@@ -10,6 +10,7 @@
   },
   "include": [
     "src/worker",
+    "src/hosted/tenant.ts",
     "src/core",
     "src/shared",
     "worker-configuration.d.ts",

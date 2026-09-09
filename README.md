@@ -106,6 +106,11 @@ behind Cloudflare Access? See [docs/self-hosting.md](docs/self-hosting.md).
 Moving from the desktop app: **Settings → Sync → Export data**, then import
 the file on your instance.
 
+The web build also supports an optional **Public portfolio**: reconcile a curated
+collection against connected accounts, edit privately, and publish selected
+names at `/p/<handle>`. No inventory is public by default. See
+[publishing and its privacy boundary](docs/public-portfolio.md).
+
 ---
 
 # Development
@@ -227,3 +232,10 @@ Any paid data feeds are a separate, optional add-on service with their own terms
 — the app itself is and stays free. The registrar logic in
 [`@aoxborrow/registrar-client`](https://github.com/aoxborrow/registrar-client)
 is a separate project under the MIT license.
+
+## Hosted staging edition
+
+An invite-only hosted gateway and isolated per-customer Worker deployments are
+available in this branch. See [hosted staging](docs/hosted-staging.md) for
+provisioning, authentication, MCP scopes, migration, and the tested isolation
+boundary. This is a staging foundation, not public signup or a security audit.

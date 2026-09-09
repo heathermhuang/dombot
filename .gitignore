@@ -33,7 +33,7 @@ coverage
 build/Release
 
 # Dependency directories
-node_modules/
+node_modules
 jspm_packages/
 
 # Built static site (Vite output from site/ — npm run site:build)
@@ -117,3 +117,6 @@ dist/
 
 # Pinned registrar adapter for the self-hosted Name.com release
 !vendor/aoxborrow-registrar-client-0.5.0-namecom.2.tgz
+
+# Local browser QA state
+.gstack/

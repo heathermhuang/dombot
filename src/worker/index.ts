@@ -31,6 +31,10 @@ import { withRequestLock } from './lock';
 import { D1DocStore } from './storage/d1-doc-store';
 import { configureNamecheapProxyTransport } from '../core/services/namecheap-proxy';
 import { workerNamecheapProxyFetch } from './namecheap-proxy';
+import { createPublicPortfolioRoutes } from './public-portfolio';
+import { createPublicationRoutes } from './publication-routes';
+import { PublicationStore } from './publication-store';
+import { publicationBackupMethods } from './publication-backup';
 
 // The Cloudflare Worker host: the same core (services, API table, storage
 // façade) as the desktop app behind an HTTP transport. See
@@ -57,6 +61,8 @@ let bootFor = '';
 function bootFingerprint(env: Env): string {
   return [
     env.DOMBOT_SECRET,
+    env.DOMBOT_GATEWAY_SECRET,
+    env.DOMBOT_WORKSPACE_ID,
     env.DOMBOT_PASSWORD,
     env.DOMBOT_AUTH,
     env.CF_ACCESS_TEAM_DOMAIN,
@@ -90,6 +96,10 @@ async function hydrate(): Promise<void> {
 
 type Vars = { auth: AuthConfig };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+// Anonymous access is limited to the published projection. Never hydrate the
+// private store or decrypt credentials to serve these pages.
+app.route('/', createPublicPortfolioRoutes());
 
 // ── boot on every request ───────────────────────────────────────────────────
 app.use('*', async (c, next) => {
@@ -216,6 +226,8 @@ app.post('/auth/logout', (c) => {
 
 // ── the API: one route over the method table ────────────────────────────────
 
+app.route('/publishing', createPublicationRoutes(stateful));
+
 app.post(
   '/api/:method',
   async (c, next) => {
@@ -230,7 +242,7 @@ app.post(
   stateful,
   async (c) => {
     const name = c.req.param('method') as ApiMethodName;
-    const entry = Object.prototype.hasOwnProperty.call(webApi, name)
+    let entry = Object.prototype.hasOwnProperty.call(webApi, name)
       ? webApi[name]
       : undefined;
     if (!entry) return c.json({ error: `Unknown method ${name}` }, 404);
@@ -240,6 +252,14 @@ app.post(
     } | null;
     const args = Array.isArray(body?.args) ? (body!.args as unknown[]) : [];
     try {
+      if (name === 'exportData' || name === 'importData') {
+        const cipher = await aesGcmCipher(
+          await deriveEncryptionKey(parseRootSecret(c.env.DOMBOT_SECRET)),
+        );
+        entry = publicationBackupMethods(
+          new PublicationStore(c.env.DB, cipher),
+        )[name];
+      }
       const result = await invoke(name, entry, args);
       return c.json({ result: result === undefined ? null : result });
     } catch (err) {
@@ -260,7 +280,15 @@ app.all('/api/*', (c) => c.json({ error: 'Method not allowed' }, 405));
 // its own, so it sits outside the session gate above; it answers 404 until
 // the user turns it on in Settings → MCP. Behind Cloudflare Access these
 // paths must be excluded from the Access policy (docs/self-hosting.md).
-app.route('/', createMcpRoutes({ version: APP_VERSION }));
+for (const path of MCP_PUBLIC_PATHS) {
+  app.all(path, (c) =>
+    createMcpRoutes({
+      version: APP_VERSION,
+      basePath: c.env.DOMBOT_PUBLIC_BASE_PATH,
+      enforceScopes: c.env.DOMBOT_AUTH === 'gateway',
+    }).fetch(c.req.raw),
+  );
+}
 
 // ── the SPA ─────────────────────────────────────────────────────────────────
 // Everything else is the renderer, served from the assets binding. In

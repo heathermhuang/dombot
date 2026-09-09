@@ -69,7 +69,7 @@ export default function StatusBar() {
   const showRefreshed = portfolioLoadedAt !== null && configuredCount > 0;
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-40 flex h-[29px] items-center justify-between gap-4 border-t bg-background px-4 text-xs text-muted-foreground select-none">
+    <footer className="fixed inset-x-0 bottom-0 z-40 flex min-h-[29px] flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t bg-background px-4 py-1 text-xs text-muted-foreground whitespace-nowrap select-none sm:py-0">
       <div className="flex items-center gap-4">
         {isWeb() && <SessionStatus />}
         <button

@@ -9,6 +9,8 @@ import Settings from './pages/Settings';
 import ApprovalModal from './components/ApprovalModal';
 import StatusBar from './components/StatusBar';
 import SyncControl from './components/SyncControl';
+import PublicPortfolio from './pages/PublicPortfolio';
+import { isWeb, webAuthMode } from './lib/platform';
 import { Toaster } from '@/components/ui/sonner';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -16,7 +18,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     // inline-flex + items-center + leading-none centers the icon/label as one
     // box, so the active pill's fill is vertically symmetric (plain line-height
     // left a few extra px on top).
-    'inline-flex h-9 items-center gap-2 rounded-md border border-transparent px-[15px] text-base font-medium leading-none transition-colors',
+    'inline-flex h-12 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-md border border-transparent px-1 text-xs font-medium leading-none transition-colors sm:h-9 sm:flex-row sm:gap-2 sm:px-[15px] sm:text-base',
     isActive
       ? 'bg-primary text-primary-foreground dark:border-input'
       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -69,7 +71,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center border-b px-6 py-2">
+      <header className="flex flex-wrap items-center gap-y-3 border-b px-4 py-2 sm:px-6">
         <div className="flex flex-1 items-center">
           <button
             type="button"
@@ -92,7 +94,7 @@ export default function App() {
             </span>
           </button>
         </div>
-        <nav className="flex flex-1 justify-center gap-4">
+        <nav className="order-3 grid w-full grid-cols-4 gap-1 sm:order-none sm:flex sm:w-auto sm:flex-1 sm:justify-center sm:gap-3">
           <NavLink to="/" end className={navLinkClass}>
             <Globe className="size-[18px]" />
             Domains
@@ -101,6 +103,12 @@ export default function App() {
             <CalendarClock className="size-[18px]" />
             Renewals
           </NavLink>
+          {isWeb() && (
+            <NavLink to="/public-portfolio" className={navLinkClass}>
+              <Globe className="size-[18px]" />
+              Public portfolio
+            </NavLink>
+          )}
           <NavLink to="/settings" className={navLinkClass}>
             <SettingsIcon className="size-[18px]" />
             Settings
@@ -109,17 +117,28 @@ export default function App() {
         {/* Global sync control on the right; also balances the logo so the nav
             stays centered. */}
         <div className="flex flex-1 justify-end">
+          {webAuthMode() === 'gateway' && (
+            <a
+              href="/account"
+              className="mr-4 self-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              Account
+            </a>
+          )}
           <SyncControl />
         </div>
       </header>
 
       {/* Extra bottom padding clears the fixed status bar (h-6) so the last
           row of a page is never hidden behind it. */}
-      <main className="flex-1 px-6 pt-[21px] pb-14">
+      <main className="min-w-0 flex-1 px-4 pt-[21px] pb-16 sm:px-6">
         <Routes>
           <Route path="/" element={<Domains />} />
           <Route path="/renewals" element={<Renewals />} />
           <Route path="/settings" element={<Settings />} />
+          {isWeb() && (
+            <Route path="/public-portfolio" element={<PublicPortfolio />} />
+          )}
         </Routes>
       </main>
 

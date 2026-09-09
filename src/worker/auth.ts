@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { verifyGatewayRequest } from '../shared/gateway-proof';
 import { Namespace } from '../core/storage/namespace';
 import {
   deriveSessionKey,
@@ -21,9 +22,12 @@ import {
 //
 // No auth state lives in the database except login-attempt backoff.
 
-export type AuthMode = 'password' | 'cloudflare-access' | 'external';
+export type AuthMode =
+  'password' | 'cloudflare-access' | 'external' | 'gateway';
 
 export interface AuthConfig {
+  gatewaySecret?: string;
+  workspaceId?: string;
   mode: AuthMode;
   /** password mode */
   password?: string;
@@ -36,7 +40,12 @@ export interface AuthConfig {
 export function parseAuthMode(value: string | undefined): AuthMode {
   if (value === undefined || value === '' || value === 'password')
     return 'password';
-  if (value === 'cloudflare-access' || value === 'external') return value;
+  if (
+    value === 'cloudflare-access' ||
+    value === 'external' ||
+    value === 'gateway'
+  )
+    return value;
   throw new Error(
     `DOMBOT_AUTH must be "password", "cloudflare-access", or "external" (got "${value}")`,
   );
@@ -46,6 +55,8 @@ export function parseAuthMode(value: string | undefined): AuthMode {
  *  whose prerequisites are missing — better than an unlocked instance. */
 export async function buildAuthConfig(
   env: {
+    DOMBOT_GATEWAY_SECRET?: string;
+    DOMBOT_WORKSPACE_ID?: string;
     DOMBOT_AUTH?: string;
     DOMBOT_PASSWORD?: string;
     CF_ACCESS_TEAM_DOMAIN?: string;
@@ -54,6 +65,19 @@ export async function buildAuthConfig(
   root: Uint8Array,
 ): Promise<AuthConfig> {
   const mode = parseAuthMode(env.DOMBOT_AUTH);
+  if (mode === 'gateway') {
+    if (
+      !env.DOMBOT_GATEWAY_SECRET ||
+      env.DOMBOT_GATEWAY_SECRET.length < 32 ||
+      !env.DOMBOT_WORKSPACE_ID
+    )
+      throw new Error('Gateway workspace identity and key are required.');
+    return {
+      mode,
+      gatewaySecret: env.DOMBOT_GATEWAY_SECRET,
+      workspaceId: env.DOMBOT_WORKSPACE_ID,
+    };
+  }
   if (mode === 'password') {
     if (!env.DOMBOT_PASSWORD) {
       throw new Error(
@@ -240,6 +264,16 @@ export async function isAuthenticated(
   request: Request,
 ): Promise<boolean> {
   switch (config.mode) {
+    case 'gateway':
+      return Boolean(
+        (
+          await verifyGatewayRequest(
+            config.gatewaySecret!,
+            config.workspaceId!,
+            request,
+          )
+        )?.owner,
+      );
     case 'password':
       return verifySession(
         config.sessionKey!,

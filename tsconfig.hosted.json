@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["node", "./hosted-configuration.d.ts"],
+    "noEmit": true
+  },
+  "include": [
+    "src/hosted/gateway.ts",
+    "src/hosted/accounts.ts",
+    "src/hosted/crypto.ts",
+    "src/hosted/views.ts",
+    "src/hosted/env.d.ts",
+    "hosted-configuration.d.ts",
+    "src/shared/gateway-proof.ts"
+  ],
+  "exclude": ["src/**/*.test.ts"]
+}
