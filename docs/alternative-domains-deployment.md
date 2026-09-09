@@ -1,13 +1,13 @@
 # alternative.domains deployment
 
-Current self-hosted release: **1.2.0-namecom.3**, deployed on 2026-09-09.
+Current self-hosted release: **1.2.0-namecom.4**, deployed on 2026-09-09.
 Source branch: `codex/alternative-domains-release`, based on multi-account
 commit `206b3af489762d5101ab1d713d3c23b8751014f1`.
 
 - Production URL: https://alternative.domains
 - Additional URL: https://dombot.measurable.workers.dev
 - Worker: `dombot`
-- Worker version ID: `73e01f3c-583d-488c-ab2b-f1c18f5ba9e8`
+- Worker version ID: `6db568c0-5379-458e-9922-d992c22d493b`
 - Account: `63a7fe52c985c63bb9e69ce47efdc569`
 - D1: `dombot`, ID `0b7e15ac-97e8-4bf5-ab66-b4b847f2c729`
 - Migration: `0001_docs.sql`, applied remotely
@@ -128,3 +128,29 @@ The temporary test Worker was removed. Detailed results, proxy endpoints and
 prototype source are retained privately under .wrangler/deployment; they are
 ignored by Git. Preserve Name.com's direct connection when integrating a proxy
 for Namecheap. Do not assume the native Worker fetch API accepts a proxy option.
+
+## Hosted proxy integration deployed
+
+Release 1.2.0-namecom.4 integrates the feature proposed in upstream PR #73 on
+top of the hosted branch's multi-account and Name.com support. Deployment source
+commit: `6170500`. The upstream PR remains a separate contribution.
+
+Proxy controls are available for existing Namecheap accounts and the new-account
+form. Proxy settings are validated during account connection and account-aware
+bundle import, saved inside the encrypted credential record, and included in
+client-cache invalidation. Separate Namecheap accounts use their own proxies.
+Changes limited to Namecheap connection settings retain cached domains until the
+next successful sync; API identity changes keep the existing cache-clearing rule.
+
+The existing hosted Namecheap account was configured with the verified proxy,
+keeping its original API credentials and direct Client IP. Its live sync completed
+successfully and all active configured accounts reported successful sync. Name.com
+continues using its direct connection. Only configuration and read-only sync were
+performed; no registrar purchase, renewal or domain-setting mutation was executed.
+
+Validation: 418 passing tests (one existing skipped test), typecheck, lint,
+web renderer build and Worker dry run. Additional tests cover named-account
+proxy isolation, account creation, import validation, cache invalidation after
+hydration and preservation of cached data during connection-only changes.
+Private activation receipts and the pre-change credential backup remain under
+.wrangler/deployment and are ignored by Git.
