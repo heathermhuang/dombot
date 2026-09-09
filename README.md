@@ -106,6 +106,11 @@ behind Cloudflare Access? See [docs/self-hosting.md](docs/self-hosting.md).
 Moving from the desktop app: **Settings → Sync → Export data**, then import
 the file on your instance.
 
+The web build also supports an optional **Public portfolio**: reconcile a curated
+collection against connected accounts, edit privately, and publish selected
+names at `/p/<handle>`. No inventory is public by default. See
+[publishing and its privacy boundary](docs/public-portfolio.md).
+
 ---
 
 # Development

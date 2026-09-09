@@ -31,6 +31,10 @@ import { withRequestLock } from './lock';
 import { D1DocStore } from './storage/d1-doc-store';
 import { configureNamecheapProxyTransport } from '../core/services/namecheap-proxy';
 import { workerNamecheapProxyFetch } from './namecheap-proxy';
+import { createPublicPortfolioRoutes } from './public-portfolio';
+import { createPublicationRoutes } from './publication-routes';
+import { PublicationStore } from './publication-store';
+import { publicationBackupMethods } from './publication-backup';
 
 // The Cloudflare Worker host: the same core (services, API table, storage
 // façade) as the desktop app behind an HTTP transport. See
@@ -90,6 +94,10 @@ async function hydrate(): Promise<void> {
 
 type Vars = { auth: AuthConfig };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+// Anonymous access is limited to the published projection. Never hydrate the
+// private store or decrypt credentials to serve these pages.
+app.route('/', createPublicPortfolioRoutes());
 
 // ── boot on every request ───────────────────────────────────────────────────
 app.use('*', async (c, next) => {
@@ -216,6 +224,8 @@ app.post('/auth/logout', (c) => {
 
 // ── the API: one route over the method table ────────────────────────────────
 
+app.route('/publishing', createPublicationRoutes(stateful));
+
 app.post(
   '/api/:method',
   async (c, next) => {
@@ -230,7 +240,7 @@ app.post(
   stateful,
   async (c) => {
     const name = c.req.param('method') as ApiMethodName;
-    const entry = Object.prototype.hasOwnProperty.call(webApi, name)
+    let entry = Object.prototype.hasOwnProperty.call(webApi, name)
       ? webApi[name]
       : undefined;
     if (!entry) return c.json({ error: `Unknown method ${name}` }, 404);
@@ -240,6 +250,14 @@ app.post(
     } | null;
     const args = Array.isArray(body?.args) ? (body!.args as unknown[]) : [];
     try {
+      if (name === 'exportData' || name === 'importData') {
+        const cipher = await aesGcmCipher(
+          await deriveEncryptionKey(parseRootSecret(c.env.DOMBOT_SECRET)),
+        );
+        entry = publicationBackupMethods(
+          new PublicationStore(c.env.DB, cipher),
+        )[name];
+      }
       const result = await invoke(name, entry, args);
       return c.json({ result: result === undefined ? null : result });
     } catch (err) {
