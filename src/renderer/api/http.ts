@@ -1,3 +1,4 @@
+import { hostPath } from '../lib/platform';
 import type {
   BulkJob,
   BulkProgress,
@@ -47,7 +48,7 @@ async function call<T>(method: string, args: unknown[] = []): Promise<T> {
   // JSON has no `undefined`: a trailing omitted optional would arrive as
   // `null` and fail the method's schema. Drop them; `invoke` pads them back.
   while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
-  const res = await fetch(`/api/${method}`, {
+  const res = await fetch(hostPath(`/api/${method}`), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ args }),
@@ -362,7 +363,9 @@ export function createHttpApi(): DombotApi {
         await call<Awaited<ReturnType<DombotApi['getMcpInfo']>>>('getMcpInfo');
       return {
         ...info,
-        url: info.url ? new URL(info.url, window.location.href).href : '',
+        url: info.url
+          ? new URL(hostPath(info.url), window.location.href).href
+          : '',
       };
     },
     listPendingApprovals: m('listPendingApprovals'),

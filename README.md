@@ -232,3 +232,10 @@ Any paid data feeds are a separate, optional add-on service with their own terms
 — the app itself is and stays free. The registrar logic in
 [`@aoxborrow/registrar-client`](https://github.com/aoxborrow/registrar-client)
 is a separate project under the MIT license.
+
+## Hosted staging edition
+
+An invite-only hosted gateway and isolated per-customer Worker deployments are
+available in this branch. See [hosted staging](docs/hosted-staging.md) for
+provisioning, authentication, MCP scopes, migration, and the tested isolation
+boundary. This is a staging foundation, not public signup or a security audit.

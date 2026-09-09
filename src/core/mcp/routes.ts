@@ -20,6 +20,7 @@ import {
   type PendingApproval,
 } from './oauth';
 import { registerTools } from './tools';
+import { HOSTED_SCOPES } from './scopes';
 
 // The MCP endpoint and its OAuth 2.1 authorization server as Hono routes,
 // shared by both hosts: the desktop serves them on loopback through
@@ -32,6 +33,8 @@ import { registerTools } from './tools';
 // the desktop, the deployment's public URL on the web.
 
 export interface McpRouteOptions {
+  basePath?: string;
+  enforceScopes?: boolean;
   /** Reported to clients as the server version. */
   version: string;
   /**
@@ -58,6 +61,9 @@ export const MCP_PUBLIC_PATHS = [
 
 export function createMcpRoutes(options: McpRouteOptions): Hono {
   const app = new Hono();
+  const basePath = options.basePath ?? '';
+  if (basePath && !/^\/w\/[a-f0-9-]{36}$/.test(basePath))
+    throw new Error('Invalid workspace MCP path');
 
   // Middleware is scoped to the MCP paths: a host mounts this router at its
   // root, and nothing else on that origin should pick up CORS headers or the
@@ -81,7 +87,7 @@ export function createMcpRoutes(options: McpRouteOptions): Hono {
 
   // ── discovery (RFC 8414 / RFC 9728) ──────────────────────────────────────
   const asMetadata = (c: Context) => {
-    const origin = new URL(c.req.url).origin;
+    const origin = new URL(c.req.url).origin + basePath;
     return c.json({
       issuer: origin + '/',
       authorization_endpoint: `${origin}/authorize`,
@@ -93,15 +99,19 @@ export function createMcpRoutes(options: McpRouteOptions): Hono {
       token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
       revocation_endpoint_auth_methods_supported: ['client_secret_post'],
       grant_types_supported: ['authorization_code'],
-      scopes_supported: ['portfolio'],
+      scopes_supported: options.enforceScopes
+        ? [...HOSTED_SCOPES]
+        : ['portfolio'],
     });
   };
   const rsMetadata = (c: Context) => {
-    const origin = new URL(c.req.url).origin;
+    const origin = new URL(c.req.url).origin + basePath;
     return c.json({
       resource: origin + MCP_PATH,
       authorization_servers: [origin + '/'],
-      scopes_supported: ['portfolio'],
+      scopes_supported: options.enforceScopes
+        ? [...HOSTED_SCOPES]
+        : ['portfolio'],
       resource_name: 'DomBot',
     });
   };
@@ -155,18 +165,46 @@ export function createMcpRoutes(options: McpRouteOptions): Hono {
         302,
       );
     }
+    const scopes = parsed.data.scope
+      ? parsed.data.scope.split(' ').filter(Boolean)
+      : options.enforceScopes
+        ? ['portfolio:read']
+        : [];
+    const resource = new URL(c.req.url).origin + basePath + MCP_PATH;
+    if (
+      options.enforceScopes &&
+      (scopes.some(
+        (scope) => !HOSTED_SCOPES.some((allowed) => allowed === scope),
+      ) ||
+        (parsed.data.resource && parsed.data.resource !== resource))
+    ) {
+      return c.redirect(
+        errorRedirect(
+          redirectUri,
+          'invalid_scope',
+          'Unsupported permission or workspace resource',
+          q.state,
+        ),
+        302,
+      );
+    }
     const p = createPendingApproval(client, {
       state: parsed.data.state,
-      scopes: parsed.data.scope ? parsed.data.scope.split(' ') : [],
+      scopes,
       redirectUri,
       codeChallenge: parsed.data.code_challenge,
-      resource: parsed.data.resource,
+      resource: options.enforceScopes ? resource : parsed.data.resource,
     });
     if (options.autoApprove) {
       const redirect = resolvePending(p.id, true);
       if (redirect) return c.redirect(redirect, 302);
     }
-    return c.html(waitingPage(p));
+    const nonce = crypto.randomUUID();
+    c.header(
+      'Content-Security-Policy',
+      `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'`,
+    );
+    return c.html(waitingPage(p, basePath, nonce));
   };
   app.get('/authorize', authorize);
   app.post('/authorize', authorize);
@@ -228,7 +266,7 @@ export function createMcpRoutes(options: McpRouteOptions): Hono {
     // tools read the (hydrated) store, so nothing needs to persist between
     // requests, and any isolate can answer any call.
     const server = new McpServer({ name: 'DomBot', version: options.version });
-    registerTools(server);
+    registerTools(server, options.enforceScopes ? auth.scopes : undefined);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -334,7 +372,7 @@ async function bearer(
   const header = c.req.header('authorization') ?? '';
   const [type, token] = header.split(' ');
   const fail = (description: string) => {
-    const origin = new URL(c.req.url).origin;
+    const origin = new URL(c.req.url).origin + (options.basePath ?? '');
     c.header(
       'WWW-Authenticate',
       `Bearer error="invalid_token", error_description="${description}", ` +
@@ -349,12 +387,18 @@ async function bearer(
   const info =
     options.verifyStaticToken?.(token) ?? (await verifyAccessToken(token));
   if (!info) return fail('Invalid or expired token');
+  if (
+    options.enforceScopes &&
+    info.resource?.href !==
+      new URL(c.req.url).origin + (options.basePath ?? '') + MCP_PATH
+  )
+    return fail('Token belongs to a different workspace resource');
   return info;
 }
 
 // ── browser waiting page ─────────────────────────────────────────────────────
 
-function waitingPage(req: PendingApproval): string {
+function waitingPage(req: PendingApproval, basePath = '', nonce = ''): string {
   const esc = (s: string) =>
     s.replace(
       /[&<>"']/g,
@@ -382,17 +426,17 @@ function waitingPage(req: PendingApproval): string {
 <body>
   <div class="card">
     <h1>Approve this connection in DomBot</h1>
-    <p>Open DomBot and confirm this code matches:</p>
+    <p>${basePath ? `<a href="${esc(basePath)}/" target="_blank" rel="noopener">Open your workspace</a> and confirm this code matches:` : 'Open DomBot and confirm this code matches:'}</p>
     <div class="code">${esc(req.displayCode)}</div>
     <p>Access will be sent to <code>${esc(req.params.redirectUri)}</code></p>
     <div class="spin" id="spin"></div>
     <p id="status">Waiting for approval…</p>
   </div>
-  <script>
+  <script nonce="${nonce}">
     const id = ${JSON.stringify(req.id)};
     async function poll() {
       try {
-        const r = await fetch('/oauth/status?id=' + encodeURIComponent(id));
+        const r = await fetch(${JSON.stringify(basePath + '/oauth/status?id=')} + encodeURIComponent(id));
         const s = await r.json();
         if (s.status === 'approved' && s.redirect) { location.href = s.redirect; return; }
         if (s.status === 'denied' && s.redirect) { location.href = s.redirect; return; }

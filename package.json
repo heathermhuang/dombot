@@ -22,7 +22,7 @@
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json && tsc -p tsconfig.hosted.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "pricing:build": "node scripts/build-base-pricing.mjs",

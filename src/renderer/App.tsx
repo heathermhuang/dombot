@@ -10,7 +10,7 @@ import ApprovalModal from './components/ApprovalModal';
 import StatusBar from './components/StatusBar';
 import SyncControl from './components/SyncControl';
 import PublicPortfolio from './pages/PublicPortfolio';
-import { isWeb } from './lib/platform';
+import { isWeb, webAuthMode } from './lib/platform';
 import { Toaster } from '@/components/ui/sonner';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -117,6 +117,14 @@ export default function App() {
         {/* Global sync control on the right; also balances the logo so the nav
             stays centered. */}
         <div className="flex flex-1 justify-end">
+          {webAuthMode() === 'gateway' && (
+            <a
+              href="/account"
+              className="mr-4 self-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              Account
+            </a>
+          )}
           <SyncControl />
         </div>
       </header>

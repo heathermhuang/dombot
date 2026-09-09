@@ -5,7 +5,7 @@ import App from './App';
 import Login from './pages/Login';
 import { ThemeProvider } from '@/components/theme-provider';
 import { createHttpApi, setSessionActive } from './api/http';
-import { markWeb, type AuthMode } from './lib/platform';
+import { markWeb, hostPath, type AuthMode } from './lib/platform';
 import './index.css';
 
 // HashRouter is used because the packaged app loads over the file:// protocol,
@@ -40,7 +40,9 @@ if (window.api) {
 } else {
   window.api = createHttpApi();
   void (async () => {
-    const status = (await fetch('/auth/status', { credentials: 'same-origin' })
+    const status = (await fetch(hostPath('/auth/status'), {
+      credentials: 'same-origin',
+    })
       .then((r) => r.json())
       .catch(() => ({ mode: 'password', authenticated: false }))) as {
       mode: AuthMode;

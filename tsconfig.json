@@ -28,5 +28,10 @@
     "forge.config.ts",
     "forge.env.d.ts"
   ],
-  "exclude": ["src/worker", "worker-configuration.d.ts"]
+  "exclude": [
+    "src/worker",
+    "src/hosted",
+    "worker-configuration.d.ts",
+    "hosted-configuration.d.ts"
+  ]
 }
