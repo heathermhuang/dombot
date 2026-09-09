@@ -76,6 +76,27 @@ export default function ApprovalModal() {
                 </dd>
               </div>
             </dl>
+            {req.scopes && (
+              <div className="rounded-md border p-3 text-sm">
+                <p className="font-medium">Requested permissions</p>
+                <ul className="mt-2 space-y-1">
+                  {req.scopes.map((scope) => (
+                    <li key={scope}>
+                      {scope === 'portfolio:read'
+                        ? 'Read and sync your portfolio'
+                        : scope === 'domains:write'
+                          ? 'Change domain settings and access transfer codes'
+                          : scope === 'domains:spend'
+                            ? 'Register, transfer, and renew domains using your registrar funds'
+                            : scope}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 break-all text-xs text-muted-foreground">
+                  Workspace: {req.resource}
+                </p>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               The same code is shown in the client&apos;s browser window — make
               sure they match.

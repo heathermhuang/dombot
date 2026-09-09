@@ -1,0 +1,25 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "domains-staging",
+  "main": "../src/hosted/gateway.ts",
+  "compatibility_date": "2026-09-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "CONTROL_DB",
+      "database_name": "domains-staging-control",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "services": [
+    { "binding": "WORKSPACE_0", "service": "domains-staging-tenant-0" },
+    { "binding": "WORKSPACE_1", "service": "domains-staging-tenant-1" },
+    { "binding": "WORKSPACE_2", "service": "domains-staging-tenant-2" },
+  ],
+  "vars": { "WORKSPACES": "[]" },
+  "triggers": { "crons": ["17 * * * *"] },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+}

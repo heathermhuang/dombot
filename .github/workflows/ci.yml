@@ -5,8 +5,9 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, codex/hosted-foundation]
 
 # Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
 concurrency:
@@ -59,6 +60,10 @@ jobs:
           npm rebuild esbuild
       - name: Build the web renderer
         run: npm run web:build
+      - name: Bundle hosted gateway
+        run: npx wrangler deploy --config hosted/wrangler.gateway.jsonc --dry-run --outdir dist/gateway
+      - name: Bundle hosted tenant
+        run: npx wrangler deploy --config hosted/wrangler.tenant.jsonc --dry-run --outdir dist/tenant
       - name: Bundle the Worker without deploying
         # No account or token needed: --dry-run stops after bundling.
         run: npx wrangler deploy --dry-run --outdir dist/worker

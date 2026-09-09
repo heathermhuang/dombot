@@ -1,3 +1,4 @@
+import { permitsTool } from './scopes';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type {
@@ -398,657 +399,692 @@ function syncSummary(portfolio: Portfolio) {
  * layer — the same lower-level core the UI's IPC handlers use — and shapes its
  * own output. Tools group by scope prefix (portfolio / registrar / domain).
  */
-export function registerTools(server: McpServer): void {
+export function registerTools(
+  server: McpServer,
+  scopes?: readonly string[],
+): void {
+  const allow = (name: string) =>
+    scopes === undefined || permitsTool(name, scopes);
   // ── Portfolio / account (no scope params) ──────────────────────────────────
 
-  server.registerTool(
-    'registrar_list',
-    {
-      title: 'List registrars',
-      description:
-        'List every built-in registrar id, which have credentials configured, and which are active (configured and enabled). A disabled registrar keeps its credentials but does not sync or contribute domains.',
-      inputSchema: {},
-      annotations: { readOnlyHint: true },
-    },
-    async () =>
-      json({
-        all: registrarNames,
-        accounts: getRegistrarMetadata().map((r) => ({
-          accountId: r.accountId,
-          registrar: r.name,
-          label: r.accountLabel,
-          configured: r.configured,
-          enabled: r.enabled,
-          sync: r.sync,
-        })),
-        configured: getConfiguredRegistrars(),
-        active: getActiveRegistrars(),
-      }),
-  );
+  if (allow('registrar_list'))
+    server.registerTool(
+      'registrar_list',
+      {
+        title: 'List registrars',
+        description:
+          'List every built-in registrar id, which have credentials configured, and which are active (configured and enabled). A disabled registrar keeps its credentials but does not sync or contribute domains.',
+        inputSchema: {},
+        annotations: { readOnlyHint: true },
+      },
+      async () =>
+        json({
+          all: registrarNames,
+          accounts: getRegistrarMetadata().map((r) => ({
+            accountId: r.accountId,
+            registrar: r.name,
+            label: r.accountLabel,
+            configured: r.configured,
+            enabled: r.enabled,
+            sync: r.sync,
+          })),
+          configured: getConfiguredRegistrars(),
+          active: getActiveRegistrars(),
+        }),
+    );
 
-  server.registerTool(
-    'portfolio_query',
-    {
-      title: 'Query portfolio',
-      description:
-        'List, search, and filter your whole portfolio across every configured registrar — the primary way to read the portfolio. Filter by registrar, TLD, folder, name, nameserver, auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort and page the results. With no filters it returns everything (paged), so use it as a plain list too. Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete. Rows carry only the fields you need — call domain_get for a single domain’s full record.',
-      inputSchema: queryShape,
-      annotations: { readOnlyHint: true },
-    },
-    async (args) => json(runQuery(args)),
-  );
+  if (allow('portfolio_query'))
+    server.registerTool(
+      'portfolio_query',
+      {
+        title: 'Query portfolio',
+        description:
+          'List, search, and filter your whole portfolio across every configured registrar — the primary way to read the portfolio. Filter by registrar, TLD, folder, name, nameserver, auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort and page the results. With no filters it returns everything (paged), so use it as a plain list too. Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete. Rows carry only the fields you need — call domain_get for a single domain’s full record.',
+        inputSchema: queryShape,
+        annotations: { readOnlyHint: true },
+      },
+      async (args) => json(runQuery(args)),
+    );
 
-  server.registerTool(
-    'portfolio_sync',
-    {
-      title: 'Sync portfolio',
-      description:
-        'Re-sync every configured registrar and refresh the local cache that portfolio_query and the domain_* reads serve from. A live network pass across all registrars — call it to pull fresh data (e.g. on first use, or when portfolio_query reports stale:true or comes back empty), then read with portfolio_query. Returns a per-registrar summary: domain counts, last-synced times, and any sync errors.',
-      inputSchema: {},
-      annotations: { readOnlyHint: true },
-    },
-    async () => {
-      const portfolio = await getPortfolio(true);
-      broadcastPortfolioChanged();
-      return json(syncSummary(portfolio));
-    },
-  );
+  if (allow('portfolio_sync'))
+    server.registerTool(
+      'portfolio_sync',
+      {
+        title: 'Sync portfolio',
+        description:
+          'Re-sync every configured registrar and refresh the local cache that portfolio_query and the domain_* reads serve from. A live network pass across all registrars — call it to pull fresh data (e.g. on first use, or when portfolio_query reports stale:true or comes back empty), then read with portfolio_query. Returns a per-registrar summary: domain counts, last-synced times, and any sync errors.',
+        inputSchema: {},
+        annotations: { readOnlyHint: true },
+      },
+      async () => {
+        const portfolio = await getPortfolio(true);
+        broadcastPortfolioChanged();
+        return json(syncSummary(portfolio));
+      },
+    );
 
   // ── Registrar-level (registrar required) ───────────────────────────────────
 
-  server.registerTool(
-    'registrar_test',
-    {
-      title: 'Test registrar connection',
-      description:
-        'At one registrar: verify the configured credentials work (a connection test).',
-      inputSchema: { accountId, registrar },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar }) =>
-      json(await getRegistrarClient(registrar, accountId).testConnection()),
-  );
+  if (allow('registrar_test'))
+    server.registerTool(
+      'registrar_test',
+      {
+        title: 'Test registrar connection',
+        description:
+          'At one registrar: verify the configured credentials work (a connection test).',
+        inputSchema: { accountId, registrar },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar }) =>
+        json(await getRegistrarClient(registrar, accountId).testConnection()),
+    );
 
-  server.registerTool(
-    'registrar_domains',
-    {
-      title: 'List a registrar’s domains',
-      description: 'At one registrar: list every domain in the account.',
-      inputSchema: { accountId, registrar },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar }) => {
-      const account = resolveAccount(registrar, accountId);
-      const domains = await getRegistrarClient(
-        registrar,
-        account.id,
-      ).listDomains();
-      return json(
-        domains.map((d) => ({
-          ...d,
+  if (allow('registrar_domains'))
+    server.registerTool(
+      'registrar_domains',
+      {
+        title: 'List a registrar’s domains',
+        description: 'At one registrar: list every domain in the account.',
+        inputSchema: { accountId, registrar },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar }) => {
+        const account = resolveAccount(registrar, accountId);
+        const domains = await getRegistrarClient(
           registrar,
-          accountId: account.id,
-          accountLabel: account.label,
-        })),
-      );
-    },
-  );
+          account.id,
+        ).listDomains();
+        return json(
+          domains.map((d) => ({
+            ...d,
+            registrar,
+            accountId: account.id,
+            accountLabel: account.label,
+          })),
+        );
+      },
+    );
 
-  server.registerTool(
-    'registrar_sync',
-    {
-      title: 'Sync a registrar',
-      description:
-        'Re-sync one registrar’s domains into the local cache — a targeted refresh (e.g. after registering a domain, or when just one registrar is stale) that avoids a full portfolio_sync. Returns the same per-registrar summary as portfolio_sync.',
-      inputSchema: { accountId, registrar },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar }) => {
-      const portfolio = await syncRegistrar(registrar, accountId);
-      broadcastPortfolioChanged();
-      return json(syncSummary(portfolio));
-    },
-  );
+  if (allow('registrar_sync'))
+    server.registerTool(
+      'registrar_sync',
+      {
+        title: 'Sync a registrar',
+        description:
+          'Re-sync one registrar’s domains into the local cache — a targeted refresh (e.g. after registering a domain, or when just one registrar is stale) that avoids a full portfolio_sync. Returns the same per-registrar summary as portfolio_sync.',
+        inputSchema: { accountId, registrar },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar }) => {
+        const portfolio = await syncRegistrar(registrar, accountId);
+        broadcastPortfolioChanged();
+        return json(syncSummary(portfolio));
+      },
+    );
 
-  server.registerTool(
-    'registrar_check_availability',
-    {
-      title: 'Check domain availability',
-      description:
-        'At one registrar: check whether one or more domains are available to register.',
-      inputSchema: {
-        accountId,
-        registrar,
-        domains: z
-          .array(z.string())
-          .min(1)
-          .describe(
-            'Domain names to check, e.g. ["example.com", "example.net"]',
+  if (allow('registrar_check_availability'))
+    server.registerTool(
+      'registrar_check_availability',
+      {
+        title: 'Check domain availability',
+        description:
+          'At one registrar: check whether one or more domains are available to register.',
+        inputSchema: {
+          accountId,
+          registrar,
+          domains: z
+            .array(z.string())
+            .min(1)
+            .describe(
+              'Domain names to check, e.g. ["example.com", "example.net"]',
+            ),
+        },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domains }) =>
+        json(
+          await getRegistrarClient(registrar, accountId).checkAvailability(
+            domains,
           ),
-      },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domains }) =>
-      json(
-        await getRegistrarClient(registrar, accountId).checkAvailability(
-          domains,
         ),
-      ),
-  );
+    );
 
-  server.registerTool(
-    'registrar_pricing',
-    {
-      title: 'Get TLD pricing',
-      description:
-        'At one registrar: look up live registration/renewal/transfer pricing for a TLD (or a specific domain). This is the registrar’s own quote — for DomBot’s estimated renewal price use domain_renewal_price.',
-      inputSchema: {
-        accountId,
-        registrar,
-        tld: z
-          .string()
-          .describe('A TLD ("com") or a full domain ("example.com").'),
-      },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, tld }) =>
-      json(await getRegistrarClient(registrar, accountId).getPricing(tld)),
-  );
-
-  server.registerTool(
-    'registrar_register_domain',
-    {
-      title: 'Register a domain',
-      description:
-        'At one registrar: register a new domain. This creates a registration and costs money.',
-      inputSchema: { accountId, registrar, domain, input: registerInput },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-      },
-    },
-    async ({ accountId, registrar, domain, input }) =>
-      cachedWrite(() =>
-        registerDomainCached(
+  if (allow('registrar_pricing'))
+    server.registerTool(
+      'registrar_pricing',
+      {
+        title: 'Get TLD pricing',
+        description:
+          'At one registrar: look up live registration/renewal/transfer pricing for a TLD (or a specific domain). This is the registrar’s own quote — for DomBot’s estimated renewal price use domain_renewal_price.',
+        inputSchema: {
+          accountId,
           registrar,
-          domain,
-          input,
-          resolveAccount(registrar, accountId).id,
-        ),
-      ),
-  );
-
-  server.registerTool(
-    'registrar_transfer_domain',
-    {
-      title: 'Transfer a domain in',
-      description:
-        'At one registrar: transfer a domain in using its EPP/auth code. This costs money.',
-      inputSchema: { accountId, registrar, domain, input: transferInput },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
+          tld: z
+            .string()
+            .describe('A TLD ("com") or a full domain ("example.com").'),
+        },
+        annotations: { readOnlyHint: true },
       },
-    },
-    async ({ accountId, registrar, domain, input }) =>
-      json(
-        await getRegistrarClient(registrar, accountId).transferIn(
-          domain,
-          input,
+      async ({ accountId, registrar, tld }) =>
+        json(await getRegistrarClient(registrar, accountId).getPricing(tld)),
+    );
+
+  if (allow('registrar_register_domain'))
+    server.registerTool(
+      'registrar_register_domain',
+      {
+        title: 'Register a domain',
+        description:
+          'At one registrar: register a new domain. This creates a registration and costs money.',
+        inputSchema: { accountId, registrar, domain, input: registerInput },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+        },
+      },
+      async ({ accountId, registrar, domain, input }) =>
+        cachedWrite(() =>
+          registerDomainCached(
+            registrar,
+            domain,
+            input,
+            resolveAccount(registrar, accountId).id,
+          ),
         ),
-      ),
-  );
+    );
+
+  if (allow('registrar_transfer_domain'))
+    server.registerTool(
+      'registrar_transfer_domain',
+      {
+        title: 'Transfer a domain in',
+        description:
+          'At one registrar: transfer a domain in using its EPP/auth code. This costs money.',
+        inputSchema: { accountId, registrar, domain, input: transferInput },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+        },
+      },
+      async ({ accountId, registrar, domain, input }) =>
+        json(
+          await getRegistrarClient(registrar, accountId).transferIn(
+            domain,
+            input,
+          ),
+        ),
+    );
 
   // ── Domain-level (domain required; registrar auto-resolved from cache) ──────
 
-  server.registerTool(
-    'domain_get',
-    {
-      title: 'Get domain',
-      description:
-        'For a single domain: its full record — status, creation/expiration dates, auto-renew, transfer lock, WHOIS privacy, and nameservers. Served from the local detail cache when fresh; otherwise fetched live and written through. Pass `refresh` to force a live fetch.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        refresh: refreshParam,
+  if (allow('domain_get'))
+    server.registerTool(
+      'domain_get',
+      {
+        title: 'Get domain',
+        description:
+          'For a single domain: its full record — status, creation/expiration dates, auto-renew, transfer lock, WHOIS privacy, and nameservers. Served from the local detail cache when fresh; otherwise fetched live and written through. Pass `refresh` to force a live fetch.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          refresh: refreshParam,
+        },
+        annotations: { readOnlyHint: true },
       },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain, refresh }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      const detail = await getDomainDetail(
-        r,
-        domain,
-        refresh ?? false,
-        account.id,
-      );
-      // getDomainDetail returns null only when neither the registrar nor the
-      // registry could resolve anything — fall back to a live getDomain so the
-      // error (or record) still comes from the provider.
-      return json({
-        ...(detail ??
-          (await getRegistrarClient(r, account.id).getDomain(domain))),
-        registrar: r,
-        accountId: account.id,
-        accountLabel: account.label,
-      });
-    },
-  );
-
-  server.registerTool(
-    'domain_contacts_get',
-    {
-      title: 'Get domain contacts',
-      description:
-        'For a single domain: read its registrant, admin, tech, and billing contacts.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return json(await getRegistrarClient(r, account.id).getContacts(domain));
-    },
-  );
-
-  server.registerTool(
-    'domain_renew',
-    {
-      title: 'Renew a domain',
-      description:
-        'For a single domain: renew it (extend its registration). This costs money.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        years: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe('Number of years to renew (defaults to 1).'),
+      async ({ accountId, registrar, domain, refresh }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        const detail = await getDomainDetail(
+          r,
+          domain,
+          refresh ?? false,
+          account.id,
+        );
+        // getDomainDetail returns null only when neither the registrar nor the
+        // registry could resolve anything — fall back to a live getDomain so the
+        // error (or record) still comes from the provider.
+        return json({
+          ...(detail ??
+            (await getRegistrarClient(r, account.id).getDomain(domain))),
+          registrar: r,
+          accountId: account.id,
+          accountLabel: account.label,
+        });
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
+    );
+
+  if (allow('domain_contacts_get'))
+    server.registerTool(
+      'domain_contacts_get',
+      {
+        title: 'Get domain contacts',
+        description:
+          'For a single domain: read its registrant, admin, tech, and billing contacts.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
       },
-    },
-    async ({ accountId, registrar, domain, years }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(
-        r,
-        domain,
-        { kind: 'renew', years: years ?? 1 },
-        account.id,
-      );
-    },
-  );
-
-  server.registerTool(
-    'domain_nameservers_get',
-    {
-      title: 'Get nameservers',
-      description:
-        'For a single domain: its nameservers. Served from the local detail cache when fresh; otherwise fetched live (registrar, then the public registry) and written through. Pass `refresh` to force a live fetch.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        refresh: refreshParam,
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return json(
+          await getRegistrarClient(r, account.id).getContacts(domain),
+        );
       },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain, refresh }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      const detail = await getDomainDetail(
-        r,
-        domain,
-        refresh ?? false,
-        account.id,
-      );
-      return json(
-        detail?.nameservers ??
-          (await getRegistrarClient(r, account.id).getNameservers(domain)),
-      );
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_nameservers_set',
-    {
-      title: 'Set nameservers',
-      description:
-        'For a single domain: replace its nameservers with the full set given.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        nameservers: z
-          .array(z.string())
-          .min(1)
-          .describe(
-            'The full nameserver set, e.g. ["ns1.example.net", "ns2.example.net"]',
-          ),
+  if (allow('domain_renew'))
+    server.registerTool(
+      'domain_renew',
+      {
+        title: 'Renew a domain',
+        description:
+          'For a single domain: renew it (extend its registration). This costs money.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          years: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe('Number of years to renew (defaults to 1).'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
+      async ({ accountId, registrar, domain, years }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(
+          r,
+          domain,
+          { kind: 'renew', years: years ?? 1 },
+          account.id,
+        );
       },
-    },
-    async ({ accountId, registrar, domain, nameservers }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(
-        r,
-        domain,
-        { kind: 'nameservers', nameservers },
-        account.id,
-      );
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_dns_get',
-    {
-      title: 'Get DNS records',
-      description: 'For a single domain: read its DNS records.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return json(
-        await getRegistrarClient(r, account.id).getDnsRecords(domain),
-      );
-    },
-  );
-
-  server.registerTool(
-    'domain_dns_set',
-    {
-      title: 'Set DNS records',
-      description:
-        'For a single domain: replace its DNS records with the full set given. This is a full replace — any record you omit is removed, and an empty array clears the zone.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        records: z
-          .array(dnsRecord)
-          .describe('The complete DNS record set to write.'),
+  if (allow('domain_nameservers_get'))
+    server.registerTool(
+      'domain_nameservers_get',
+      {
+        title: 'Get nameservers',
+        description:
+          'For a single domain: its nameservers. Served from the local detail cache when fresh; otherwise fetched live (registrar, then the public registry) and written through. Pass `refresh` to force a live fetch.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          refresh: refreshParam,
+        },
+        annotations: { readOnlyHint: true },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
+      async ({ accountId, registrar, domain, refresh }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        const detail = await getDomainDetail(
+          r,
+          domain,
+          refresh ?? false,
+          account.id,
+        );
+        return json(
+          detail?.nameservers ??
+            (await getRegistrarClient(r, account.id).getNameservers(domain)),
+        );
       },
-    },
-    // DNS records aren't part of the portfolio/detail cache (nothing in the
-    // Domains table shows them), so there's no cached field to patch — but we
-    // still emit the change event for consistency with the other writes.
-    async ({ accountId, registrar, domain, records }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return cachedWrite(() =>
-        getRegistrarClient(r, account.id).setDnsRecords(domain, records),
-      );
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_contacts_set',
-    {
-      title: 'Set domain contacts',
-      description:
-        'For a single domain: update its contacts. Provide only the roles you want to change (registrant, admin, tech, billing).',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        contacts: contactSet,
+  if (allow('domain_nameservers_set'))
+    server.registerTool(
+      'domain_nameservers_set',
+      {
+        title: 'Set nameservers',
+        description:
+          'For a single domain: replace its nameservers with the full set given.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          nameservers: z
+            .array(z.string())
+            .min(1)
+            .describe(
+              'The full nameserver set, e.g. ["ns1.example.net", "ns2.example.net"]',
+            ),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+        },
       },
-      annotations: { readOnlyHint: false, idempotentHint: true },
-    },
-    // Contacts aren't part of the portfolio/detail cache; emit the event for
-    // consistency (see domain_dns_set).
-    async ({ accountId, registrar, domain, contacts }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return cachedWrite(() =>
-        getRegistrarClient(r, account.id).updateContacts(domain, contacts),
-      );
-    },
-  );
-
-  server.registerTool(
-    'domain_set_privacy',
-    {
-      title: 'Set WHOIS privacy',
-      description: 'For a single domain: enable or disable WHOIS privacy.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        enabled: z
-          .boolean()
-          .describe('true to enable WHOIS privacy, false to disable'),
+      async ({ accountId, registrar, domain, nameservers }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(
+          r,
+          domain,
+          { kind: 'nameservers', nameservers },
+          account.id,
+        );
       },
-      annotations: { readOnlyHint: false, idempotentHint: true },
-    },
-    async ({ accountId, registrar, domain, enabled }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(r, domain, { kind: 'privacy', enabled }, account.id);
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_set_autorenew',
-    {
-      title: 'Set auto-renew',
-      description: 'For a single domain: enable or disable auto-renew.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        enabled: z
-          .boolean()
-          .describe('true to enable auto-renew, false to disable'),
+  if (allow('domain_dns_get'))
+    server.registerTool(
+      'domain_dns_get',
+      {
+        title: 'Get DNS records',
+        description: 'For a single domain: read its DNS records.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
       },
-      annotations: { readOnlyHint: false, idempotentHint: true },
-    },
-    async ({ accountId, registrar, domain, enabled }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(r, domain, { kind: 'autoRenew', enabled }, account.id);
-    },
-  );
-
-  server.registerTool(
-    'domain_set_lock',
-    {
-      title: 'Set domain lock',
-      description:
-        'For a single domain: lock or unlock it (registrar transfer lock).',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        locked: z.boolean().describe('true to lock, false to unlock'),
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return json(
+          await getRegistrarClient(r, account.id).getDnsRecords(domain),
+        );
       },
-      annotations: { readOnlyHint: false, idempotentHint: true },
-    },
-    async ({ accountId, registrar, domain, locked }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(r, domain, { kind: 'lock', locked }, account.id);
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_email_forwarding_get',
-    {
-      title: 'Get email forwarding',
-      description:
-        'For a single domain: read its alias-style email forwarding rules (mail sent to an alias at the domain redirects to a destination address). Not supported by every registrar.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return json(
-        await getRegistrarClient(r, account.id).getEmailForwarding(domain),
-      );
-    },
-  );
-
-  server.registerTool(
-    'domain_email_forwarding_set',
-    {
-      title: 'Set email forwarding',
-      description:
-        'For a single domain: replace its email forwarding rules with the full set given. This is a full replace — any alias you omit is removed, and an empty array clears all email forwarding. Not supported by every registrar.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        forwards: z
-          .array(emailForward)
-          .describe('The complete set of email forwarding rules to write.'),
+  if (allow('domain_dns_set'))
+    server.registerTool(
+      'domain_dns_set',
+      {
+        title: 'Set DNS records',
+        description:
+          'For a single domain: replace its DNS records with the full set given. This is a full replace — any record you omit is removed, and an empty array clears the zone.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          records: z
+            .array(dnsRecord)
+            .describe('The complete DNS record set to write.'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
+      // DNS records aren't part of the portfolio/detail cache (nothing in the
+      // Domains table shows them), so there's no cached field to patch — but we
+      // still emit the change event for consistency with the other writes.
+      async ({ accountId, registrar, domain, records }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return cachedWrite(() =>
+          getRegistrarClient(r, account.id).setDnsRecords(domain, records),
+        );
       },
-    },
-    async ({ accountId, registrar, domain, forwards }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(
-        r,
-        domain,
-        { kind: 'emailForwarding', forwards },
-        account.id,
-      );
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_url_forwarding_get',
-    {
-      title: 'Get URL forwarding',
-      description:
-        'For a single domain: read its URL forwarding rules (HTTP redirects from a host at the domain to a destination URL). A rule may report a read-only "masked" type; the set tool cannot create one. Not supported by every registrar.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return json(
-        await getRegistrarClient(r, account.id).getDomainForwarding(domain),
-      );
-    },
-  );
-
-  server.registerTool(
-    'domain_url_forwarding_set',
-    {
-      title: 'Set URL forwarding',
-      description:
-        'For a single domain: replace its URL forwarding rules with the full set given. This is a full replace — any rule you omit is removed, and an empty array clears all URL forwarding. Only "temporary"/"permanent" redirects can be set. Not supported by every registrar.',
-      inputSchema: {
-        accountId,
-        registrar: optionalRegistrar,
-        domain,
-        forwards: z
-          .array(domainForward)
-          .describe('The complete set of URL forwarding rules to write.'),
+  if (allow('domain_contacts_set'))
+    server.registerTool(
+      'domain_contacts_set',
+      {
+        title: 'Set domain contacts',
+        description:
+          'For a single domain: update its contacts. Provide only the roles you want to change (registrant, admin, tech, billing).',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          contacts: contactSet,
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
+      // Contacts aren't part of the portfolio/detail cache; emit the event for
+      // consistency (see domain_dns_set).
+      async ({ accountId, registrar, domain, contacts }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return cachedWrite(() =>
+          getRegistrarClient(r, account.id).updateContacts(domain, contacts),
+        );
       },
-    },
-    async ({ accountId, registrar, domain, forwards }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return domainOp(
-        r,
-        domain,
-        { kind: 'urlForwarding', forwards },
-        account.id,
-      );
-    },
-  );
+    );
 
-  server.registerTool(
-    'domain_auth_code_get',
-    {
-      title: 'Get auth code',
-      description:
-        'For a single domain: read its authorization code (also called the EPP code or transfer secret) — the token the gaining registrar needs to transfer the domain away. Treat it as a secret. Not supported by every registrar.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      const result = await applyDomainOp(
-        { registrar: r, domainName: domain, accountId: account.id },
-        { kind: 'authCode' },
-      );
-      // A read: surface a non-ok outcome as the tool's error, as before.
-      if (result.status !== 'ok') throw new Error(result.message);
-      return json({ domain, authCode: result.data?.authCode });
-    },
-  );
+  if (allow('domain_set_privacy'))
+    server.registerTool(
+      'domain_set_privacy',
+      {
+        title: 'Set WHOIS privacy',
+        description: 'For a single domain: enable or disable WHOIS privacy.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          enabled: z
+            .boolean()
+            .describe('true to enable WHOIS privacy, false to disable'),
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true },
+      },
+      async ({ accountId, registrar, domain, enabled }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(r, domain, { kind: 'privacy', enabled }, account.id);
+      },
+    );
 
-  server.registerTool(
-    'domain_dnssec_get',
-    {
-      title: 'Get DNSSEC status',
-      description:
-        'For a single domain: read whether DNSSEC is enabled and, if so, its DS records (keyTag, algorithm, digestType, digest). Not supported by every registrar.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      // The RegistrarClient wrapper doesn't re-expose this extended method;
-      // reach through to the underlying provider.
-      return json(
-        await getRegistrarClient(r, account.id).provider.getDnssec(domain),
-      );
-    },
-  );
+  if (allow('domain_set_autorenew'))
+    server.registerTool(
+      'domain_set_autorenew',
+      {
+        title: 'Set auto-renew',
+        description: 'For a single domain: enable or disable auto-renew.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          enabled: z
+            .boolean()
+            .describe('true to enable auto-renew, false to disable'),
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true },
+      },
+      async ({ accountId, registrar, domain, enabled }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(r, domain, { kind: 'autoRenew', enabled }, account.id);
+      },
+    );
 
-  server.registerTool(
-    'domain_renewal_price',
-    {
-      title: 'Estimate renewal price',
-      description:
-        'For a single domain: DomBot’s estimated annual renewal price, with provenance — a manual override, else a per-name registrar quote where supported, else the base per-TLD database. Distinct from registrar_pricing, which is the registrar’s own live quote.',
-      inputSchema: { accountId, registrar: optionalRegistrar, domain },
-      annotations: { readOnlyHint: true },
-    },
-    async ({ accountId, registrar, domain }) => {
-      const r = resolveRegistrar(domain, registrar, accountId);
-      const account = resolveDomainAccount(r, domain, accountId);
-      return json(await getRenewalPriceLive(r, domain, account.id));
-    },
-  );
+  if (allow('domain_set_lock'))
+    server.registerTool(
+      'domain_set_lock',
+      {
+        title: 'Set domain lock',
+        description:
+          'For a single domain: lock or unlock it (registrar transfer lock).',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          locked: z.boolean().describe('true to lock, false to unlock'),
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true },
+      },
+      async ({ accountId, registrar, domain, locked }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(r, domain, { kind: 'lock', locked }, account.id);
+      },
+    );
+
+  if (allow('domain_email_forwarding_get'))
+    server.registerTool(
+      'domain_email_forwarding_get',
+      {
+        title: 'Get email forwarding',
+        description:
+          'For a single domain: read its alias-style email forwarding rules (mail sent to an alias at the domain redirects to a destination address). Not supported by every registrar.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return json(
+          await getRegistrarClient(r, account.id).getEmailForwarding(domain),
+        );
+      },
+    );
+
+  if (allow('domain_email_forwarding_set'))
+    server.registerTool(
+      'domain_email_forwarding_set',
+      {
+        title: 'Set email forwarding',
+        description:
+          'For a single domain: replace its email forwarding rules with the full set given. This is a full replace — any alias you omit is removed, and an empty array clears all email forwarding. Not supported by every registrar.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          forwards: z
+            .array(emailForward)
+            .describe('The complete set of email forwarding rules to write.'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+        },
+      },
+      async ({ accountId, registrar, domain, forwards }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(
+          r,
+          domain,
+          { kind: 'emailForwarding', forwards },
+          account.id,
+        );
+      },
+    );
+
+  if (allow('domain_url_forwarding_get'))
+    server.registerTool(
+      'domain_url_forwarding_get',
+      {
+        title: 'Get URL forwarding',
+        description:
+          'For a single domain: read its URL forwarding rules (HTTP redirects from a host at the domain to a destination URL). A rule may report a read-only "masked" type; the set tool cannot create one. Not supported by every registrar.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return json(
+          await getRegistrarClient(r, account.id).getDomainForwarding(domain),
+        );
+      },
+    );
+
+  if (allow('domain_url_forwarding_set'))
+    server.registerTool(
+      'domain_url_forwarding_set',
+      {
+        title: 'Set URL forwarding',
+        description:
+          'For a single domain: replace its URL forwarding rules with the full set given. This is a full replace — any rule you omit is removed, and an empty array clears all URL forwarding. Only "temporary"/"permanent" redirects can be set. Not supported by every registrar.',
+        inputSchema: {
+          accountId,
+          registrar: optionalRegistrar,
+          domain,
+          forwards: z
+            .array(domainForward)
+            .describe('The complete set of URL forwarding rules to write.'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+        },
+      },
+      async ({ accountId, registrar, domain, forwards }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(
+          r,
+          domain,
+          { kind: 'urlForwarding', forwards },
+          account.id,
+        );
+      },
+    );
+
+  if (allow('domain_auth_code_get'))
+    server.registerTool(
+      'domain_auth_code_get',
+      {
+        title: 'Get auth code',
+        description:
+          'For a single domain: read its authorization code (also called the EPP code or transfer secret) — the token the gaining registrar needs to transfer the domain away. Treat it as a secret. Not supported by every registrar.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        const result = await applyDomainOp(
+          { registrar: r, domainName: domain, accountId: account.id },
+          { kind: 'authCode' },
+        );
+        // A read: surface a non-ok outcome as the tool's error, as before.
+        if (result.status !== 'ok') throw new Error(result.message);
+        return json({ domain, authCode: result.data?.authCode });
+      },
+    );
+
+  if (allow('domain_dnssec_get'))
+    server.registerTool(
+      'domain_dnssec_get',
+      {
+        title: 'Get DNSSEC status',
+        description:
+          'For a single domain: read whether DNSSEC is enabled and, if so, its DS records (keyTag, algorithm, digestType, digest). Not supported by every registrar.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        // The RegistrarClient wrapper doesn't re-expose this extended method;
+        // reach through to the underlying provider.
+        return json(
+          await getRegistrarClient(r, account.id).provider.getDnssec(domain),
+        );
+      },
+    );
+
+  if (allow('domain_renewal_price'))
+    server.registerTool(
+      'domain_renewal_price',
+      {
+        title: 'Estimate renewal price',
+        description:
+          'For a single domain: DomBot’s estimated annual renewal price, with provenance — a manual override, else a per-name registrar quote where supported, else the base per-TLD database. Distinct from registrar_pricing, which is the registrar’s own live quote.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return json(await getRenewalPriceLive(r, domain, account.id));
+      },
+    );
 }

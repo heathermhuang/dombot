@@ -61,6 +61,8 @@ let bootFor = '';
 function bootFingerprint(env: Env): string {
   return [
     env.DOMBOT_SECRET,
+    env.DOMBOT_GATEWAY_SECRET,
+    env.DOMBOT_WORKSPACE_ID,
     env.DOMBOT_PASSWORD,
     env.DOMBOT_AUTH,
     env.CF_ACCESS_TEAM_DOMAIN,
@@ -278,7 +280,15 @@ app.all('/api/*', (c) => c.json({ error: 'Method not allowed' }, 405));
 // its own, so it sits outside the session gate above; it answers 404 until
 // the user turns it on in Settings → MCP. Behind Cloudflare Access these
 // paths must be excluded from the Access policy (docs/self-hosting.md).
-app.route('/', createMcpRoutes({ version: APP_VERSION }));
+for (const path of MCP_PUBLIC_PATHS) {
+  app.all(path, (c) =>
+    createMcpRoutes({
+      version: APP_VERSION,
+      basePath: c.env.DOMBOT_PUBLIC_BASE_PATH,
+      enforceScopes: c.env.DOMBOT_AUTH === 'gateway',
+    }).fetch(c.req.raw),
+  );
+}
 
 // ── the SPA ─────────────────────────────────────────────────────────────────
 // Everything else is the renderer, served from the assets binding. In

@@ -1,3 +1,4 @@
+import { hostPath } from '../lib/platform';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/auth/login', {
+      const res = await fetch(hostPath('/auth/login'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ password }),

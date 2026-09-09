@@ -230,6 +230,8 @@ export interface SaveResult {
 
 /** A connection awaiting the user's approval in the app window. */
 export interface McpPendingApproval {
+  scopes?: string[];
+  resource?: string;
   id: string;
   /** Self-reported at registration; anyone can register a client. */
   clientName: string;

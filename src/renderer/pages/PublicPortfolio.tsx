@@ -1,3 +1,4 @@
+import { hostPath } from '../lib/platform';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
@@ -25,7 +26,7 @@ async function request<T>(
   method = 'GET',
   body?: unknown,
 ): Promise<T> {
-  const response = await fetch(`/publishing${path}`, {
+  const response = await fetch(hostPath(`/publishing${path}`), {
     method,
     credentials: 'same-origin',
     ...(body !== undefined
@@ -389,7 +390,7 @@ export default function PublicPortfolio() {
                   </p>
                   <a
                     className="mt-1 inline-flex items-center gap-1 text-primary underline"
-                    href={`/p/${state.published.handle}`}
+                    href={hostPath(`/p/${state.published.handle}`)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -748,7 +749,11 @@ export default function PublicPortfolio() {
               asChild={!dirty && !!state.revision && !blocked.length && !busy}
             >
               {!dirty && state.revision && !blocked.length && !busy ? (
-                <a href="/publishing/preview" target="_blank" rel="noreferrer">
+                <a
+                  href={hostPath('/publishing/preview')}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <Eye className="size-4" />
                   Preview saved draft
                 </a>

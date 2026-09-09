@@ -3,7 +3,8 @@
 // the app renders. Kept tiny and synchronous so any component can branch on
 // it without a store round trip.
 
-export type AuthMode = 'password' | 'cloudflare-access' | 'external';
+export type AuthMode =
+  'password' | 'cloudflare-access' | 'external' | 'gateway';
 
 let web = false;
 let authMode: AuthMode | null = null;
@@ -25,6 +26,16 @@ export function webAuthMode(): AuthMode | null {
 
 /** Ends the web session (password mode) and returns to the login screen. */
 export async function signOut(): Promise<void> {
-  await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
-  window.location.reload();
+  await fetch(hostPath('/auth/logout'), {
+    method: 'POST',
+    credentials: 'same-origin',
+  });
+  if (webAuthMode() === 'gateway') window.location.assign('/login');
+  else window.location.reload();
+}
+
+export function hostPath(path: string): string {
+  const prefix =
+    window.location.pathname.match(/^\/w\/[a-f0-9-]{36}(?=\/)/)?.[0] ?? '';
+  return path.startsWith('/') ? prefix + path : path;
 }
