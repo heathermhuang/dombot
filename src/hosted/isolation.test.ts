@@ -407,6 +407,58 @@ describe('real gateway and isolated Worker instances', () => {
     ).json();
     expect(JSON.stringify(denied)).toMatch(/not found|Unknown tool/i);
   });
+  it('requires the current password and revokes all browser sessions on change', async () => {
+    const form = (
+      path: string,
+      body: Record<string, string>,
+      cookie?: string,
+    ) =>
+      gateway.fetch(
+        new Request('http://localhost' + path, {
+          method: 'POST',
+          headers: {
+            Origin: 'http://localhost',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+          body: new URLSearchParams(body),
+          redirect: 'manual',
+        }),
+      );
+    const second = await form('/session/login', { email: emails[0], password });
+    expect(second.status).toBe(303);
+    const secondCookie = second.headers.get('set-cookie')!.split(';')[0];
+    const next = 'different-long-staging-password';
+    expect(
+      (
+        await form(
+          '/account/password',
+          { oldPassword: 'wrong-password', newPassword: next },
+          cookies[0],
+        )
+      ).status,
+    ).toBe(401);
+    expect((await api(0, 'getFolders')).status).toBe(200);
+    expect(
+      (
+        await form(
+          '/account/password',
+          { oldPassword: password, newPassword: next },
+          cookies[0],
+        )
+      ).status,
+    ).toBe(303);
+    expect((await api(0, 'getFolders')).status).toBe(401);
+    expect((await api(0, 'getFolders', [], secondCookie)).status).toBe(401);
+    expect(
+      (await form('/session/login', { email: emails[0], password })).status,
+    ).toBe(401);
+    expect(
+      (await form('/session/login', { email: emails[0], password: next }))
+        .status,
+    ).toBe(303);
+  });
+
   it('revokes browser sessions immediately on logout', async () => {
     expect(
       (await request(`/w/${ids[1]}/auth/logout`, 'POST', {}, cookies[1]))
