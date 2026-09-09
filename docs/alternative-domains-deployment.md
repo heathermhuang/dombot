@@ -81,11 +81,19 @@ error. Changing keys is not a demonstrated remedy for these network-dependent
 failures. Namecheap requires an allowlisted IPv4 address for the calling server:
 https://www.namecheap.com/support/api/global-parameters/
 
-The app's existing cached portfolio remains available. An approved server with
-fixed IPv4 egress is needed to implement an alternative hosted connection path;
-no relay, registrar allowlist changes, credential rotations, or security-setting
-changes were performed during this investigation. Name.com's exact rejection
-rule has not been established and may require provider support.
+The app's existing cached portfolio remains available. Keep the deployment on
+Cloudflare Workers and D1, as requested; do not assume an external server or
+silently add a relay. A Cloudflare-native path is Workers VPC through Gateway
+with dedicated egress, but dedicated egress is an Enterprise add-on rather than
+a standard Workers feature. Provider access must be verified before claiming
+that path fixes either registrar. References:
+https://developers.cloudflare.com/changelog/post/2026-06-05-gateway-egress/
+https://developers.cloudflare.com/cloudflare-one/traffic-policies/egress-policies/dedicated-egress-ips/
+
+No relay, registrar allowlist changes, credential rotations, security-setting
+changes, or paid upgrades were performed. Name.com's exact rejection rule has
+not been established and may require provider support. Its 403 is not proof
+that it has the same IPv4 allowlist requirement as Namecheap.
 
 A transport privacy patch removes query strings, URL user information, upstream
 error bodies, parser excerpts and nested network error details from surfaced
