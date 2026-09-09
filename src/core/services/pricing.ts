@@ -49,6 +49,9 @@ export function usesPerNameQuote(
   registrar: RegistrarName,
   tld: string,
 ): boolean {
+  // Name.com has no bundled base-rate table; use its account-specific quote
+  // for every TLD, including legacy extensions.
+  if (registrar === 'namecom') return true;
   return (
     SPECIFIC_CAPABLE.has(registrar) && !NO_PREMIUM_TLDS.has(tld.toLowerCase())
   );

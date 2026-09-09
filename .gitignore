@@ -114,3 +114,6 @@ dist/
 .dev.vars
 # Wrangler local state
 .wrangler/
+
+# Pinned registrar adapter for the self-hosted Name.com release
+!vendor/aoxborrow-registrar-client-0.5.0-namecom.1.tgz

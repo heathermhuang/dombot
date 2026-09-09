@@ -7,6 +7,16 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "dombot",
+  "account_id": "63a7fe52c985c63bb9e69ce47efdc569",
+  "routes": [
+    {
+      "pattern": "alternative.domains",
+      "zone_id": "e692d7f87e93b565f85445f4abbfcf36",
+      "custom_domain": true,
+    },
+  ],
+  "workers_dev": true,
+  "preview_urls": false,
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-06",
   // fast-xml-parser (via @aoxborrow/registrar-client) touches Buffer.
@@ -26,9 +36,8 @@
     {
       "binding": "DB",
       "database_name": "dombot",
-      // Replaced by the Deploy button / `wrangler d1 create dombot`. Local
-      // dev (`wrangler dev`) ignores it and uses a local SQLite file.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Production database. Local dev uses a separate local SQLite file.
+      "database_id": "0b7e15ac-97e8-4bf5-ab66-b4b847f2c729",
       "migrations_dir": "migrations",
     },
   ],

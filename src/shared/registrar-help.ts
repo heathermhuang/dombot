@@ -129,6 +129,21 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
     },
   },
 
+  namecom: {
+    summary:
+      'Use your Name.com username and a production API token. If your account uses two-step verification, enable API Access in its security settings.',
+    links: [
+      {
+        label: 'API token settings',
+        url: 'https://www.name.com/account/settings/api',
+      },
+    ],
+    fields: {
+      apiToken:
+        'Use a token from the Production section, not the Development/Test token.',
+    },
+  },
+
   namesilo: {
     summary:
       'An API key generated in the API Manager under Account Options, ' +

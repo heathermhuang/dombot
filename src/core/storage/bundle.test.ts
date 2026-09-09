@@ -15,8 +15,16 @@ import {
   updateSettings,
 } from '../services/settings';
 import { createFolder, getFolders } from '../services/folders';
-import { setStoredCredentials } from '../services/credentials';
-import { getRegistrarClient } from '../services/registrars';
+import {
+  getStoredCredentials,
+  setStoredCredentials,
+} from '../services/credentials';
+import {
+  getRegistrarClient,
+  getRegistrarMetadata,
+} from '../services/registrars';
+import { listAccounts } from '../services/accounts';
+import { EncryptedDocStore, aesGcmCipher } from './encrypted';
 import { sealBundle } from '../../shared/bundle-seal';
 import { bumpRevision, getRevisions } from '../revision';
 import { onCoreEvent } from '../events';
@@ -54,6 +62,55 @@ describe('buildBundle', () => {
 });
 
 describe('export → import', () => {
+  it('imports a desktop Name.com account into encrypted web storage without losing its identity or credentials', async () => {
+    const accountId = '11111111-2222-4333-8444-555555555555';
+    const account = { id: accountId, registrar: 'namecom', label: 'Personal' };
+    const credentials = { username: 'test-user', apiToken: 'test-token' };
+    const desktopBundle = {
+      format: BUNDLE_FORMAT,
+      version: 2,
+      exportedAt: '2026-09-09T00:00:00.000Z',
+      app: { version: '1.2.0-namecom.1', platform: 'darwin' },
+      namespaces: {
+        'registrar-accounts': { [accountId]: account },
+        credentials: { [accountId]: credentials },
+      },
+    };
+    const disk = new MemoryDocStore();
+    configureStore(
+      new EncryptedDocStore(
+        disk,
+        await aesGcmCipher(crypto.getRandomValues(new Uint8Array(32))),
+      ),
+    );
+    await hydrateStores();
+
+    await importBundle(JSON.stringify(desktopBundle));
+    await flushWrites();
+    await hydrateStores();
+
+    expect(listAccounts()).toContainEqual(account);
+    expect(getStoredCredentials(accountId)).toEqual(credentials);
+    expect(getRegistrarMetadata()).toContainEqual(
+      expect.objectContaining({
+        name: 'namecom',
+        accountId,
+        configured: true,
+      }),
+    );
+    expect(await disk.get('credentials', accountId)).toMatchObject({
+      __sealed: 1,
+    });
+    expect(JSON.stringify(await disk.list('credentials'))).not.toContain(
+      'test-token',
+    );
+    expect(
+      buildBundle({ ...APP, platform: 'web' }).namespaces['registrar-accounts'][
+        accountId
+      ],
+    ).toEqual(account);
+  });
+
   it('round-trips in the clear and replaces the store', async () => {
     await seed();
     const text = exportBundle(APP);
