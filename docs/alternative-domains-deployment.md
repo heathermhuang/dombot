@@ -108,3 +108,23 @@ web build, Worker dry run, production cached-error and live connection-error
 redaction, and browser verification of hosted connection guidance. Existing
 portfolio counts and credentials were preserved. The two provider connection
 failures remain unresolved pending an approved connection path/provider access.
+
+## Subsequent proxy tests and Name.com recovery
+
+Name.com was subsequently verified working directly from the production Worker
+after an account configuration correction. It no longer needs a proxy.
+
+The user's existing IPRoyal ISP proxies were tested with read-only requests.
+One refused proxy authentication (407). The other listed Namecheap domains
+successfully from both the desktop network and an isolated Cloudflare Worker.
+Native Workers CONNECT/startTls failed for the tunnel; a pinned tunnelfetch
+1.13.0 prototype with certificate verification enabled succeeded. A wrong-host
+certificate was rejected. The expiry control was blocked at the proxy and is
+inconclusive. The client's authors disclose that its JavaScript TLS stack has
+not had an external audit, so this is functional test evidence, not production
+qualification. No production proxy transport was installed or activated.
+
+The temporary test Worker was removed. Detailed results, proxy endpoints and
+prototype source are retained privately under .wrangler/deployment; they are
+ignored by Git. Preserve Name.com's direct connection when integrating a proxy
+for Namecheap. Do not assume the native Worker fetch API accepts a proxy option.
