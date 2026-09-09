@@ -17,6 +17,7 @@ import {
 } from '../../../shared/registrar-help';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '../../store/app';
+import { isWeb } from '../../lib/platform';
 import { timeAgo } from '../../lib/time';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,6 +112,7 @@ function RegistrarCard({
   accounts: RegistrarMeta[];
   canAddAccount: boolean;
 }) {
+  const hosted = isWeb();
   const syncRegistrar = useAppStore((s) => s.syncRegistrar);
   const setRegistrarEnabled = useAppStore((s) => s.setRegistrarEnabled);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
@@ -513,6 +515,11 @@ function RegistrarCard({
               <p className="text-[13px] leading-relaxed text-muted-foreground">
                 {help.summary}
               </p>
+              {hosted && help.hostedNotice && (
+                <p className="text-[13px] leading-relaxed text-muted-foreground">
+                  {help.hostedNotice}
+                </p>
+              )}
               {help.links.length > 0 && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
                   {help.links.map((link) => (

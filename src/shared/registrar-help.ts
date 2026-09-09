@@ -20,6 +20,8 @@ export interface HelpLink {
  */
 export interface RegistrarHelp {
   summary: string;
+  /** Additional connection requirements for the hosted app. */
+  hostedNotice?: string;
   /** The credential page and, where useful, the docs. */
   links: HelpLink[];
   /** Per-field guidance keyed by `ConfigField.name`, shown between the label
@@ -117,6 +119,8 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
       'Enable API access under Profile › Tools › Namecheap API Access, ' +
       'generate a key, and whitelist the IP address you will call from ' +
       '(IPv4 only).',
+    hostedNotice:
+      'Namecheap requires API calls from an allowlisted IPv4 address. This hosted app uses Cloudflare Workers; importing your desktop Client IP does not give the server that address. Hosted sync needs a fixed-IPv4 connection approved in your Namecheap API settings.',
     links: [
       {
         label: 'API Access settings',
@@ -132,6 +136,8 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
   namecom: {
     summary:
       'Use your Name.com username and a production API token. If your account uses two-step verification, enable API Access in its security settings.',
+    hostedNotice:
+      'If the same credentials work on desktop but return HTTP 403 here, Name.com is rejecting the hosted connection. Ask Name.com support to check API access from your hosted server.',
     links: [
       {
         label: 'API token settings',

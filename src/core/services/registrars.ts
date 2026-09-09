@@ -77,6 +77,27 @@ interface RegistrarPortfolioEntry {
   lastError: string | null;
 }
 
+/** Older bundles can contain raw transport errors with credentials in URLs
+ * and echoed response bodies. Sanitize those before storing or displaying. */
+function registrarErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const transport = message.match(
+    /^(Request to|Failed to reach|Failed to parse JSON response from) '([^']+)'(?: failed with (?:HTTP )?(\d{3})| timed out after (\d+)ms)?/,
+  );
+  if (!transport) return message;
+  try {
+    const url = new URL(transport[2]);
+    const endpoint = `${url.origin}${url.pathname}`;
+    if (transport[3])
+      return `Request to '${endpoint}' failed with HTTP ${transport[3]}`;
+    if (transport[4])
+      return `Request to '${endpoint}' timed out after ${transport[4]}ms`;
+    return `${transport[1]} '${endpoint}'`;
+  } catch {
+    return 'Registrar request failed.';
+  }
+}
+
 /** Dates round-trip through JSON as ISO strings; revive them back to `Date`. */
 function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
   const out = { ...d } as Partial<Domain>;
@@ -222,6 +243,9 @@ function readRegistrarEntry(name: string): RegistrarPortfolioEntry | null {
   if (!cached) return null;
   return {
     ...cached.data,
+    lastError: cached.data.lastError
+      ? registrarErrorMessage(cached.data.lastError)
+      : null,
     domains: cached.data.domains.map(reviveDomainDates),
   };
 }
@@ -302,14 +326,14 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
       ? {
           domains: prev?.domains ?? [],
           lastSyncedAt: prev?.lastSyncedAt ?? null,
-          lastError: error.message,
+          lastError: registrarErrorMessage(error),
         }
       : { domains, lastSyncedAt: Date.now(), lastError: null };
   } catch (err) {
     entry = {
       domains: prev?.domains ?? [],
       lastSyncedAt: prev?.lastSyncedAt ?? null,
-      lastError: err instanceof Error ? err.message : String(err),
+      lastError: registrarErrorMessage(err),
     };
   }
   if ((generations.get(accountId) ?? 0) !== generation) return;
@@ -596,7 +620,9 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
       enabled: isRegistrarEnabled(account.id),
       sync: {
         lastSyncedAt: sync?.lastSyncedAt ?? null,
-        lastError: sync?.lastError ?? null,
+        lastError: sync?.lastError
+          ? registrarErrorMessage(sync.lastError)
+          : null,
         domainCount: sync?.domains.length ?? 0,
       },
     };

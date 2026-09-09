@@ -118,6 +118,7 @@ vi.mock('../dns', () => ({
 import {
   findRegistrarsForDomain,
   getCachedPortfolio,
+  getRegistrarMetadata,
   getDomainDetail,
   getMergedPortfolio,
   getPortfolio,
@@ -259,6 +260,25 @@ describe('getCachedPortfolio / assemblePortfolio', () => {
         message: 'boom',
       },
     ]);
+  });
+
+  it('does not expose credentials or upstream HTML from previously cached sync errors', () => {
+    seedSlice('dynadot', [], {
+      lastSyncedAt: null,
+      lastError:
+        "Request to 'https://api.example.test/xml.response?ApiKey=test-secret&ApiUser=private-user' failed with 500 Internal Server Error: <!DOCTYPE html><html>test-secret</html>",
+    });
+    const messages = [
+      getCachedPortfolio()!.errors[0].message,
+      getRegistrarMetadata().find((a) => a.accountId === 'dynadot')!.sync
+        .lastError,
+    ];
+    for (const message of messages) {
+      expect(message).toContain('500');
+      expect(message).not.toMatch(
+        /test-secret|private-user|ApiKey|DOCTYPE|<html>/,
+      );
+    }
   });
 });
 

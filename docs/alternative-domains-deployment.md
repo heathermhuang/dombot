@@ -1,13 +1,13 @@
 # alternative.domains deployment
 
-Current self-hosted release: **1.2.0-namecom.2**, deployed on 2026-09-09.
+Current self-hosted release: **1.2.0-namecom.3**, deployed on 2026-09-09.
 Source branch: `codex/alternative-domains-release`, based on multi-account
 commit `206b3af489762d5101ab1d713d3c23b8751014f1`.
 
 - Production URL: https://alternative.domains
 - Additional URL: https://dombot.measurable.workers.dev
 - Worker: `dombot`
-- Worker version ID: `7bba544a-ce3a-489b-a0d2-aae49497c83e`
+- Worker version ID: `73e01f3c-583d-488c-ab2b-f1c18f5ba9e8`
 - Account: `63a7fe52c985c63bb9e69ce47efdc569`
 - D1: `dombot`, ID `0b7e15ac-97e8-4bf5-ab66-b4b847f2c729`
 - Migration: `0001_docs.sql`, applied remotely
@@ -70,3 +70,33 @@ removed, and the Worker custom domain was attached. The `ftp`, `ssh`, and
 
 HTTPS, login, database reads, logout, and unauthenticated-request rejection
 were verified on the custom domain after cutover.
+
+## Registrar connection investigation (2026-09-09)
+
+Using the same imported credentials and registrar-client User-Agent, read-only
+requests from the desktop network returned Name.com HTTP 200 and
+Namecheap HTTP 200 with XML ApiResponse status OK. The hosted connection tests
+returned Name.com HTTP 403 and Namecheap HTTP 500 with a generic HTML runtime
+error. Changing keys is not a demonstrated remedy for these network-dependent
+failures. Namecheap requires an allowlisted IPv4 address for the calling server:
+https://www.namecheap.com/support/api/global-parameters/
+
+The app's existing cached portfolio remains available. An approved server with
+fixed IPv4 egress is needed to implement an alternative hosted connection path;
+no relay, registrar allowlist changes, credential rotations, or security-setting
+changes were performed during this investigation. Name.com's exact rejection
+rule has not been established and may require provider support.
+
+A transport privacy patch removes query strings, URL user information, upstream
+error bodies, parser excerpts and nested network error details from surfaced
+HTTP errors while retaining typed statuses and retry behavior. Cached errors
+from prior builds are sanitized when returned in portfolio and account metadata.
+The original Namecheap key was included in the error URL shown to the user;
+rotation is recommended, with the replacement entered into both apps.
+
+The privacy correction is deployed as 1.2.0-namecom.3. Verification passed:
+360 app tests (one skipped), all 353 registrar-library tests, typecheck, lint,
+web build, Worker dry run, production cached-error and live connection-error
+redaction, and browser verification of hosted connection guidance. Existing
+portfolio counts and credentials were preserved. The two provider connection
+failures remain unresolved pending an approved connection path/provider access.
