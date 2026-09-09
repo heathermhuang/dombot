@@ -17,6 +17,7 @@ import {
 } from '../../../shared/registrar-help';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '../../store/app';
+import { namecheapCredentials } from '../../../shared/namecheap-proxy';
 import { isWeb } from '../../lib/platform';
 import { timeAgo } from '../../lib/time';
 import { Badge } from '@/components/ui/badge';
@@ -141,6 +142,7 @@ function RegistrarCard({
       }
     : selected;
   const [values, setValues] = useState<CredentialValues>({});
+  const [proxyEnabled, setProxyEnabled] = useState(false);
   const [original, setOriginal] = useState<CredentialValues>({});
   const [label, setLabel] = useState('');
   const [open, setOpen] = useState(false);
@@ -158,6 +160,7 @@ function RegistrarCard({
     setError(null);
     if (draft || !currentId) {
       setValues({});
+      setProxyEnabled(false);
       setOriginal({});
       setLabel('');
       setLoading(false);
@@ -169,6 +172,9 @@ function RegistrarCard({
         .then((creds) => {
           if (current) {
             setValues(creds);
+            setProxyEnabled(
+              Boolean(creds.proxyUrl?.trim() || creds.proxyIp?.trim()),
+            );
             setOriginal(creds);
             setLoading(false);
           }
@@ -207,7 +213,11 @@ function RegistrarCard({
     setError(null);
     try {
       const clean = Object.fromEntries(
-        Object.entries(values)
+        Object.entries(
+          provider.name === 'namecheap'
+            ? namecheapCredentials(values, proxyEnabled)
+            : values,
+        )
           .map(([k, v]) => [k, v.trim()])
           .filter(([, v]) => v),
       );
@@ -534,6 +544,8 @@ function RegistrarCard({
               idPrefix={provider.name}
               values={values}
               disabled={busy}
+              proxyEnabled={proxyEnabled}
+              onProxyEnabledChange={setProxyEnabled}
               onChange={(name, value) =>
                 setValues((current) => ({ ...current, [name]: value }))
               }
@@ -666,17 +678,27 @@ function CredentialFields({
   values,
   disabled,
   onChange,
+  proxyEnabled,
+  onProxyEnabledChange,
 }: {
   provider: RegistrarDefinition;
   idPrefix: string;
   values: CredentialValues;
   disabled: boolean;
   onChange: (name: string, value: string) => void;
+  proxyEnabled: boolean;
+  onProxyEnabledChange: (enabled: boolean) => void;
 }) {
   const help = REGISTRAR_HELP[provider.name];
   return (
     <FieldGroup className="gap-4">
       {provider.configFields.map((field) => {
+        if (
+          provider.name === 'namecheap' &&
+          proxyEnabled &&
+          field.name === 'clientIp'
+        )
+          return null;
         const id = `${idPrefix}-${field.name}`;
         const fieldHelp = help.fields[field.name];
         return (
@@ -726,6 +748,75 @@ function CredentialFields({
           </Field>
         );
       })}
+      {provider.name === 'namecheap' && (
+        <div className="mt-1 border-t pt-4">
+          <div className="flex items-center gap-3">
+            <Switch
+              id={`${idPrefix}-proxy-enabled`}
+              checked={proxyEnabled}
+              onCheckedChange={onProxyEnabledChange}
+              disabled={disabled}
+            />
+            <FieldLabel htmlFor={`${idPrefix}-proxy-enabled`}>
+              Use fixed IP proxy
+            </FieldLabel>
+          </div>
+          {proxyEnabled && (
+            <FieldGroup className="mt-4 gap-4">
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor={`${idPrefix}-proxy-url`}>
+                  Proxy URL
+                </FieldLabel>
+                <FieldDescription>
+                  HTTP CONNECT proxy with a public IPv4 endpoint. Include
+                  username and password if required.
+                </FieldDescription>
+                <Input
+                  id={`${idPrefix}-proxy-url`}
+                  type="password"
+                  autoComplete="off"
+                  placeholder="http://user:password@proxy-ip:port"
+                  value={values.proxyUrl ?? ''}
+                  disabled={disabled}
+                  onChange={(e) => onChange('proxyUrl', e.target.value)}
+                />
+              </Field>
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor={`${idPrefix}-proxy-ip`}>
+                  Outgoing IPv4 address
+                </FieldLabel>
+                <FieldDescription>
+                  Allowlist this address in Namecheap API settings. It may
+                  differ from the proxy endpoint.
+                </FieldDescription>
+                <Input
+                  id={`${idPrefix}-proxy-ip`}
+                  autoComplete="off"
+                  placeholder="Your proxy’s outgoing IPv4"
+                  value={values.proxyIp ?? ''}
+                  disabled={disabled}
+                  onChange={(e) => onChange('proxyIp', e.target.value)}
+                />
+              </Field>
+              {isWeb() && (
+                <p className="text-sm text-muted-foreground">
+                  Workers proxy connections use an experimental TLS client.
+                  Review the{' '}
+                  <a
+                    className="underline"
+                    href="https://github.com/latentharbor/tunnelfetch#readme"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    transport’s security limitations
+                  </a>{' '}
+                  before enabling it.
+                </p>
+              )}
+            </FieldGroup>
+          )}
+        </div>
+      )}
     </FieldGroup>
   );
 }
@@ -748,14 +839,24 @@ function NewRegistrarAccountForm({
     heading.current?.focus({ preventScroll: true });
   }, []);
   const [values, setValues] = useState<CredentialValues>({});
+  const [proxyEnabled, setProxyEnabled] = useState(false);
   const [label, setLabel] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready =
     Object.values(values).some((value) => value.trim()) &&
     provider.configFields.every(
-      (field) => !field.required || values[field.name]?.trim(),
-    );
+      (field) =>
+        !field.required ||
+        (provider.name === 'namecheap' &&
+        proxyEnabled &&
+        field.name === 'clientIp'
+          ? values.proxyIp?.trim()
+          : values[field.name]?.trim()),
+    ) &&
+    (provider.name !== 'namecheap' ||
+      !proxyEnabled ||
+      Boolean(values.proxyUrl?.trim() && values.proxyIp?.trim()));
   const save = async () => {
     if (!ready || saving) return;
     setSaving(true);
@@ -763,7 +864,9 @@ function NewRegistrarAccountForm({
     try {
       const account = await window.api.connectRegistrarAccount(
         provider.name,
-        values,
+        provider.name === 'namecheap'
+          ? namecheapCredentials(values, proxyEnabled)
+          : values,
         label.trim() || undefined,
       );
       onAdded(account);
@@ -799,6 +902,8 @@ function NewRegistrarAccountForm({
           idPrefix={`${provider.name}-new`}
           values={values}
           disabled={saving}
+          proxyEnabled={proxyEnabled}
+          onProxyEnabledChange={setProxyEnabled}
           onChange={(name, value) =>
             setValues((current) => ({ ...current, [name]: value }))
           }

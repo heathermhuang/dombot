@@ -19,6 +19,8 @@ import {
 import { domainKey } from '../../shared/account-key';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
+import { createProxiedNamecheap } from './namecheap-proxy';
+import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
 import { resolveNameservers } from '../dns';
 import { isRegistrarEnabled, setRegistrarEnabled } from './registrar-state';
 import {
@@ -205,12 +207,20 @@ export function getRegistrarClient(
   const account = resolveAccount(name, accountId);
   requireActive(account);
   const credentials = resolveCredentials(name, account.id);
-  const fingerprint = JSON.stringify(credentials);
+  const proxy =
+    name === 'namecheap'
+      ? parseNamecheapProxy(getStoredCredentials(account.id))
+      : null;
+  const fingerprint = JSON.stringify({ credentials, proxy });
   if (clientCredentials.get(account.id) !== fingerprint)
     invalidateAccount(account.id);
   let client = clients.get(account.id);
   if (!client) {
-    client = new RegistrarClient(createRegistrar(name, credentials));
+    client = new RegistrarClient(
+      proxy
+        ? createProxiedNamecheap(credentials, proxy)
+        : createRegistrar(name, credentials),
+    );
     clients.set(account.id, client);
     clientCredentials.set(account.id, fingerprint);
   }
@@ -640,10 +650,16 @@ export async function connectRegistrarAccount(
   const provider = getRegistrarCatalog().find((r) => r.name === name);
   if (!provider) throw new Error('Unknown registrar.');
   const clean: RegistrarCredentials = {};
+  const proxy = name === 'namecheap' ? parseNamecheapProxy(credentials) : null;
   for (const field of provider.configFields) {
     const value = credentials[field.name]?.trim();
     if (value) clean[field.name] = value;
-    else if (field.required) throw new Error(`${field.label} is required.`);
+    else if (field.required && !(proxy && field.name === 'clientIp'))
+      throw new Error(`${field.label} is required.`);
+  }
+  if (proxy) {
+    clean.proxyUrl = proxy.url;
+    clean.proxyIp = proxy.ip;
   }
   if (!Object.keys(clean).length)
     throw new Error('Enter your account credentials.');
@@ -654,12 +670,14 @@ export async function connectRegistrarAccount(
       (account) =>
         account.name === name &&
         account.saved &&
-        provider.configFields.every(
-          (field) =>
-            (getStoredCredentials(account.accountId ?? name)[
-              field.name
-            ]?.trim() ?? '') === (clean[field.name] ?? ''),
-        ),
+        provider.configFields
+          .filter((field) => name !== 'namecheap' || field.name !== 'clientIp')
+          .every(
+            (field) =>
+              (getStoredCredentials(account.accountId ?? name)[
+                field.name
+              ]?.trim() ?? '') === (clean[field.name] ?? ''),
+          ),
     );
     if (duplicate)
       throw new Error(
@@ -667,7 +685,9 @@ export async function connectRegistrarAccount(
       );
   };
   assertNotDuplicate();
-  const client = new RegistrarClient(createRegistrar(name, clean));
+  const client = new RegistrarClient(
+    proxy ? createProxiedNamecheap(clean, proxy) : createRegistrar(name, clean),
+  );
   const result = await client.testConnection();
   if (!result.success)
     throw new Error(
@@ -709,10 +729,18 @@ export async function saveRegistrarCredentials(
   creds: RegistrarCredentials,
   accountId?: string,
 ): Promise<void> {
+  if (name === 'namecheap') parseNamecheapProxy(creds);
   const account = resolveAccount(name, accountId);
+  const previous = getStoredCredentials(account.id);
+  const sameNamecheapAccount =
+    name === 'namecheap' &&
+    Boolean(previous.username && previous.apiKey) &&
+    ['username', 'apiKey'].every(
+      (field) => previous[field]?.trim() === creds[field]?.trim(),
+    );
   invalidateAccount(account.id);
   await setStoredCredentials(account.id, creds);
-  clearRegistrarData(account.id);
+  if (!sameNamecheapAccount) clearRegistrarData(account.id);
 }
 
 /**
@@ -1047,25 +1075,41 @@ async function lookupNameservers(domainName: string): Promise<string[]> {
 // Resolve a field to the value the user saved in Settings (encrypted at rest
 // by the host). Credentials come only from the GUI store now — no .env or
 // process.env fallback, so ambient vars from other tools can't shadow creds.
-function resolveField(name: string, field: string): string | undefined {
-  return getStoredCredentials(name)[field];
+function resolveField(
+  name: RegistrarName,
+  accountId: string,
+  field: string,
+): string | undefined {
+  const credentials = getStoredCredentials(accountId);
+  if (name === 'namecheap' && field === 'clientIp') {
+    const proxy = parseNamecheapProxy(credentials);
+    if (proxy) return proxy.ip;
+  }
+  return credentials[field];
 }
 
 function isConfigured(name: RegistrarName, accountId: string): boolean {
-  const fields = registrars[name].configFields;
-  // Every required field must resolve to a value.
-  const requiredOk = fields.every(
-    (field) => !field.required || Boolean(resolveField(accountId, field.name)),
-  );
-  if (!requiredOk) return false;
-  // Some registrars mark every credential field optional because they accept
-  // one of several auth shapes. There "all required fields present" is vacuously
-  // true even with nothing entered, which would make the registrar look
-  // configured on a fresh install and then 401 on the first query. So when
-  // nothing is required, also demand at least one credential value before
-  // treating the registrar as configured.
-  if (fields.some((field) => field.required)) return true;
-  return fields.some((field) => Boolean(resolveField(accountId, field.name)));
+  try {
+    const fields = registrars[name].configFields;
+    // Every required field must resolve to a value.
+    const requiredOk = fields.every(
+      (field) =>
+        !field.required || Boolean(resolveField(name, accountId, field.name)),
+    );
+    if (!requiredOk) return false;
+    // Some registrars mark every credential field optional because they accept
+    // one of several auth shapes. There "all required fields present" is vacuously
+    // true even with nothing entered, which would make the registrar look
+    // configured on a fresh install and then 401 on the first query. So when
+    // nothing is required, also demand at least one credential value before
+    // treating the registrar as configured.
+    if (fields.some((field) => field.required)) return true;
+    return fields.some((field) =>
+      Boolean(resolveField(name, accountId, field.name)),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function resolveCredentials(
@@ -1075,7 +1119,7 @@ function resolveCredentials(
   const creds: RegistrarCredentials = {};
   const missing: string[] = [];
   for (const field of registrars[name].configFields) {
-    const value = resolveField(accountId, field.name);
+    const value = resolveField(name, accountId, field.name);
     if (value) creds[field.name] = value;
     else if (field.required) missing.push(field.name);
   }

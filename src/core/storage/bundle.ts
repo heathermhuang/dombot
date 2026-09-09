@@ -1,4 +1,5 @@
 import { validateAccountRecords } from '../services/accounts';
+import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
 import {
   broadcastApprovalsChanged,
   broadcastPortfolioChanged,
@@ -89,7 +90,20 @@ export function parseBundle(text: string): DataBundle {
     }
   }
   try {
-    validateAccountRecords(head.namespaces['registrar-accounts'] ?? {});
+    const accounts = head.namespaces['registrar-accounts'] ?? {};
+    validateAccountRecords(accounts);
+    for (const [id, credentials] of Object.entries(
+      head.namespaces.credentials ?? {},
+    )) {
+      const account = accounts[id] as { registrar?: string } | undefined;
+      if (
+        (id === 'namecheap' || account?.registrar === 'namecheap') &&
+        credentials &&
+        typeof credentials === 'object'
+      ) {
+        parseNamecheapProxy(credentials as Record<string, unknown>);
+      }
+    }
   } catch (err) {
     throw new BundleError(err instanceof Error ? err.message : String(err));
   }
