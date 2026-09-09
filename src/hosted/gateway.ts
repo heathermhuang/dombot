@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Accounts } from './accounts';
 import { accountForm, home, page } from './views';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
+import { canonicalRedirect, portfolioAlias } from './launch';
 
 const workspaceSchema = z
   .array(
@@ -61,12 +62,19 @@ app.use(
   }),
 );
 app.use('*', async (c, next) => {
+  const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
+  if (redirect) return redirect;
   c.header('Cache-Control', 'no-store');
   c.header('X-Content-Type-Options', 'nosniff');
   // Native POST forms may send Origin:null under no-referrer. same-origin
   // preserves their CSRF signal while suppressing cross-origin referrers.
   c.header('Referrer-Policy', 'same-origin');
-  c.header('X-Robots-Tag', 'noindex, nofollow');
+  if (
+    c.req.path !== '/' &&
+    c.req.path !== '/domains' &&
+    !/^\/w\/[a-f0-9-]+\/p\//.test(c.req.path)
+  )
+    c.header('X-Robots-Tag', 'noindex, nofollow');
   c.header(
     'Content-Security-Policy',
     "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
@@ -79,7 +87,20 @@ app.onError((_error, c) =>
     500,
   ),
 );
-app.get('/', (c) => c.html(home()));
+app.get('/', (c) =>
+  c.html(home(Boolean(portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH)))),
+);
+app.get('/domains', (c) => {
+  const path = portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH);
+  return path
+    ? c.redirect(path + new URL(c.req.url).search, 302)
+    : c.notFound();
+});
+app.get('/robots.txt', (c) =>
+  c.text(
+    'User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /join\nDisallow: /account\nDisallow: /session\nDisallow: /app\n',
+  ),
+);
 app.get('/health', (c) =>
   c.json({
     ok: true,
