@@ -180,7 +180,7 @@ function fmtUsd(n: number): string {
 
 /** Annual renewal-price cell. Shows the figure with a source tooltip, a skeleton
  *  while pricing is still loading, or "—" when unavailable. */
-function RenewalCell({
+export function RenewalCell({
   info,
   loading,
 }: {
@@ -213,7 +213,7 @@ function RenewalCell({
  * that opens the folder-assignment menu directly. Rendered in a `p-0` cell so
  * the button fills the whole cell.
  */
-function FolderCell({
+export function FolderCell({
   folders,
   folderId,
   onAssign,
@@ -371,7 +371,7 @@ function domainLifecycle(
 }
 
 /** A distinctly-colored pill per lifecycle state; nothing when healthy. */
-function LifecycleBadge({ status }: { status: string }) {
+export function LifecycleBadge({ status }: { status: string }) {
   const flag = domainLifecycle(status);
   if (!flag) return null;
   return (
@@ -395,7 +395,7 @@ function LifecycleBadge({ status }: { status: string }) {
  * (Cloudflare), and while the write is in flight. Outcome is a toast. Brand
  * green when on, a muted red when off.
  */
-function AutoRenewSwitch({ domain }: { domain: Domain }) {
+export function AutoRenewSwitch({ domain }: { domain: Domain }) {
   const applyDomainOp = useAppStore((s) => s.applyDomainOp);
   const key = domainKey(domain);
   const pending = useAppStore((s) => s.mutating[key] ?? false);
@@ -595,7 +595,9 @@ function toggleValue(selected: string[], value: string): string[] {
 
 // ── Page ────────────────────────────────────────────────────────────────────
 
-export default function Domains() {
+export default function Domains({
+  hidePublication = false,
+}: { hidePublication?: boolean } = {}) {
   const [addingToPortfolio, setAddingToPortfolio] = useState(false);
   const {
     portfolio,
@@ -1089,7 +1091,7 @@ export default function Domains() {
             }`}
           </p>
         </div>
-        {isWeb() && (
+        {isWeb() && !hidePublication && (
           <Button
             variant="outline"
             onClick={() => navigate('/public-portfolio')}
@@ -1267,7 +1269,7 @@ export default function Domains() {
           domains={selectedDomains}
           addingToPortfolio={addingToPortfolio}
           onAddToPortfolio={
-            isWeb()
+            isWeb() && !hidePublication
               ? () => {
                   setAddingToPortfolio(true);
                   void portfolioEditor

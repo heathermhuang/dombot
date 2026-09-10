@@ -1,3 +1,16 @@
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useDomainList, type DomainScope } from '../store/domain-list';
+import {
+  buildDomainCatalog,
+  withInventory,
+  matchesRegistrarFilters,
+  sortManagementRows,
+} from '../../shared/domain-catalog';
+import { domainKey } from '../../shared/account-key';
+import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
+import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
+import { Switch } from '@/components/ui/switch';
+import LegacyDomains from './Domains';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -51,7 +64,6 @@ import {
   filterPortfolio,
   isCurrent,
   type BulkPortfolioEdit,
-  type PortfolioScope,
   type OwnershipFilter,
 } from '../../shared/portfolio-management';
 import { renderPortfolio } from '../../shared/render-portfolio';
@@ -68,20 +80,60 @@ import { PortfolioReview } from '../components/portfolio/PortfolioReview';
 import '../components/portfolio/portfolio.css';
 
 const PAGE_SIZE = 50;
-export default function PublicPortfolio() {
-  const { state, draft, status, error } = usePortfolioEditor();
+export default function DomainWorkspace({
+  area,
+}: {
+  area: 'domains' | 'page';
+}) {
+  const { state, draft: savedDraft, status, error } = usePortfolioEditor();
+  const inventory = useAppStore((s) => s.portfolio);
+  const enriched = useAppStore((s) => s.enriched);
+  const pricing = useAppStore((s) => s.pricing);
+  const accounts = useAppStore((s) => s.registrars);
+  const folders = useAppStore((s) => s.folders);
+  const assignments = useAppStore((s) => s.folderAssignments);
+  const loadRegistrars = useAppStore((s) => s.loadRegistrars);
+  const effectiveInventory = useMemo(
+    () =>
+      inventory.map((record) =>
+        enriched[domainKey(record)]
+          ? {
+              ...record,
+              ...enriched[domainKey(record)],
+              accountId: record.accountId,
+              accountLabel: record.accountLabel,
+              registrar: record.registrar,
+              domainName: record.domainName,
+            }
+          : record,
+      ),
+    [inventory, enriched],
+  );
+  const draft = useMemo(
+    () => (savedDraft ? withInventory(savedDraft, inventory) : null),
+    [savedDraft, inventory],
+  );
+  const navigate = useNavigate();
+  const location = useLocation();
+  const requestedView = new URLSearchParams(location.search).get('view');
+  const view =
+    area === 'domains'
+      ? 'domains'
+      : requestedView === 'preview' || requestedView === 'review'
+        ? requestedView
+        : 'settings';
+  const list = useDomainList();
+  const { mode, scope, query, collection, sort, page, picked } = list;
+  const ownershipFilter = list.ownership;
+  const setPage = list.setPage,
+    setPicked = list.setPicked;
+  const setScope = (scope: DomainScope) => list.setFilters({ scope });
+  const setQuery = (query: string) => list.setFilters({ query });
+  const setCollection = (collection: string) => list.setFilters({ collection });
+  const setSort = (sort: string) => list.setFilters({ sort });
+  const setOwnershipFilter = (ownership: OwnershipFilter) =>
+    list.setFilters({ ownership });
   const refreshTick = useAppStore((s) => s.refreshTick);
-  const [view, setView] = useState<
-    'domains' | 'settings' | 'preview' | 'review'
-  >('domains');
-  const [scope, setScope] = useState<PortfolioScope>('listed');
-  const [ownershipFilter, setOwnershipFilter] =
-    useState<OwnershipFilter>('all');
-  const [query, setQuery] = useState('');
-  const [collection, setCollection] = useState('');
-  const [sort, setSort] = useState('az');
-  const [page, setPage] = useState(1);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -101,14 +153,21 @@ export default function PublicPortfolio() {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   useEffect(() => {
     void portfolioEditor.load().catch(() => {});
+    void loadRegistrars();
     window.scrollTo(0, 0);
-  }, []);
+  }, [loadRegistrars]);
   useEffect(() => {
     if (refreshTick)
       void portfolioEditor
         .refreshReview()
         .catch((e: Error) => setActionError(e.message));
   }, [refreshTick]);
+  useEffect(() => {
+    setUndo(null);
+    setEditing(null);
+    setNotice('');
+    setCollectionAction(false);
+  }, [area]);
   const checks = useMemo(
     () => new Map(state?.review.map((item) => [item.domain, item]) ?? []),
     [state],
@@ -127,19 +186,76 @@ export default function PublicPortfolio() {
         : '',
     [view, draft, previewHistory],
   );
-  const filtered = useMemo(
+  const catalog = useMemo(
     () =>
-      draft && state
-        ? filterPortfolio(draft.listings, state.review, {
-            scope,
-            ownership: ownershipFilter,
-            query,
-            collection,
-            sort,
-          })
-        : [],
-    [draft, state, scope, ownershipFilter, query, collection, sort],
+      buildDomainCatalog(
+        draft?.listings ?? [],
+        effectiveInventory,
+        accounts,
+        list.account,
+      ),
+    [draft, effectiveInventory, accounts, list.account],
   );
+  const filtered = useMemo(() => {
+    if (!draft || !state) return [];
+    const candidates = filterPortfolio(draft.listings, state.review, {
+      scope: scope === 'registered' ? 'all' : scope,
+      ownership: ownershipFilter,
+      query,
+      collection,
+      sort,
+    }).filter(
+      (item) =>
+        (scope !== 'registered' ||
+          !!catalog.get(item.domain)?.records.length) &&
+        matchesRegistrarFilters(
+          catalog.get(item.domain)!,
+          {
+            account: list.account,
+            tld: list.tld,
+            expiry: list.expiry,
+            folder: list.folder,
+            nameserver: list.nameserver,
+          },
+          assignments,
+          new Set(folders.map((folder) => folder.id)),
+          HIDDEN_FOLDER_ID,
+        ),
+    );
+    return sortManagementRows(candidates, catalog, pricing, sort);
+  }, [
+    draft,
+    state,
+    scope,
+    ownershipFilter,
+    query,
+    collection,
+    sort,
+    catalog,
+    list.account,
+    list.tld,
+    list.expiry,
+    list.folder,
+    list.nameserver,
+    assignments,
+    pricing,
+    folders,
+  ]);
+  const displayedPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)),
+  );
+  const visibleNames = filtered
+    .slice((displayedPage - 1) * PAGE_SIZE, displayedPage * PAGE_SIZE)
+    .map((item) => item.domain);
+  const management = useRegistrarManagement({
+    catalog,
+    selected: picked,
+    visible: visibleNames,
+    active: area === 'domains' && mode === 'manage',
+    needsAllDetails: !!list.nameserver,
+    clearSelection: () => setPicked(new Set()),
+  });
   const collections = useMemo(
     () =>
       [
@@ -170,6 +286,16 @@ export default function PublicPortfolio() {
       setBusy(false);
     }
   };
+  if ((!draft || !state) && error && area === 'domains')
+    return (
+      <>
+        <div className="pf-alert" role="alert">
+          Public-page metadata is unavailable. Registrar management remains
+          available.
+        </div>
+        <LegacyDomains hidePublication />
+      </>
+    );
   if (!draft || !state)
     return (
       <section className="pf-workspace">
@@ -288,10 +414,7 @@ export default function PublicPortfolio() {
       return false;
     }
   };
-  const selectScope = (
-    next: PortfolioScope,
-    owner: OwnershipFilter = 'all',
-  ) => {
+  const selectScope = (next: DomainScope, owner: OwnershipFilter = 'all') => {
     setScope(next);
     setOwnershipFilter(owner);
     setPage(1);
@@ -300,13 +423,33 @@ export default function PublicPortfolio() {
     clearSelection();
     window.scrollTo(0, 0);
   };
+  const resetFilters = () =>
+    list.setFilters({
+      query: '',
+      collection: '',
+      ownership: 'all',
+      sort: 'az',
+      account: '',
+      tld: '',
+      expiry: '',
+      folder: '',
+      nameserver: '',
+    });
   const filterChange = (action: () => void) => {
     action();
     setPage(1);
     clearSelection();
   };
-  const navigateView = (next: typeof view) => {
-    setView(next);
+  const navigateView = (
+    next: 'domains' | 'settings' | 'preview' | 'review',
+  ) => {
+    navigate(
+      next === 'domains'
+        ? '/'
+        : next === 'settings'
+          ? '/public-page'
+          : `/public-page?view=${next}`,
+    );
     setNotice('');
     setUndo(null);
     window.scrollTo(0, 0);
@@ -317,6 +460,9 @@ export default function PublicPortfolio() {
       await portfolioEditor.refreshReview();
       navigateView('review');
     });
+  const registrarRows = filtered.flatMap((item) =>
+    catalog.get(item.domain)?.target ? [catalog.get(item.domain)!.target!] : [],
+  );
   const copyLink = () =>
     void navigator.clipboard
       .writeText(
@@ -331,7 +477,7 @@ export default function PublicPortfolio() {
 
   return (
     <section className="pf-workspace">
-      {view !== 'domains' && (
+      {area === 'page' && (
         <button className="pf-back" onClick={() => navigateView('domains')}>
           <ArrowLeft />
           Back to domains
@@ -346,18 +492,42 @@ export default function PublicPortfolio() {
                 ? 'Publish review'
                 : view === 'preview'
                   ? 'Private preview'
-                  : 'Public portfolio'}
+                  : mode === 'manage'
+                    ? 'Registrar management'
+                    : 'Public page selection'}
           </span>
           <h1>
-            {view === 'review'
-              ? 'Review your changes'
-              : draft.title || 'Your collection'}
+            {view === 'domains'
+              ? 'Domains'
+              : view === 'review'
+                ? 'Review your changes'
+                : draft.title || 'Your public page'}
           </h1>
           <div className="pf-status">
+            {area === 'domains' && (
+              <span>
+                {
+                  new Set(
+                    inventory.map((item) => item.domainName.toLowerCase()),
+                  ).size
+                }{' '}
+                registrar domains ·{' '}
+                {Math.max(
+                  0,
+                  draft.listings.length -
+                    new Set(
+                      inventory.map((item) => item.domainName.toLowerCase()),
+                    ).size,
+                )}{' '}
+                history / imported
+              </span>
+            )}
             {state.published ? (
               <span>
                 <i className="pf-live-dot" />
-                Live · {state.published.count} names
+                {area === 'domains'
+                  ? `${state.published.count} on public page`
+                  : `Live · ${state.published.count} names`}
               </span>
             ) : (
               <span>Not published</span>
@@ -372,6 +542,29 @@ export default function PublicPortfolio() {
             )}
           </div>
         </div>
+        {area === 'domains' && (
+          <div className="domain-view-switch" aria-label="Domain view">
+            <button
+              aria-pressed={mode === 'manage'}
+              onClick={() => {
+                list.setMode('manage');
+                setEditing(null);
+                setCollectionAction(false);
+              }}
+            >
+              Manage
+            </button>
+            <button
+              aria-pressed={mode === 'publish'}
+              onClick={() => {
+                list.setMode('publish');
+                setEditing(null);
+              }}
+            >
+              Publish
+            </button>
+          </div>
+        )}
         <div className="pf-actions">
           {view === 'domains' && (
             <>
@@ -381,7 +574,7 @@ export default function PublicPortfolio() {
                 onClick={() => navigateView('settings')}
               >
                 <Settings2 />
-                Page settings
+                Public page
               </Button>
               <Button
                 variant="outline"
@@ -428,11 +621,17 @@ export default function PublicPortfolio() {
                       <DropdownMenuSeparator />
                     </>
                   )}
+                  <DropdownMenuItem
+                    disabled={!registrarRows.length}
+                    onSelect={() => void management.exportRows(registrarRows)}
+                  >
+                    Export {registrarRows.length} registered domains (CSV)
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setImporting(true)}>
                     <Upload />
                     Import domains
                   </DropdownMenuItem>
-                  {state.published && (
+                  {area === 'page' && state.published && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -444,6 +643,57 @@ export default function PublicPortfolio() {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+            </>
+          )}
+          {area === 'page' && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  list.setMode('publish');
+                  navigateView('domains');
+                }}
+              >
+                Choose domains
+              </Button>
+              {changes.count > 0 && view !== 'review' && (
+                <Button size="sm" disabled={busy} onClick={review}>
+                  Review changes ({changes.count}) →
+                </Button>
+              )}
+              {liveUrl && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label="Public page options"
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {liveUrl && (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <a href={liveUrl} target="_blank" rel="noreferrer">
+                            View live page
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={copyLink}>
+                          Copy page link
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => setConfirmUnpublish(true)}
+                        >
+                          Unpublish…
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </>
           )}
           {view === 'settings' && (
@@ -464,13 +714,6 @@ export default function PublicPortfolio() {
                 onClick={() => setMobile(!mobile)}
               >
                 {mobile ? 'Desktop view' : 'Mobile view'}
-              </Button>
-              <Button
-                size="sm"
-                disabled={busy || changes.count === 0}
-                onClick={review}
-              >
-                Review changes →
               </Button>
             </>
           )}
@@ -592,6 +835,7 @@ export default function PublicPortfolio() {
             )
               navigateView('settings');
             else {
+              list.setMode('publish');
               selectScope('listed', 'blocking');
               navigateView('domains');
             }
@@ -599,7 +843,7 @@ export default function PublicPortfolio() {
           onPublish={() =>
             void run(async () => {
               await portfolioEditor.publish();
-              navigateView('domains');
+              navigateView('settings');
               setNotice('Your portfolio is published.');
             })
           }
@@ -610,11 +854,18 @@ export default function PublicPortfolio() {
             <div className="pf-scopes">
               {(
                 [
+                  [
+                    'registered',
+                    'Inventory',
+                    new Set(
+                      inventory.map((item) => item.domainName.toLowerCase()),
+                    ).size,
+                  ],
                   ['listed', 'Listed', current.length],
-                  ['private', 'Not listed', privateNames.length],
+                  ['private', 'Private', privateNames.length],
                   ['history', 'History', history.length],
                   ['all', 'All names', draft.listings.length],
-                ] as [PortfolioScope, string, number][]
+                ] as [DomainScope, string, number][]
               ).map(([key, label, count]) => (
                 <button
                   key={key}
@@ -631,7 +882,7 @@ export default function PublicPortfolio() {
                 <Search />
                 <Input
                   type="search"
-                  aria-label="Search portfolio"
+                  aria-label="Search domains"
                   placeholder="Search domains or collections…"
                   value={query}
                   onChange={(e) => filterChange(() => setQuery(e.target.value))}
@@ -664,21 +915,142 @@ export default function PublicPortfolio() {
                 <option value="blocking">Blocks publishing</option>
               </select>
               <select
-                aria-label="Sort portfolio"
+                aria-label="Sort domains"
                 className="pf-sort"
                 value={sort}
                 onChange={(e) => filterChange(() => setSort(e.target.value))}
               >
                 <option value="az">Name A–Z</option>
                 <option value="za">Name Z–A</option>
-                <option value="price">Price by currency</option>
+                <option value="price">Asking price by currency</option>
+                <option value="expiry">Expiration soonest</option>
+                <option value="renewal">Renewal cost highest</option>
               </select>
-              <Button size="sm" onClick={() => selectScope('private', 'owned')}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  list.setMode('publish');
+                  selectScope('private', 'owned');
+                }}
+              >
                 <Plus />
-                Add domains
+                Choose listings
               </Button>
             </div>
-            {picked.size > 0 && (
+            <details className="domain-more-filters">
+              <summary>
+                Registrar filters
+                {[
+                  list.account,
+                  list.tld,
+                  list.expiry,
+                  list.folder,
+                  list.nameserver,
+                ].filter(Boolean).length
+                  ? ` · ${[list.account, list.tld, list.expiry, list.folder, list.nameserver].filter(Boolean).length} active`
+                  : ''}
+              </summary>
+              <div>
+                <button className="pf-text-button" onClick={resetFilters}>
+                  Reset all filters
+                </button>
+                <label>
+                  Account
+                  <select
+                    aria-label="Filter registrar account"
+                    value={list.account}
+                    onChange={(e) =>
+                      list.setFilters({ account: e.target.value })
+                    }
+                  >
+                    <option value="">All connected accounts</option>
+                    {accounts
+                      ?.filter((a) => a.configured)
+                      .map((a) => (
+                        <option
+                          key={a.accountId ?? a.name}
+                          value={a.accountId ?? a.name}
+                        >
+                          {a.displayName}
+                          {accounts.filter(
+                            (x) => x.name === a.name && x.configured,
+                          ).length > 1
+                            ? ` · ${a.accountLabel}`
+                            : ''}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  TLD
+                  <select
+                    aria-label="Filter TLD"
+                    value={list.tld}
+                    onChange={(e) => list.setFilters({ tld: e.target.value })}
+                  >
+                    <option value="">All TLDs</option>
+                    {[
+                      ...new Set(
+                        draft.listings.map((i) =>
+                          i.domain.split('.').slice(1).join('.'),
+                        ),
+                      ),
+                    ]
+                      .sort()
+                      .map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Expiration
+                  <select
+                    aria-label="Filter expiration"
+                    value={list.expiry}
+                    onChange={(e) =>
+                      list.setFilters({ expiry: e.target.value })
+                    }
+                  >
+                    <option value="">Any expiration</option>
+                    <option value="30">Within 30 days</option>
+                    <option value="90">Within 90 days</option>
+                    <option value="365">Within one year</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                </label>
+                <label>
+                  Folder
+                  <select
+                    aria-label="Filter folder"
+                    value={list.folder}
+                    onChange={(e) =>
+                      list.setFilters({ folder: e.target.value })
+                    }
+                  >
+                    <option value="">Visible folders</option>
+                    <option value="unassigned">Unassigned</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                    <option value={HIDDEN_FOLDER_ID}>Hidden</option>
+                  </select>
+                </label>
+                <label>
+                  Nameserver
+                  <Input
+                    aria-label="Filter nameserver"
+                    placeholder="e.g. cloudflare.com"
+                    value={list.nameserver}
+                    onChange={(e) =>
+                      list.setFilters({ nameserver: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+            </details>
+            {mode === 'publish' && picked.size > 0 && (
               <div className="pf-bulk">
                 <strong>{picked.size} selected</strong>
                 {allPrivate ? (
@@ -689,7 +1061,7 @@ export default function PublicPortfolio() {
                       apply({ kind: 'visibility', value: 'showcase' })
                     }
                   >
-                    Add to portfolio
+                    Include on public page
                   </Button>
                 ) : (
                   <DropdownMenu>
@@ -763,7 +1135,7 @@ export default function PublicPortfolio() {
                 )}
               </div>
             )}
-            {collectionAction && picked.size > 0 && (
+            {mode === 'publish' && collectionAction && picked.size > 0 && (
               <div className="pf-bulk-form">
                 <label className="pf-field">
                   Action
@@ -825,6 +1197,7 @@ export default function PublicPortfolio() {
                 )}
               </div>
             )}
+            {management.toolbar}
             <label className="pf-mobile-select">
               <Checkbox
                 aria-label="Select visible domains"
@@ -839,217 +1212,271 @@ export default function PublicPortfolio() {
               />
               Select this page
             </label>
-            <table className="pf-table">
-              <thead>
-                <tr>
-                  <th>
-                    <Checkbox
-                      aria-label="Select this page"
-                      checked={
-                        visibleSelected === 0
-                          ? false
-                          : visibleSelected === rows.length
-                            ? true
-                            : 'indeterminate'
-                      }
-                      onCheckedChange={(checked) => {
-                        const next = new Set(picked);
-                        rows.forEach((item) =>
-                          checked
-                            ? next.add(item.domain)
-                            : next.delete(item.domain),
-                        );
-                        setPicked(next);
-                      }}
-                    />
-                  </th>
-                  <th>Domain</th>
-                  <th>Availability</th>
-                  <th className="pf-collection-cell">Collections</th>
-                  <th>Asking price</th>
-                  <th className="pf-check-column">Ownership</th>
-                  <th>
-                    <span className="sr-only">Edit</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((item) => {
-                  const check =
-                    checks.get(item.domain)?.ownership ?? 'unmatched';
-                  return (
-                    <tr
-                      key={item.domain}
-                      data-selected={picked.has(item.domain)}
-                    >
-                      <td>
-                        <Checkbox
-                          aria-label={`Select ${item.domain}`}
-                          checked={picked.has(item.domain)}
-                          onCheckedChange={(checked) => {
-                            const next = new Set(picked);
-                            if (checked) next.add(item.domain);
-                            else next.delete(item.domain);
-                            setPicked(next);
-                          }}
-                        />
-                      </td>
-                      <td className="pf-domain-cell">
-                        <button
-                          className="pf-domain"
-                          onClick={() => openInspector(item.domain)}
-                        >
-                          {item.domain}
-                        </button>
-                        {check !== 'owned' &&
-                          item.visibility !== 'historical' && (
-                            <span className="pf-mobile-evidence">
-                              {ownershipLabel[check]}
-                            </span>
+            <div className="domain-table-scroll">
+              <table className="pf-table" data-mode={mode}>
+                <thead>
+                  <tr>
+                    <th>
+                      <Checkbox
+                        aria-label="Select this page"
+                        checked={
+                          visibleSelected === 0
+                            ? false
+                            : visibleSelected === rows.length
+                              ? true
+                              : 'indeterminate'
+                        }
+                        onCheckedChange={(checked) => {
+                          const next = new Set(picked);
+                          rows.forEach((item) =>
+                            checked
+                              ? next.add(item.domain)
+                              : next.delete(item.domain),
+                          );
+                          setPicked(next);
+                        }}
+                      />
+                    </th>
+                    <th>Domain</th>
+                    {mode === 'manage' ? (
+                      <>
+                        <th>Registrar / account</th>
+                        <th>Folder</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Renewal</th>
+                        <th>Auto</th>
+                        <th>Privacy</th>
+                        <th>Locked</th>
+                        <th>Nameservers</th>
+                        <th>
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </>
+                    ) : (
+                      <>
+                        <th>On page</th> <th>Availability</th>
+                        <th className="pf-collection-cell">Collections</th>
+                        <th>Asking price</th>
+                        <th className="pf-check-column">Ownership</th>
+                        <th>
+                          <span className="sr-only">Edit</span>
+                        </th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((item) => {
+                    const check =
+                      checks.get(item.domain)?.ownership ?? 'unmatched';
+                    return (
+                      <tr
+                        key={item.domain}
+                        data-selected={picked.has(item.domain)}
+                      >
+                        <td>
+                          <Checkbox
+                            aria-label={`Select ${item.domain}`}
+                            checked={picked.has(item.domain)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(picked);
+                              if (checked) next.add(item.domain);
+                              else next.delete(item.domain);
+                              setPicked(next);
+                            }}
+                          />
+                        </td>
+                        <td className="pf-domain-cell">
+                          {mode === 'manage' ? (
+                            <span className="pf-domain">{item.domain}</span>
+                          ) : (
+                            <button
+                              className="pf-domain"
+                              onClick={() => {
+                                if (mode === 'publish')
+                                  openInspector(item.domain);
+                              }}
+                            >
+                              {item.domain}
+                            </button>
                           )}
-                      </td>
-                      <td className="pf-availability-cell">
-                        {isCurrent(item) ? (
-                          <select
-                            className="pf-inline-availability"
-                            aria-label={`Availability for ${item.domain}`}
-                            value={item.visibility}
-                            onChange={(e) =>
-                              update(item.domain, {
-                                visibility: e.target.value as
-                                  'inquiry' | 'showcase',
-                              })
-                            }
-                          >
-                            <option value="inquiry">Inquiries on</option>
-                            <option value="showcase">Showcase only</option>
-                          </select>
-                        ) : item.visibility === 'historical' ? (
-                          <span className="pf-availability">
-                            Previously owned
-                          </span>
-                        ) : (
-                          <button
-                            className="pf-text-button"
-                            disabled={check === 'unmatched'}
-                            onClick={() =>
-                              apply(
-                                { kind: 'visibility', value: 'showcase' },
-                                new Set([item.domain]),
-                              )
-                            }
-                          >
-                            {check === 'unmatched'
-                              ? 'Not listed'
-                              : '+ Add to page'}
-                          </button>
-                        )}
-                      </td>
-                      <td className="pf-collection-cell">
-                        <div className="pf-collection">
-                          {collectionTokens(item.collection)
-                            .slice(0, 2)
-                            .map((name) => (
-                              <span key={name} className="pf-tag">
-                                {name}
+                          {check !== 'owned' &&
+                            item.visibility !== 'historical' && (
+                              <span className="pf-mobile-evidence">
+                                {ownershipLabel[check]}
                               </span>
-                            ))}
-                          {collectionTokens(item.collection).length > 2 && (
-                            <span className="pf-hint">
-                              +{collectionTokens(item.collection).length - 2}
-                            </span>
-                          )}
-                          {!item.collection && (
-                            <span className="pf-hint">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="pf-price-cell">
-                        <button
-                          className="pf-price"
-                          aria-label={`Edit asking price for ${item.domain}`}
-                          onClick={() => openInspector(item.domain)}
-                        >
-                          {item.visibility === 'historical' ? (
-                            '—'
-                          ) : item.askingPrice === null ? (
-                            <span className="pf-hint">On request</span>
-                          ) : (
-                            `${item.currency} ${item.askingPrice.toLocaleString()}`
-                          )}
-                        </button>
-                      </td>
-                      <td className="pf-check-column">
-                        <span
-                          className="pf-evidence-label"
-                          data-ok={check === 'owned'}
-                        >
-                          {item.visibility === 'historical' ? (
-                            'Owner-declared'
-                          ) : check === 'owned' ? (
-                            <>
-                              <Check />
-                              Synced
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle />
-                              {check === 'unmatched'
-                                ? 'No match'
-                                : check === 'stale'
-                                  ? 'Needs sync'
-                                  : 'Conflict'}
-                            </>
-                          )}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="pf-row-edit"
-                          aria-label={`Edit ${item.domain}`}
-                          onClick={() => openInspector(item.domain)}
-                        >
-                          <Pencil />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            )}
+                        </td>
+                        {mode === 'manage' ? (
+                          management.cells(catalog.get(item.domain))
+                        ) : (
+                          <>
+                            <td className="pf-inclusion-cell">
+                              <Switch
+                                aria-label={`Include ${item.domain} on public page`}
+                                checked={item.visibility !== 'private'}
+                                disabled={
+                                  item.visibility === 'private' &&
+                                  (!checks.get(item.domain) ||
+                                    checks.get(item.domain)?.ownership ===
+                                      'unmatched')
+                                }
+                                onCheckedChange={(on) =>
+                                  apply(
+                                    {
+                                      kind: 'visibility',
+                                      value: on ? 'showcase' : 'private',
+                                    },
+                                    new Set([item.domain]),
+                                  )
+                                }
+                              />
+                            </td>{' '}
+                            <td className="pf-availability-cell">
+                              {isCurrent(item) ? (
+                                <select
+                                  className="pf-inline-availability"
+                                  aria-label={`Availability for ${item.domain}`}
+                                  value={item.visibility}
+                                  onChange={(e) =>
+                                    update(item.domain, {
+                                      visibility: e.target.value as
+                                        'inquiry' | 'showcase',
+                                    })
+                                  }
+                                >
+                                  <option value="inquiry">Inquiries on</option>
+                                  <option value="showcase">
+                                    Showcase only
+                                  </option>
+                                </select>
+                              ) : item.visibility === 'historical' ? (
+                                <span className="pf-availability">
+                                  Previously owned
+                                </span>
+                              ) : (
+                                <span className="pf-availability">
+                                  Not listed
+                                </span>
+                              )}
+                            </td>
+                            <td className="pf-collection-cell">
+                              <div className="pf-collection">
+                                {collectionTokens(item.collection)
+                                  .slice(0, 2)
+                                  .map((name) => (
+                                    <span key={name} className="pf-tag">
+                                      {name}
+                                    </span>
+                                  ))}
+                                {collectionTokens(item.collection).length >
+                                  2 && (
+                                  <span className="pf-hint">
+                                    +
+                                    {collectionTokens(item.collection).length -
+                                      2}
+                                  </span>
+                                )}
+                                {!item.collection && (
+                                  <span className="pf-hint">—</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="pf-price-cell">
+                              <button
+                                className="pf-price"
+                                aria-label={`Edit asking price for ${item.domain}`}
+                                onClick={() => {
+                                  if (mode === 'publish')
+                                    openInspector(item.domain);
+                                }}
+                              >
+                                {item.visibility === 'historical' ? (
+                                  '—'
+                                ) : item.askingPrice === null ? (
+                                  <span className="pf-hint">On request</span>
+                                ) : (
+                                  `${item.currency} ${item.askingPrice.toLocaleString()}`
+                                )}
+                              </button>
+                            </td>
+                            <td className="pf-check-column">
+                              <span
+                                className="pf-evidence-label"
+                                data-ok={check === 'owned'}
+                              >
+                                {item.visibility === 'historical' ? (
+                                  'Owner-declared'
+                                ) : check === 'owned' ? (
+                                  <>
+                                    <Check />
+                                    Synced
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertCircle />
+                                    {check === 'unmatched'
+                                      ? 'No match'
+                                      : check === 'stale'
+                                        ? 'Needs sync'
+                                        : 'Conflict'}
+                                  </>
+                                )}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="pf-row-edit"
+                                aria-label={`Edit ${item.domain}`}
+                                onClick={() => {
+                                  if (mode === 'publish')
+                                    openInspector(item.domain);
+                                }}
+                              >
+                                <Pencil />
+                              </button>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             {!rows.length && (
               <div className="pf-empty">
                 <Globe />
                 <h2>
-                  {scope === 'listed' &&
-                  !query &&
-                  !collection &&
-                  ownershipFilter === 'all'
-                    ? 'Your collection starts here'
+                  {draft.listings.length === 0
+                    ? 'Connect your domains'
                     : 'No matching domains'}
                 </h2>
                 <p>
-                  {scope === 'listed' && current.length === 0
-                    ? 'Choose names from your inventory. Everything stays private until you publish.'
-                    : 'Try another filter or clear your search.'}
+                  {draft.listings.length === 0
+                    ? 'Connect a registrar to manage your domains, or import names to prepare your public page.'
+                    : 'Try another view or clear the active filters.'}
                 </p>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    selectScope(
-                      scope === 'listed' && current.length === 0
-                        ? 'private'
-                        : scope,
-                      scope === 'listed' && current.length === 0
-                        ? 'owned'
-                        : 'all',
-                    )
-                  }
-                >
-                  {current.length === 0 && scope === 'listed'
-                    ? 'Choose domains'
-                    : 'Clear filters'}
-                </Button>
+                {draft.listings.length === 0 ? (
+                  <div className="pf-actions justify-center">
+                    <Button
+                      onClick={() => navigate('/settings?tab=registrars')}
+                    >
+                      Connect registrar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setImporting(true)}
+                    >
+                      Import collection
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" onClick={resetFilters}>
+                    Clear filters
+                  </Button>
+                )}
               </div>
             )}
             <div className="pf-footer">
@@ -1117,6 +1544,7 @@ export default function PublicPortfolio() {
           </div>
         </>
       )}
+      {management.dialogs}
       <PortfolioInspector
         item={inspector}
         check={inspector ? checks.get(inspector.domain) : undefined}

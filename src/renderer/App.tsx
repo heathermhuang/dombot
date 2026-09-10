@@ -1,5 +1,11 @@
 import { useEffect } from 'react';
-import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import {
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useNavigate,
+} from 'react-router-dom';
 import { CalendarClock, Globe, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from './store/app';
@@ -9,7 +15,7 @@ import Settings from './pages/Settings';
 import ApprovalModal from './components/ApprovalModal';
 import StatusBar from './components/StatusBar';
 import SyncControl from './components/SyncControl';
-import PublicPortfolio from './pages/PublicPortfolio';
+import DomainWorkspace from './pages/DomainWorkspace';
 import { isWeb, webAuthMode } from './lib/platform';
 import { Toaster } from '@/components/ui/sonner';
 import { portfolioEditor, usePortfolioEditor } from './lib/publication-client';
@@ -115,9 +121,9 @@ export default function App() {
             Renewals
           </NavLink>
           {isWeb() && (
-            <NavLink to="/public-portfolio" className={navLinkClass}>
+            <NavLink to="/public-page" className={navLinkClass}>
               <Globe className="size-[18px]" />
-              Portfolio
+              Public page
             </NavLink>
           )}
           <NavLink to="/settings" className={navLinkClass}>
@@ -144,11 +150,23 @@ export default function App() {
           row of a page is never hidden behind it. */}
       <main className="min-w-0 flex-1 px-4 pt-[21px] pb-16 sm:px-6">
         <Routes>
-          <Route path="/" element={<Domains />} />
+          <Route
+            path="/"
+            element={isWeb() ? <DomainWorkspace area="domains" /> : <Domains />}
+          />
           <Route path="/renewals" element={<Renewals />} />
           <Route path="/settings" element={<Settings />} />
           {isWeb() && (
-            <Route path="/public-portfolio" element={<PublicPortfolio />} />
+            <>
+              <Route
+                path="/public-page"
+                element={<DomainWorkspace area="page" />}
+              />
+              <Route
+                path="/public-portfolio"
+                element={<Navigate to="/public-page" replace />}
+              />
+            </>
           )}
         </Routes>
       </main>
