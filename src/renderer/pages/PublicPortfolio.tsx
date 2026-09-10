@@ -1,184 +1,107 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowUpRight,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
   Eye,
+  FolderPlus,
   Globe,
+  MoreHorizontal,
+  Pencil,
   Plus,
+  Search,
+  Settings2,
   Upload,
+  X,
+  AlertCircle,
+  Undo2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAppStore } from '../store/app';
 import { portfolioEditor, usePortfolioEditor } from '../lib/publication-client';
 import { hostPath } from '../lib/platform';
 import { importPublication } from '../../shared/publication-import';
 import {
-  includeDomains,
   previewSnapshot,
   publicationChanges,
 } from '../../shared/publication-edit';
+import {
+  collectionTokens,
+  editPortfolioSelection,
+  filterPortfolio,
+  isCurrent,
+  type BulkPortfolioEdit,
+  type PortfolioScope,
+  type OwnershipFilter,
+} from '../../shared/portfolio-management';
 import { renderPortfolio } from '../../shared/render-portfolio';
 import type {
-  PortfolioListing,
   PortfolioDraft,
+  PortfolioListing,
 } from '../../shared/publication';
+import {
+  PortfolioInspector,
+  ownershipLabel,
+} from '../components/portfolio/PortfolioInspector';
+import { PortfolioSettings } from '../components/portfolio/PortfolioSettings';
+import { PortfolioReview } from '../components/portfolio/PortfolioReview';
+import '../components/portfolio/portfolio.css';
 
-const ownershipLabels = {
-  owned: 'Owned · synced',
-  stale: 'Sync needs attention',
-  unmatched: 'Not in connected inventory',
-  conflict: 'Multiple accounts · review',
-};
-const fieldLabels = {
-  title: 'Page title',
-  intro: 'Introduction',
-  contactEmail: 'Public contact email',
-  handle: 'Public address',
-};
-type Tab = 'listings' | 'details' | 'history' | 'attention' | 'add';
-
-function ListingDetails({
-  item,
-  update,
-}: {
-  item: PortfolioListing;
-  update: (patch: Partial<PortfolioListing>) => void;
-}) {
-  return (
-    <details className="mt-3 text-sm">
-      <summary className="cursor-pointer text-muted-foreground">
-        Edit public details
-      </summary>
-      <div className="mt-4 grid gap-4">
-        <label className="grid gap-1.5">
-          Collections
-          <Input
-            aria-label={`Collections for ${item.domain}`}
-            value={item.collection}
-            maxLength={200}
-            onChange={(e) => update({ collection: e.target.value })}
-          />
-          <span className="text-xs text-muted-foreground">
-            Separate multiple collections with a semicolon.
-          </span>
-        </label>
-        <label className="grid gap-1.5">
-          Public description
-          <Textarea
-            aria-label={`Description for ${item.domain}`}
-            value={item.description}
-            maxLength={400}
-            rows={2}
-            onChange={(e) => update({ description: e.target.value })}
-          />
-        </label>
-        {item.visibility === 'inquiry' && (
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1.5">
-              Asking price (optional)
-              <Input
-                aria-label={`Asking price for ${item.domain}`}
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={item.askingPrice ?? ''}
-                onChange={(e) =>
-                  update({
-                    askingPrice: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-              />
-            </label>
-            <label className="grid gap-1.5">
-              Currency
-              <Input
-                aria-label={`Currency for ${item.domain}`}
-                value={item.currency}
-                maxLength={3}
-                onChange={(e) =>
-                  update({ currency: e.target.value.toUpperCase() })
-                }
-              />
-            </label>
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}
-
-function ChangedListing({
-  item,
-  before,
-}: {
-  item: PortfolioListing;
-  before?: PortfolioListing;
-}) {
-  const labels = {
-    visibility: 'Availability',
-    description: 'Description',
-    collection: 'Collections',
-    askingPrice: 'Asking price',
-    currency: 'Currency',
-  };
-  const display = (field: keyof typeof labels, listing: PortfolioListing) => {
-    if (field === 'visibility')
-      return {
-        private: 'Private',
-        showcase: 'Showcase',
-        inquiry: 'Accept inquiries',
-        historical: 'Previously owned',
-      }[listing.visibility];
-    if (field === 'askingPrice' && listing.visibility !== 'inquiry')
-      return 'Not displayed';
-    return String(listing[field] ?? '(not set)') || '(empty)';
-  };
-  return (
-    <dl className="w-full space-y-2 text-xs text-muted-foreground">
-      {(Object.keys(labels) as (keyof typeof labels)[])
-        .filter(
-          (field) => !before || display(field, before) !== display(field, item),
-        )
-        .map((field) => (
-          <div key={field}>
-            <dt className="font-medium">{labels[field]}</dt>
-            <dd className="break-words whitespace-pre-wrap">
-              {before ? `${display(field, before)} → ` : ''}
-              {display(field, item)}
-            </dd>
-          </div>
-        ))}
-    </dl>
-  );
-}
-
+const PAGE_SIZE = 50;
 export default function PublicPortfolio() {
   const { state, draft, status, error } = usePortfolioEditor();
   const refreshTick = useAppStore((s) => s.refreshTick);
-  const [tab, setTab] = useState<Tab>('listings');
-  const [view, setView] = useState<'edit' | 'preview' | 'review'>('edit');
+  const [view, setView] = useState<
+    'domains' | 'settings' | 'preview' | 'review'
+  >('domains');
+  const [scope, setScope] = useState<PortfolioScope>('listed');
+  const [ownershipFilter, setOwnershipFilter] =
+    useState<OwnershipFilter>('all');
   const [query, setQuery] = useState('');
+  const [collection, setCollection] = useState('');
+  const [sort, setSort] = useState('az');
   const [page, setPage] = useState(1);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
+  const [undo, setUndo] = useState<PortfolioDraft | null>(null);
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
+  const [collectionAction, setCollectionAction] = useState(false);
+  const [collectionMode, setCollectionMode] = useState<
+    'add' | 'remove' | 'replace'
+  >('add');
+  const [collectionValue, setCollectionValue] = useState('');
+  const [historyNames, setHistoryNames] = useState<Set<string> | null>(null);
   const [mobile, setMobile] = useState(false);
   const [previewHistory, setPreviewHistory] = useState(false);
-  const [historical, setHistorical] = useState<string | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [returnFocus, setReturnFocus] = useState(false);
   useEffect(() => {
     void portfolioEditor.load().catch(() => {});
+    window.scrollTo(0, 0);
   }, []);
   useEffect(() => {
     if (refreshTick)
@@ -186,19 +109,14 @@ export default function PublicPortfolio() {
         .refreshReview()
         .catch((e: Error) => setActionError(e.message));
   }, [refreshTick]);
-  useEffect(() => {
-    if (returnFocus) {
-      document.getElementById('portfolio-heading')?.focus();
-      setReturnFocus(false);
-    }
-  }, [returnFocus]);
-  const ownership = useMemo(
-    () => new Map(state?.review.map((r) => [r.domain, r]) ?? []),
+  const checks = useMemo(
+    () => new Map(state?.review.map((item) => [item.domain, item]) ?? []),
     [state],
   );
+  // The public document is rendered only when requested, never on each table edit.
   const preview = useMemo(
     () =>
-      draft
+      view === 'preview' && draft
         ? renderPortfolio(
             previewSnapshot(draft),
             new URL(
@@ -207,12 +125,43 @@ export default function PublicPortfolio() {
             true,
           )
         : '',
-    [draft, previewHistory],
+    [view, draft, previewHistory],
   );
+  const filtered = useMemo(
+    () =>
+      draft && state
+        ? filterPortfolio(draft.listings, state.review, {
+            scope,
+            ownership: ownershipFilter,
+            query,
+            collection,
+            sort,
+          })
+        : [],
+    [draft, state, scope, ownershipFilter, query, collection, sort],
+  );
+  const collections = useMemo(
+    () =>
+      [
+        ...new Set(
+          draft?.listings.flatMap((item) =>
+            collectionTokens(item.collection),
+          ) ?? [],
+        ),
+      ].sort(),
+    [draft],
+  );
+  const saveStatus =
+    status === 'saving'
+      ? 'Saving…'
+      : status === 'unsaved'
+        ? 'Saving shortly…'
+        : status === 'error'
+          ? 'Not saved'
+          : 'All changes saved';
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setActionError('');
-    setNotice('');
     try {
       await action();
     } catch (e) {
@@ -223,20 +172,88 @@ export default function PublicPortfolio() {
   };
   if (!draft || !state)
     return (
-      <section className="mx-auto max-w-6xl py-8">
-        <h1 className="text-3xl font-semibold">Portfolio</h1>
-        <p role={error ? 'alert' : 'status'} className="my-4">
-          {error || 'Loading your private draft…'}
-        </p>
-        {error && (
+      <section className="pf-workspace">
+        <header className="pf-header">
+          <div>
+            <span className="pf-eyebrow">Portfolio</span>
+            <h1>Your collection</h1>
+            <p className="pf-subtitle">
+              {error || 'Loading your private workspace…'}
+            </p>
+          </div>
+        </header>
+        {error ? (
           <Button onClick={() => void portfolioEditor.load().catch(() => {})}>
             Try again
           </Button>
+        ) : (
+          <div className="pf-shell" aria-label="Loading domains" role="status">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="pf-skeleton" />
+            ))}
+          </div>
         )}
       </section>
     );
+  const current = draft.listings.filter(isCurrent);
+  const history = draft.listings.filter(
+    (item) => item.visibility === 'historical',
+  );
+  const privateNames = draft.listings.filter(
+    (item) => item.visibility === 'private',
+  );
+  const blockers = current.filter(
+    (item) => checks.get(item.domain)?.ownership !== 'owned',
+  );
+  const unmatched = privateNames.filter(
+    (item) => checks.get(item.domain)?.ownership !== 'owned',
+  );
+  const changes = publicationChanges(draft, state.publishedSnapshot);
+  const publicUrl = window.location.origin + hostPath(`/p/${draft.handle}`);
+  const liveUrl = state.published
+    ? hostPath(`/p/${state.published.handle}`)
+    : null;
+  const rows = filtered.slice(
+    (Math.min(page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))) - 1) *
+      PAGE_SIZE,
+    Math.min(page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))) *
+      PAGE_SIZE,
+  );
+  const actualPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)),
+  );
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const visibleSelected = rows.filter((item) => picked.has(item.domain)).length;
+  const chosen = draft.listings.filter((item) => picked.has(item.domain));
+  const allPrivate =
+    chosen.length > 0 && chosen.every((item) => item.visibility === 'private');
+  const allCurrent = chosen.length > 0 && chosen.every(isCurrent);
+  const hasUnmatched = chosen.some(
+    (item) =>
+      !checks.get(item.domain) ||
+      checks.get(item.domain)?.ownership === 'unmatched',
+  );
+  const inspector =
+    draft.listings.find((item) => item.domain === editing) ?? null;
+  const clearSelection = () => {
+    setPicked(new Set());
+    setCollectionAction(false);
+  };
+  const selectPage = (checked: boolean) => {
+    const next = new Set(picked);
+    rows.forEach((item) =>
+      checked ? next.add(item.domain) : next.delete(item.domain),
+    );
+    setPicked(next);
+  };
+  const openInspector = (domain: string) => {
+    clearSelection();
+    setEditing(domain);
+  };
   const change = (patch: Partial<PortfolioDraft>) => {
     portfolioEditor.update({ ...draft, ...patch });
+    setUndo(null);
     setNotice('');
     setActionError('');
   };
@@ -246,178 +263,223 @@ export default function PublicPortfolio() {
         item.domain === domain ? { ...item, ...patch } : item,
       ),
     });
-  const current = draft.listings.filter(
-    (item) => item.visibility === 'showcase' || item.visibility === 'inquiry',
-  );
-  const history = draft.listings.filter(
-    (item) => item.visibility === 'historical',
-  );
-  const attention = draft.listings.filter(
-    (item) =>
-      item.visibility !== 'historical' &&
-      ownership.get(item.domain)?.ownership !== 'owned',
-  );
-  const privateNames = draft.listings.filter(
-    (item) =>
-      item.visibility === 'private' &&
-      ownership.get(item.domain)?.ownership !== 'unmatched',
-  );
-  const blocked = current.filter(
-    (item) => ownership.get(item.domain)?.ownership !== 'owned',
-  );
-  const needsEmail =
-    current.some((item) => item.visibility === 'inquiry') &&
-    !draft.contactEmail;
-  const changes = publicationChanges(draft, state.publishedSnapshot);
-  const allRows =
-    tab === 'history'
-      ? history
-      : tab === 'attention'
-        ? attention
-        : tab === 'add'
-          ? privateNames
-          : current;
-  const filtered = allRows.filter((item) =>
-    `${item.domain} ${item.collection}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
-  const pages = Math.max(1, Math.ceil(filtered.length / 40));
-  const activePage = Math.min(page, pages);
-  const shown = filtered.slice((activePage - 1) * 40, activePage * 40);
-  const switchTab = (next: Tab) => {
-    setTab(next);
-    setQuery('');
+  const apply = (edit: BulkPortfolioEdit, names = picked) => {
+    try {
+      const next = editPortfolioSelection(draft, names, edit);
+      const affected = next.listings.filter(
+        (item, i) => JSON.stringify(item) !== JSON.stringify(draft.listings[i]),
+      ).length;
+      portfolioEditor.update(next);
+      setUndo(affected ? draft : null);
+      setNotice(
+        edit.kind === 'collection'
+          ? `Collections updated for ${affected} domains.`
+          : edit.value === 'private'
+            ? `${affected} domains removed from the draft. They remain in your inventory.`
+            : edit.value === 'historical'
+              ? `${affected} domains added to history.`
+              : `${affected} domains updated in your draft.`,
+      );
+      setActionError('');
+      clearSelection();
+      return true;
+    } catch (e) {
+      setActionError((e as Error).message);
+      return false;
+    }
+  };
+  const selectScope = (
+    next: PortfolioScope,
+    owner: OwnershipFilter = 'all',
+  ) => {
+    setScope(next);
+    setOwnershipFilter(owner);
     setPage(1);
-    setPicked(new Set());
-    setHistorical(null);
+    setQuery('');
+    setCollection('');
+    clearSelection();
+    window.scrollTo(0, 0);
   };
-  const go = (next: typeof view) => {
+  const filterChange = (action: () => void) => {
+    action();
+    setPage(1);
+    clearSelection();
+  };
+  const navigateView = (next: typeof view) => {
     setView(next);
-    setReturnFocus(true);
+    setNotice('');
+    setUndo(null);
+    window.scrollTo(0, 0);
   };
-  const prepareReview = () =>
-    run(async () => {
+  const review = () =>
+    void run(async () => {
       await portfolioEditor.flush();
       await portfolioEditor.refreshReview();
-      go('review');
+      navigateView('review');
     });
-  const previewPanel = (
-    <div
-      className={`overflow-hidden rounded-lg border bg-muted/20 ${mobile ? 'mx-auto w-full max-w-[390px]' : 'w-full'}`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
-        <span>Private preview · {current.length} current</span>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            className="underline underline-offset-4"
-            aria-pressed={!previewHistory}
-            onClick={() => setPreviewHistory(false)}
-          >
-            Current
-          </button>
-          {history.length > 0 && (
-            <button
-              type="button"
-              className="underline underline-offset-4"
-              aria-pressed={previewHistory}
-              onClick={() => setPreviewHistory(true)}
-            >
-              History
-            </button>
-          )}
-        </div>
-      </div>
-      <iframe
-        title="Portfolio draft preview"
-        sandbox=""
-        srcDoc={preview}
-        className={`w-full border-0 ${view === 'preview' ? 'h-[850px]' : 'h-[680px]'}`}
-      />
-    </div>
-  );
+  const copyLink = () =>
+    void navigator.clipboard
+      .writeText(
+        window.location.origin + (liveUrl ?? hostPath(`/p/${draft.handle}`)),
+      )
+      .then(() => setNotice('Page link copied.'))
+      .catch(() =>
+        setActionError(
+          'Could not copy the link. Open the live page and copy its address.',
+        ),
+      );
 
   return (
-    <section className="mx-auto max-w-6xl space-y-6 pb-8">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-6">
+    <section className="pf-workspace">
+      {view !== 'domains' && (
+        <button className="pf-back" onClick={() => navigateView('domains')}>
+          <ArrowLeft />
+          Back to domains
+        </button>
+      )}
+      <header className="pf-header">
         <div>
-          <h1
-            id="portfolio-heading"
-            tabIndex={-1}
-            className="text-3xl font-semibold tracking-tight outline-none"
-          >
+          <span className="pf-eyebrow">
+            {view === 'settings'
+              ? 'Page settings'
+              : view === 'review'
+                ? 'Publish review'
+                : view === 'preview'
+                  ? 'Private preview'
+                  : 'Public portfolio'}
+          </span>
+          <h1>
             {view === 'review'
               ? 'Review your changes'
-              : view === 'preview'
-                ? 'Your page, before it’s public'
-                : 'Portfolio'}
+              : draft.title || 'Your collection'}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {view === 'edit'
-              ? 'Choose what the world sees.'
-              : view === 'review'
-                ? 'Only these public fields will change.'
-                : 'A private preview of your selected names.'}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground" role="status">
-            {status === 'saving'
-              ? 'Saving draft…'
-              : status === 'unsaved'
-                ? 'Changes waiting to save'
-                : status === 'error'
-                  ? 'Draft not saved'
-                  : 'Draft saved'}{' '}
-            ·{' '}
-            {state.published
-              ? `${state.published.count} names live`
-              : 'Not published'}
-            {changes.count > 0 ? ` · ${changes.count} public changes` : ''}
-          </p>
+          <div className="pf-status">
+            {state.published ? (
+              <span>
+                <i className="pf-live-dot" />
+                Live · {state.published.count} names
+              </span>
+            ) : (
+              <span>Not published</span>
+            )}
+            <span aria-hidden="true">/</span>
+            <span role="status">
+              {status === 'saved' && <Check />}
+              {saveStatus}
+            </span>
+            {changes.count > 0 && (
+              <span>· {changes.count} unpublished changes</span>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {view !== 'edit' && (
-            <Button variant="outline" onClick={() => go('edit')}>
-              <ArrowLeft />
-              Back to editing
-            </Button>
-          )}
-          {view === 'edit' && (
+        <div className="pf-actions">
+          {view === 'domains' && (
             <>
-              <Button variant="outline" onClick={() => go('preview')}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateView('settings')}
+              >
+                <Settings2 />
+                Page settings
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateView('preview')}
+              >
                 <Eye />
                 Preview
               </Button>
-              <Button
-                disabled={busy || changes.count === 0}
-                onClick={() => void prepareReview()}
-              >
-                Review changes →
-              </Button>
+              {changes.count > 0 && (
+                <Button
+                  size="sm"
+                  disabled={busy || changes.count === 0}
+                  onClick={review}
+                >
+                  Review changes{changes.count > 0 ? ` (${changes.count})` : ''}{' '}
+                  →
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="pf-icon-button"
+                    aria-label="Portfolio options"
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {liveUrl && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <a href={liveUrl} target="_blank" rel="noreferrer">
+                          <ArrowUpRight />
+                          View live page
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={copyLink}>
+                        <Copy />
+                        Copy page link
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onSelect={() => setImporting(true)}>
+                    <Upload />
+                    Import domains
+                  </DropdownMenuItem>
+                  {state.published && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => setConfirmUnpublish(true)}
+                      >
+                        Unpublish…
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
+          )}
+          {view === 'settings' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigateView('preview')}
+            >
+              <Eye />
+              Preview page
+            </Button>
           )}
           {view === 'preview' && (
             <>
-              <Button variant="outline" onClick={() => setMobile(!mobile)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMobile(!mobile)}
+              >
                 {mobile ? 'Desktop view' : 'Mobile view'}
               </Button>
               <Button
+                size="sm"
                 disabled={busy || changes.count === 0}
-                onClick={() => void prepareReview()}
+                onClick={review}
               >
                 Review changes →
               </Button>
             </>
           )}
         </div>
-      </div>
+      </header>
       {(error || actionError) && (
-        <div
-          className="space-y-3 rounded-md border border-destructive/40 p-4 text-sm"
-          role="alert"
-        >
-          <p>{actionError || error}</p>
-          <div className="flex flex-wrap gap-3">
+        <div role="alert" className="pf-alert">
+          <span>{actionError || error}</span>
+          <div className="pf-actions">
             <Button
               size="sm"
               variant="outline"
@@ -434,657 +496,785 @@ export default function PublicPortfolio() {
               Reload saved draft…
             </Button>
           </div>
-          {confirmDiscard && (
-            <div className="space-y-2 border-t pt-3">
-              <p>Discard unsaved edits and load the latest saved draft?</p>
-              <Button
-                size="sm"
-                onClick={() =>
-                  void run(async () => {
-                    await portfolioEditor.discardAndReload();
-                    setConfirmDiscard(false);
-                  })
-                }
-              >
-                Discard edits and reload
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setConfirmDiscard(false)}
-              >
-                Keep editing
-              </Button>
-            </div>
-          )}
         </div>
       )}
       {notice && (
-        <p
-          role="status"
-          className="flex items-center gap-2 text-sm text-primary"
-        >
-          <Check className="size-4" />
-          {notice}
-        </p>
+        <div role="status" className="pf-alert">
+          <span>{notice}</span>
+          {undo && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                portfolioEditor.update(undo);
+                setUndo(null);
+                setNotice('Change undone in your draft.');
+              }}
+            >
+              <Undo2 />
+              Undo
+            </Button>
+          )}
+          <button
+            className="pf-row-edit"
+            aria-label="Dismiss message"
+            onClick={() => {
+              setNotice('');
+              setUndo(null);
+            }}
+          >
+            <X />
+          </button>
+        </div>
       )}
-      {view === 'preview' ? (
-        <div className="mx-auto max-w-4xl">
-          {previewPanel}
-          <p className="mt-3 text-xs text-muted-foreground">
-            Search and inquiry links are inactive in this embedded preview.{' '}
+      {view === 'settings' ? (
+        <div className="pf-shell">
+          <PortfolioSettings
+            draft={draft}
+            onChange={change}
+            publicUrl={publicUrl}
+          />
+        </div>
+      ) : view === 'preview' ? (
+        <>
+          <div className="pf-preview-frame" data-mobile={mobile}>
+            <div className="pf-preview-toolbar">
+              <span>
+                {current.length} current listings · {history.length} historical
+              </span>
+              <div className="pf-preview-switches">
+                <button
+                  aria-pressed={!previewHistory}
+                  onClick={() => setPreviewHistory(false)}
+                >
+                  Current holdings
+                </button>
+                {history.length > 0 && (
+                  <button
+                    aria-pressed={previewHistory}
+                    onClick={() => setPreviewHistory(true)}
+                  >
+                    Previously owned
+                  </button>
+                )}
+              </div>
+            </div>
+            <iframe
+              title="Portfolio draft preview"
+              sandbox=""
+              srcDoc={preview}
+            />
+          </div>
+          <p className="pf-preview-foot">
+            Read-only preview.{' '}
             <a
+              className="ml-1 underline"
               href={hostPath('/publishing/preview')}
               target="_blank"
               rel="noreferrer"
-              className="underline"
             >
               Open the saved preview ↗
             </a>
           </p>
-        </div>
+        </>
       ) : view === 'review' ? (
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div className="flex flex-wrap gap-6 text-sm">
-            <span>{changes.added.length} added</span>
-            <span>{changes.removed.length} removed</span>
-            <span>{changes.edited.length} edited</span>
-          </div>
-          <div className="divide-y rounded-lg border">
-            {[
-              ['Added', changes.added],
-              ['Removed', changes.removed],
-              ['Public details changed', changes.edited],
-            ].map(([label, items]) =>
-              (items as PortfolioListing[]).map((item) => (
-                <div
-                  key={`${label}-${item.domain}`}
-                  className="flex flex-wrap justify-between gap-3 px-4 py-3 text-sm"
-                >
-                  <strong className="font-medium">{item.domain}</strong>
-                  <span className="text-muted-foreground">
-                    {label as string}
-                    {item.visibility === 'historical' ? ' · historical' : ''}
-                  </span>
-                  {label !== 'Removed' && (
-                    <ChangedListing
-                      item={item}
-                      before={state.publishedSnapshot?.listings.find(
-                        (entry) => entry.domain === item.domain,
-                      )}
-                    />
-                  )}
-                </div>
-              )),
-            )}
-            {changes.page.map((field) => (
-              <div key={field} className="space-y-1 px-4 py-3 text-sm">
-                <strong className="font-medium">{fieldLabels[field]}</strong>
-                <p className="break-words text-muted-foreground">
-                  {state.publishedSnapshot?.[field] || '(empty)'} →{' '}
-                  {draft[field] || '(empty)'}
-                </p>
-              </div>
-            ))}
-          </div>
-          <dl className="grid gap-4 border-y py-5 text-sm">
-            <div className="flex flex-wrap justify-between gap-2">
-              <dt>Public page</dt>
-              <dd className="break-all">
-                {window.location.origin}
-                {hostPath(`/p/${draft.handle}`)}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt>After publishing</dt>
-              <dd>
-                {current.length} current · {history.length} historical
-              </dd>
-            </div>
-            <div className="flex flex-wrap justify-between gap-2">
-              <dt>Public contact</dt>
-              <dd>{draft.contactEmail || 'None'}</dd>
-            </div>
-            <div className="flex flex-wrap justify-between gap-2">
-              <dt>Ownership check</dt>
-              <dd>
-                {blocked.length
-                  ? `${blocked.length} current names need review`
-                  : `All ${current.length} current names synced`}
-              </dd>
-            </div>
-          </dl>
-          {state.published && state.published.handle !== draft.handle && (
-            <p className="text-sm text-destructive">
-              Changing the address removes /p/{state.published.handle}. Keep the
-              current handle to preserve existing links.
-            </p>
-          )}
-          {(blocked.length > 0 || needsEmail) && (
-            <div role="alert" className="space-y-2 text-sm">
-              <p>
-                {needsEmail
-                  ? 'Add a public contact email before accepting inquiries.'
-                  : `${blocked.length} selected names need a fresh sync or ownership review.`}
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  switchTab(needsEmail ? 'details' : 'attention');
-                  go('edit');
-                }}
-              >
-                Resolve before publishing
-              </Button>
-            </div>
-          )}
-          {current.length + history.length === 0 && (
-            <p className="text-sm">
-              No names selected. Use Unpublish in the editor to remove your
-              page.
-            </p>
-          )}
-          <div className="flex justify-end">
-            <Button
-              disabled={
-                busy ||
-                status !== 'saved' ||
-                changes.count === 0 ||
-                blocked.length > 0 ||
-                needsEmail ||
-                current.length + history.length === 0
-              }
-              onClick={() =>
-                void run(async () => {
-                  await portfolioEditor.publish();
-                  go('edit');
-                  setNotice('Your portfolio is published.');
-                })
-              }
-            >
-              <Globe />
-              {busy ? 'Publishing…' : 'Publish changes'}
-            </Button>
-          </div>
-        </div>
+        <PortfolioReview
+          draft={draft}
+          published={state.publishedSnapshot}
+          blockers={blockers.length}
+          busy={busy}
+          ready={status === 'saved'}
+          publicUrl={publicUrl}
+          onResolve={() => {
+            if (
+              current.some((item) => item.visibility === 'inquiry') &&
+              !draft.contactEmail
+            )
+              navigateView('settings');
+            else {
+              selectScope('listed', 'blocking');
+              navigateView('domains');
+            }
+          }}
+          onPublish={() =>
+            void run(async () => {
+              await portfolioEditor.publish();
+              navigateView('domains');
+              setNotice('Your portfolio is published.');
+            })
+          }
+        />
       ) : (
         <>
-          <div
-            className="flex flex-wrap gap-5 border-b"
-            aria-label="Portfolio sections"
-          >
-            {(
-              [
-                ['listings', `Listings · ${current.length}`],
-                ['details', 'Page details'],
-                ['history', `History · ${history.length}`],
-                ['attention', `Needs review · ${attention.length}`],
-              ] as [Tab, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={tab === key}
-                className={`border-b-2 py-3 text-sm ${tab === key ? 'border-primary font-medium text-primary' : 'border-transparent text-muted-foreground'}`}
-                onClick={() => switchTab(key)}
+          <div className="pf-shell">
+            <div className="pf-scopes">
+              {(
+                [
+                  ['listed', 'Listed', current.length],
+                  ['private', 'Not listed', privateNames.length],
+                  ['history', 'History', history.length],
+                  ['all', 'All names', draft.listings.length],
+                ] as [PortfolioScope, string, number][]
+              ).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  aria-pressed={scope === key}
+                  onClick={() => selectScope(key)}
+                >
+                  {label}
+                  <span>{count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="pf-toolbar">
+              <div className="pf-search">
+                <Search />
+                <Input
+                  type="search"
+                  aria-label="Search portfolio"
+                  placeholder="Search domains or collections…"
+                  value={query}
+                  onChange={(e) => filterChange(() => setQuery(e.target.value))}
+                />
+              </div>
+              <select
+                aria-label="Filter collection"
+                value={collection}
+                onChange={(e) =>
+                  filterChange(() => setCollection(e.target.value))
+                }
               >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)]">
-            <fieldset
-              disabled={busy}
-              className="min-w-0 space-y-5 disabled:opacity-60"
-            >
-              {tab === 'details' ? (
-                <div className="grid gap-5">
-                  <label className="grid gap-2 text-sm font-medium">
-                    Page title
-                    <Input
-                      value={draft.title}
-                      maxLength={100}
-                      onChange={(e) => change({ title: e.target.value })}
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium">
-                    Introduction
-                    <Textarea
-                      value={draft.intro}
-                      maxLength={600}
-                      rows={3}
-                      onChange={(e) => change({ intro: e.target.value })}
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium">
-                    Public inquiry email
-                    <Input
-                      type="email"
-                      value={draft.contactEmail}
-                      onChange={(e) => change({ contactEmail: e.target.value })}
-                    />
-                    <span className="font-normal text-xs text-muted-foreground">
-                      Required only when you accept inquiries.
-                    </span>
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium">
-                    Public address
-                    <Input
-                      value={draft.handle}
-                      maxLength={40}
-                      onChange={(e) =>
-                        change({ handle: e.target.value.toLowerCase() })
-                      }
-                    />
-                    <span className="break-all font-normal text-xs text-muted-foreground">
-                      {window.location.origin}
-                      {hostPath(`/p/${draft.handle}`)}
-                    </span>
-                  </label>
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="font-medium">
-                      {tab === 'add'
-                        ? 'Add from your inventory'
-                        : tab === 'history'
-                          ? 'Previously owned'
-                          : tab === 'attention'
-                            ? 'Ownership needs attention'
-                            : 'Current listings'}
-                    </h2>
-                    <div className="flex gap-3">
+                <option value="">All collections</option>
+                {collections.map((name) => (
+                  <option key={name}>{name}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Filter ownership"
+                value={ownershipFilter}
+                onChange={(e) =>
+                  filterChange(() =>
+                    setOwnershipFilter(e.target.value as OwnershipFilter),
+                  )
+                }
+              >
+                <option value="all">Ownership: all</option>
+                <option value="owned">Synced</option>
+                <option value="attention">Needs review</option>
+                <option value="blocking">Blocks publishing</option>
+              </select>
+              <select
+                aria-label="Sort portfolio"
+                className="pf-sort"
+                value={sort}
+                onChange={(e) => filterChange(() => setSort(e.target.value))}
+              >
+                <option value="az">Name A–Z</option>
+                <option value="za">Name Z–A</option>
+                <option value="price">Price by currency</option>
+              </select>
+              <Button size="sm" onClick={() => selectScope('private', 'owned')}>
+                <Plus />
+                Add domains
+              </Button>
+            </div>
+            {picked.size > 0 && (
+              <div className="pf-bulk">
+                <strong>{picked.size} selected</strong>
+                {allPrivate ? (
+                  <Button
+                    size="sm"
+                    disabled={busy || hasUnmatched}
+                    onClick={() =>
+                      apply({ kind: 'visibility', value: 'showcase' })
+                    }
+                  >
+                    Add to portfolio
+                  </Button>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
-                        size="sm"
                         variant="outline"
-                        onClick={() =>
-                          switchTab(tab === 'add' ? 'listings' : 'add')
+                        size="sm"
+                        disabled={!allCurrent}
+                      >
+                        Inquiries
+                        <ChevronDown />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          apply({ kind: 'inquiries', value: 'inquiry' })
                         }
                       >
-                        <Plus />
-                        {tab === 'add' ? 'Back to listings' : 'Add domains'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setImporting(!importing)}
+                        Accept inquiries
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          apply({ kind: 'inquiries', value: 'showcase' })
+                        }
                       >
-                        <Upload />
-                        Import
-                      </Button>
-                    </div>
-                  </div>
-                  {tab === 'history' && (
-                    <p className="text-sm text-muted-foreground">
-                      Displayed in a separate “Previously owned” section,
-                      without inquiries. Historical ownership is your statement,
-                      not a registrar verification.
-                    </p>
-                  )}
-                  {tab === 'attention' && (
-                    <p className="text-sm text-muted-foreground">
-                      Unlisted names stay private and do not block your other
-                      listings. A missing match does not mean a domain was sold.
-                    </p>
-                  )}
-                  {importing && (
-                    <div className="space-y-3 rounded-lg border p-4">
-                      <label className="grid gap-2 text-sm">
-                        Import CSV, JSON, or a domain list
-                        <input
-                          type="file"
-                          accept=".csv,.tsv,.txt,.json"
-                          aria-label="Import collection file"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            if (file.size > 4 * 1024 * 1024) {
-                              setActionError(
-                                'Choose a file smaller than 4 MB.',
-                              );
-                              return;
-                            }
-                            void file
-                              .text()
-                              .then(setImportText)
-                              .catch(() =>
-                                setActionError('Could not read that file.'),
-                              );
-                          }}
-                        />
-                      </label>
-                      <Textarea
-                        aria-label="Collection import text"
-                        value={importText}
-                        rows={4}
-                        onChange={(e) => setImportText(e.target.value)}
-                        placeholder="domain,collection"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          try {
-                            const result = importPublication(
-                              importText,
-                              draft.listings,
-                            );
-                            change({ listings: result.listings });
-                            setNotice(
-                              `${result.added} candidates added privately; existing edits preserved.`,
-                            );
-                            setImportText('');
-                            setImporting(false);
-                            switchTab('attention');
-                          } catch (e) {
-                            setActionError((e as Error).message);
-                          }
-                        }}
-                      >
-                        Add privately
-                      </Button>
-                    </div>
-                  )}
+                        Showcase only
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCollectionAction(!collectionAction)}
+                >
+                  <FolderPlus />
+                  Collections
+                </Button>
+                {!allPrivate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      apply({ kind: 'visibility', value: 'private' })
+                    }
+                  >
+                    Remove from page
+                  </Button>
+                )}
+                {allPrivate && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setHistoryNames(new Set(picked))}
+                  >
+                    Previously owned…
+                  </Button>
+                )}
+                <button
+                  className="pf-text-button pf-clear"
+                  onClick={clearSelection}
+                >
+                  Clear selection
+                </button>
+                {allPrivate && hasUnmatched && (
+                  <span className="pf-hint w-full">
+                    Some names have no inventory match. Verify them before
+                    adding them as current listings.
+                  </span>
+                )}
+              </div>
+            )}
+            {collectionAction && picked.size > 0 && (
+              <div className="pf-bulk-form">
+                <label className="pf-field">
+                  Action
+                  <select
+                    aria-label="Collection edit action"
+                    value={collectionMode}
+                    onChange={(e) =>
+                      setCollectionMode(e.target.value as typeof collectionMode)
+                    }
+                  >
+                    <option value="add">Add collection</option>
+                    <option value="remove">Remove collection</option>
+                    <option value="replace">Replace collections</option>
+                  </select>
+                </label>
+                <label className="pf-field">
+                  Collection name
                   <Input
-                    type="search"
-                    aria-label="Search portfolio domains"
-                    placeholder="Search domains or collections…"
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      setPage(1);
-                    }}
+                    aria-label="Bulk collection name"
+                    value={collectionValue}
+                    onChange={(e) => setCollectionValue(e.target.value)}
+                    placeholder="e.g. Short names"
                   />
-                  {tab === 'add' && (
-                    <div className="space-y-3 rounded-md bg-muted/40 p-3 text-sm">
-                      <label className="flex items-center gap-2">
+                </label>
+                <Button
+                  size="sm"
+                  disabled={!collectionValue.trim()}
+                  onClick={() => {
+                    const applied = apply({
+                      kind: 'collection',
+                      mode: collectionMode,
+                      value: collectionValue,
+                    });
+                    if (applied) setCollectionValue('');
+                  }}
+                >
+                  Apply to {picked.size}
+                </Button>
+                <button
+                  className="pf-text-button"
+                  onClick={() => setCollectionAction(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            {picked.size > 0 && filtered.length > rows.length && (
+              <div className="pf-selection-banner">
+                <span>{picked.size} selected across this result.</span>
+                {!filtered.every((item) => picked.has(item.domain)) && (
+                  <button
+                    className="pf-text-button"
+                    onClick={() =>
+                      setPicked(new Set(filtered.map((item) => item.domain)))
+                    }
+                  >
+                    Select all {filtered.length} matching domains
+                  </button>
+                )}
+              </div>
+            )}
+            <label className="pf-mobile-select">
+              <Checkbox
+                aria-label="Select visible domains"
+                checked={
+                  visibleSelected === 0
+                    ? false
+                    : visibleSelected === rows.length
+                      ? true
+                      : 'indeterminate'
+                }
+                onCheckedChange={(checked) => selectPage(checked === true)}
+              />
+              Select this page
+            </label>
+            <table className="pf-table">
+              <thead>
+                <tr>
+                  <th>
+                    <Checkbox
+                      aria-label="Select this page"
+                      checked={
+                        visibleSelected === 0
+                          ? false
+                          : visibleSelected === rows.length
+                            ? true
+                            : 'indeterminate'
+                      }
+                      onCheckedChange={(checked) => {
+                        const next = new Set(picked);
+                        rows.forEach((item) =>
+                          checked
+                            ? next.add(item.domain)
+                            : next.delete(item.domain),
+                        );
+                        setPicked(next);
+                      }}
+                    />
+                  </th>
+                  <th>Domain</th>
+                  <th>Availability</th>
+                  <th className="pf-collection-cell">Collections</th>
+                  <th>Asking price</th>
+                  <th className="pf-check-column">Ownership</th>
+                  <th>
+                    <span className="sr-only">Edit</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((item) => {
+                  const check =
+                    checks.get(item.domain)?.ownership ?? 'unmatched';
+                  return (
+                    <tr
+                      key={item.domain}
+                      data-selected={picked.has(item.domain)}
+                    >
+                      <td>
                         <Checkbox
-                          aria-label="Select all matching domains"
-                          checked={
-                            filtered.length > 0 &&
-                            filtered.every((item) => picked.has(item.domain))
-                          }
+                          aria-label={`Select ${item.domain}`}
+                          checked={picked.has(item.domain)}
                           onCheckedChange={(checked) => {
                             const next = new Set(picked);
-                            filtered.forEach((item) =>
-                              checked
-                                ? next.add(item.domain)
-                                : next.delete(item.domain),
-                            );
+                            if (checked) next.add(item.domain);
+                            else next.delete(item.domain);
                             setPicked(next);
                           }}
                         />
-                        Select all {filtered.length} matching names
-                      </label>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{picked.size} selected</span>
-                        <Button
-                          size="sm"
-                          disabled={!picked.size}
-                          onClick={() => {
-                            change(includeDomains(draft, [...picked]));
-                            setNotice(
-                              `${picked.size} names included in your private draft. Inquiries are off for new listings.`,
-                            );
-                            switchTab('listings');
-                          }}
+                      </td>
+                      <td className="pf-domain-cell">
+                        <button
+                          className="pf-domain"
+                          onClick={() => openInspector(item.domain)}
                         >
-                          Add to draft
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  <div className="divide-y">
-                    {shown.map((item) => {
-                      const check =
-                        ownership.get(item.domain)?.ownership ?? 'unmatched';
-                      return (
-                        <article key={item.domain} className="py-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-3">
-                                {tab === 'add' && (
-                                  <Checkbox
-                                    aria-label={`Select ${item.domain}`}
-                                    checked={picked.has(item.domain)}
-                                    onCheckedChange={(checked) => {
-                                      const next = new Set(picked);
-                                      if (checked) next.add(item.domain);
-                                      else next.delete(item.domain);
-                                      setPicked(next);
-                                    }}
-                                  />
-                                )}
-                                <h3 className="break-all text-lg font-medium tracking-tight">
-                                  {item.domain}
-                                </h3>
-                              </div>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {item.collection ? `${item.collection} · ` : ''}
-                                {item.visibility === 'historical'
-                                  ? 'Owner-declared history'
-                                  : ownershipLabels[check]}
-                              </p>
-                            </div>
-                            {item.visibility !== 'private' && (
-                              <button
-                                type="button"
-                                className="shrink-0 py-1 text-xs text-muted-foreground underline underline-offset-4"
-                                aria-label={`Remove ${item.domain} from portfolio`}
-                                onClick={() =>
-                                  update(item.domain, { visibility: 'private' })
-                                }
-                              >
-                                Remove
-                              </button>
-                            )}
-                          </div>
-                          {(item.visibility === 'showcase' ||
-                            item.visibility === 'inquiry') && (
-                            <label className="mt-3 flex items-center gap-2 text-sm">
-                              <Switch
-                                aria-label={`Accept inquiries for ${item.domain}`}
-                                checked={item.visibility === 'inquiry'}
-                                onCheckedChange={(checked) =>
-                                  update(item.domain, {
-                                    visibility: checked
-                                      ? 'inquiry'
-                                      : 'showcase',
-                                  })
-                                }
-                              />
-                              Accept inquiries
-                            </label>
+                          {item.domain}
+                        </button>
+                        {check !== 'owned' &&
+                          item.visibility !== 'historical' && (
+                            <span className="pf-mobile-evidence">
+                              {ownershipLabel[check]}
+                            </span>
                           )}
-                          {tab === 'attention' && (
-                            <div className="mt-3 flex flex-wrap gap-4 text-xs">
-                              <Link
-                                to="/settings"
-                                className="underline underline-offset-4"
-                              >
-                                Review registrar accounts
-                              </Link>
-                              {item.visibility === 'private' && (
-                                <button
-                                  className="underline underline-offset-4"
-                                  onClick={() => setHistorical(item.domain)}
-                                >
-                                  Previously owned…
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          {historical === item.domain && (
-                            <div className="mt-3 space-y-3 rounded-md border p-3 text-sm">
-                              <p>
-                                Confirm that you previously owned {item.domain}.
-                                It will be included as history, without
-                                inquiries, when you publish.
-                              </p>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  update(item.domain, {
-                                    visibility: 'historical',
-                                  });
-                                  setHistorical(null);
-                                }}
-                              >
-                                Mark previously owned
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setHistorical(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          )}
-                          {tab !== 'add' && (
-                            <ListingDetails
-                              item={item}
-                              update={(patch) => update(item.domain, patch)}
-                            />
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                  {!shown.length && (
-                    <div className="py-10 text-center text-sm text-muted-foreground">
-                      {query
-                        ? 'No matching names.'
-                        : tab === 'listings'
-                          ? 'Choose names from your inventory to create your public collection.'
-                          : tab === 'attention'
-                            ? 'No ownership issues need review.'
-                            : tab === 'history'
-                              ? 'No historical names selected.'
-                              : 'All inventory names are already included.'}
-                      {tab === 'listings' && (
-                        <div className="mt-4">
-                          <Button
-                            variant="outline"
-                            onClick={() => switchTab('add')}
+                      </td>
+                      <td className="pf-availability-cell">
+                        {isCurrent(item) ? (
+                          <select
+                            className="pf-inline-availability"
+                            aria-label={`Availability for ${item.domain}`}
+                            value={item.visibility}
+                            onChange={(e) =>
+                              update(item.domain, {
+                                visibility: e.target.value as
+                                  'inquiry' | 'showcase',
+                              })
+                            }
                           >
-                            Choose domains
-                          </Button>
+                            <option value="inquiry">Inquiries on</option>
+                            <option value="showcase">Showcase only</option>
+                          </select>
+                        ) : item.visibility === 'historical' ? (
+                          <span className="pf-availability">
+                            Previously owned
+                          </span>
+                        ) : (
+                          <button
+                            className="pf-text-button"
+                            disabled={check === 'unmatched'}
+                            onClick={() =>
+                              apply(
+                                { kind: 'visibility', value: 'showcase' },
+                                new Set([item.domain]),
+                              )
+                            }
+                          >
+                            {check === 'unmatched'
+                              ? 'Not listed'
+                              : '+ Add to page'}
+                          </button>
+                        )}
+                      </td>
+                      <td className="pf-collection-cell">
+                        <div className="pf-collection">
+                          {collectionTokens(item.collection)
+                            .slice(0, 2)
+                            .map((name) => (
+                              <span key={name} className="pf-tag">
+                                {name}
+                              </span>
+                            ))}
+                          {collectionTokens(item.collection).length > 2 && (
+                            <span className="pf-hint">
+                              +{collectionTokens(item.collection).length - 2}
+                            </span>
+                          )}
+                          {!item.collection && (
+                            <span className="pf-hint">—</span>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  )}
-                  {filtered.length > 40 && (
-                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                      <span>
-                        {filtered.length} names · {activePage} / {pages}
-                      </span>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={activePage === 1}
-                          onClick={() => setPage(activePage - 1)}
+                      </td>
+                      <td className="pf-price-cell">
+                        <button
+                          className="pf-price"
+                          aria-label={`Edit asking price for ${item.domain}`}
+                          onClick={() => openInspector(item.domain)}
                         >
-                          Previous
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={activePage === pages}
-                          onClick={() => setPage(activePage + 1)}
+                          {item.visibility === 'historical' ? (
+                            '—'
+                          ) : item.askingPrice === null ? (
+                            <span className="pf-hint">On request</span>
+                          ) : (
+                            `${item.currency} ${item.askingPrice.toLocaleString()}`
+                          )}
+                        </button>
+                      </td>
+                      <td className="pf-check-column">
+                        <span
+                          className="pf-evidence-label"
+                          data-ok={check === 'owned'}
                         >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </fieldset>
-            <aside className="min-w-0 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Your page</span>
-                <button
-                  className="text-primary underline underline-offset-4"
-                  onClick={() => go('preview')}
+                          {item.visibility === 'historical' ? (
+                            'Owner-declared'
+                          ) : check === 'owned' ? (
+                            <>
+                              <Check />
+                              Synced
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle />
+                              {check === 'unmatched'
+                                ? 'No match'
+                                : check === 'stale'
+                                  ? 'Needs sync'
+                                  : 'Conflict'}
+                            </>
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="pf-row-edit"
+                          aria-label={`Edit ${item.domain}`}
+                          onClick={() => openInspector(item.domain)}
+                        >
+                          <Pencil />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!rows.length && (
+              <div className="pf-empty">
+                <Globe />
+                <h2>
+                  {scope === 'listed' &&
+                  !query &&
+                  !collection &&
+                  ownershipFilter === 'all'
+                    ? 'Your collection starts here'
+                    : 'No matching domains'}
+                </h2>
+                <p>
+                  {scope === 'listed' && current.length === 0
+                    ? 'Choose names from your inventory. Everything stays private until you publish.'
+                    : 'Try another filter or clear your search.'}
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    selectScope(
+                      scope === 'listed' && current.length === 0
+                        ? 'private'
+                        : scope,
+                      scope === 'listed' && current.length === 0
+                        ? 'owned'
+                        : 'all',
+                    )
+                  }
                 >
-                  Expand preview
-                </button>
+                  {current.length === 0 && scope === 'listed'
+                    ? 'Choose domains'
+                    : 'Clear filters'}
+                </Button>
               </div>
-              {previewPanel}
-            </aside>
-          </div>
-          <details className="rounded-md border px-4 py-3 text-sm">
-            <summary className="cursor-pointer">
-              Registrar coverage ·{' '}
-              {state.accounts.filter((a) => a.healthy).length}/
-              {state.accounts.length} accounts fresh
-            </summary>
-            <ul className="mt-3 space-y-2">
-              {state.accounts.map((account) => (
-                <li
-                  key={account.label}
-                  className="flex flex-wrap justify-between gap-2"
+            )}
+            <div className="pf-footer">
+              <span>
+                {filtered.length
+                  ? `${(actualPage - 1) * PAGE_SIZE + 1}–${Math.min(actualPage * PAGE_SIZE, filtered.length)} of ${filtered.length} domains`
+                  : '0 domains'}
+                {picked.size ? ` · ${picked.size} selected` : ''}
+              </span>
+              <div className="pf-pagination">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Previous portfolio page"
+                  disabled={actualPage === 1}
+                  onClick={() => {
+                    setPage(actualPage - 1);
+                    window.scrollTo(0, 0);
+                  }}
                 >
-                  <span>{account.label}</span>
-                  <span className="text-muted-foreground">
-                    {account.count} domains ·{' '}
-                    {account.healthy ? 'Synced' : 'Needs attention'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-          {state.published && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
-              <a
-                href={hostPath(`/p/${state.published.handle}`)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-primary underline"
-              >
-                View live page
-                <ArrowUpRight className="size-3" />
-              </a>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => setConfirmUnpublish(true)}
-              >
-                Unpublish…
-              </Button>
+                  <ChevronLeft />
+                </Button>
+                <span>
+                  {actualPage} / {pages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Next portfolio page"
+                  disabled={actualPage === pages}
+                  onClick={() => {
+                    setPage(actualPage + 1);
+                    window.scrollTo(0, 0);
+                  }}
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
             </div>
-          )}
-          {confirmUnpublish && (
-            <div className="space-y-3 rounded-md border p-4 text-sm">
-              <p>
-                Remove the public page? Your draft and registrar inventory
-                remain intact.
-              </p>
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await portfolioEditor.unpublish();
-                    setConfirmUnpublish(false);
-                    setNotice('Page unpublished. Your draft is retained.');
-                  })
-                }
+          </div>
+          <div className="pf-health-line">
+            <Check />
+            <span>
+              {state.accounts.filter((account) => account.healthy).length}/
+              {state.accounts.length} registrar accounts synced.
+            </span>
+            {blockers.length > 0 ? (
+              <button
+                className="pf-text-button"
+                onClick={() => selectScope('listed', 'blocking')}
               >
-                Confirm unpublish
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => setConfirmUnpublish(false)}
+                {blockers.length} listed names block publishing
+              </button>
+            ) : (
+              <span>No ownership blockers on your page.</span>
+            )}
+            {unmatched.length > 0 && (
+              <button
+                className="pf-text-button"
+                onClick={() => selectScope('private', 'attention')}
               >
-                Cancel
-              </Button>
-            </div>
-          )}
+                {unmatched.length} unlisted names need review
+              </button>
+            )}
+          </div>
         </>
       )}
+      <PortfolioInspector
+        item={inspector}
+        check={inspector ? checks.get(inspector.domain) : undefined}
+        onClose={() => setEditing(null)}
+        onChange={(patch) => {
+          if (inspector) update(inspector.domain, patch);
+        }}
+        onHistory={() => {
+          if (inspector) {
+            setHistoryNames(new Set([inspector.domain]));
+            setEditing(null);
+          }
+        }}
+        saveStatus={saveStatus}
+        error={error}
+      />
+      <Dialog
+        open={!!historyNames}
+        onOpenChange={(open) => {
+          if (!open) setHistoryNames(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>Add {historyNames?.size} names to history?</DialogTitle>
+          <DialogDescription>
+            This is your statement that you previously owned these names. They
+            will appear under Previously owned, without inquiries, after you
+            publish.
+          </DialogDescription>
+          <p className="break-words text-sm">
+            {[...(historyNames ?? [])].slice(0, 5).join(', ')}
+            {(historyNames?.size ?? 0) > 5
+              ? ` and ${historyNames!.size - 5} more`
+              : ''}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setHistoryNames(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (historyNames)
+                  apply(
+                    { kind: 'visibility', value: 'historical' },
+                    historyNames,
+                  );
+                setHistoryNames(null);
+              }}
+            >
+              Confirm previous ownership
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={importing} onOpenChange={setImporting}>
+        <DialogContent>
+          <DialogTitle>Import a collection</DialogTitle>
+          <DialogDescription>
+            Imported names start private. Existing edits and public selections
+            are preserved.
+          </DialogDescription>
+          <input
+            type="file"
+            accept=".csv,.tsv,.json,.txt"
+            aria-label="Import collection file"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (file.size > 4 * 1024 * 1024) {
+                setActionError('Choose a file smaller than 4 MB.');
+                return;
+              }
+              void file
+                .text()
+                .then(setImportText)
+                .catch(() => setActionError('Could not read that file.'));
+            }}
+          />
+          <Textarea
+            aria-label="Collection import text"
+            rows={6}
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder="Paste domains, CSV, or JSON"
+          />
+          <Button
+            onClick={() => {
+              try {
+                const result = importPublication(importText, draft.listings);
+                change({ listings: result.listings });
+                setNotice(
+                  `${result.added} names imported privately. ${result.duplicates} existing names kept.`,
+                );
+                setImportText('');
+                setImporting(false);
+                selectScope('private');
+              } catch (e) {
+                setActionError((e as Error).message);
+              }
+            }}
+          >
+            Import privately
+          </Button>
+          {actionError && (
+            <p role="alert" className="text-sm text-destructive">
+              {actionError}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
+        <DialogContent>
+          <DialogTitle>Unpublish this portfolio?</DialogTitle>
+          <DialogDescription>
+            The public page will be removed. Your draft and registrar inventory
+            remain.
+          </DialogDescription>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                setUndo(null);
+                clearSelection();
+                setEditing(null);
+                await portfolioEditor.unpublish();
+                setConfirmUnpublish(false);
+                setNotice('Portfolio unpublished. Your draft is retained.');
+              })
+            }
+          >
+            Confirm unpublish
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+        <DialogContent>
+          <DialogTitle>Discard unsaved edits?</DialogTitle>
+          <DialogDescription>
+            This loads the latest saved draft, including any changes made in
+            another tab.
+          </DialogDescription>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                setUndo(null);
+                clearSelection();
+                setEditing(null);
+                await portfolioEditor.discardAndReload();
+                setConfirmDiscard(false);
+                setNotice('Latest saved draft loaded.');
+              })
+            }
+          >
+            Discard edits and reload
+          </Button>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
