@@ -5,57 +5,55 @@ inventory against a curated collection, edit a private draft, and publish only
 explicitly selected public fields. It is a **single-owner, self-hosted instance**
 feature. It does not add SaaS signup, multi-tenancy, billing, or new MCP grants.
 
-## Portfolio builder
+## Unified Domains and Public page
 
-In the hosted app, select names in **Domains → Add to portfolio**, or open
-**Portfolio** to manage the page in a full-width table. The table separates
-**Listed**, **Not listed**, **History**, and **All names**. Search, collection,
-ownership, and name/price sort controls narrow the results. Prices are grouped
-by currency before sorting; they are not converted. Unmatched imported
-candidates are distinct from current listings that block publication.
+The hosted application has one **Domains** catalog. **Manage** and **Publish**
+are column/action presets over the same filtered rows, search, page and selection.
+Visiting **Public page** and returning also preserves that catalog context.
+Changing filters clears selection; changing the account filter cannot silently
+retarget a selected domain to another account.
 
-Select the visible page first, then explicitly choose **Select all N matching
-domains** to include other result pages. Changing filters clears selection.
-Bulk controls can add private names to the draft, change inquiries for current
-listings, add/remove/replace collections, or remove names from the page. Inquiry
-changes cannot silently include private names from a mixed selection. Historical
-assertions are explicit and never enable inquiries. Bulk edits are one immutable
-update and one serialized save, with Undo until another edit or baseline reload.
+Manage reuses the existing registrar controls for folders, renewal, auto-renew,
+privacy, locks, nameservers, forwarding and transfer authorization. Each domain
+must resolve to one exact, enabled registrar account before these controls appear.
+Historical, unmatched, deleted, and unavailable-account records have no registrar
+actions. Duplicate-account records require an explicit account filter. A mixed
+selection with any unavailable target disables the entire registrar bulk action;
+it never silently operates on a subset. CSV export explicitly names the count of
+registered records included.
 
-Click a domain to edit its availability, public description, collections, and
-asking price in a focused side panel. Closing the panel retains filters and page
-position. Page identity, contact email, and the link name live under **Page
-settings**. Changing the link name removes the old address only when published.
+Publish shows **Include on public page**, inquiry availability, collections and
+asking prices. Inclusion edits only the private draft. Newly discovered domains
+start private. Bulk inquiry changes apply only to current listings; history
+requires an explicit ownership assertion and never accepts inquiries. Collections
+support explicit Add, Remove and Replace operations. Undo is invalidated when
+reloading or unpublishing so it cannot overwrite a newer saved draft.
 
-**Preview** opens a separate full-width view with mobile/desktop and
-current/history controls. No iframe or public document is rendered while editing
-the table. The embedded preview is read-only; open the saved authenticated preview
-to exercise its search and inquiry links. Both use the same escaped public-field
-renderer. Private previews can be viewed without publishing.
+The default Inventory scope shows registered domains. Listed, Private, History
+and All names scopes reveal the relevant publication or reference records, with
+ownership, collection, account, TLD, expiration, private-folder and nameserver
+filters. Hidden private folders remain hidden until selected explicitly.
+Nameserver details are fetched on demand for the filter; reference records never
+trigger provider reads. Unknown dates/prices sort last, and all account-dependent
+filters and prices use the selected account consistently.
 
-**Review changes** flushes autosave, refreshes ownership, and compares against the
-actual published snapshot. Added, removed, and edited names are compact groups;
-expand individual rows to inspect their exact public-field changes. The adjacent
-summary shows destination, contact details, ownership readiness and the explicit
-**Publish changes** action. Private unmatched candidates never block unrelated
-valid listings. Use **Portfolio options → Unpublish** for an empty public page.
+**Public page** contains presentation settings, preview and publication review,
+not another domain list. Choose domains returns to the same catalog in Publish
+view. The old `#/public-portfolio` bookmark redirects to `#/public-page`.
 
-Autosave survives navigation between app pages. Failed saves retain the in-memory
-edits; retry or explicitly discard them and reload. Stale revisions are never
-adopted silently. Reload and unpublish invalidate Undo so an earlier whole-draft
-snapshot cannot overwrite a newer baseline. Closing the browser warns while
-unsaved edits remain; this is not a persistent offline store.
+Preview is on demand and uses the existing escaped public-field renderer.
+**Review changes** flushes autosave, refreshes ownership and compares the draft
+with the actual published snapshot. Only **Publish changes** changes the public
+page. Private unmatched candidates never block unrelated valid listings.
 
-New selections default to Showcase with inquiries off. Existing descriptions,
-prices, collections and historical classifications are preserved. Removing a
-listing keeps its inventory and editorial data private. Imports always start
-private. No UI edit updates the public snapshot without explicit publication.
+Serialized autosave, stale-tab conflict rejection, in-memory edit recovery and
+explicit publication are unchanged. If publication metadata is unavailable,
+registrar management remains accessible through the existing inventory view.
+Closing the browser warns while unsaved edits remain; this is not an offline store.
 
-Public pages default to current holdings and provide a separate **Previously
-owned** view. Historical category bookmarks remain usable. The builder requires
-no database migration and does not change existing published membership, handles,
-credentials or registrar settings. It is hosted/web-only; Electron-to-hosted
-account linking remains a separate integration.
+This change needs no database migration, credential change, domain import or
+publication reset. The original portfolio at domains.domains remains independent
+of the product testing host. Electron retains its existing registrar interface.
 
 ## Deploy and recover
 
