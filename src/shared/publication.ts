@@ -101,6 +101,8 @@ export interface PublicationState {
     count: number;
     revision: string;
   } | null;
+  /** Already-public fields, returned only to the owner for an exact change review. */
+  publishedSnapshot: PublishedPortfolio | null;
   review: ReconciledListing[];
   accounts: {
     label: string;

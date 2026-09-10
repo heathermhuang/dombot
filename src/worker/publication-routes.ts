@@ -92,6 +92,7 @@ export function createPublicationRoutes(
             revision: published.revision,
           }
         : null,
+      publishedSnapshot: published?.snapshot ?? null,
       accounts: getRegistrarMetadata()
         .filter((a) => a.saved || a.configured)
         .map((a) => ({

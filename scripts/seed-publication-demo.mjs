@@ -62,6 +62,21 @@ const bundle = {
         },
       },
     },
+    'cache-detail': Object.fromEntries(
+      names.map((name) => [
+        `dynadot:${name}`,
+        {
+          fetchedAt: Date.now(),
+          data: {
+            domainName: name,
+            nameservers: ['ns1.example.com'],
+            locked: true,
+            privacy: true,
+            autoRenew: false,
+          },
+        },
+      ]),
+    ),
     settings: { autoSyncIntervalMinutes: 0, mcpEnabled: false },
   },
 };

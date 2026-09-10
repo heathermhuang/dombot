@@ -5,32 +5,49 @@ inventory against a curated collection, edit a private draft, and publish only
 explicitly selected public fields. It is a **single-owner, self-hosted instance**
 feature. It does not add SaaS signup, multi-tenancy, billing, or new MCP grants.
 
-## Use
+## Portfolio builder
 
-Open **Public portfolio** in the web application. New inventory is private.
-Import an existing collection as CSV, TSV, JSON, or a list of domain names.
-Supported columns are `domain`, `collection`, `description`, `askingPrice`, and
-`currency`. Separate multiple collection names with semicolons in `collection`.
-Repeated names retain existing edits. Incoming visibility flags are
-ignored; imports cannot authorize publication. Invalid rows reject the import
-without adding partial results.
+In the hosted app, select names in **Domains → Add to portfolio**. This opens
+**Portfolio** with those names in a private draft. New selections default to
+Showcase, with inquiries off. Re-adding a domain preserves its descriptions,
+prices, collections, inquiry choice, and historical classification. Use the
+existing inventory filters to select a group, or use **Portfolio → Add domains**
+and explicitly select all matching names across pages.
 
-For each name choose Private, Showcase, Accept inquiries, or Previously owned.
-Active public listings require a fresh, successful sync of the matching connected
-account. Duplicate ownership across accounts requires review. A missing or stale
-record is never classified automatically as sold or expired. Previously owned
-is an explicit owner assertion, displayed as history without an inquiry action.
+The editor separates **Listings**, **Page details**, **History**, and **Needs
+review**. Inclusion is separate from the **Accept inquiries** switch. Removing a
+listing keeps the domain and its public metadata in the private inventory.
+Imports remain private. A historical name requires an explicit assertion of
+previous ownership and never accepts inquiries.
 
-Save the draft, open the private preview, and confirm publication. The public
-address is `/p/<handle>`. Draft edits do not change that page until publication.
-Changing the handle on publication removes the old address. Unpublish removes
-the page while retaining the private draft and inventory. Publishing an empty
-selection is rejected; use Unpublish instead.
+Draft changes autosave after a short debounce. Saves run in order, including
+when navigating to another app page. A failed save retains the in-memory edits;
+retry it or explicitly discard edits and reload. A stale revision from another
+tab is never adopted silently. Closing the browser warns while unsaved edits
+remain; the in-memory buffer is not a persistent offline store.
 
-The public page has server-rendered search, collection filters, and pagination.
-It contains no JavaScript, third-party analytics, remote fonts, or tracking SDKs.
-Renewal prices and asking prices are separate fields; renewal prices never enter
-the public projection.
+The embedded preview uses the same escaped public-field renderer as the public
+page, inside a sandboxed iframe. It supports current/history and mobile/desktop
+views. Search, pagination, and inquiry links are inactive inside the embedded
+preview; open the saved authenticated preview to exercise those links. A draft
+can be previewed before ownership issues are resolved, but the server still
+requires fresh ownership checks before publishing current listings.
+
+**Review changes** flushes pending saves, refreshes ownership, and compares the
+draft against the actual published snapshot. The review shows additions,
+removals, changed public fields, public contact, and destination URL. Only
+**Publish changes** replaces the public snapshot. Unmatched private candidates
+do not block valid selected domains. Empty selections use **Unpublish**.
+
+Public pages default to current holdings and provide a separate **Previously
+owned** view. Historical-only collections and old category bookmarks still work.
+Search, filters, and pagination stay within the selected view. This renderer
+change requires no database migration and does not change published membership,
+draft selections, handles, or registrar settings.
+
+This flow is available in the hosted/web app. Electron remains unchanged; a
+desktop-to-hosted account connection is a separate integration, not an assumed
+credential transfer.
 
 ## Deploy and recover
 

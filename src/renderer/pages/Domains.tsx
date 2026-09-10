@@ -1,3 +1,5 @@
+import { portfolioEditor } from '../lib/publication-client';
+import { isWeb } from '../lib/platform';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { domainKey } from '../../shared/account-key';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
@@ -594,6 +596,7 @@ function toggleValue(selected: string[], value: string): string[] {
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function Domains() {
+  const [addingToPortfolio, setAddingToPortfolio] = useState(false);
   const {
     portfolio,
     portfolioErrors,
@@ -1075,15 +1078,25 @@ export default function Domains() {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-[13px]">
-      <div>
-        <h1 className="text-[32px] font-bold">Domains</h1>
-        <p className="-mt-0.5 text-sm text-muted-foreground">
-          {/* Always a count — "0 domains across 0 registrars" before a load or
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-[32px] font-bold">Domains</h1>
+          <p className="-mt-0.5 text-sm text-muted-foreground">
+            {/* Always a count — "0 domains across 0 registrars" before a load or
               when nothing is configured, never a call-to-action sentence. */}
-          {`${portfolio.length} domain${portfolio.length === 1 ? '' : 's'} across ${portfolioRegistrars.length} registrar${
-            portfolioRegistrars.length === 1 ? '' : 's'
-          }`}
-        </p>
+            {`${portfolio.length} domain${portfolio.length === 1 ? '' : 's'} across ${portfolioRegistrars.length} registrar${
+              portfolioRegistrars.length === 1 ? '' : 's'
+            }`}
+          </p>
+        </div>
+        {isWeb() && (
+          <Button
+            variant="outline"
+            onClick={() => navigate('/public-portfolio')}
+          >
+            Manage portfolio →
+          </Button>
+        )}
       </div>
 
       {portfolioError && (
@@ -1252,6 +1265,25 @@ export default function Domains() {
             while a bulk job is running (as a progress pill). */}
         <BulkBar
           domains={selectedDomains}
+          addingToPortfolio={addingToPortfolio}
+          onAddToPortfolio={
+            isWeb()
+              ? () => {
+                  setAddingToPortfolio(true);
+                  void portfolioEditor
+                    .add(selectedDomains.map((domain) => domain.domainName))
+                    .then(() => {
+                      clearSelection();
+                      navigate('/public-portfolio');
+                      toast.success(
+                        'Selected names added to your private portfolio draft.',
+                      );
+                    })
+                    .catch((error: Error) => toast.error(error.message))
+                    .finally(() => setAddingToPortfolio(false));
+                }
+              : undefined
+          }
           folders={folders}
           onClear={clearSelection}
           onRefresh={bulkRefresh}
