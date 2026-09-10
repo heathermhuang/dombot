@@ -1,276 +1,462 @@
-import { hostPath } from '../lib/platform';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  ArrowLeft,
   ArrowUpRight,
   Check,
   Eye,
   Globe,
-  LockKeyhole,
-  Search,
+  Plus,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '../store/app';
+import { portfolioEditor, usePortfolioEditor } from '../lib/publication-client';
+import { hostPath } from '../lib/platform';
 import { importPublication } from '../../shared/publication-import';
 import {
-  draftSchema,
-  type PortfolioDraft,
-  type PortfolioListing,
-  type PublicationState,
+  includeDomains,
+  previewSnapshot,
+  publicationChanges,
+} from '../../shared/publication-edit';
+import { renderPortfolio } from '../../shared/render-portfolio';
+import type {
+  PortfolioListing,
+  PortfolioDraft,
 } from '../../shared/publication';
 
-async function request<T>(
-  path = '',
-  method = 'GET',
-  body?: unknown,
-): Promise<T> {
-  const response = await fetch(hostPath(`/publishing${path}`), {
-    method,
-    credentials: 'same-origin',
-    ...(body !== undefined
-      ? {
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  const json = (await response.json()) as T & { error?: string };
-  if (!response.ok)
-    throw new Error(json.error ?? 'Could not load the publication workspace.');
-  return json;
-}
-
-const selectClass =
-  'h-9 w-full rounded-md border border-input bg-background px-2 text-sm';
-const visibilityLabels = {
-  private: 'Private',
-  showcase: 'Showcase',
-  inquiry: 'Accept inquiries',
-  historical: 'Previously owned',
-};
 const ownershipLabels = {
   owned: 'Owned · synced',
   stale: 'Sync needs attention',
-  unmatched: 'Not in synced inventory',
+  unmatched: 'Not in connected inventory',
   conflict: 'Multiple accounts · review',
 };
+const fieldLabels = {
+  title: 'Page title',
+  intro: 'Introduction',
+  contactEmail: 'Public contact email',
+  handle: 'Public address',
+};
+type Tab = 'listings' | 'details' | 'history' | 'attention' | 'add';
+
+function ListingDetails({
+  item,
+  update,
+}: {
+  item: PortfolioListing;
+  update: (patch: Partial<PortfolioListing>) => void;
+}) {
+  return (
+    <details className="mt-3 text-sm">
+      <summary className="cursor-pointer text-muted-foreground">
+        Edit public details
+      </summary>
+      <div className="mt-4 grid gap-4">
+        <label className="grid gap-1.5">
+          Collections
+          <Input
+            aria-label={`Collections for ${item.domain}`}
+            value={item.collection}
+            maxLength={200}
+            onChange={(e) => update({ collection: e.target.value })}
+          />
+          <span className="text-xs text-muted-foreground">
+            Separate multiple collections with a semicolon.
+          </span>
+        </label>
+        <label className="grid gap-1.5">
+          Public description
+          <Textarea
+            aria-label={`Description for ${item.domain}`}
+            value={item.description}
+            maxLength={400}
+            rows={2}
+            onChange={(e) => update({ description: e.target.value })}
+          />
+        </label>
+        {item.visibility === 'inquiry' && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1.5">
+              Asking price (optional)
+              <Input
+                aria-label={`Asking price for ${item.domain}`}
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={item.askingPrice ?? ''}
+                onChange={(e) =>
+                  update({
+                    askingPrice: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </label>
+            <label className="grid gap-1.5">
+              Currency
+              <Input
+                aria-label={`Currency for ${item.domain}`}
+                value={item.currency}
+                maxLength={3}
+                onChange={(e) =>
+                  update({ currency: e.target.value.toUpperCase() })
+                }
+              />
+            </label>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function ChangedListing({
+  item,
+  before,
+}: {
+  item: PortfolioListing;
+  before?: PortfolioListing;
+}) {
+  const labels = {
+    visibility: 'Availability',
+    description: 'Description',
+    collection: 'Collections',
+    askingPrice: 'Asking price',
+    currency: 'Currency',
+  };
+  const display = (field: keyof typeof labels, listing: PortfolioListing) => {
+    if (field === 'visibility')
+      return {
+        private: 'Private',
+        showcase: 'Showcase',
+        inquiry: 'Accept inquiries',
+        historical: 'Previously owned',
+      }[listing.visibility];
+    if (field === 'askingPrice' && listing.visibility !== 'inquiry')
+      return 'Not displayed';
+    return String(listing[field] ?? '(not set)') || '(empty)';
+  };
+  return (
+    <dl className="w-full space-y-2 text-xs text-muted-foreground">
+      {(Object.keys(labels) as (keyof typeof labels)[])
+        .filter(
+          (field) => !before || display(field, before) !== display(field, item),
+        )
+        .map((field) => (
+          <div key={field}>
+            <dt className="font-medium">{labels[field]}</dt>
+            <dd className="break-words whitespace-pre-wrap">
+              {before ? `${display(field, before)} → ` : ''}
+              {display(field, item)}
+            </dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
 
 export default function PublicPortfolio() {
+  const { state, draft, status, error } = usePortfolioEditor();
   const refreshTick = useAppStore((s) => s.refreshTick);
-  const [state, setState] = useState<PublicationState | null>(null);
-  const [draft, setDraft] = useState<PortfolioDraft | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<Tab>('listings');
+  const [view, setView] = useState<'edit' | 'preview' | 'review'>('edit');
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [editing, setEditing] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState('');
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
-  const [confirm, setConfirm] = useState<'publish' | 'unpublish' | null>(null);
-
-  const reload = useCallback(async (replace = true) => {
-    const next = await request<PublicationState>();
-    setState(next);
-    if (replace) {
-      setDraft({
-        ...next.draft,
-        listings: next.review.map(
-          ({
-            domain,
-            collection,
-            description,
-            visibility,
-            askingPrice,
-            currency,
-          }) => ({
-            domain,
-            collection,
-            description,
-            visibility,
-            askingPrice,
-            currency,
-          }),
-        ),
-      });
-      setDirty(false);
-      setSelected(new Set());
-    }
+  const [mobile, setMobile] = useState(false);
+  const [previewHistory, setPreviewHistory] = useState(false);
+  const [historical, setHistorical] = useState<string | null>(null);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [returnFocus, setReturnFocus] = useState(false);
+  useEffect(() => {
+    void portfolioEditor.load().catch(() => {});
   }, []);
   useEffect(() => {
-    void reload().catch((e: Error) => setError(e.message));
-  }, [reload]);
-  // Sync updates reconciliation without overwriting unsaved editorial work.
-  useEffect(() => {
     if (refreshTick)
-      void reload(false).catch((e: Error) => setError(e.message));
-  }, [refreshTick, reload]);
+      void portfolioEditor
+        .refreshReview()
+        .catch((e: Error) => setActionError(e.message));
+  }, [refreshTick]);
   useEffect(() => {
-    if (!dirty) return;
-    const protect = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', protect);
-    return () => window.removeEventListener('beforeunload', protect);
-  }, [dirty]);
-
-  const review = useMemo(
+    if (returnFocus) {
+      document.getElementById('portfolio-heading')?.focus();
+      setReturnFocus(false);
+    }
+  }, [returnFocus]);
+  const ownership = useMemo(
     () => new Map(state?.review.map((r) => [r.domain, r]) ?? []),
     [state],
   );
-  const listings = draft?.listings ?? [];
-  const publicCount = listings.filter(
-    (item) => item.visibility !== 'private',
-  ).length;
-  const blocked = listings.filter(
-    (item) =>
-      item.visibility !== 'private' &&
-      item.visibility !== 'historical' &&
-      review.get(item.domain)?.ownership !== 'owned',
+  const preview = useMemo(
+    () =>
+      draft
+        ? renderPortfolio(
+            previewSnapshot(draft),
+            new URL(
+              `https://preview.invalid/p/portfolio${previewHistory ? '?view=history' : ''}`,
+            ),
+            true,
+          )
+        : '',
+    [draft, previewHistory],
   );
-  const filtered = listings.filter((item) => {
-    const status = review.get(item.domain)?.ownership ?? 'unmatched';
-    return (
-      `${item.domain} ${item.collection}`
-        .toLowerCase()
-        .includes(query.toLowerCase()) &&
-      (filter === 'all' ||
-        (filter === 'selected'
-          ? item.visibility !== 'private'
-          : filter === 'review'
-            ? status !== 'owned'
-            : item.visibility === 'private'))
-    );
-  });
-  const pages = Math.max(1, Math.ceil(filtered.length / 50));
-  const currentPage = Math.min(page, pages);
-  const shown = filtered.slice((currentPage - 1) * 50, currentPage * 50);
-  const change = (patch: Partial<PortfolioDraft>) => {
-    setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
-    setDirty(true);
-    setConfirm(null);
-    setNotice('');
-  };
-  const updateListing = (domain: string, patch: Partial<PortfolioListing>) =>
-    change({
-      listings: listings.map((item) =>
-        item.domain === domain ? { ...item, ...patch } : item,
-      ),
-    });
-  const action = async (run: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>) => {
     setBusy(true);
-    setError('');
+    setActionError('');
     setNotice('');
     try {
-      await run();
+      await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
+      setActionError(e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setBusy(false);
-    }
-  };
-  const save = () =>
-    action(async () => {
-      if (!draft || !state) return;
-      const parsed = draftSchema.safeParse(draft);
-      if (!parsed.success)
-        throw new Error(
-          parsed.error.issues
-            .map((i) => `${i.path.join('.')}: ${i.message}`)
-            .slice(0, 3)
-            .join('; '),
-        );
-      await request('', 'PUT', {
-        draft: parsed.data,
-        revision: state.revision,
-      });
-      await reload();
-      setNotice('Draft saved. The public page has not changed.');
-    });
-  const importRows = () => {
-    try {
-      const result = importPublication(importText, listings);
-      change({ listings: result.listings });
-      setImporting(false);
-      setImportText('');
-      setNotice(
-        `${result.added} candidates added privately. ${result.duplicates} existing records kept.`,
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed.');
     }
   };
   if (!draft || !state)
     return (
       <section className="mx-auto max-w-6xl py-8">
-        <h1 className="text-3xl font-semibold">Public portfolio</h1>
-        <p role={error ? 'alert' : 'status'} className="mt-4">
-          {error || 'Loading your private publication workspace…'}
+        <h1 className="text-3xl font-semibold">Portfolio</h1>
+        <p role={error ? 'alert' : 'status'} className="my-4">
+          {error || 'Loading your private draft…'}
         </p>
         {error && (
-          <Button className="mt-4" onClick={() => void action(() => reload())}>
+          <Button onClick={() => void portfolioEditor.load().catch(() => {})}>
             Try again
           </Button>
         )}
       </section>
     );
+  const change = (patch: Partial<PortfolioDraft>) => {
+    portfolioEditor.update({ ...draft, ...patch });
+    setNotice('');
+    setActionError('');
+  };
+  const update = (domain: string, patch: Partial<PortfolioListing>) =>
+    change({
+      listings: draft.listings.map((item) =>
+        item.domain === domain ? { ...item, ...patch } : item,
+      ),
+    });
+  const current = draft.listings.filter(
+    (item) => item.visibility === 'showcase' || item.visibility === 'inquiry',
+  );
+  const history = draft.listings.filter(
+    (item) => item.visibility === 'historical',
+  );
+  const attention = draft.listings.filter(
+    (item) =>
+      item.visibility !== 'historical' &&
+      ownership.get(item.domain)?.ownership !== 'owned',
+  );
+  const privateNames = draft.listings.filter(
+    (item) =>
+      item.visibility === 'private' &&
+      ownership.get(item.domain)?.ownership !== 'unmatched',
+  );
+  const blocked = current.filter(
+    (item) => ownership.get(item.domain)?.ownership !== 'owned',
+  );
+  const needsEmail =
+    current.some((item) => item.visibility === 'inquiry') &&
+    !draft.contactEmail;
+  const changes = publicationChanges(draft, state.publishedSnapshot);
+  const allRows =
+    tab === 'history'
+      ? history
+      : tab === 'attention'
+        ? attention
+        : tab === 'add'
+          ? privateNames
+          : current;
+  const filtered = allRows.filter((item) =>
+    `${item.domain} ${item.collection}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  const pages = Math.max(1, Math.ceil(filtered.length / 40));
+  const activePage = Math.min(page, pages);
+  const shown = filtered.slice((activePage - 1) * 40, activePage * 40);
+  const switchTab = (next: Tab) => {
+    setTab(next);
+    setQuery('');
+    setPage(1);
+    setPicked(new Set());
+    setHistorical(null);
+  };
+  const go = (next: typeof view) => {
+    setView(next);
+    setReturnFocus(true);
+  };
+  const prepareReview = () =>
+    run(async () => {
+      await portfolioEditor.flush();
+      await portfolioEditor.refreshReview();
+      go('review');
+    });
+  const previewPanel = (
+    <div
+      className={`overflow-hidden rounded-lg border bg-muted/20 ${mobile ? 'mx-auto w-full max-w-[390px]' : 'w-full'}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
+        <span>Private preview · {current.length} current</span>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="underline underline-offset-4"
+            aria-pressed={!previewHistory}
+            onClick={() => setPreviewHistory(false)}
+          >
+            Current
+          </button>
+          {history.length > 0 && (
+            <button
+              type="button"
+              className="underline underline-offset-4"
+              aria-pressed={previewHistory}
+              onClick={() => setPreviewHistory(true)}
+            >
+              History
+            </button>
+          )}
+        </div>
+      </div>
+      <iframe
+        title="Portfolio draft preview"
+        sandbox=""
+        srcDoc={preview}
+        className={`w-full border-0 ${view === 'preview' ? 'h-[850px]' : 'h-[680px]'}`}
+      />
+    </div>
+  );
 
   return (
-    <section className="mx-auto max-w-6xl space-y-6 pb-10">
+    <section className="mx-auto max-w-6xl space-y-6 pb-8">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-6">
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Your collection, your choice
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Public portfolio
+          <h1
+            id="portfolio-heading"
+            tabIndex={-1}
+            className="text-3xl font-semibold tracking-tight outline-none"
+          >
+            {view === 'review'
+              ? 'Review your changes'
+              : view === 'preview'
+                ? 'Your page, before it’s public'
+                : 'Portfolio'}
           </h1>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Choose the names you want to share. Save a private draft, preview
-            it, then publish.
+          <p className="mt-2 text-sm text-muted-foreground">
+            {view === 'edit'
+              ? 'Choose what the world sees.'
+              : view === 'review'
+                ? 'Only these public fields will change.'
+                : 'A private preview of your selected names.'}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground" role="status">
+            {status === 'saving'
+              ? 'Saving draft…'
+              : status === 'unsaved'
+                ? 'Changes waiting to save'
+                : status === 'error'
+                  ? 'Draft not saved'
+                  : 'Draft saved'}{' '}
+            ·{' '}
+            {state.published
+              ? `${state.published.count} names live`
+              : 'Not published'}
+            {changes.count > 0 ? ` · ${changes.count} public changes` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => setImporting(!importing)}
-          >
-            <Upload className="size-4" />
-            Import collection
-          </Button>
-          <Button
-            disabled={busy || (!dirty && state.revision !== null)}
-            onClick={() => void save()}
-          >
-            {busy ? 'Working…' : 'Save draft'}
-          </Button>
+          {view !== 'edit' && (
+            <Button variant="outline" onClick={() => go('edit')}>
+              <ArrowLeft />
+              Back to editing
+            </Button>
+          )}
+          {view === 'edit' && (
+            <>
+              <Button variant="outline" onClick={() => go('preview')}>
+                <Eye />
+                Preview
+              </Button>
+              <Button
+                disabled={busy || changes.count === 0}
+                onClick={() => void prepareReview()}
+              >
+                Review changes →
+              </Button>
+            </>
+          )}
+          {view === 'preview' && (
+            <>
+              <Button variant="outline" onClick={() => setMobile(!mobile)}>
+                {mobile ? 'Desktop view' : 'Mobile view'}
+              </Button>
+              <Button
+                disabled={busy || changes.count === 0}
+                onClick={() => void prepareReview()}
+              >
+                Review changes →
+              </Button>
+            </>
+          )}
         </div>
       </div>
-      {error && (
+      {(error || actionError) && (
         <div
+          className="space-y-3 rounded-md border border-destructive/40 p-4 text-sm"
           role="alert"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/40 p-4 text-sm"
         >
-          <span>{error}</span>
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              void action(async () => {
-                await reload();
-                setNotice('Latest saved draft loaded.');
-              })
-            }
-          >
-            Discard edits and reload
-          </Button>
+          <p>{actionError || error}</p>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void run(() => portfolioEditor.flush())}
+            >
+              Retry save
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmDiscard(true)}
+            >
+              Reload saved draft…
+            </Button>
+          </div>
+          {confirmDiscard && (
+            <div className="space-y-2 border-t pt-3">
+              <p>Discard unsaved edits and load the latest saved draft?</p>
+              <Button
+                size="sm"
+                onClick={() =>
+                  void run(async () => {
+                    await portfolioEditor.discardAndReload();
+                    setConfirmDiscard(false);
+                  })
+                }
+              >
+                Discard edits and reload
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirmDiscard(false)}
+              >
+                Keep editing
+              </Button>
+            </div>
+          )}
         </div>
       )}
       {notice && (
@@ -282,555 +468,623 @@ export default function PublicPortfolio() {
           {notice}
         </p>
       )}
-      <fieldset
-        disabled={busy}
-        className="min-w-0 w-full space-y-6 disabled:opacity-70"
-      >
-        {importing && (
-          <div className="space-y-3 rounded-lg border bg-muted/30 p-5">
-            <h2 className="font-semibold">Bring your existing collection</h2>
-            <p className="text-sm text-muted-foreground">
-              Paste domains or import CSV/JSON. CSV columns: domain, collection,
-              description, askingPrice, currency. Imports start private and
-              never replace existing edits.
-            </p>
-            <input
-              aria-label="Import collection file"
-              type="file"
-              accept=".csv,.tsv,.json,.txt"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (file.size > 4 * 1024 * 1024) {
-                    setError('Choose a file smaller than 4 MB.');
-                    return;
-                  }
-                  void file
-                    .text()
-                    .then(setImportText)
-                    .catch(() => setError('Could not read the file.'));
-                }
-              }}
-            />
-            <Textarea
-              aria-label="Collection import text"
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder={'domain,collection\nexample.com,Short names'}
-              rows={5}
-            />
-            <div className="flex gap-2">
-              <Button onClick={importRows}>Add privately</Button>
-              <Button variant="ghost" onClick={() => setImporting(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-        <div className="grid gap-8 border-b pb-6 md:grid-cols-[minmax(0,2fr)_minmax(240px,1fr)]">
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1.5 text-sm font-medium">
-                Collection title
-                <Input
-                  value={draft.title}
-                  maxLength={100}
-                  onChange={(e) => change({ title: e.target.value })}
-                />
-              </label>
-              <label className="space-y-1.5 text-sm font-medium">
-                Public address
-                <Input
-                  value={draft.handle}
-                  maxLength={40}
-                  onChange={(e) =>
-                    change({ handle: e.target.value.toLowerCase() })
-                  }
-                />
-                <span className="block text-xs font-normal text-muted-foreground">
-                  /p/{draft.handle}
-                </span>
-              </label>
-            </div>
-            <label className="block space-y-1.5 text-sm font-medium">
-              Introduction
-              <Textarea
-                value={draft.intro}
-                maxLength={600}
-                rows={3}
-                placeholder="Tell visitors about your collection."
-                onChange={(e) => change({ intro: e.target.value })}
-              />
-            </label>
-            <label className="block space-y-1.5 text-sm font-medium">
-              Public inquiry email
-              <Input
-                type="email"
-                value={draft.contactEmail}
-                placeholder="Optional unless accepting inquiries"
-                onChange={(e) => change({ contactEmail: e.target.value })}
-              />
-            </label>
-          </div>
-          <aside className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <LockKeyhole className="size-4" />
-              Private until you publish
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Only selected names, public descriptions, collections, and asking
-              prices appear. Account details, renewal costs, and private notes
-              stay in your workspace.
-            </p>
-            <div className="border-t pt-4 text-sm">
-              {state.published ? (
-                <>
-                  <p className="font-medium">
-                    {state.published.count} names currently published
-                  </p>
-                  <a
-                    className="mt-1 inline-flex items-center gap-1 text-primary underline"
-                    href={hostPath(`/p/${state.published.handle}`)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View published collection
-                    <ArrowUpRight className="size-3" />
-                  </a>
-                </>
-              ) : (
-                <p>No public page yet.</p>
-              )}
-              <p className="mt-2 text-muted-foreground">
-                {dirty
-                  ? 'Unsaved changes'
-                  : state.published?.revision === state.revision
-                    ? 'Saved draft matches the published version'
-                    : 'Draft changes are private'}
-              </p>
-            </div>
-          </aside>
-        </div>
-        <details className="rounded-md border px-4 py-3 text-sm">
-          <summary className="cursor-pointer font-medium">
-            Account coverage · {state.accounts.filter((a) => a.healthy).length}/
-            {state.accounts.length} connected accounts fresh
-          </summary>
-          <p className="mt-2 text-muted-foreground">
-            Coverage includes connected accounts only. Missing or stale data
-            does not mean a domain was sold.
+      {view === 'preview' ? (
+        <div className="mx-auto max-w-4xl">
+          {previewPanel}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Search and inquiry links are inactive in this embedded preview.{' '}
+            <a
+              href={hostPath('/publishing/preview')}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Open the saved preview ↗
+            </a>
           </p>
-          <ul className="mt-3 space-y-2">
-            {state.accounts.map((a) => (
-              <li
-                key={a.label}
-                className="flex flex-wrap justify-between gap-2"
-              >
-                <span>{a.label}</span>
-                <span className="text-muted-foreground">
-                  {a.count} domains · {a.healthy ? 'Synced' : 'Needs attention'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-52 flex-1">
-            <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
-            <Input
-              aria-label="Search collection"
-              className="pl-9"
-              value={query}
-              placeholder="Search domains or collections…"
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-          <select
-            aria-label="Filter collection"
-            className={`${selectClass} sm:w-auto`}
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All {listings.length} names</option>
-            <option value="selected">
-              Selected for public page ({publicCount})
-            </option>
-            <option value="review">Needs ownership review</option>
-            <option value="private">Private</option>
-          </select>
         </div>
-        {selected.size > 0 && (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3 text-sm">
-            <span>{selected.size} selected</span>
-            <select
-              aria-label="Set visibility for selected domains"
-              className={`${selectClass} max-w-52`}
-              value=""
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const visibility = e.target
-                  .value as PortfolioListing['visibility'];
-                change({
-                  listings: listings.map((item) =>
-                    selected.has(item.domain) ? { ...item, visibility } : item,
-                  ),
-                });
-                setSelected(new Set());
-              }}
-            >
-              <option value="">Set visibility…</option>
-              {Object.entries(visibilityLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelected(new Set())}
-            >
-              Clear selection
-            </Button>
+      ) : view === 'review' ? (
+        <div className="mx-auto max-w-3xl space-y-6">
+          <div className="flex flex-wrap gap-6 text-sm">
+            <span>{changes.added.length} added</span>
+            <span>{changes.removed.length} removed</span>
+            <span>{changes.edited.length} edited</span>
           </div>
-        )}
-        <div className="relative overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[740px] text-left text-sm">
-            <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
-              <tr>
-                <th className="w-10 p-3">
-                  <input
-                    type="checkbox"
-                    aria-label="Select visible domains"
-                    checked={
-                      shown.length > 0 &&
-                      shown.every((item) => selected.has(item.domain))
-                    }
-                    onChange={(e) => {
-                      const next = new Set(selected);
-                      for (const item of shown) {
-                        if (e.target.checked) next.add(item.domain);
-                        else next.delete(item.domain);
-                      }
-                      setSelected(next);
-                    }}
-                  />
-                </th>
-                <th className="p-3 font-medium">Domain / collection</th>
-                <th className="p-3 font-medium">Inventory check</th>
-                <th className="w-48 p-3 font-medium">Visibility</th>
-                <th className="w-20 p-3">
-                  <span className="sr-only">Edit</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((item) => {
-                const reconciled = review.get(item.domain);
-                return (
-                  <Fragment key={item.domain}>
-                    <tr className="border-b last:border-0">
-                      <td className="p-3">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${item.domain}`}
-                          checked={selected.has(item.domain)}
-                          onChange={(e) => {
-                            const next = new Set(selected);
-                            if (e.target.checked) next.add(item.domain);
-                            else next.delete(item.domain);
-                            setSelected(next);
-                          }}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <span className="font-medium">{item.domain}</span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {item.collection || 'No collection'}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={
-                            reconciled?.ownership === 'owned'
-                              ? 'text-primary'
-                              : 'text-muted-foreground'
-                          }
-                        >
-                          {
-                            ownershipLabels[
-                              reconciled?.ownership ?? 'unmatched'
-                            ]
-                          }
-                        </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {reconciled?.accountLabels.join(', ')}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <select
-                          aria-label={`Visibility for ${item.domain}`}
-                          value={item.visibility}
-                          className={selectClass}
-                          onChange={(e) =>
-                            updateListing(item.domain, {
-                              visibility: e.target
-                                .value as PortfolioListing['visibility'],
-                            })
-                          }
-                        >
-                          {Object.entries(visibilityLabels).map(
-                            ([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ),
-                          )}
-                        </select>
-                      </td>
-                      <td className="p-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Edit ${item.domain}`}
-                          onClick={() =>
-                            setEditing(
-                              editing === item.domain ? null : item.domain,
-                            )
-                          }
-                        >
-                          Edit
-                        </Button>
-                      </td>
-                    </tr>
-                    {editing === item.domain && (
-                      <tr>
-                        <td colSpan={5}>
-                          {' '}
-                          <div className="space-y-4 rounded-lg border p-5">
-                            <div className="flex items-center justify-between">
-                              <h2 className="font-semibold">
-                                Public details · {item.domain}
-                              </h2>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditing(null)}
-                              >
-                                Done
-                              </Button>
-                            </div>
-                            <label className="block space-y-1.5 text-sm">
-                              Collections (separate with ;)
-                              <Input
-                                value={item.collection}
-                                maxLength={200}
-                                onChange={(e) =>
-                                  updateListing(item.domain, {
-                                    collection: e.target.value,
-                                  })
-                                }
-                              />
-                            </label>
-                            <label className="block space-y-1.5 text-sm">
-                              Public description
-                              <Textarea
-                                value={item.description}
-                                maxLength={400}
-                                onChange={(e) =>
-                                  updateListing(item.domain, {
-                                    description: e.target.value,
-                                  })
-                                }
-                              />
-                            </label>
-                            {item.visibility === 'inquiry' && (
-                              <div className="grid grid-cols-2 gap-3">
-                                <label className="space-y-1.5 text-sm">
-                                  Asking price (optional)
-                                  <Input
-                                    type="number"
-                                    min="0.01"
-                                    step="0.01"
-                                    value={item.askingPrice ?? ''}
-                                    onChange={(e) =>
-                                      updateListing(item.domain, {
-                                        askingPrice: e.target.value
-                                          ? Number(e.target.value)
-                                          : null,
-                                      })
-                                    }
-                                  />
-                                </label>
-                                <label className="space-y-1.5 text-sm">
-                                  Currency
-                                  <Input
-                                    value={item.currency}
-                                    maxLength={3}
-                                    onChange={(e) =>
-                                      updateListing(item.domain, {
-                                        currency: e.target.value.toUpperCase(),
-                                      })
-                                    }
-                                  />
-                                </label>
-                              </div>
-                            )}
-                            {item.visibility === 'historical' && (
-                              <p className="text-sm text-muted-foreground">
-                                This is your explicit statement of prior
-                                ownership. It will appear as “Previously owned”
-                                and will not accept inquiries.
-                              </p>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          {!shown.length && (
-            <p className="p-10 text-center text-sm text-muted-foreground">
-              {listings.length
-                ? 'No names match these filters.'
-                : 'Connect a registrar or import your existing collection to get started.'}
+          <div className="divide-y rounded-lg border">
+            {[
+              ['Added', changes.added],
+              ['Removed', changes.removed],
+              ['Public details changed', changes.edited],
+            ].map(([label, items]) =>
+              (items as PortfolioListing[]).map((item) => (
+                <div
+                  key={`${label}-${item.domain}`}
+                  className="flex flex-wrap justify-between gap-3 px-4 py-3 text-sm"
+                >
+                  <strong className="font-medium">{item.domain}</strong>
+                  <span className="text-muted-foreground">
+                    {label as string}
+                    {item.visibility === 'historical' ? ' · historical' : ''}
+                  </span>
+                  {label !== 'Removed' && (
+                    <ChangedListing
+                      item={item}
+                      before={state.publishedSnapshot?.listings.find(
+                        (entry) => entry.domain === item.domain,
+                      )}
+                    />
+                  )}
+                </div>
+              )),
+            )}
+            {changes.page.map((field) => (
+              <div key={field} className="space-y-1 px-4 py-3 text-sm">
+                <strong className="font-medium">{fieldLabels[field]}</strong>
+                <p className="break-words text-muted-foreground">
+                  {state.publishedSnapshot?.[field] || '(empty)'} →{' '}
+                  {draft[field] || '(empty)'}
+                </p>
+              </div>
+            ))}
+          </div>
+          <dl className="grid gap-4 border-y py-5 text-sm">
+            <div className="flex flex-wrap justify-between gap-2">
+              <dt>Public page</dt>
+              <dd className="break-all">
+                {window.location.origin}
+                {hostPath(`/p/${draft.handle}`)}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt>After publishing</dt>
+              <dd>
+                {current.length} current · {history.length} historical
+              </dd>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2">
+              <dt>Public contact</dt>
+              <dd>{draft.contactEmail || 'None'}</dd>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2">
+              <dt>Ownership check</dt>
+              <dd>
+                {blocked.length
+                  ? `${blocked.length} current names need review`
+                  : `All ${current.length} current names synced`}
+              </dd>
+            </div>
+          </dl>
+          {state.published && state.published.handle !== draft.handle && (
+            <p className="text-sm text-destructive">
+              Changing the address removes /p/{state.published.handle}. Keep the
+              current handle to preserve existing links.
             </p>
           )}
-        </div>
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {filtered.length} names · page {currentPage} of {pages}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage === pages}
-              onClick={() => setPage(currentPage + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </fieldset>
-      <div className="space-y-4 rounded-lg border bg-muted/20 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="font-semibold">
-              {publicCount} names selected for your public page
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {blocked.length
-                ? `${blocked.length} selected names need ownership review or a fresh sync.`
-                : 'Review the saved draft before making it public.'}
+          {(blocked.length > 0 || needsEmail) && (
+            <div role="alert" className="space-y-2 text-sm">
+              <p>
+                {needsEmail
+                  ? 'Add a public contact email before accepting inquiries.'
+                  : `${blocked.length} selected names need a fresh sync or ownership review.`}
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  switchTab(needsEmail ? 'details' : 'attention');
+                  go('edit');
+                }}
+              >
+                Resolve before publishing
+              </Button>
+            </div>
+          )}
+          {current.length + history.length === 0 && (
+            <p className="text-sm">
+              No names selected. Use Unpublish in the editor to remove your
+              page.
             </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              disabled={busy || dirty || !state.revision || blocked.length > 0}
-              asChild={!dirty && !!state.revision && !blocked.length && !busy}
-            >
-              {!dirty && state.revision && !blocked.length && !busy ? (
-                <a
-                  href={hostPath('/publishing/preview')}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Eye className="size-4" />
-                  Preview saved draft
-                </a>
-              ) : (
-                <span>Preview saved draft</span>
-              )}
-            </Button>
+          )}
+          <div className="flex justify-end">
             <Button
               disabled={
                 busy ||
-                dirty ||
-                !state.revision ||
+                status !== 'saved' ||
+                changes.count === 0 ||
                 blocked.length > 0 ||
-                publicCount === 0
+                needsEmail ||
+                current.length + history.length === 0
               }
-              onClick={() => setConfirm('publish')}
+              onClick={() =>
+                void run(async () => {
+                  await portfolioEditor.publish();
+                  go('edit');
+                  setNotice('Your portfolio is published.');
+                })
+              }
             >
-              <Globe className="size-4" />
-              Publish…
+              <Globe />
+              {busy ? 'Publishing…' : 'Publish changes'}
             </Button>
-            {state.published && (
+          </div>
+        </div>
+      ) : (
+        <>
+          <div
+            className="flex flex-wrap gap-5 border-b"
+            aria-label="Portfolio sections"
+          >
+            {(
+              [
+                ['listings', `Listings · ${current.length}`],
+                ['details', 'Page details'],
+                ['history', `History · ${history.length}`],
+                ['attention', `Needs review · ${attention.length}`],
+              ] as [Tab, string][]
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={tab === key}
+                className={`border-b-2 py-3 text-sm ${tab === key ? 'border-primary font-medium text-primary' : 'border-transparent text-muted-foreground'}`}
+                onClick={() => switchTab(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)]">
+            <fieldset
+              disabled={busy}
+              className="min-w-0 space-y-5 disabled:opacity-60"
+            >
+              {tab === 'details' ? (
+                <div className="grid gap-5">
+                  <label className="grid gap-2 text-sm font-medium">
+                    Page title
+                    <Input
+                      value={draft.title}
+                      maxLength={100}
+                      onChange={(e) => change({ title: e.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Introduction
+                    <Textarea
+                      value={draft.intro}
+                      maxLength={600}
+                      rows={3}
+                      onChange={(e) => change({ intro: e.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Public inquiry email
+                    <Input
+                      type="email"
+                      value={draft.contactEmail}
+                      onChange={(e) => change({ contactEmail: e.target.value })}
+                    />
+                    <span className="font-normal text-xs text-muted-foreground">
+                      Required only when you accept inquiries.
+                    </span>
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Public address
+                    <Input
+                      value={draft.handle}
+                      maxLength={40}
+                      onChange={(e) =>
+                        change({ handle: e.target.value.toLowerCase() })
+                      }
+                    />
+                    <span className="break-all font-normal text-xs text-muted-foreground">
+                      {window.location.origin}
+                      {hostPath(`/p/${draft.handle}`)}
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="font-medium">
+                      {tab === 'add'
+                        ? 'Add from your inventory'
+                        : tab === 'history'
+                          ? 'Previously owned'
+                          : tab === 'attention'
+                            ? 'Ownership needs attention'
+                            : 'Current listings'}
+                    </h2>
+                    <div className="flex gap-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          switchTab(tab === 'add' ? 'listings' : 'add')
+                        }
+                      >
+                        <Plus />
+                        {tab === 'add' ? 'Back to listings' : 'Add domains'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setImporting(!importing)}
+                      >
+                        <Upload />
+                        Import
+                      </Button>
+                    </div>
+                  </div>
+                  {tab === 'history' && (
+                    <p className="text-sm text-muted-foreground">
+                      Displayed in a separate “Previously owned” section,
+                      without inquiries. Historical ownership is your statement,
+                      not a registrar verification.
+                    </p>
+                  )}
+                  {tab === 'attention' && (
+                    <p className="text-sm text-muted-foreground">
+                      Unlisted names stay private and do not block your other
+                      listings. A missing match does not mean a domain was sold.
+                    </p>
+                  )}
+                  {importing && (
+                    <div className="space-y-3 rounded-lg border p-4">
+                      <label className="grid gap-2 text-sm">
+                        Import CSV, JSON, or a domain list
+                        <input
+                          type="file"
+                          accept=".csv,.tsv,.txt,.json"
+                          aria-label="Import collection file"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 4 * 1024 * 1024) {
+                              setActionError(
+                                'Choose a file smaller than 4 MB.',
+                              );
+                              return;
+                            }
+                            void file
+                              .text()
+                              .then(setImportText)
+                              .catch(() =>
+                                setActionError('Could not read that file.'),
+                              );
+                          }}
+                        />
+                      </label>
+                      <Textarea
+                        aria-label="Collection import text"
+                        value={importText}
+                        rows={4}
+                        onChange={(e) => setImportText(e.target.value)}
+                        placeholder="domain,collection"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          try {
+                            const result = importPublication(
+                              importText,
+                              draft.listings,
+                            );
+                            change({ listings: result.listings });
+                            setNotice(
+                              `${result.added} candidates added privately; existing edits preserved.`,
+                            );
+                            setImportText('');
+                            setImporting(false);
+                            switchTab('attention');
+                          } catch (e) {
+                            setActionError((e as Error).message);
+                          }
+                        }}
+                      >
+                        Add privately
+                      </Button>
+                    </div>
+                  )}
+                  <Input
+                    type="search"
+                    aria-label="Search portfolio domains"
+                    placeholder="Search domains or collections…"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                  {tab === 'add' && (
+                    <div className="space-y-3 rounded-md bg-muted/40 p-3 text-sm">
+                      <label className="flex items-center gap-2">
+                        <Checkbox
+                          aria-label="Select all matching domains"
+                          checked={
+                            filtered.length > 0 &&
+                            filtered.every((item) => picked.has(item.domain))
+                          }
+                          onCheckedChange={(checked) => {
+                            const next = new Set(picked);
+                            filtered.forEach((item) =>
+                              checked
+                                ? next.add(item.domain)
+                                : next.delete(item.domain),
+                            );
+                            setPicked(next);
+                          }}
+                        />
+                        Select all {filtered.length} matching names
+                      </label>
+                      <div className="flex items-center justify-between gap-3">
+                        <span>{picked.size} selected</span>
+                        <Button
+                          size="sm"
+                          disabled={!picked.size}
+                          onClick={() => {
+                            change(includeDomains(draft, [...picked]));
+                            setNotice(
+                              `${picked.size} names included in your private draft. Inquiries are off for new listings.`,
+                            );
+                            switchTab('listings');
+                          }}
+                        >
+                          Add to draft
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="divide-y">
+                    {shown.map((item) => {
+                      const check =
+                        ownership.get(item.domain)?.ownership ?? 'unmatched';
+                      return (
+                        <article key={item.domain} className="py-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-3">
+                                {tab === 'add' && (
+                                  <Checkbox
+                                    aria-label={`Select ${item.domain}`}
+                                    checked={picked.has(item.domain)}
+                                    onCheckedChange={(checked) => {
+                                      const next = new Set(picked);
+                                      if (checked) next.add(item.domain);
+                                      else next.delete(item.domain);
+                                      setPicked(next);
+                                    }}
+                                  />
+                                )}
+                                <h3 className="break-all text-lg font-medium tracking-tight">
+                                  {item.domain}
+                                </h3>
+                              </div>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {item.collection ? `${item.collection} · ` : ''}
+                                {item.visibility === 'historical'
+                                  ? 'Owner-declared history'
+                                  : ownershipLabels[check]}
+                              </p>
+                            </div>
+                            {item.visibility !== 'private' && (
+                              <button
+                                type="button"
+                                className="shrink-0 py-1 text-xs text-muted-foreground underline underline-offset-4"
+                                aria-label={`Remove ${item.domain} from portfolio`}
+                                onClick={() =>
+                                  update(item.domain, { visibility: 'private' })
+                                }
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          {(item.visibility === 'showcase' ||
+                            item.visibility === 'inquiry') && (
+                            <label className="mt-3 flex items-center gap-2 text-sm">
+                              <Switch
+                                aria-label={`Accept inquiries for ${item.domain}`}
+                                checked={item.visibility === 'inquiry'}
+                                onCheckedChange={(checked) =>
+                                  update(item.domain, {
+                                    visibility: checked
+                                      ? 'inquiry'
+                                      : 'showcase',
+                                  })
+                                }
+                              />
+                              Accept inquiries
+                            </label>
+                          )}
+                          {tab === 'attention' && (
+                            <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                              <Link
+                                to="/settings"
+                                className="underline underline-offset-4"
+                              >
+                                Review registrar accounts
+                              </Link>
+                              {item.visibility === 'private' && (
+                                <button
+                                  className="underline underline-offset-4"
+                                  onClick={() => setHistorical(item.domain)}
+                                >
+                                  Previously owned…
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {historical === item.domain && (
+                            <div className="mt-3 space-y-3 rounded-md border p-3 text-sm">
+                              <p>
+                                Confirm that you previously owned {item.domain}.
+                                It will be included as history, without
+                                inquiries, when you publish.
+                              </p>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  update(item.domain, {
+                                    visibility: 'historical',
+                                  });
+                                  setHistorical(null);
+                                }}
+                              >
+                                Mark previously owned
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setHistorical(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                          {tab !== 'add' && (
+                            <ListingDetails
+                              item={item}
+                              update={(patch) => update(item.domain, patch)}
+                            />
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                  {!shown.length && (
+                    <div className="py-10 text-center text-sm text-muted-foreground">
+                      {query
+                        ? 'No matching names.'
+                        : tab === 'listings'
+                          ? 'Choose names from your inventory to create your public collection.'
+                          : tab === 'attention'
+                            ? 'No ownership issues need review.'
+                            : tab === 'history'
+                              ? 'No historical names selected.'
+                              : 'All inventory names are already included.'}
+                      {tab === 'listings' && (
+                        <div className="mt-4">
+                          <Button
+                            variant="outline"
+                            onClick={() => switchTab('add')}
+                          >
+                            Choose domains
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {filtered.length > 40 && (
+                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span>
+                        {filtered.length} names · {activePage} / {pages}
+                      </span>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={activePage === 1}
+                          onClick={() => setPage(activePage - 1)}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={activePage === pages}
+                          onClick={() => setPage(activePage + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </fieldset>
+            <aside className="min-w-0 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Your page</span>
+                <button
+                  className="text-primary underline underline-offset-4"
+                  onClick={() => go('preview')}
+                >
+                  Expand preview
+                </button>
+              </div>
+              {previewPanel}
+            </aside>
+          </div>
+          <details className="rounded-md border px-4 py-3 text-sm">
+            <summary className="cursor-pointer">
+              Registrar coverage ·{' '}
+              {state.accounts.filter((a) => a.healthy).length}/
+              {state.accounts.length} accounts fresh
+            </summary>
+            <ul className="mt-3 space-y-2">
+              {state.accounts.map((account) => (
+                <li
+                  key={account.label}
+                  className="flex flex-wrap justify-between gap-2"
+                >
+                  <span>{account.label}</span>
+                  <span className="text-muted-foreground">
+                    {account.count} domains ·{' '}
+                    {account.healthy ? 'Synced' : 'Needs attention'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+          {state.published && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
+              <a
+                href={hostPath(`/p/${state.published.handle}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-primary underline"
+              >
+                View live page
+                <ArrowUpRight className="size-3" />
+              </a>
               <Button
-                variant="outline"
-                disabled={busy || dirty}
-                onClick={() => setConfirm('unpublish')}
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setConfirmUnpublish(true)}
               >
                 Unpublish…
               </Button>
-            )}
-          </div>
-        </div>
-        {confirm && (
-          <div
-            role="region"
-            aria-label="Confirm publication"
-            className="space-y-3 border-t pt-4"
-          >
-            <p className="text-sm">
-              {confirm === 'publish'
-                ? `Publish ${publicCount} selected names at /p/${draft.handle}? ${draft.contactEmail ? `Your contact email ${draft.contactEmail} will be public.` : 'No contact email will be shown.'} This replaces the current public page.`
-                : 'Remove the public page now? Your saved draft and private inventory will remain.'}
-            </p>
-            <div className="flex gap-2">
+            </div>
+          )}
+          {confirmUnpublish && (
+            <div className="space-y-3 rounded-md border p-4 text-sm">
+              <p>
+                Remove the public page? Your draft and registrar inventory
+                remain intact.
+              </p>
               <Button
                 disabled={busy}
                 onClick={() =>
-                  void action(async () => {
-                    await request(`/${confirm}`, 'POST', {
-                      revision: state.revision,
-                    });
-                    await reload();
-                    setNotice(
-                      confirm === 'publish'
-                        ? 'Your selected collection is now public.'
-                        : 'The public page has been removed.',
-                    );
-                    setConfirm(null);
+                  void run(async () => {
+                    await portfolioEditor.unpublish();
+                    setConfirmUnpublish(false);
+                    setNotice('Page unpublished. Your draft is retained.');
                   })
                 }
               >
-                {busy
-                  ? 'Working…'
-                  : confirm === 'publish'
-                    ? 'Confirm publish'
-                    : 'Confirm unpublish'}
+                Confirm unpublish
               </Button>
               <Button
                 variant="ghost"
-                disabled={busy}
-                onClick={() => setConfirm(null)}
+                onClick={() => setConfirmUnpublish(false)}
               >
                 Cancel
               </Button>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </>
+      )}
     </section>
   );
 }

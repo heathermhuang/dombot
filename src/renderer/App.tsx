@@ -12,6 +12,7 @@ import SyncControl from './components/SyncControl';
 import PublicPortfolio from './pages/PublicPortfolio';
 import { isWeb, webAuthMode } from './lib/platform';
 import { Toaster } from '@/components/ui/sonner';
+import { portfolioEditor, usePortfolioEditor } from './lib/publication-client';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -25,6 +26,16 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   );
 
 export default function App() {
+  const publication = usePortfolioEditor();
+  useEffect(() => {
+    if (!portfolioEditor.isDirty()) return;
+    const protect = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protect);
+    return () => window.removeEventListener('beforeunload', protect);
+  }, [publication]);
   const hydrateFromCache = useAppStore((s) => s.hydrateFromCache);
   const applyPortfolioCacheUpdate = useAppStore(
     (s) => s.applyPortfolioCacheUpdate,
@@ -106,7 +117,7 @@ export default function App() {
           {isWeb() && (
             <NavLink to="/public-portfolio" className={navLinkClass}>
               <Globe className="size-[18px]" />
-              Public portfolio
+              Portfolio
             </NavLink>
           )}
           <NavLink to="/settings" className={navLinkClass}>

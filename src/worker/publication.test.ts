@@ -191,6 +191,15 @@ describe('publication database and HTTP boundary', () => {
     expect(
       (await call('/publishing/publish', 'POST', { revision })).status,
     ).toBe(200);
+    const ownerState = await (await call('/publishing')).json();
+    expect(
+      ownerState.publishedSnapshot.listings.map(
+        (item: { domain: string }) => item.domain,
+      ),
+    ).toEqual(['visible.com']);
+    expect(JSON.stringify(ownerState.publishedSnapshot)).not.toContain(
+      'NEVER_PUBLIC',
+    );
     privateReads = 0;
     const published = await call('/p/portfolio', 'GET', undefined, false);
     const html = await published.text();
