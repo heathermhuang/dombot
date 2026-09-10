@@ -7,47 +7,55 @@ feature. It does not add SaaS signup, multi-tenancy, billing, or new MCP grants.
 
 ## Portfolio builder
 
-In the hosted app, select names in **Domains → Add to portfolio**. This opens
-**Portfolio** with those names in a private draft. New selections default to
-Showcase, with inquiries off. Re-adding a domain preserves its descriptions,
-prices, collections, inquiry choice, and historical classification. Use the
-existing inventory filters to select a group, or use **Portfolio → Add domains**
-and explicitly select all matching names across pages.
+In the hosted app, select names in **Domains → Add to portfolio**, or open
+**Portfolio** to manage the page in a full-width table. The table separates
+**Listed**, **Not listed**, **History**, and **All names**. Search, collection,
+ownership, and name/price sort controls narrow the results. Prices are grouped
+by currency before sorting; they are not converted. Unmatched imported
+candidates are distinct from current listings that block publication.
 
-The editor separates **Listings**, **Page details**, **History**, and **Needs
-review**. Inclusion is separate from the **Accept inquiries** switch. Removing a
-listing keeps the domain and its public metadata in the private inventory.
-Imports remain private. A historical name requires an explicit assertion of
-previous ownership and never accepts inquiries.
+Select the visible page first, then explicitly choose **Select all N matching
+domains** to include other result pages. Changing filters clears selection.
+Bulk controls can add private names to the draft, change inquiries for current
+listings, add/remove/replace collections, or remove names from the page. Inquiry
+changes cannot silently include private names from a mixed selection. Historical
+assertions are explicit and never enable inquiries. Bulk edits are one immutable
+update and one serialized save, with Undo until another edit or baseline reload.
 
-Draft changes autosave after a short debounce. Saves run in order, including
-when navigating to another app page. A failed save retains the in-memory edits;
-retry it or explicitly discard edits and reload. A stale revision from another
-tab is never adopted silently. Closing the browser warns while unsaved edits
-remain; the in-memory buffer is not a persistent offline store.
+Click a domain to edit its availability, public description, collections, and
+asking price in a focused side panel. Closing the panel retains filters and page
+position. Page identity, contact email, and the link name live under **Page
+settings**. Changing the link name removes the old address only when published.
 
-The embedded preview uses the same escaped public-field renderer as the public
-page, inside a sandboxed iframe. It supports current/history and mobile/desktop
-views. Search, pagination, and inquiry links are inactive inside the embedded
-preview; open the saved authenticated preview to exercise those links. A draft
-can be previewed before ownership issues are resolved, but the server still
-requires fresh ownership checks before publishing current listings.
+**Preview** opens a separate full-width view with mobile/desktop and
+current/history controls. No iframe or public document is rendered while editing
+the table. The embedded preview is read-only; open the saved authenticated preview
+to exercise its search and inquiry links. Both use the same escaped public-field
+renderer. Private previews can be viewed without publishing.
 
-**Review changes** flushes pending saves, refreshes ownership, and compares the
-draft against the actual published snapshot. The review shows additions,
-removals, changed public fields, public contact, and destination URL. Only
-**Publish changes** replaces the public snapshot. Unmatched private candidates
-do not block valid selected domains. Empty selections use **Unpublish**.
+**Review changes** flushes autosave, refreshes ownership, and compares against the
+actual published snapshot. Added, removed, and edited names are compact groups;
+expand individual rows to inspect their exact public-field changes. The adjacent
+summary shows destination, contact details, ownership readiness and the explicit
+**Publish changes** action. Private unmatched candidates never block unrelated
+valid listings. Use **Portfolio options → Unpublish** for an empty public page.
+
+Autosave survives navigation between app pages. Failed saves retain the in-memory
+edits; retry or explicitly discard them and reload. Stale revisions are never
+adopted silently. Reload and unpublish invalidate Undo so an earlier whole-draft
+snapshot cannot overwrite a newer baseline. Closing the browser warns while
+unsaved edits remain; this is not a persistent offline store.
+
+New selections default to Showcase with inquiries off. Existing descriptions,
+prices, collections and historical classifications are preserved. Removing a
+listing keeps its inventory and editorial data private. Imports always start
+private. No UI edit updates the public snapshot without explicit publication.
 
 Public pages default to current holdings and provide a separate **Previously
-owned** view. Historical-only collections and old category bookmarks still work.
-Search, filters, and pagination stay within the selected view. This renderer
-change requires no database migration and does not change published membership,
-draft selections, handles, or registrar settings.
-
-This flow is available in the hosted/web app. Electron remains unchanged; a
-desktop-to-hosted account connection is a separate integration, not an assumed
-credential transfer.
+owned** view. Historical category bookmarks remain usable. The builder requires
+no database migration and does not change existing published membership, handles,
+credentials or registrar settings. It is hosted/web-only; Electron-to-hosted
+account linking remains a separate integration.
 
 ## Deploy and recover
 
