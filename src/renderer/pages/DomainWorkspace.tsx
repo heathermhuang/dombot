@@ -419,14 +419,14 @@ export default function DomainWorkspace({
       setUndo(affected ? draft : null);
       setNotice(
         edit.kind === 'collection'
-          ? `Collections updated for ${affected} domains.`
+          ? `Collections updated for ${affected} ${affected === 1 ? 'domain' : 'domains'}.`
           : edit.kind === 'include'
-            ? `${affected} domains added to the page draft. Review changes to put them online.`
+            ? `${affected} ${affected === 1 ? 'domain' : 'domains'} added to the page draft. Review changes to put them online.`
             : edit.value === 'private'
-              ? `${affected} domains marked for removal. Review changes to update the live page.`
+              ? `${affected} ${affected === 1 ? 'domain' : 'domains'} marked for removal. Review changes to update the live page.`
               : edit.value === 'historical'
-                ? `${affected} domains added to history.`
-                : `${affected} domains updated in your draft.`,
+                ? `${affected} ${affected === 1 ? 'domain' : 'domains'} added to history.`
+                : `${affected} ${affected === 1 ? 'domain' : 'domains'} updated in your draft.`,
       );
       setActionError('');
       clearSelection();
@@ -553,7 +553,10 @@ export default function DomainWorkspace({
               {saveStatus}
             </span>
             {changes.count > 0 && (
-              <span>· {changes.count} unpublished changes</span>
+              <span>
+                · {changes.count} unpublished{' '}
+                {changes.count === 1 ? 'change' : 'changes'}
+              </span>
             )}
           </div>
         </div>
