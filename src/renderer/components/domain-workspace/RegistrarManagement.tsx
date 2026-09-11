@@ -122,7 +122,12 @@ export function useRegistrarManagement({
     }
   };
   const toolbar = (
-    <>
+    <details
+      className="registrar-bulk-details"
+      hidden={!active || (!selected.size && bulk?.status !== 'running')}
+      open={bulk?.status === 'running'}
+    >
+      <summary>Registrar bulk actions</summary>
       {active && blocked > 0 && (
         <div className="pf-alert" role="status">
           <span>
@@ -159,7 +164,7 @@ export function useRegistrarManagement({
           }}
         />
       )}
-    </>
+    </details>
   );
   const cells = (entry: CatalogEntry | undefined) => {
     const d = entry?.target;

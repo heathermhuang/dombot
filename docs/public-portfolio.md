@@ -7,13 +7,15 @@ feature. It does not add SaaS signup, multi-tenancy, billing, or new MCP grants.
 
 ## Unified Domains and Public page
 
-The hosted application has one **Domains** catalog. **Manage** and **Publish**
-are column/action presets over the same filtered rows, search, page and selection.
+The hosted application has one **Domains** catalog. Every row has a **Public page**
+status with direct **Add to public page**, **Edit**, and **Remove** actions. Select
+multiple inventory rows to use **Add N to public page**. Registrar and listing
+column presets are available under **More domain options**.
 Visiting **Public page** and returning also preserves that catalog context.
 Changing filters clears selection; changing the account filter cannot silently
 retarget a selected domain to another account.
 
-Manage reuses the existing registrar controls for folders, renewal, auto-renew,
+The registrar columns reuse the existing controls for folders, renewal, auto-renew,
 privacy, locks, nameservers, forwarding and transfer authorization. Each domain
 must resolve to one exact, enabled registrar account before these controls appear.
 Historical, unmatched, deleted, and unavailable-account records have no registrar
@@ -22,15 +24,20 @@ selection with any unavailable target disables the entire registrar bulk action;
 it never silently operates on a subset. CSV export explicitly names the count of
 registered records included.
 
-Publish shows **Include on public page**, inquiry availability, collections and
-asking prices. Inclusion edits only the private draft. Newly discovered domains
+The listing columns show inquiry availability, collections and asking prices.
+Adding a domain edits only the private draft. **Draft · ready to add**, **Live**,
+and **Live · removal pending** distinguish draft selection from publication.
+Removing a live name keeps it visible in the page list until publication;
+**Keep on page** cancels that removal. A pending-changes banner links to review. Newly discovered domains
 start private. Bulk inquiry changes apply only to current listings; history
 requires an explicit ownership assertion and never accepts inquiries. Collections
 support explicit Add, Remove and Replace operations. Undo is invalidated when
 reloading or unpublishing so it cannot overwrite a newer saved draft.
 
-The default Inventory scope shows registered domains. Listed, Private, History
-and All names scopes reveal the relevant publication or reference records, with
+The default **Inventory** scope shows registered domains. **Page list** includes
+live names and draft additions, while **Not added** contains names neither live
+nor selected. History, all records and verification filters live under More
+domain options. The catalog retains
 ownership, collection, account, TLD, expiration, private-folder and nameserver
 filters. Hidden private folders remain hidden until selected explicitly.
 Nameserver details are fetched on demand for the filter; reference records never
@@ -38,8 +45,8 @@ trigger provider reads. Unknown dates/prices sort last, and all account-dependen
 filters and prices use the selected account consistently.
 
 **Public page** contains presentation settings, preview and publication review,
-not another domain list. Choose domains returns to the same catalog in Publish
-view. The old `#/public-portfolio` bookmark redirects to `#/public-page`.
+not another domain list. Choose domains returns to the same catalog with listing
+columns. The old `#/public-portfolio` bookmark redirects to `#/public-page`.
 
 Preview is on demand and uses the existing escaped public-field renderer.
 **Review changes** flushes autosave, refreshes ownership and compares the draft

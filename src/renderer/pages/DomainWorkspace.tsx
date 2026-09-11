@@ -1,3 +1,8 @@
+import {
+  pageMembership,
+  pageMembershipLabel,
+  matchesPageScope,
+} from '../../shared/page-membership';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDomainList, type DomainScope } from '../store/domain-list';
 import {
@@ -9,7 +14,6 @@ import {
 import { domainKey } from '../../shared/account-key';
 import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
 import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
-import { Switch } from '@/components/ui/switch';
 import LegacyDomains from './Domains';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -25,7 +29,6 @@ import {
   Globe,
   MoreHorizontal,
   Pencil,
-  Plus,
   Search,
   Settings2,
   Upload,
@@ -199,13 +202,20 @@ export default function DomainWorkspace({
   const filtered = useMemo(() => {
     if (!draft || !state) return [];
     const candidates = filterPortfolio(draft.listings, state.review, {
-      scope: scope === 'registered' ? 'all' : scope,
+      scope: scope === 'registered' || scope === 'listed' ? 'all' : scope,
       ownership: ownershipFilter,
       query,
       collection,
       sort,
     }).filter(
       (item) =>
+        matchesPageScope(
+          item,
+          state.publishedSnapshot?.listings.find(
+            (entry) => entry.domain === item.domain,
+          ),
+          scope,
+        ) &&
         (scope !== 'registered' ||
           !!catalog.get(item.domain)?.records.length) &&
         matchesRegistrarFilters(
@@ -267,14 +277,6 @@ export default function DomainWorkspace({
       ].sort(),
     [draft],
   );
-  const saveStatus =
-    status === 'saving'
-      ? 'Saving…'
-      : status === 'unsaved'
-        ? 'Saving shortly…'
-        : status === 'error'
-          ? 'Not saved'
-          : 'All changes saved';
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setActionError('');
@@ -321,12 +323,15 @@ export default function DomainWorkspace({
         )}
       </section>
     );
+  const liveItems = new Map(
+    state.publishedSnapshot?.listings.map((item) => [item.domain, item]) ?? [],
+  );
   const current = draft.listings.filter(isCurrent);
   const history = draft.listings.filter(
     (item) => item.visibility === 'historical',
   );
   const privateNames = draft.listings.filter(
-    (item) => item.visibility === 'private',
+    (item) => item.visibility === 'private' && !liveItems.has(item.domain),
   );
   const blockers = current.filter(
     (item) => checks.get(item.domain)?.ownership !== 'owned',
@@ -335,6 +340,16 @@ export default function DomainWorkspace({
     (item) => checks.get(item.domain)?.ownership !== 'owned',
   );
   const changes = publicationChanges(draft, state.publishedSnapshot);
+  const saveStatus =
+    status === 'saving'
+      ? 'Saving…'
+      : status === 'unsaved'
+        ? 'Saving shortly…'
+        : status === 'error'
+          ? 'Not saved'
+          : changes.count > 0
+            ? 'Draft saved'
+            : 'No pending changes';
   const publicUrl = window.location.origin + hostPath(`/p/${draft.handle}`);
   const liveUrl = state.published
     ? hostPath(`/p/${state.published.handle}`)
@@ -352,14 +367,19 @@ export default function DomainWorkspace({
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visibleSelected = rows.filter((item) => picked.has(item.domain)).length;
   const chosen = draft.listings.filter((item) => picked.has(item.domain));
+  const selectedPrivate = chosen.filter(
+    (item) => item.visibility === 'private' && !liveItems.has(item.domain),
+  );
+  const cannotAdd = selectedPrivate.some(
+    (item) => checks.get(item.domain)?.ownership !== 'owned',
+  );
+  const editedItems = new Set(changes.edited.map((item) => item.domain));
+  const pageListCount = draft.listings.filter(
+    (item) => item.visibility !== 'private' || liveItems.has(item.domain),
+  ).length;
   const allPrivate =
     chosen.length > 0 && chosen.every((item) => item.visibility === 'private');
   const allCurrent = chosen.length > 0 && chosen.every(isCurrent);
-  const hasUnmatched = chosen.some(
-    (item) =>
-      !checks.get(item.domain) ||
-      checks.get(item.domain)?.ownership === 'unmatched',
-  );
   const inspector =
     draft.listings.find((item) => item.domain === editing) ?? null;
   const clearSelection = () => {
@@ -399,15 +419,18 @@ export default function DomainWorkspace({
       setUndo(affected ? draft : null);
       setNotice(
         edit.kind === 'collection'
-          ? `Collections updated for ${affected} domains.`
-          : edit.value === 'private'
-            ? `${affected} domains removed from the draft. They remain in your inventory.`
-            : edit.value === 'historical'
-              ? `${affected} domains added to history.`
-              : `${affected} domains updated in your draft.`,
+          ? `Collections updated for ${affected} ${affected === 1 ? 'domain' : 'domains'}.`
+          : edit.kind === 'include'
+            ? `${affected} ${affected === 1 ? 'domain' : 'domains'} added to the page draft. Review changes to put them online.`
+            : edit.value === 'private'
+              ? `${affected} ${affected === 1 ? 'domain' : 'domains'} marked for removal. Review changes to update the live page.`
+              : edit.value === 'historical'
+                ? `${affected} ${affected === 1 ? 'domain' : 'domains'} added to history.`
+                : `${affected} ${affected === 1 ? 'domain' : 'domains'} updated in your draft.`,
       );
       setActionError('');
       clearSelection();
+      if (edit.kind === 'include') window.scrollTo(0, 0);
       return true;
     } catch (e) {
       setActionError((e as Error).message);
@@ -415,6 +438,8 @@ export default function DomainWorkspace({
     }
   };
   const selectScope = (next: DomainScope, owner: OwnershipFilter = 'all') => {
+    if (next === 'registered') list.setMode('manage');
+    if (next === 'listed' || next === 'history') list.setMode('publish');
     setScope(next);
     setOwnershipFilter(owner);
     setPage(1);
@@ -492,9 +517,7 @@ export default function DomainWorkspace({
                 ? 'Publish review'
                 : view === 'preview'
                   ? 'Private preview'
-                  : mode === 'manage'
-                    ? 'Registrar management'
-                    : 'Public page selection'}
+                  : 'Your domains'}
           </span>
           <h1>
             {view === 'domains'
@@ -511,22 +534,14 @@ export default function DomainWorkspace({
                     inventory.map((item) => item.domainName.toLowerCase()),
                   ).size
                 }{' '}
-                registrar domains ·{' '}
-                {Math.max(
-                  0,
-                  draft.listings.length -
-                    new Set(
-                      inventory.map((item) => item.domainName.toLowerCase()),
-                    ).size,
-                )}{' '}
-                history / imported
+                domains in inventory
               </span>
             )}
             {state.published ? (
               <span>
                 <i className="pf-live-dot" />
                 {area === 'domains'
-                  ? `${state.published.count} on public page`
+                  ? `${state.published.count} live on public page`
                   : `Live · ${state.published.count} names`}
               </span>
             ) : (
@@ -538,33 +553,13 @@ export default function DomainWorkspace({
               {saveStatus}
             </span>
             {changes.count > 0 && (
-              <span>· {changes.count} unpublished changes</span>
+              <span>
+                · {changes.count} unpublished{' '}
+                {changes.count === 1 ? 'change' : 'changes'}
+              </span>
             )}
           </div>
         </div>
-        {area === 'domains' && (
-          <div className="domain-view-switch" aria-label="Domain view">
-            <button
-              aria-pressed={mode === 'manage'}
-              onClick={() => {
-                list.setMode('manage');
-                setEditing(null);
-                setCollectionAction(false);
-              }}
-            >
-              Manage
-            </button>
-            <button
-              aria-pressed={mode === 'publish'}
-              onClick={() => {
-                list.setMode('publish');
-                setEditing(null);
-              }}
-            >
-              Publish
-            </button>
-          </div>
-        )}
         <div className="pf-actions">
           {view === 'domains' && (
             <>
@@ -584,28 +579,44 @@ export default function DomainWorkspace({
                 <Eye />
                 Preview
               </Button>
-              {changes.count > 0 && (
-                <Button
-                  size="sm"
-                  disabled={busy || changes.count === 0}
-                  onClick={review}
-                >
-                  Review changes{changes.count > 0 ? ` (${changes.count})` : ''}{' '}
-                  →
-                </Button>
-              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="pf-icon-button"
-                    aria-label="Portfolio options"
+                    aria-label="More domain options"
                   >
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => list.setMode('manage')}>
+                    Show registrar details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => list.setMode('publish')}>
+                    Show listing details
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => selectScope('history')}>
+                    Show previously owned names
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => selectScope('private', 'attention')}
+                  >
+                    Show names needing verification
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => selectScope('all')}>
+                    Show all records
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {allPrivate && picked.size > 0 && (
+                    <DropdownMenuItem
+                      onSelect={() => setHistoryNames(new Set(picked))}
+                    >
+                      Mark selected as previously owned…
+                    </DropdownMenuItem>
+                  )}
                   {liveUrl && (
                     <>
                       <DropdownMenuItem asChild>
@@ -719,6 +730,34 @@ export default function DomainWorkspace({
           )}
         </div>
       </header>
+      {area === 'domains' && changes.count > 0 && (
+        <div className="page-pending-banner" role="status">
+          <div>
+            <strong>
+              {changes.count} {changes.count === 1 ? 'change' : 'changes'}{' '}
+              waiting to publish
+            </strong>
+            <span>Your live page has not changed yet.</span>
+          </div>
+          <Button size="sm" disabled={busy} onClick={review}>
+            Review changes →
+          </Button>
+        </div>
+      )}
+      {area === 'domains' && (scope === 'history' || scope === 'all') && (
+        <p className="pf-hint">
+          {scope === 'history'
+            ? 'Previously owned names'
+            : 'All registered and imported records'}{' '}
+          ·{' '}
+          <button
+            className="pf-text-button"
+            onClick={() => selectScope('registered')}
+          >
+            Back to inventory
+          </button>
+        </p>
+      )}
       {(error || actionError) && (
         <div role="alert" className="pf-alert">
           <span>{actionError || error}</span>
@@ -861,10 +900,8 @@ export default function DomainWorkspace({
                       inventory.map((item) => item.domainName.toLowerCase()),
                     ).size,
                   ],
-                  ['listed', 'Listed', current.length],
-                  ['private', 'Private', privateNames.length],
-                  ['history', 'History', history.length],
-                  ['all', 'All names', draft.listings.length],
+                  ['listed', 'Page list', pageListCount],
+                  ['private', 'Not added', privateNames.length],
                 ] as [DomainScope, string, number][]
               ).map(([key, label, count]) => (
                 <button
@@ -883,7 +920,7 @@ export default function DomainWorkspace({
                 <Input
                   type="search"
                   aria-label="Search domains"
-                  placeholder="Search domains or collections…"
+                  placeholder="Find a domain to add or manage…"
                   value={query}
                   onChange={(e) => filterChange(() => setQuery(e.target.value))}
                 />
@@ -926,16 +963,6 @@ export default function DomainWorkspace({
                 <option value="expiry">Expiration soonest</option>
                 <option value="renewal">Renewal cost highest</option>
               </select>
-              <Button
-                size="sm"
-                onClick={() => {
-                  list.setMode('publish');
-                  selectScope('private', 'owned');
-                }}
-              >
-                <Plus />
-                Choose listings
-              </Button>
             </div>
             <details className="domain-more-filters">
               <summary>
@@ -1050,27 +1077,27 @@ export default function DomainWorkspace({
                 </label>
               </div>
             </details>
-            {mode === 'publish' && picked.size > 0 && (
+            {picked.size > 0 && (
               <div className="pf-bulk">
                 <strong>{picked.size} selected</strong>
-                {allPrivate ? (
+                {selectedPrivate.length > 0 && (
                   <Button
                     size="sm"
-                    disabled={busy || hasUnmatched}
+                    disabled={busy || cannotAdd}
                     onClick={() =>
-                      apply({ kind: 'visibility', value: 'showcase' })
+                      apply(
+                        { kind: 'include' },
+                        new Set(selectedPrivate.map((item) => item.domain)),
+                      )
                     }
                   >
-                    Include on public page
+                    Add {selectedPrivate.length} to public page
                   </Button>
-                ) : (
+                )}
+                {allCurrent && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!allCurrent}
-                      >
+                      <Button variant="outline" size="sm">
                         Inquiries
                         <ChevronDown />
                       </Button>
@@ -1088,7 +1115,7 @@ export default function DomainWorkspace({
                           apply({ kind: 'inquiries', value: 'showcase' })
                         }
                       >
-                        Showcase only
+                        Display without inquiries
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1112,22 +1139,13 @@ export default function DomainWorkspace({
                     Remove from page
                   </Button>
                 )}
-                {allPrivate && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setHistoryNames(new Set(picked))}
-                  >
-                    Previously owned…
-                  </Button>
-                )}
                 <button
                   className="pf-text-button pf-clear"
                   onClick={clearSelection}
                 >
                   Clear selection
                 </button>
-                {allPrivate && hasUnmatched && (
+                {selectedPrivate.length > 0 && cannotAdd && (
                   <span className="pf-hint w-full">
                     Some names have no inventory match. Verify them before
                     adding them as current listings.
@@ -1135,7 +1153,7 @@ export default function DomainWorkspace({
                 )}
               </div>
             )}
-            {mode === 'publish' && collectionAction && picked.size > 0 && (
+            {collectionAction && picked.size > 0 && (
               <div className="pf-bulk-form">
                 <label className="pf-field">
                   Action
@@ -1238,6 +1256,7 @@ export default function DomainWorkspace({
                       />
                     </th>
                     <th>Domain</th>
+                    <th>Public page</th>
                     {mode === 'manage' ? (
                       <>
                         <th>Registrar / account</th>
@@ -1255,7 +1274,7 @@ export default function DomainWorkspace({
                       </>
                     ) : (
                       <>
-                        <th>On page</th> <th>Availability</th>
+                        <th>Availability</th>
                         <th className="pf-collection-cell">Collections</th>
                         <th>Asking price</th>
                         <th className="pf-check-column">Ownership</th>
@@ -1308,31 +1327,85 @@ export default function DomainWorkspace({
                               </span>
                             )}
                         </td>
+                        <td className="page-action-cell">
+                          <div>
+                            <span
+                              data-page-state={pageMembership(
+                                item,
+                                liveItems.get(item.domain),
+                                editedItems.has(item.domain),
+                              )}
+                            >
+                              {
+                                pageMembershipLabel[
+                                  pageMembership(
+                                    item,
+                                    liveItems.get(item.domain),
+                                    editedItems.has(item.domain),
+                                  )
+                                ]
+                              }
+                            </span>
+                            <div className="page-row-actions">
+                              {item.visibility === 'private' ? (
+                                liveItems.has(item.domain) ? (
+                                  <button
+                                    className="pf-text-button"
+                                    onClick={() =>
+                                      update(item.domain, {
+                                        visibility: liveItems.get(item.domain)!
+                                          .visibility,
+                                      })
+                                    }
+                                  >
+                                    Keep on page
+                                  </button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={check !== 'owned'}
+                                    onClick={() =>
+                                      apply(
+                                        { kind: 'include' },
+                                        new Set([item.domain]),
+                                      )
+                                    }
+                                  >
+                                    Add to public page
+                                  </Button>
+                                )
+                              ) : (
+                                <>
+                                  <button
+                                    className="pf-text-button"
+                                    onClick={() => openInspector(item.domain)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className="pf-text-button"
+                                    onClick={() =>
+                                      apply(
+                                        {
+                                          kind: 'visibility',
+                                          value: 'private',
+                                        },
+                                        new Set([item.domain]),
+                                      )
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </td>
                         {mode === 'manage' ? (
                           management.cells(catalog.get(item.domain))
                         ) : (
                           <>
-                            <td className="pf-inclusion-cell">
-                              <Switch
-                                aria-label={`Include ${item.domain} on public page`}
-                                checked={item.visibility !== 'private'}
-                                disabled={
-                                  item.visibility === 'private' &&
-                                  (!checks.get(item.domain) ||
-                                    checks.get(item.domain)?.ownership ===
-                                      'unmatched')
-                                }
-                                onCheckedChange={(on) =>
-                                  apply(
-                                    {
-                                      kind: 'visibility',
-                                      value: on ? 'showcase' : 'private',
-                                    },
-                                    new Set([item.domain]),
-                                  )
-                                }
-                              />
-                            </td>{' '}
                             <td className="pf-availability-cell">
                               {isCurrent(item) ? (
                                 <select
@@ -1347,18 +1420,14 @@ export default function DomainWorkspace({
                                   }
                                 >
                                   <option value="inquiry">Inquiries on</option>
-                                  <option value="showcase">
-                                    Showcase only
-                                  </option>
+                                  <option value="showcase">Display only</option>
                                 </select>
                               ) : item.visibility === 'historical' ? (
                                 <span className="pf-availability">
                                   Previously owned
                                 </span>
                               ) : (
-                                <span className="pf-availability">
-                                  Not listed
-                                </span>
+                                <span className="pf-availability">—</span>
                               )}
                             </td>
                             <td className="pf-collection-cell">

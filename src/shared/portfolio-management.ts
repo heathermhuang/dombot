@@ -66,6 +66,7 @@ export function filterPortfolio(
     });
 }
 export type BulkPortfolioEdit =
+  | { kind: 'include' }
   | { kind: 'inquiries'; value: 'showcase' | 'inquiry' }
   | { kind: 'visibility'; value: PortfolioListing['visibility'] }
   | { kind: 'collection'; mode: 'add' | 'remove' | 'replace'; value: string };
@@ -103,6 +104,10 @@ export function editPortfolioSelection(
     throw new Error('Enter a collection name.');
   const result = draft.listings.map((item) => {
     if (!names.has(item.domain)) return item;
+    if (edit.kind === 'include')
+      return item.visibility === 'private'
+        ? { ...item, visibility: 'showcase' as const }
+        : item;
     if (edit.kind === 'visibility' || edit.kind === 'inquiries')
       return { ...item, visibility: edit.value };
     const existing = collectionTokens(item.collection);

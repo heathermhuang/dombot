@@ -13,8 +13,8 @@ import type {
 } from '../../../shared/publication';
 
 export const visibilityLabel = {
-  private: 'Not listed',
-  showcase: 'Showcase only',
+  private: 'Not on page',
+  showcase: 'Display only',
   inquiry: 'Inquiries on',
   historical: 'Previously owned',
 };
@@ -76,12 +76,12 @@ export function PortfolioInspector({
                       })
                     }
                   >
-                    <option value="private">Not listed</option>
+                    <option value="private">Not on page</option>
                     <option
                       value="showcase"
                       disabled={!check || check.ownership === 'unmatched'}
                     >
-                      Showcase only
+                      Display only
                     </option>
                     <option
                       value="inquiry"
