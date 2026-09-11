@@ -1029,3 +1029,97 @@
     font-size: 0.6875rem;
   }
 }
+
+.page-action-cell {
+  min-width: 165px;
+}
+.page-action-cell > div {
+  display: grid;
+  gap: 5px;
+}
+.page-action-cell [data-page-state] {
+  font-size: 0.6875rem;
+  color: var(--pf-muted);
+}
+.page-action-cell [data-page-state='live'] {
+  color: var(--pf-green);
+}
+.page-action-cell [data-page-state='adding'],
+.page-action-cell [data-page-state='removing'],
+.page-action-cell [data-page-state='editing'] {
+  color: var(--foreground);
+}
+.page-row-actions {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+}
+.page-row-actions button {
+  font-size: 0.75rem;
+}
+.page-pending-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--pf-raised);
+  border: 1px solid var(--pf-line);
+  border-radius: 8px;
+  padding: 15px 18px;
+  margin-bottom: 18px;
+}
+.page-pending-banner > div {
+  display: grid;
+  gap: 3px;
+  font-size: 0.8125rem;
+}
+.page-pending-banner strong {
+  font-weight: 550;
+}
+.page-pending-banner span {
+  font-size: 0.75rem;
+  color: var(--pf-muted);
+}
+.registrar-bulk-details {
+  font-size: 0.75rem;
+  color: var(--pf-muted);
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--pf-line);
+}
+.registrar-bulk-details summary {
+  cursor: pointer;
+}
+.registrar-bulk-details > div {
+  margin-top: 10px;
+}
+@media (max-width: 650px) {
+  .pf-scopes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pf-scopes button {
+    font-size: 0.75rem;
+  }
+  .pf-table[data-mode='publish'] .page-action-cell {
+    grid-column: 2/4;
+    grid-row: 2;
+    min-width: 0;
+  }
+  .pf-table[data-mode='publish'] .pf-availability-cell {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .pf-table[data-mode='publish'] .pf-price-cell {
+    grid-column: 3;
+    grid-row: 3;
+  }
+  .page-action-cell > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+  }
+  .page-row-actions {
+    gap: 12px;
+  }
+}
