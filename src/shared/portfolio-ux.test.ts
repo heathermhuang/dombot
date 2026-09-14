@@ -111,10 +111,11 @@ describe('portfolio UX contracts', () => {
       snapshot,
       new URL('https://test/p/portfolio'),
       true,
-      'https://test/portfolio-preview.js',
+      true,
     );
     expect(preview).not.toContain('mailto:');
-    expect(preview).toContain('portfolio-preview');
+    expect(preview).not.toContain('<script');
+    expect(preview).toContain('<button type="button">Apply</button>');
     expect(preview).toContain('Inquire · disabled in draft');
     const live = renderPortfolio(snapshot, new URL('https://test/p/portfolio'));
     expect(live).toContain('USD 500');

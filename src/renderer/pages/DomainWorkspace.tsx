@@ -15,7 +15,7 @@ import { domainKey } from '../../shared/account-key';
 import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
 import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
 import LegacyDomains from './Domains';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -70,6 +70,7 @@ import {
   type OwnershipFilter,
 } from '../../shared/portfolio-management';
 import { portfolioIssues } from '../../shared/portfolio-validation';
+import { bindPortfolioPreview } from '../lib/portfolio-preview';
 import { renderPortfolio } from '../../shared/render-portfolio';
 import type {
   PortfolioDraft,
@@ -161,25 +162,12 @@ export default function DomainWorkspace({
   const [historyNames, setHistoryNames] = useState<Set<string> | null>(null);
   const [mobile, setMobile] = useState(false);
   const [previewQuery, setPreviewQuery] = useState('');
-  const previewFrame = useRef<HTMLIFrameElement>(null);
   const [addIntent, setAddIntent] = useState<'showcase' | 'inquiry'>(
     'showcase',
   );
   const [receipt, setReceipt] = useState<{ url: string; time: number } | null>(
     null,
   );
-  useEffect(() => {
-    const receive = (event: MessageEvent) => {
-      if (
-        event.source === previewFrame.current?.contentWindow &&
-        event.data?.type === 'portfolio-preview' &&
-        typeof event.data.query === 'string'
-      )
-        setPreviewQuery(event.data.query.slice(0, 2000));
-    };
-    window.addEventListener('message', receive);
-    return () => window.removeEventListener('message', receive);
-  }, []);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   useEffect(() => {
@@ -213,7 +201,7 @@ export default function DomainWorkspace({
               `${window.location.origin}${hostPath('/publishing/preview')}${previewQuery}`,
             ),
             true,
-            window.location.origin + hostPath('/portfolio-preview.js'),
+            true,
           )
         : '',
     [view, draft, previewQuery],
@@ -1030,8 +1018,11 @@ export default function DomainWorkspace({
             </div>
             <iframe
               title="Portfolio draft preview"
-              ref={previewFrame}
-              sandbox="allow-scripts"
+              sandbox="allow-same-origin"
+              onLoad={(event) => {
+                const document = event.currentTarget.contentDocument;
+                if (document) bindPortfolioPreview(document, setPreviewQuery);
+              }}
               srcDoc={preview}
             />
           </div>
