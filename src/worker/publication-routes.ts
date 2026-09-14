@@ -10,6 +10,7 @@ import {
   reconcilePortfolio,
   publicSnapshot,
 } from '../core/publication/reconcile';
+import { previewSnapshot } from '../shared/publication-edit';
 import { draftSchema, type PublicationState } from '../shared/publication';
 import { isAuthenticated, sameOrigin, type AuthConfig } from './auth';
 import { deriveEncryptionKey, parseRootSecret } from './keys';
@@ -103,6 +104,7 @@ export function createPublicationRoutes(
             a.enabled &&
             !a.sync.lastError &&
             a.sync.lastSyncedAt !== null &&
+            a.sync.lastSyncedAt <= Date.now() &&
             Date.now() - a.sync.lastSyncedAt < 86_400_000,
           lastSyncedAt: a.sync.lastSyncedAt,
         })),
@@ -123,7 +125,7 @@ export function createPublicationRoutes(
     try {
       return c.html(
         renderPortfolio(
-          publicSnapshot(draft, review(draft)),
+          previewSnapshot(draftSchema.parse(draft)),
           new URL(c.req.url),
           true,
         ),

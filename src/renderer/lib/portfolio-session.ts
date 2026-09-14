@@ -1,4 +1,8 @@
 import {
+  portfolioIssues,
+  validDraftEdits,
+} from '../../shared/portfolio-validation';
+import {
   draftSchema,
   type PortfolioDraft,
   type PublicationState,
@@ -19,6 +23,7 @@ export type EditorSnapshot = {
   draft: PortfolioDraft | null;
   status: 'loading' | 'saved' | 'unsaved' | 'saving' | 'error';
   error: string;
+  errorKind: 'validation' | 'request' | null;
 };
 
 /** A session survives route navigation. Saves are serialized, never last-response-wins. */
@@ -28,6 +33,7 @@ export class PortfolioSession {
     draft: null,
     status: 'loading',
     error: '',
+    errorKind: null,
   };
   private listeners = new Set<() => void>();
   private saved = '';
@@ -68,7 +74,7 @@ export class PortfolioSession {
       const draft = editableDraft(state);
       this.saved = JSON.stringify(draft);
       this.conflict = false;
-      this.emit({ state, draft, status: 'saved', error: '' });
+      this.emit({ state, draft, status: 'saved', error: '', errorKind: null });
     } catch (error) {
       this.fail(error);
       throw error;
@@ -79,6 +85,7 @@ export class PortfolioSession {
       draft,
       status: this.conflict ? 'error' : 'unsaved',
       error: this.conflict ? this.snapshot.error : '',
+      errorKind: this.conflict ? this.snapshot.errorKind : null,
     });
     clearTimeout(this.timer);
     if (!this.conflict)
@@ -86,7 +93,10 @@ export class PortfolioSession {
         void this.flush().catch(() => {});
       }, this.delay);
   }
-  private fail(error: unknown) {
+  private fail(
+    error: unknown,
+    errorKind: 'validation' | 'request' = 'request',
+  ) {
     if (
       error &&
       typeof error === 'object' &&
@@ -96,6 +106,7 @@ export class PortfolioSession {
       this.conflict = true;
     this.emit({
       status: 'error',
+      errorKind,
       error:
         error instanceof Error
           ? error.message
@@ -111,12 +122,23 @@ export class PortfolioSession {
     }
     if (!this.snapshot.draft || !this.snapshot.state) return;
     if (!this.isDirty() && this.snapshot.state.revision) {
-      this.emit({ status: 'saved', error: '' });
+      this.emit({ status: 'saved', error: '', errorKind: null });
       return;
     }
-    const input = this.snapshot.draft;
+    const buffer = this.snapshot.draft;
+    const issues = portfolioIssues(buffer);
+    const input = issues.length
+      ? validDraftEdits(buffer, JSON.parse(this.saved))
+      : buffer;
+    if (issues.length && JSON.stringify(input) === this.saved) {
+      const error = new Error(
+        'Fix the highlighted fields. Other valid edits are saved.',
+      );
+      this.fail(error, 'validation');
+      throw error;
+    }
     const revision = this.snapshot.state.revision;
-    this.emit({ status: 'saving', error: '' });
+    this.emit({ status: 'saving', error: '', errorKind: null });
     this.saving = (async () => {
       try {
         const parsed = draftSchema.safeParse(input);
@@ -133,6 +155,7 @@ export class PortfolioSession {
           state: { ...this.snapshot.state!, revision: result.revision },
           status: this.isDirty() ? 'unsaved' : 'saved',
           error: '',
+          errorKind: null,
         });
       } catch (error) {
         this.fail(error);
@@ -143,6 +166,13 @@ export class PortfolioSession {
       await this.saving;
     } finally {
       this.saving = null;
+    }
+    if (issues.length) {
+      const error = new Error(
+        'Fix the highlighted fields. Other valid edits are saved.',
+      );
+      this.fail(error, 'validation');
+      throw error;
     }
     if (this.isDirty()) await this.flush();
   }
@@ -183,6 +213,7 @@ export class PortfolioSession {
     await this.flush();
     const revision = this.snapshot.state?.revision;
     if (!revision) throw new Error('Save a draft first.');
+    await this.refreshReview();
     await this.client.publish(revision);
     // Publishing may finish after the user has navigated back to editing.
     // Refresh the public baseline without replacing their newer draft buffer.

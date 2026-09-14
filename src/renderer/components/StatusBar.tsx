@@ -114,8 +114,8 @@ export default function StatusBar() {
                 noneConfigured
                   ? `No ${unit} configured — open registrar settings`
                   : allSynced
-                    ? `All configured ${unit} synced — open registrar settings`
-                    : `${configuredCount - syncedCount} ${unit} not synced — open registrar settings`
+                    ? `All configured ${unit} have a successful sync. Publication readiness also requires fresh verification.`
+                    : `${configuredCount - syncedCount} ${unit} need a successful sync — open registrar settings`
               }
             >
               <span
@@ -125,7 +125,7 @@ export default function StatusBar() {
                 )}
                 aria-hidden
               />
-              {syncedCount}/{configuredCount} {unit} synced
+              {syncedCount}/{configuredCount} {unit} last sync succeeded
             </button>
           )}
         </div>

@@ -1123,3 +1123,210 @@
     gap: 12px;
   }
 }
+
+/* Task-first catalog: a domain is always readable, with secondary details optional. */
+.pf-table .pf-domain-cell {
+  min-width: 210px;
+}
+.pf-table .pf-domain {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.pf-row-edit {
+  width: 44px;
+  height: 44px;
+}
+.pf-share,
+.pf-filter-summary,
+.pf-add-intent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  font-size: 0.8125rem;
+}
+.pf-share {
+  margin-bottom: 18px;
+  border: 1px solid var(--pf-line);
+  border-radius: 8px;
+}
+.pf-share > a {
+  overflow-wrap: anywhere;
+  margin-right: auto;
+}
+.pf-filter-summary {
+  border-bottom: 1px solid var(--pf-line);
+  color: var(--pf-muted);
+}
+.pf-filter-summary button {
+  padding: 6px 9px;
+  border: 1px solid var(--pf-line);
+  border-radius: 5px;
+}
+.pf-add-intent select {
+  border: 1px solid var(--pf-line);
+  padding: 8px;
+  border-radius: 5px;
+}
+.pf-verification-reason {
+  text-align: left;
+  font-size: 0.75rem;
+  max-width: 240px;
+  color: var(--destructive);
+  text-decoration: underline;
+}
+.pf-change > .pf-actions {
+  padding: 12px 16px;
+}
+@media (max-width: 900px) {
+  .pf-publish-panel {
+    grid-row: auto;
+  }
+}
+@media (max-width: 650px) {
+  .pf-table[data-mode] {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  .pf-table[data-mode] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .pf-table[data-mode] tbody {
+    display: block;
+  }
+  .pf-table[data-mode] tr {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    padding: 14px 12px;
+    gap: 10px;
+  }
+  .pf-table[data-mode] td {
+    display: block;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    width: auto;
+    grid-column: 2;
+    grid-row: auto;
+    justify-self: stretch;
+  }
+  .pf-table[data-mode] td:first-child {
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
+    padding: 8px 0;
+  }
+  .pf-table[data-mode] .pf-domain-cell {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .pf-table[data-mode] .pf-domain {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+    min-height: 44px;
+  }
+  .pf-table[data-mode] .page-action-cell {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .page-action-cell > div {
+    display: grid;
+    justify-content: stretch;
+  }
+  .pf-table[data-mode] .pf-availability-cell,
+  .pf-table[data-mode] .pf-price-cell {
+    grid-column: 2;
+    grid-row: auto;
+    text-align: left;
+  }
+  .pf-table[data-mode] .pf-check-column {
+    display: none;
+  }
+  .pf-table[data-mode] td[data-label] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pf-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--pf-muted);
+    font-size: 0.75rem;
+  }
+  .pf-table[data-mode] .pf-collection-cell {
+    display: block;
+  }
+  .pf-workspace button,
+  .pf-workspace select,
+  .pf-drawer select {
+    min-height: 44px;
+  }
+  .pf-table [role='checkbox'] {
+    min-height: 24px;
+    width: 24px;
+  }
+  .pf-filter-summary,
+  .pf-add-intent {
+    padding: 12px;
+  }
+  .pf-health-line {
+    flex-wrap: wrap;
+  }
+}
+.pf-recovery {
+  border: 1px solid var(--pf-line);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 20px;
+  font-size: 0.8125rem;
+}
+.pf-recovery summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.pf-recovery > p {
+  margin: 12px 0;
+  color: var(--pf-muted);
+  max-width: 70ch;
+}
+.pf-recovery-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--pf-line);
+  padding: 14px 0;
+}
+.pf-recovery-account p {
+  color: var(--pf-muted);
+  margin-top: 4px;
+}
+.pf-mobile-registrar-toggle {
+  display: none;
+}
+@media (max-width: 650px) {
+  .pf-mobile-registrar-toggle {
+    display: block;
+    color: var(--pf-muted);
+    text-decoration: underline;
+    text-align: left;
+  }
+  .pf-table[data-mode='manage']
+    tbody
+    tr:not([data-registrar-expanded='true'])
+    td:nth-child(n + 4) {
+    display: none;
+  }
+}

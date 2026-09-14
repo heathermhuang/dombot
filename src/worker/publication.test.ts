@@ -187,7 +187,7 @@ describe('publication database and HTTP boundary', () => {
     );
     const preview = await call('/publishing/preview');
     expect(preview.status).toBe(200);
-    expect(await preview.text()).toContain('Private preview');
+    expect(await preview.text()).toContain('Draft preview');
     expect(
       (await call('/publishing/publish', 'POST', { revision })).status,
     ).toBe(200);

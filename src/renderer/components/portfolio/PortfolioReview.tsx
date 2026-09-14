@@ -57,6 +57,10 @@ export function PortfolioReview({
   busy,
   ready,
   publicUrl,
+  onEdit,
+  onRevert,
+  onEditPage,
+  onRevertPage,
   onResolve,
   onPublish,
 }: {
@@ -66,6 +70,10 @@ export function PortfolioReview({
   busy: boolean;
   ready: boolean;
   publicUrl: string;
+  onEdit: (domain: string) => void;
+  onRevert: (domain: string) => void;
+  onEditPage: () => void;
+  onRevertPage: (field: 'title' | 'intro' | 'contactEmail' | 'handle') => void;
   onResolve: () => void;
   onPublish: () => void;
 }) {
@@ -115,6 +123,22 @@ export function PortfolioReview({
                   <ChevronDown aria-hidden="true" className="inline size-3.5" />
                 </span>
               </summary>
+              <div className="pf-actions">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onEdit(item.domain)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onRevert(item.domain)}
+                >
+                  Revert this change
+                </Button>
+              </div>
               <Details
                 item={item}
                 before={
@@ -155,6 +179,18 @@ export function PortfolioReview({
             {change.page.map((key) => (
               <details key={key} className="pf-change">
                 <summary>{fieldLabels[key]}</summary>
+                <div className="pf-actions">
+                  <Button size="sm" variant="outline" onClick={onEditPage}>
+                    Edit page
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onRevertPage(key)}
+                  >
+                    Revert this change
+                  </Button>
+                </div>
                 <div className="pf-change-details">
                   <p className="pf-before">{published?.[key] || 'Empty'}</p>
                   <p>{draft[key] || 'Empty'}</p>
@@ -166,6 +202,10 @@ export function PortfolioReview({
       </section>
       <aside className="pf-publish-panel">
         <span className="pf-eyebrow">Publishing</span>
+        <p className="pf-hint">
+          {change.added.length} additions · {change.removed.length} removals ·{' '}
+          {change.edited.length} listing edits · {change.page.length} page edits
+        </p>
         <h2>{draft.title}</h2>
         <p className="pf-subtitle">
           {current} current listings
@@ -183,7 +223,7 @@ export function PortfolioReview({
               ) : (
                 <>
                   <Check />
-                  Current listings synced
+                  Current listings verified
                 </>
               )}
             </dd>

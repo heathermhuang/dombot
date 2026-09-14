@@ -180,7 +180,7 @@ export function useRegistrarManagement({
     const key = domainKey(d);
     return (
       <Fragment key={key}>
-        <td>
+        <td data-label="Registrar / account">
           <span className="pf-registrar-name">
             {portfolioRegistrarLabels[d.registrar] ?? d.registrar}
           </span>
@@ -188,28 +188,30 @@ export function useRegistrarManagement({
             <small className="pf-hint block">{d.accountLabel}</small>
           )}
         </td>
-        <td className="pf-manage-folder">
+        <td className="pf-manage-folder" data-label="Folder">
           <FolderCell
             folders={folders}
             folderId={folderAssignments[key]}
             onAssign={(id) => void assignFolder(key, id)}
           />
         </td>
-        <td className="pf-manage-date">{date(d.createdDate)}</td>
-        <td className="pf-manage-date">
+        <td className="pf-manage-date" data-label="Created">
+          {date(d.createdDate)}
+        </td>
+        <td className="pf-manage-date" data-label="Expires">
           {date(d.expirationDate)}
           <LifecycleBadge status={d.status} />
         </td>
-        <td>
+        <td data-label="Renewal">
           <RenewalCell
             info={pricing[key]}
             loading={Object.keys(pricing).length === 0}
           />
         </td>
-        <td>
+        <td data-label="Auto renew">
           <AutoRenewSwitch domain={d} />
         </td>
-        <td>
+        <td data-label="Privacy">
           <FlagToggle
             domain={d}
             kind="privacy"
@@ -219,7 +221,7 @@ export function useRegistrarManagement({
             offLabel="privacy off"
           />
         </td>
-        <td>
+        <td data-label="Lock">
           <FlagToggle
             domain={d}
             kind="lock"
@@ -229,10 +231,10 @@ export function useRegistrarManagement({
             offLabel="unlocked"
           />
         </td>
-        <td>
+        <td data-label="Nameservers">
           <NameserversCell domain={d} />
         </td>
-        <td>
+        <td data-label="Registrar actions">
           <RowActionsMenu
             domain={d}
             folders={folders}
