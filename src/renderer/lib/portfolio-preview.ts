@@ -12,6 +12,8 @@ export function bindPortfolioPreview(
   };
   document.addEventListener('submit', (event) => {
     event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    if (form?.tagName === 'FORM') search(form);
   });
   document.addEventListener('keydown', (event) => {
     const target = event.target as HTMLInputElement;

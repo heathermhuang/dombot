@@ -44,11 +44,26 @@ describe('script-free preview navigation boundary', () => {
     expect(f.click('https://example.com')).toHaveBeenCalled();
     expect(f.navigate).not.toHaveBeenCalled();
   });
-  it('cancels native form submissions', () => {
+  it('cancels native submission and routes an assistive submit event through the owner', () => {
     const f = frame();
     const preventDefault = vi.fn();
-    f.listeners.get('submit')!({ preventDefault } as unknown as Event);
-    expect(preventDefault).toHaveBeenCalledOnce();
-    expect(f.navigate).not.toHaveBeenCalled();
+    vi.stubGlobal(
+      'FormData',
+      class {
+        forEach(callback: (value: string, key: string) => void) {
+          callback('atlas', 'q');
+        }
+      },
+    );
+    try {
+      f.listeners.get('submit')!({
+        target: { tagName: 'FORM' },
+        preventDefault,
+      } as unknown as Event);
+      expect(preventDefault).toHaveBeenCalledOnce();
+      expect(f.navigate).toHaveBeenCalledWith('?q=atlas');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
