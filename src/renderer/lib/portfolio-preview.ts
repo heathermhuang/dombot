@@ -31,8 +31,11 @@ export function bindPortfolioPreview(
     const link = target.closest<HTMLAnchorElement>('a');
     if (!link) return;
     const href = link.getAttribute('href') ?? '';
-    if (href.startsWith('#')) return;
     event.preventDefault();
+    if (href.startsWith('#')) {
+      document.getElementById(href.slice(1))?.scrollIntoView();
+      return;
+    }
     if (href.startsWith('?')) navigate(href.slice(0, 2000));
   });
 }
