@@ -7,6 +7,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  currencies,
+  type PortfolioIssue,
+} from '../../../shared/portfolio-validation';
 import type {
   PortfolioListing,
   ReconciledListing,
@@ -19,10 +23,10 @@ export const visibilityLabel = {
   historical: 'Previously owned',
 };
 export const ownershipLabel = {
-  owned: 'Synced with registrar',
-  stale: 'Sync needs attention',
-  unmatched: 'No inventory match',
-  conflict: 'Multiple accounts found',
+  owned: 'Ready for publication',
+  stale: 'Verification is stale or the last sync failed',
+  unmatched: 'Connect the registrar that holds this name',
+  conflict: 'Resolve duplicate account records',
 };
 export function PortfolioInspector({
   item,
@@ -30,6 +34,8 @@ export function PortfolioInspector({
   onClose,
   onChange,
   onHistory,
+  issues,
+  onResolve,
   saveStatus,
   error,
 }: {
@@ -38,6 +44,8 @@ export function PortfolioInspector({
   onClose: () => void;
   onChange: (patch: Partial<PortfolioListing>) => void;
   onHistory: () => void;
+  issues: PortfolioIssue[];
+  onResolve: () => void;
   saveStatus: string;
   error: string;
 }) {
@@ -61,6 +69,28 @@ export function PortfolioInspector({
               </DialogDescription>
             </div>
             <div className="pf-drawer-body">
+              {check?.ownership !== 'owned' &&
+                item.visibility !== 'historical' && (
+                  <div className="pf-note">
+                    <p>
+                      {check?.accountLabels.join(', ') ||
+                        'No connected account matches this domain.'}
+                    </p>
+                    <p>
+                      {check?.lastSyncedAt
+                        ? `Last successful sync: ${new Date(check.lastSyncedAt).toLocaleString()}`
+                        : 'No successful sync recorded.'}
+                    </p>
+                    <Button variant="outline" onClick={onResolve}>
+                      {check?.ownership === 'stale'
+                        ? 'Refresh verification'
+                        : check?.ownership === 'conflict'
+                          ? 'Resolve account conflict'
+                          : 'Connect registrar'}
+                    </Button>
+                  </div>
+                )}
+
               <label className="pf-field">
                 On your public page
                 {item.visibility === 'historical' ? (
@@ -120,9 +150,14 @@ export function PortfolioInspector({
               {item.visibility !== 'historical' && (
                 <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3">
                   <label className="pf-field">
-                    Asking price
+                    Asking price{' '}
+                    {item.visibility !== 'inquiry' ? '(not public)' : ''}
                     <Input
                       aria-label={`Asking price for ${item.domain}`}
+                      id="pf-field-askingPrice"
+                      aria-invalid={issues.some(
+                        (issue) => issue.field === 'askingPrice',
+                      )}
                       type="number"
                       min="0.01"
                       step="0.01"
@@ -136,17 +171,30 @@ export function PortfolioInspector({
                         })
                       }
                     />
+                    {issues
+                      .filter((issue) => issue.field === 'askingPrice')
+                      .map((issue) => (
+                        <span key={issue.field} className="pf-warning">
+                          {issue.message}
+                        </span>
+                      ))}
                   </label>
                   <label className="pf-field">
                     Currency
-                    <Input
+                    <select
+                      id="pf-field-currency"
                       aria-label={`Currency for ${item.domain}`}
                       value={item.currency}
-                      maxLength={3}
-                      onChange={(e) =>
-                        onChange({ currency: e.target.value.toUpperCase() })
-                      }
-                    />
+                      onChange={(e) => onChange({ currency: e.target.value })}
+                    >
+                      {[...new Set([...currencies, item.currency])].map(
+                        (currency) => (
+                          <option key={currency} value={currency}>
+                            {currency}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   </label>
                   <p className="pf-hint col-span-2">
                     Prices appear only when inquiries are on. Renewal costs are

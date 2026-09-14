@@ -1,4 +1,8 @@
 import {
+  portfolioIssues,
+  validDraftEdits,
+} from '../../shared/portfolio-validation';
+import {
   draftSchema,
   type PortfolioDraft,
   type PublicationState,
@@ -114,7 +118,18 @@ export class PortfolioSession {
       this.emit({ status: 'saved', error: '' });
       return;
     }
-    const input = this.snapshot.draft;
+    const buffer = this.snapshot.draft;
+    const issues = portfolioIssues(buffer);
+    const input = issues.length
+      ? validDraftEdits(buffer, JSON.parse(this.saved))
+      : buffer;
+    if (issues.length && JSON.stringify(input) === this.saved) {
+      const error = new Error(
+        'Fix the highlighted fields. Other valid edits are saved.',
+      );
+      this.fail(error);
+      throw error;
+    }
     const revision = this.snapshot.state.revision;
     this.emit({ status: 'saving', error: '' });
     this.saving = (async () => {
@@ -143,6 +158,13 @@ export class PortfolioSession {
       await this.saving;
     } finally {
       this.saving = null;
+    }
+    if (issues.length) {
+      const error = new Error(
+        'Fix the highlighted fields. Other valid edits are saved.',
+      );
+      this.fail(error);
+      throw error;
     }
     if (this.isDirty()) await this.flush();
   }
@@ -183,6 +205,7 @@ export class PortfolioSession {
     await this.flush();
     const revision = this.snapshot.state?.revision;
     if (!revision) throw new Error('Save a draft first.');
+    await this.refreshReview();
     await this.client.publish(revision);
     // Publishing may finish after the user has navigated back to editing.
     // Refresh the public baseline without replacing their newer draft buffer.

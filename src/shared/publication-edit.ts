@@ -7,9 +7,13 @@ import {
 } from './publication';
 
 export function editableDraft(state: PublicationState): PortfolioDraft {
+  const savedNames = new Set(state.draft.listings.map((item) => item.domain));
   return {
     ...state.draft,
-    listings: state.review.map((item) => ({
+    listings: [
+      ...state.draft.listings,
+      ...state.review.filter((item) => !savedNames.has(item.domain)),
+    ].map((item) => ({
       domain: item.domain,
       collection: item.collection,
       description: item.description,
@@ -99,5 +103,32 @@ export function previewSnapshot(draft: PortfolioDraft): PublishedPortfolio {
         ...publicFields(item),
         visibility: item.visibility as 'showcase' | 'inquiry' | 'historical',
       })),
+  };
+}
+
+/** Restore just one public change without disturbing other draft work. */
+export function revertListing(
+  draft: PortfolioDraft,
+  live: PublishedPortfolio | null,
+  domain: string,
+): PortfolioDraft {
+  const before = live?.listings.find((item) => item.domain === domain);
+  if (before && !draft.listings.some((item) => item.domain === domain))
+    return { ...draft, listings: [...draft.listings, { ...before }] };
+  return {
+    ...draft,
+    listings: draft.listings.map((item) =>
+      item.domain !== domain
+        ? item
+        : before
+          ? {
+              ...before,
+              askingPrice:
+                before.visibility === 'inquiry'
+                  ? before.askingPrice
+                  : item.askingPrice,
+            }
+          : { ...item, visibility: 'private' },
+    ),
   };
 }

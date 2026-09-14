@@ -20,6 +20,7 @@ interface DomainListState extends DomainListFilters {
   mode: 'manage' | 'publish';
   page: number;
   picked: Set<string>;
+  startTask: (scope: DomainScope, ownership?: OwnershipFilter) => void;
   setMode: (mode: 'manage' | 'publish') => void;
   setFilters: (patch: Partial<DomainListFilters>) => void;
   setPage: (page: number) => void;
@@ -40,6 +41,22 @@ export const useDomainList = create<DomainListState>((set) => ({
   nameserver: '',
   page: 1,
   picked: new Set(),
+  startTask: (scope, ownership = 'all') =>
+    set({
+      scope,
+      ownership,
+      mode: scope === 'registered' ? 'manage' : 'publish',
+      query: '',
+      collection: '',
+      sort: 'az',
+      account: '',
+      tld: '',
+      expiry: '',
+      folder: '',
+      nameserver: '',
+      page: 1,
+      picked: new Set(),
+    }),
   setMode: (mode) => set({ mode }),
   setFilters: (patch) => set({ ...patch, page: 1, picked: new Set() }),
   setPage: (page) => set({ page }),

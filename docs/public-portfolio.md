@@ -34,8 +34,8 @@ requires an explicit ownership assertion and never accepts inquiries. Collection
 support explicit Add, Remove and Replace operations. Undo is invalidated when
 reloading or unpublishing so it cannot overwrite a newer saved draft.
 
-The default **Inventory** scope shows registered domains. **Page list** includes
-live names and draft additions, while **Not added** contains names neither live
+The default **Inventory** scope shows registered domains. **Manage listings** includes
+live names and draft additions, while **Add domains** contains inventory names neither live
 nor selected. History, all records and verification filters live under More
 domain options. The catalog retains
 ownership, collection, account, TLD, expiration, private-folder and nameserver
@@ -45,10 +45,14 @@ trigger provider reads. Unknown dates/prices sort last, and all account-dependen
 filters and prices use the selected account consistently.
 
 **Public page** contains presentation settings, preview and publication review,
-not another domain list. Choose domains returns to the same catalog with listing
-columns. The old `#/public-portfolio` bookmark redirects to `#/public-page`.
+not another domain list. **Add domains** opens unselected inventory; **Manage listings**
+opens selected and live names. Explicit task transitions clear incompatible filters;
+active chips and matching/global counts keep deliberate filtering visible. The old `#/public-portfolio` bookmark redirects to `#/public-page`.
 
-Preview is on demand and uses the existing escaped public-field renderer.
+Preview uses the same escaped renderer and default A–Z ordering as live. The embedded
+draft supports search, collections, sorting, pagination and history in an opaque
+sandbox; a saved standalone preview is also available. All preview inquiry links
+are disabled. Publishing still verifies fresh registrar ownership.
 **Review changes** flushes autosave, refreshes ownership and compares the draft
 with the actual published snapshot. Only **Publish changes** changes the public
 page. Private unmatched candidates never block unrelated valid listings.
@@ -140,3 +144,19 @@ Continue contributing reusable registrar/core improvements upstream. Pin reviewe
 releases and publish the hosted edition's source and deployment differences under
 the applicable AGPL terms; upstream attribution is not an independent security
 audit or an endorsement of this hosting service.
+
+## Corrections and recovery
+
+The review supports Edit and Revert for each listing or page-setting change.
+Publishing finishes with a dated receipt, live URL and sharing actions. History
+remains separate and never accepts inquiries. Public prices and the Inquire action
+are shown separately, with a selectable email-address fallback.
+
+Publication readiness requires current verification, distinct from a past successful
+sync. Account-level recovery shows connection state and the last successful sync;
+row-level recovery explains stale, unmatched and conflicting records. The ownership
+gate is unchanged. On phones, registrar details expand from compact domain rows.
+
+Invalid fields remain visible in the editor with messages and focusable error links.
+Independent valid edits save using the existing serialized revision protocol; invalid
+values block publication. Network errors retain retry controls and all draft work.

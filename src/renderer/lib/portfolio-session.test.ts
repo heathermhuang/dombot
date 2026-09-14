@@ -168,7 +168,7 @@ describe('serialized portfolio autosave', () => {
     await session.load();
     const original = session.getSnapshot().draft!;
     session.update({ ...original, title: '' });
-    await expect(session.flush()).rejects.toThrow('title');
+    await expect(session.flush()).rejects.toThrow('highlighted fields');
     session.update(original);
     await session.flush();
     expect(session.getSnapshot().status).toBe('saved');
@@ -192,4 +192,26 @@ describe('serialized portfolio autosave', () => {
     expect(session.getSnapshot().draft?.title).toBe('My next edit');
     await session.flush();
   });
+});
+
+it('saves valid work alongside invalid input but blocks publishing until corrected', async () => {
+  const api = client();
+  const session = new PortfolioSession(api, 60_000);
+  await session.load();
+  session.update({
+    ...session.getSnapshot().draft!,
+    title: 'Valid title',
+    handle: 'invalid handle',
+  });
+  await expect(session.flush()).rejects.toThrow('highlighted fields');
+  expect(api.save).toHaveBeenCalledWith(
+    expect.objectContaining({ title: 'Valid title', handle: 'portfolio' }),
+    'r0',
+  );
+  expect(session.getSnapshot().draft?.handle).toBe('invalid handle');
+  await expect(session.publish()).rejects.toThrow('highlighted fields');
+  expect(api.publish).not.toHaveBeenCalled();
+  session.update({ ...session.getSnapshot().draft!, handle: 'valid' });
+  await session.flush();
+  expect(session.getSnapshot().status).toBe('saved');
 });

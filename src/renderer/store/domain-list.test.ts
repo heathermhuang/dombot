@@ -6,14 +6,12 @@ beforeEach(() =>
 );
 describe('shared Manage/Publish context', () => {
   it('preserves filters, search, page and selection when changing columns', () => {
-    useDomainList
-      .getState()
-      .setFilters({
-        query: 'example',
-        scope: 'private',
-        collection: 'AI',
-        account: 'account-b',
-      });
+    useDomainList.getState().setFilters({
+      query: 'example',
+      scope: 'private',
+      collection: 'AI',
+      account: 'account-b',
+    });
     useDomainList.getState().setPage(3);
     useDomainList.getState().setPicked(new Set(['one.example', 'two.example']));
     useDomainList.getState().setMode('publish');
@@ -38,4 +36,37 @@ describe('shared Manage/Publish context', () => {
     expect(useDomainList.getState().picked.size).toBe(0);
     expect(useDomainList.getState().page).toBe(1);
   });
+});
+
+it('explicit Add and Manage tasks clear incompatible filters and selection', () => {
+  const list = useDomainList.getState();
+  list.setFilters({
+    scope: 'listed',
+    ownership: 'blocking',
+    account: 'stale',
+    query: 'old',
+    collection: 'Old',
+    tld: 'io',
+    expiry: 'soon',
+    folder: 'private',
+    nameserver: 'dns.example',
+  });
+  list.setPicked(new Set(['old.example']));
+  list.startTask('private');
+  expect(useDomainList.getState()).toMatchObject({
+    scope: 'private',
+    mode: 'publish',
+    ownership: 'all',
+    account: '',
+    query: '',
+    collection: '',
+    tld: '',
+    expiry: '',
+    folder: '',
+    nameserver: '',
+    page: 1,
+  });
+  expect(useDomainList.getState().picked.size).toBe(0);
+  list.startTask('listed');
+  expect(useDomainList.getState().scope).toBe('listed');
 });

@@ -15,7 +15,7 @@ import { domainKey } from '../../shared/account-key';
 import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
 import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
 import LegacyDomains from './Domains';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -28,7 +28,6 @@ import {
   FolderPlus,
   Globe,
   MoreHorizontal,
-  Pencil,
   Search,
   Settings2,
   Upload,
@@ -60,6 +59,7 @@ import { importPublication } from '../../shared/publication-import';
 import {
   previewSnapshot,
   publicationChanges,
+  revertListing,
 } from '../../shared/publication-edit';
 import {
   collectionTokens,
@@ -69,6 +69,7 @@ import {
   type BulkPortfolioEdit,
   type OwnershipFilter,
 } from '../../shared/portfolio-management';
+import { portfolioIssues } from '../../shared/portfolio-validation';
 import { renderPortfolio } from '../../shared/render-portfolio';
 import type {
   PortfolioDraft,
@@ -130,7 +131,6 @@ export default function DomainWorkspace({
   const ownershipFilter = list.ownership;
   const setPage = list.setPage,
     setPicked = list.setPicked;
-  const setScope = (scope: DomainScope) => list.setFilters({ scope });
   const setQuery = (query: string) => list.setFilters({ query });
   const setCollection = (collection: string) => list.setFilters({ collection });
   const setSort = (sort: string) => list.setFilters({ sort });
@@ -138,6 +138,9 @@ export default function DomainWorkspace({
     list.setFilters({ ownership });
   const refreshTick = useAppStore((s) => s.refreshTick);
   const [editing, setEditing] = useState<string | null>(null);
+  const [registrarExpanded, setRegistrarExpanded] = useState<Set<string>>(
+    new Set(),
+  );
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
@@ -151,7 +154,26 @@ export default function DomainWorkspace({
   const [collectionValue, setCollectionValue] = useState('');
   const [historyNames, setHistoryNames] = useState<Set<string> | null>(null);
   const [mobile, setMobile] = useState(false);
-  const [previewHistory, setPreviewHistory] = useState(false);
+  const [previewQuery, setPreviewQuery] = useState('');
+  const previewFrame = useRef<HTMLIFrameElement>(null);
+  const [addIntent, setAddIntent] = useState<'showcase' | 'inquiry'>(
+    'showcase',
+  );
+  const [receipt, setReceipt] = useState<{ url: string; time: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (
+        event.source === previewFrame.current?.contentWindow &&
+        event.data?.type === 'portfolio-preview' &&
+        typeof event.data.query === 'string'
+      )
+        setPreviewQuery(event.data.query.slice(0, 2000));
+    };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, []);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   useEffect(() => {
@@ -182,12 +204,13 @@ export default function DomainWorkspace({
         ? renderPortfolio(
             previewSnapshot(draft),
             new URL(
-              `https://preview.invalid/p/portfolio${previewHistory ? '?view=history' : ''}`,
+              `${window.location.origin}${hostPath('/publishing/preview')}${previewQuery}`,
             ),
             true,
+            window.location.origin + hostPath('/portfolio-preview.js'),
           )
         : '',
-    [view, draft, previewHistory],
+    [view, draft, previewQuery],
   );
   const catalog = useMemo(
     () =>
@@ -216,7 +239,7 @@ export default function DomainWorkspace({
           ),
           scope,
         ) &&
-        (scope !== 'registered' ||
+        ((scope !== 'registered' && scope !== 'private') ||
           !!catalog.get(item.domain)?.records.length) &&
         matchesRegistrarFilters(
           catalog.get(item.domain)!,
@@ -331,7 +354,10 @@ export default function DomainWorkspace({
     (item) => item.visibility === 'historical',
   );
   const privateNames = draft.listings.filter(
-    (item) => item.visibility === 'private' && !liveItems.has(item.domain),
+    (item) =>
+      item.visibility === 'private' &&
+      !liveItems.has(item.domain) &&
+      !!catalog.get(item.domain)?.records.length,
   );
   const blockers = current.filter(
     (item) => checks.get(item.domain)?.ownership !== 'owned',
@@ -339,6 +365,7 @@ export default function DomainWorkspace({
   const unmatched = privateNames.filter(
     (item) => checks.get(item.domain)?.ownership !== 'owned',
   );
+  const issues = portfolioIssues(draft);
   const changes = publicationChanges(draft, state.publishedSnapshot);
   const saveStatus =
     status === 'saving'
@@ -411,7 +438,11 @@ export default function DomainWorkspace({
     });
   const apply = (edit: BulkPortfolioEdit, names = picked) => {
     try {
-      const next = editPortfolioSelection(draft, names, edit);
+      const next = editPortfolioSelection(
+        draft,
+        names,
+        edit.kind === 'include' ? { ...edit, intent: addIntent } : edit,
+      );
       const affected = next.listings.filter(
         (item, i) => JSON.stringify(item) !== JSON.stringify(draft.listings[i]),
       ).length;
@@ -421,7 +452,7 @@ export default function DomainWorkspace({
         edit.kind === 'collection'
           ? `Collections updated for ${affected} ${affected === 1 ? 'domain' : 'domains'}.`
           : edit.kind === 'include'
-            ? `${affected} ${affected === 1 ? 'domain' : 'domains'} added to the page draft. Review changes to put them online.`
+            ? `${affected} ${affected === 1 ? 'domain' : 'domains'} added to the page draft (${addIntent === 'inquiry' ? 'accept inquiries' : 'display only; prices stay private'}). Review changes to put them online.`
             : edit.value === 'private'
               ? `${affected} ${affected === 1 ? 'domain' : 'domains'} marked for removal. Review changes to update the live page.`
               : edit.value === 'historical'
@@ -438,13 +469,7 @@ export default function DomainWorkspace({
     }
   };
   const selectScope = (next: DomainScope, owner: OwnershipFilter = 'all') => {
-    if (next === 'registered') list.setMode('manage');
-    if (next === 'listed' || next === 'history') list.setMode('publish');
-    setScope(next);
-    setOwnershipFilter(owner);
-    setPage(1);
-    setQuery('');
-    setCollection('');
+    list.startTask(next, owner);
     clearSelection();
     window.scrollTo(0, 0);
   };
@@ -662,12 +687,31 @@ export default function DomainWorkspace({
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  list.setMode('publish');
+                  selectScope('private');
                   navigateView('domains');
                 }}
               >
-                Choose domains
+                Add domains
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  selectScope('listed');
+                  navigateView('domains');
+                }}
+              >
+                Manage listings
+              </Button>
+              {view !== 'settings' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigateView('settings')}
+                >
+                  Edit page
+                </Button>
+              )}
               {changes.count > 0 && view !== 'review' && (
                 <Button size="sm" disabled={busy} onClick={review}>
                   Review changes ({changes.count}) →
@@ -730,6 +774,54 @@ export default function DomainWorkspace({
           )}
         </div>
       </header>
+      {area === 'page' && liveUrl && (
+        <div className="pf-share">
+          <a href={liveUrl} target="_blank" rel="noreferrer">
+            {window.location.origin + liveUrl}
+          </a>
+          <Button size="sm" variant="outline" asChild>
+            <a href={liveUrl} target="_blank" rel="noreferrer">
+              View live page
+            </a>
+          </Button>
+          <Button size="sm" variant="outline" onClick={copyLink}>
+            Copy link
+          </Button>
+        </div>
+      )}
+      {receipt && (
+        <div className="pf-alert" role="status">
+          <strong>Publication complete</strong>
+          <span>{new Date(receipt.time).toLocaleString()}</span>
+          <a href={receipt.url} target="_blank" rel="noreferrer">
+            View published page ↗
+          </a>
+        </div>
+      )}
+      {issues.length > 0 && (
+        <div className="pf-alert" role="alert">
+          <strong>
+            Fix these fields. Valid edits can save while you correct them.
+          </strong>
+          {issues.map((issue) => (
+            <button
+              key={`${issue.domain ?? 'page'}-${issue.field}`}
+              className="pf-text-button"
+              onClick={() => {
+                if (issue.domain) setEditing(issue.domain);
+                else navigateView('settings');
+                setTimeout(
+                  () =>
+                    document.getElementById(`pf-field-${issue.field}`)?.focus(),
+                  100,
+                );
+              }}
+            >
+              {issue.domain ?? 'Page settings'}: {issue.message}
+            </button>
+          ))}
+        </div>
+      )}
       {area === 'domains' && changes.count > 0 && (
         <div className="page-pending-banner" role="status">
           <div>
@@ -758,7 +850,7 @@ export default function DomainWorkspace({
           </button>
         </p>
       )}
-      {(error || actionError) && (
+      {((error && !issues.length) || actionError) && (
         <div role="alert" className="pf-alert">
           <span>{actionError || error}</span>
           <div className="pf-actions">
@@ -809,12 +901,101 @@ export default function DomainWorkspace({
           </button>
         </div>
       )}
+      {(blockers.length > 0 || ownershipFilter === 'attention') && (
+        <details
+          className="pf-recovery"
+          open={ownershipFilter === 'blocking' || view === 'review'}
+        >
+          <summary>
+            {blockers.length} selected listings need verification · resolve by
+            registrar
+          </summary>
+          <p>
+            Connected accounts and past syncs do not guarantee fresh ownership
+            evidence. Refresh affected accounts before publishing.
+          </p>
+          {(accounts ?? [])
+            .filter((account) => account.saved || account.configured)
+            .map((account) => {
+              const label = `${account.displayName} · ${account.accountLabel ?? 'Default'}`;
+              const affected = blockers.filter((item) =>
+                checks.get(item.domain)?.accountLabels.includes(label),
+              );
+              if (!affected.length) return null;
+              return (
+                <div
+                  className="pf-recovery-account"
+                  key={account.accountId ?? account.name}
+                >
+                  <div>
+                    <strong>
+                      {label} · {affected.length} listings
+                    </strong>
+                    <p>
+                      {account.configured ? 'Connected' : 'Not connected'} ·{' '}
+                      {account.enabled ? 'Enabled' : 'Disabled'}
+                    </p>
+                    <p>
+                      Last successful sync:{' '}
+                      {account.sync.lastSyncedAt
+                        ? new Date(account.sync.lastSyncedAt).toLocaleString()
+                        : 'Never'}
+                    </p>
+                    <p>
+                      {account.sync.lastError
+                        ? 'Last sync failed. Check account settings and refresh.'
+                        : 'Fresh verification required before publication.'}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!account.configured || !account.enabled)
+                        navigate('/settings?tab=registrars');
+                      else
+                        void run(async () => {
+                          await useAppStore
+                            .getState()
+                            .syncRegistrar(account.name, account.accountId);
+                          await portfolioEditor.refreshReview();
+                        });
+                    }}
+                  >
+                    {account.configured && account.enabled
+                      ? 'Refresh verification'
+                      : 'Connect / enable account'}
+                  </Button>
+                </div>
+              );
+            })}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              selectScope('listed', 'blocking');
+              navigateView('domains');
+            }}
+          >
+            Inspect affected listings
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => navigate('/settings?tab=registrars')}
+          >
+            Registrar settings
+          </Button>
+        </details>
+      )}
       {view === 'settings' ? (
         <div className="pf-shell">
           <PortfolioSettings
             draft={draft}
             onChange={change}
             publicUrl={publicUrl}
+            issues={issues.filter((issue) => !issue.domain)}
           />
         </div>
       ) : view === 'preview' ? (
@@ -826,15 +1007,15 @@ export default function DomainWorkspace({
               </span>
               <div className="pf-preview-switches">
                 <button
-                  aria-pressed={!previewHistory}
-                  onClick={() => setPreviewHistory(false)}
+                  aria-pressed={!previewQuery.includes('history')}
+                  onClick={() => setPreviewQuery('')}
                 >
                   Current holdings
                 </button>
                 {history.length > 0 && (
                   <button
-                    aria-pressed={previewHistory}
-                    onClick={() => setPreviewHistory(true)}
+                    aria-pressed={previewQuery.includes('history')}
+                    onClick={() => setPreviewQuery('?view=history')}
                   >
                     Previously owned
                   </button>
@@ -843,21 +1024,42 @@ export default function DomainWorkspace({
             </div>
             <iframe
               title="Portfolio draft preview"
-              sandbox=""
+              ref={previewFrame}
+              sandbox="allow-scripts"
               srcDoc={preview}
             />
           </div>
-          <p className="pf-preview-foot">
-            Read-only preview.{' '}
-            <a
-              className="ml-1 underline"
-              href={hostPath('/publishing/preview')}
-              target="_blank"
-              rel="noreferrer"
+          <div className="pf-preview-foot">
+            <p>
+              Interactive draft · search, collections and pagination work here.
+              Inquiries are disabled.
+            </p>
+            <Button
+              variant="outline"
+              disabled={busy || issues.length > 0}
+              onClick={() => {
+                const tab = window.open('about:blank', '_blank');
+                if (!tab) {
+                  setActionError(
+                    'Allow pop-ups to open the interactive preview.',
+                  );
+                  return;
+                }
+                tab.opener = null;
+                void run(async () => {
+                  try {
+                    await portfolioEditor.flush();
+                    tab.location.href = hostPath('/publishing/preview');
+                  } catch (error) {
+                    tab.close();
+                    throw error;
+                  }
+                });
+              }}
             >
-              Open the saved preview ↗
-            </a>
-          </p>
+              Open interactive draft preview ↗
+            </Button>
+          </div>
         </>
       ) : view === 'review' ? (
         <PortfolioReview
@@ -867,6 +1069,15 @@ export default function DomainWorkspace({
           busy={busy}
           ready={status === 'saved'}
           publicUrl={publicUrl}
+          onEdit={openInspector}
+          onRevert={(domain) =>
+            change(revertListing(draft, state.publishedSnapshot, domain))
+          }
+          onEditPage={() => navigateView('settings')}
+          onRevertPage={(field) => {
+            if (state.publishedSnapshot)
+              change({ [field]: state.publishedSnapshot[field] });
+          }}
           onResolve={() => {
             if (
               current.some((item) => item.visibility === 'inquiry') &&
@@ -883,7 +1094,13 @@ export default function DomainWorkspace({
             void run(async () => {
               await portfolioEditor.publish();
               navigateView('settings');
-              setNotice('Your portfolio is published.');
+              const published = portfolioEditor.getSnapshot().state?.published;
+              if (published)
+                setReceipt({
+                  url:
+                    window.location.origin + hostPath(`/p/${published.handle}`),
+                  time: published.publishedAt,
+                });
             })
           }
         />
@@ -900,8 +1117,8 @@ export default function DomainWorkspace({
                       inventory.map((item) => item.domainName.toLowerCase()),
                     ).size,
                   ],
-                  ['listed', 'Page list', pageListCount],
-                  ['private', 'Not added', privateNames.length],
+                  ['listed', 'Manage listings', pageListCount],
+                  ['private', 'Add domains', privateNames.length],
                 ] as [DomainScope, string, number][]
               ).map(([key, label, count]) => (
                 <button
@@ -914,6 +1131,68 @@ export default function DomainWorkspace({
                 </button>
               ))}
             </div>
+            <div className="pf-filter-summary">
+              <span>
+                {filtered.length} matching ·{' '}
+                {scope === 'listed'
+                  ? `${pageListCount} selected or live, including ${history.length} historical`
+                  : scope === 'private'
+                    ? `${privateNames.length} inventory names not added`
+                    : `${new Set(inventory.map((item) => item.domainName)).size} inventory names`}
+              </span>
+              {(
+                [
+                  'query',
+                  'collection',
+                  'ownership',
+                  'account',
+                  'tld',
+                  'expiry',
+                  'folder',
+                  'nameserver',
+                ] as const
+              )
+                .filter((key) => list[key] && list[key] !== 'all')
+                .map((key) => (
+                  <button
+                    key={key}
+                    onClick={() =>
+                      list.setFilters({
+                        [key]: key === 'ownership' ? 'all' : '',
+                      })
+                    }
+                  >
+                    {key}:{' '}
+                    {key === 'account'
+                      ? (accounts?.find(
+                          (a) => (a.accountId ?? a.name) === list.account,
+                        )?.accountLabel ?? list[key])
+                      : list[key]}{' '}
+                    ×
+                  </button>
+                ))}
+              <button onClick={resetFilters}>Clear filters</button>
+            </div>
+            {scope === 'private' && (
+              <label className="pf-add-intent">
+                When adding domains{' '}
+                <select
+                  aria-label="Inquiry intent for new additions"
+                  value={addIntent}
+                  onChange={(e) =>
+                    setAddIntent(e.target.value as 'showcase' | 'inquiry')
+                  }
+                >
+                  <option value="showcase">Display only</option>
+                  <option value="inquiry">Accept inquiries</option>
+                </select>
+                <span className="pf-hint">
+                  {addIntent === 'inquiry'
+                    ? 'A public email is required before publishing.'
+                    : 'Prices stay private. You can enable inquiries later.'}
+                </span>
+              </label>
+            )}
             <div className="pf-toolbar">
               <div className="pf-search">
                 <Search />
@@ -947,7 +1226,7 @@ export default function DomainWorkspace({
                 }
               >
                 <option value="all">Ownership: all</option>
-                <option value="owned">Synced</option>
+                <option value="owned">Verified for publication</option>
                 <option value="attention">Needs review</option>
                 <option value="blocking">Blocks publishing</option>
               </select>
@@ -1147,8 +1426,8 @@ export default function DomainWorkspace({
                 </button>
                 {selectedPrivate.length > 0 && cannotAdd && (
                   <span className="pf-hint w-full">
-                    Some names have no inventory match. Verify them before
-                    adding them as current listings.
+                    Some selected names need verification. See each row’s reason
+                    and recovery action before adding them.
                   </span>
                 )}
               </div>
@@ -1278,9 +1557,6 @@ export default function DomainWorkspace({
                         <th className="pf-collection-cell">Collections</th>
                         <th>Asking price</th>
                         <th className="pf-check-column">Ownership</th>
-                        <th>
-                          <span className="sr-only">Edit</span>
-                        </th>
                       </>
                     )}
                   </tr>
@@ -1293,6 +1569,9 @@ export default function DomainWorkspace({
                       <tr
                         key={item.domain}
                         data-selected={picked.has(item.domain)}
+                        data-registrar-expanded={registrarExpanded.has(
+                          item.domain,
+                        )}
                       >
                         <td>
                           <Checkbox
@@ -1307,25 +1586,32 @@ export default function DomainWorkspace({
                           />
                         </td>
                         <td className="pf-domain-cell">
-                          {mode === 'manage' ? (
-                            <span className="pf-domain">{item.domain}</span>
-                          ) : (
+                          <button
+                            className="pf-domain"
+                            onClick={() => openInspector(item.domain)}
+                            aria-label={`Edit ${item.domain}`}
+                          >
+                            {item.domain}
+                          </button>
+                          {mode === 'manage' && (
                             <button
-                              className="pf-domain"
-                              onClick={() => {
-                                if (mode === 'publish')
-                                  openInspector(item.domain);
-                              }}
+                              className="pf-mobile-registrar-toggle"
+                              aria-expanded={registrarExpanded.has(item.domain)}
+                              onClick={() =>
+                                setRegistrarExpanded((previous) => {
+                                  const next = new Set(previous);
+                                  if (next.has(item.domain))
+                                    next.delete(item.domain);
+                                  else next.add(item.domain);
+                                  return next;
+                                })
+                              }
                             >
-                              {item.domain}
+                              {registrarExpanded.has(item.domain)
+                                ? 'Hide registrar details'
+                                : 'Registrar details'}
                             </button>
                           )}
-                          {check !== 'owned' &&
-                            item.visibility !== 'historical' && (
-                              <span className="pf-mobile-evidence">
-                                {ownershipLabel[check]}
-                              </span>
-                            )}
                         </td>
                         <td className="page-action-cell">
                           <div>
@@ -1346,6 +1632,15 @@ export default function DomainWorkspace({
                                 ]
                               }
                             </span>
+                            {check !== 'owned' &&
+                              item.visibility !== 'historical' && (
+                                <button
+                                  className="pf-verification-reason"
+                                  onClick={() => openInspector(item.domain)}
+                                >
+                                  {ownershipLabel[check]} · Resolve
+                                </button>
+                              )}
                             <div className="page-row-actions">
                               {item.visibility === 'private' ? (
                                 liveItems.has(item.domain) ? (
@@ -1377,12 +1672,6 @@ export default function DomainWorkspace({
                                 )
                               ) : (
                                 <>
-                                  <button
-                                    className="pf-text-button"
-                                    onClick={() => openInspector(item.domain)}
-                                  >
-                                    Edit
-                                  </button>
                                   <button
                                     className="pf-text-button"
                                     onClick={() =>
@@ -1453,22 +1742,15 @@ export default function DomainWorkspace({
                               </div>
                             </td>
                             <td className="pf-price-cell">
-                              <button
-                                className="pf-price"
-                                aria-label={`Edit asking price for ${item.domain}`}
-                                onClick={() => {
-                                  if (mode === 'publish')
-                                    openInspector(item.domain);
-                                }}
-                              >
-                                {item.visibility === 'historical' ? (
-                                  '—'
+                              <span className="pf-price">
+                                {item.visibility !== 'inquiry' ? (
+                                  'Not public'
                                 ) : item.askingPrice === null ? (
                                   <span className="pf-hint">On request</span>
                                 ) : (
                                   `${item.currency} ${item.askingPrice.toLocaleString()}`
                                 )}
-                              </button>
+                              </span>
                             </td>
                             <td className="pf-check-column">
                               <span
@@ -1480,7 +1762,7 @@ export default function DomainWorkspace({
                                 ) : check === 'owned' ? (
                                   <>
                                     <Check />
-                                    Synced
+                                    Verified
                                   </>
                                 ) : (
                                   <>
@@ -1493,18 +1775,6 @@ export default function DomainWorkspace({
                                   </>
                                 )}
                               </span>
-                            </td>
-                            <td>
-                              <button
-                                className="pf-row-edit"
-                                aria-label={`Edit ${item.domain}`}
-                                onClick={() => {
-                                  if (mode === 'publish')
-                                    openInspector(item.domain);
-                                }}
-                              >
-                                <Pencil />
-                              </button>
                             </td>
                           </>
                         )}
@@ -1590,7 +1860,8 @@ export default function DomainWorkspace({
             <Check />
             <span>
               {state.accounts.filter((account) => account.healthy).length}/
-              {state.accounts.length} registrar accounts synced.
+              {state.accounts.length} accounts ready for publication (fresh
+              verification).
             </span>
             {blockers.length > 0 ? (
               <button
@@ -1627,8 +1898,35 @@ export default function DomainWorkspace({
             setEditing(null);
           }
         }}
+        issues={issues.filter((issue) => issue.domain === inspector?.domain)}
+        onResolve={() => {
+          const record = inspector
+            ? catalog.get(inspector.domain)?.target
+            : null;
+          if (
+            !record ||
+            checks.get(inspector!.domain)?.ownership === 'conflict'
+          ) {
+            navigate('/settings?tab=registrars');
+            setEditing(null);
+            return;
+          }
+          void run(async () => {
+            const account = accounts?.find(
+              (item) =>
+                (item.accountId ?? item.name) ===
+                (record.accountId ?? record.registrar),
+            );
+            if (!account)
+              throw new Error('Connect this registrar account first.');
+            await useAppStore
+              .getState()
+              .syncRegistrar(account.name, account.accountId);
+            await portfolioEditor.refreshReview();
+          });
+        }}
         saveStatus={saveStatus}
-        error={error}
+        error={issues.length ? '' : error}
       />
       <Dialog
         open={!!historyNames}
