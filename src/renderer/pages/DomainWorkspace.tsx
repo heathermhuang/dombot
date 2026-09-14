@@ -89,7 +89,13 @@ export default function DomainWorkspace({
 }: {
   area: 'domains' | 'page';
 }) {
-  const { state, draft: savedDraft, status, error } = usePortfolioEditor();
+  const {
+    state,
+    draft: savedDraft,
+    status,
+    error,
+    errorKind,
+  } = usePortfolioEditor();
   const inventory = useAppStore((s) => s.portfolio);
   const enriched = useAppStore((s) => s.enriched);
   const pricing = useAppStore((s) => s.pricing);
@@ -850,7 +856,7 @@ export default function DomainWorkspace({
           </button>
         </p>
       )}
-      {((error && !issues.length) || actionError) && (
+      {((error && errorKind !== 'validation') || actionError) && (
         <div role="alert" className="pf-alert">
           <span>{actionError || error}</span>
           <div className="pf-actions">
@@ -1926,7 +1932,7 @@ export default function DomainWorkspace({
           });
         }}
         saveStatus={saveStatus}
-        error={issues.length ? '' : error}
+        error={errorKind === 'validation' ? '' : error}
       />
       <Dialog
         open={!!historyNames}

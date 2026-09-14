@@ -215,3 +215,40 @@ it('saves valid work alongside invalid input but blocks publishing until correct
   await session.flush();
   expect(session.getSnapshot().status).toBe('saved');
 });
+
+it('keeps a failed partial save actionable while invalid fields remain', async () => {
+  const api = client();
+  api.save = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('Network unavailable'))
+    .mockResolvedValueOnce({ revision: 'r1' })
+    .mockResolvedValue({ revision: 'r2' });
+  const session = new PortfolioSession(api, 60_000);
+  await session.load();
+  session.update({
+    ...session.getSnapshot().draft!,
+    title: 'Valid edit',
+    handle: 'invalid handle',
+  });
+  await expect(session.flush()).rejects.toThrow('Network unavailable');
+  expect(session.getSnapshot()).toMatchObject({
+    status: 'error',
+    error: 'Network unavailable',
+    errorKind: 'request',
+  });
+  expect(session.getSnapshot().state?.revision).toBe('r0');
+  expect(session.getSnapshot().draft).toMatchObject({
+    title: 'Valid edit',
+    handle: 'invalid handle',
+  });
+  await expect(session.flush()).rejects.toThrow('highlighted fields');
+  expect(session.getSnapshot()).toMatchObject({ errorKind: 'validation' });
+  expect(session.getSnapshot().state?.revision).toBe('r1');
+  session.update({ ...session.getSnapshot().draft!, handle: 'valid-handle' });
+  await session.flush();
+  expect(session.getSnapshot()).toMatchObject({
+    status: 'saved',
+    error: '',
+    errorKind: null,
+  });
+});
