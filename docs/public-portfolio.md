@@ -50,8 +50,7 @@ opens selected and live names. Explicit task transitions clear incompatible filt
 active chips and matching/global counts keep deliberate filtering visible. The old `#/public-portfolio` bookmark redirects to `#/public-page`.
 
 Preview uses the same escaped renderer and default A–Z ordering as live. The embedded
-draft supports search, collections, sorting, pagination and history in an opaque
-sandbox; a saved standalone preview is also available. All preview inquiry links
+draft supports search, collections, sorting, pagination and history in a sandbox with scripts disabled; a saved standalone preview is also available. All preview inquiry links
 are disabled. Publishing still verifies fresh registrar ownership.
 **Review changes** flushes autosave, refreshes ownership and compares the draft
 with the actual published snapshot. Only **Publish changes** changes the public
