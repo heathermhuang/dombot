@@ -30,8 +30,10 @@ export interface RegistrarHelp {
 }
 
 // Exhaustive over RegistrarName so adding a registrar to the library forces a
-// help entry here (the build fails until one is written).
-export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
+// help entry here (the build fails until one is written). Name.com is prepared
+// ahead of the registrar-client release; it appears once that dependency adds it.
+type HelpRegistrar = RegistrarName | 'namecom';
+export const REGISTRAR_HELP: Record<HelpRegistrar, RegistrarHelp> = {
   cloudflare: {
     summary:
       'A user API token with the account-level Registrar permission (Read ' +

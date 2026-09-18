@@ -21,6 +21,7 @@ export default defineConfig({
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __DOMBOT_DEMO__: 'false',
   },
   build: {
     outDir: 'dist/web',

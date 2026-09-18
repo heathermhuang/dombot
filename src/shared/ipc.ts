@@ -19,17 +19,37 @@ export interface RegistrarAccount {
   id: string;
   registrar: RegistrarName;
   label: string;
+  /** The proxy profile this account's API traffic goes through; absent = direct. */
+  proxyId?: string;
 }
 export type Domain = ProviderDomain & {
   accountId?: string;
   accountLabel?: string;
 };
 
+/** The one proxy the app manages, and the saved accounts routed through it. */
+export interface ProxySettings {
+  proxy: { url: string; egressIp: string } | null;
+  users: {
+    accountId: string;
+    registrar: RegistrarName;
+    label: string;
+    /** The registrar has other saved accounts, proxied or not. */
+    hasSiblings: boolean;
+  }[];
+}
+
+/** The address the internet saw for a request sent through the proxy. */
+export interface ProxyTestResult {
+  ip: string;
+  expected: string;
+  matches: boolean;
+}
+
 /** Channel identifiers for `ipcRenderer.invoke` / `ipcMain.handle`. */
 export const IpcChannels = {
   ping: 'app:ping',
   getAppInfo: 'app:getAppInfo',
-  listDynadotDomains: 'registrar:listDynadotDomains',
   listPortfolio: 'registrar:listPortfolio',
   getDomainDetail: 'registrar:getDomainDetail',
   applyDomainOp: 'domain:apply',
@@ -54,6 +74,10 @@ export const IpcChannels = {
   testRegistrarAccount: 'registrar:testAccount',
   getRegistrarCredentials: 'registrar:getCredentials',
   saveRegistrarCredentials: 'registrar:saveCredentials',
+  getProxySettings: 'proxy:get',
+  saveProxySettings: 'proxy:save',
+  removeProxySettings: 'proxy:remove',
+  testProxySettings: 'proxy:test',
   setRegistrarEnabled: 'registrar:setEnabled',
   syncRegistrar: 'registrar:sync',
   getMcpInfo: 'mcp:getInfo',
@@ -202,6 +226,10 @@ export interface RegistrarMeta {
   saved?: boolean;
   accountId?: string;
   accountLabel?: string;
+  /** Whether this account's API traffic goes through the fixed IP proxy. */
+  proxy?: boolean;
+  /** Public outgoing IP for this account; never includes proxy credentials. */
+  proxyEgressIp?: string;
   name: RegistrarName;
   displayName: string;
   supportsSandbox: boolean;
@@ -253,14 +281,17 @@ export interface McpClient {
  *  - `api`         a direct, name-accurate quote from the registrar (captures
  *                  premium renewals). Only registrars that price a *specific*
  *                  owned domain qualify.
+ *  - `tld`         the account's own annual rate for this TLD, captured on Sync
+ *                  — it reflects whatever discount that account holds (e.g. a
+ *                  GoDaddy Discount Domain Club membership).
  *  - `base`        the standard TLD rate from the base pricing database — the
  *                  fill for every domain we can't quote per-name. May understate
  *                  premium names.
- *  - `manual`      a price the user entered by hand.
- *  - `unavailable` no price: nothing in the API, the base database, or a manual
- *                  override covers this domain yet.
+ *  - `manual`      a price the user entered by hand for one domain.
+ *  - `unavailable` no price: nothing in the API, a TLD rate, the base database,
+ *                  or a manual override covers this domain yet.
  */
-export type PriceSource = 'api' | 'base' | 'manual' | 'unavailable';
+export type PriceSource = 'api' | 'tld' | 'base' | 'manual' | 'unavailable';
 
 /** A domain's annual renewal price (USD), with provenance. */
 export interface RenewalPricing {
@@ -330,7 +361,14 @@ export type DomainOpStatus =
   /** Still rate-limited after the client's own retries. */
   | 'rate-limited'
   /** Aborted via the caller's signal. */
-  | 'cancelled';
+  | 'cancelled'
+  /**
+   * The request may have reached the registrar (it timed out, the connection
+   * dropped, or the registrar answered 5xx) and re-reading the domain couldn't
+   * settle whether it was applied. Never re-sent automatically: `message` says
+   * to check the domain first.
+   */
+  | 'unknown';
 
 export interface DomainOpResult {
   target: DomainTarget;
@@ -453,12 +491,14 @@ export const FOLDER_COLORS: FolderColor[] = [
 ];
 
 /**
- * Reserved id for the built-in "Hidden" folder. Assigning a domain to it hides
- * the domain from the table by default; it's surfaced again by selecting Hidden
- * in the Folder filter. Not a real folder — it isn't stored in the folders list
- * and has no color — but it's a valid assignment target.
+ * Reserved id for the built-in "Archive" folder. Assigning a domain to it
+ * archives the domain, dropping it from the table by default; it's surfaced
+ * again by selecting Archive in the Folder filter. Not a real folder — it isn't
+ * stored in the folders list and has no color — but it's a valid assignment
+ * target. The stored value was historically `'__hidden__'`; the folders store
+ * migrates that legacy value to this one on load.
  */
-export const HIDDEN_FOLDER_ID = '__hidden__';
+export const ARCHIVE_FOLDER_ID = '__archive__';
 
 /**
  * Future per-folder configuration that cascades to the folder's domains. Kept
@@ -541,7 +581,8 @@ export interface DombotApi {
   clearAllCaches: () => Promise<void>;
 
   /** Renewal prices for the whole cached portfolio, keyed `accountId:domain`.
-   *  Computed locally (base rates + Sync-captured quotes + manual overrides). */
+   *  Computed locally (base rates + TLD rates + Sync-captured quotes +
+   *  manual overrides). */
   getPortfolioPricing: () => Promise<Record<string, RenewalPricing>>;
   /** Set (or clear, with null) a manual annual renewal price for a domain. */
   setManualPrice: (
@@ -552,7 +593,6 @@ export interface DombotApi {
   ) => Promise<void>;
 
   // Registrars
-  listDynadotDomains: () => Promise<Domain[]>;
   /**
    * Aggregate portfolio across every configured registrar. With `refresh` false,
    * the cached portfolio is returned (no network); otherwise it re-syncs every
@@ -617,6 +657,8 @@ export interface DombotApi {
     name: RegistrarName,
     creds: CredentialValues,
     label?: string,
+    /** Route the new account through the fixed IP proxy (and test it that way). */
+    useProxy?: boolean,
   ) => Promise<RegistrarAccount>;
   createRegistrarAccount: (
     name: RegistrarName,
@@ -637,7 +679,21 @@ export interface DombotApi {
     name: RegistrarName,
     creds: CredentialValues,
     accountId?: string,
+    /** Turn the fixed IP proxy on or off for this account; omitted = unchanged. */
+    useProxy?: boolean,
   ) => Promise<void>;
+  getProxySettings: () => Promise<ProxySettings>;
+  saveProxySettings: (proxy: {
+    url: string;
+    egressIp: string;
+  }) => Promise<void>;
+  /** Rejects while any account still has the proxy switched on. */
+  removeProxySettings: () => Promise<void>;
+  /** One request through the given proxy (saved or not), reporting the address seen. */
+  testProxySettings: (proxy: {
+    url: string;
+    egressIp: string;
+  }) => Promise<ProxyTestResult>;
   /** Enable/disable a registrar (keeps credentials). Disabling keeps its cached
    *  data and stops syncs; enabling re-syncs it. Returns the updated portfolio. */
   setRegistrarEnabled: (

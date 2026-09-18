@@ -1,15 +1,16 @@
 import { portfolioEditor } from '../lib/publication-client';
-import { isWeb } from '../lib/platform';
+import { supportsPublishing } from '../lib/platform';
+import { accountNumber, accountTitle } from '../../shared/account-label';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { domainKey } from '../../shared/account-key';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   Building2,
   CalendarClock,
-  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +26,7 @@ import {
   Plug,
   Search,
   Server,
+  SlidersHorizontal,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -35,7 +37,7 @@ import type {
   RenewalPricing,
 } from '../../shared/ipc';
 import { toast } from 'sonner';
-import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
+import { ARCHIVE_FOLDER_ID } from '../../shared/ipc';
 import { useAppStore } from '../store/app';
 import { csvFilename, domainsToCsv } from '../lib/csv';
 import { nameserverGroup } from '../lib/nameservers';
@@ -46,6 +48,8 @@ import {
   useOpUnsupportedReason,
 } from '../lib/domain-ops';
 import { FolderIcon } from '../components/icons/FolderIcon';
+import { FolderOffIcon } from '../components/icons/FolderOffIcon';
+import { FolderMenuItems } from '../components/domains/FolderMenuItems';
 import { FlagToggle } from '../components/domains/FlagToggle';
 import { RowActionsMenu } from '../components/domains/RowActionsMenu';
 import { NameserversCell } from '../components/domains/NameserversCell';
@@ -68,8 +72,6 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -120,6 +122,9 @@ interface Column {
   detail?: boolean;
   /** Narrow column (trims header padding) — for the yes/no flag columns. */
   compact?: boolean;
+  /** Dropped below sm to trim the table on phones (still there when scrolled on
+   * desktop). Applied to both the header and the body cell. */
+  hideOnMobile?: boolean;
 }
 
 /** Everything after the first dot, e.g. "example.co.uk" → "co.uk". */
@@ -168,8 +173,8 @@ function CellSkeleton({ align }: { align?: 'left' | 'right' | 'center' }) {
 
 /** Sort sentinel for the injected Folder column (folders aren't a Domain field). */
 const FOLDER = 'folder';
-/** Filter value matching domains with no folder assigned. */
-const UNASSIGNED = '__unassigned__';
+/** Filter value matching domains with no folder assigned (the "None" bucket). */
+const NONE = '__none__';
 
 const RENEWAL = 'renewal';
 
@@ -177,6 +182,14 @@ const RENEWAL = 'renewal';
 function fmtUsd(n: number): string {
   return `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
+
+const SOURCE_LABEL: Record<RenewalPricing['source'], string> = {
+  api: 'registrar quote',
+  tld: 'account rate',
+  base: 'built-in list price',
+  manual: 'manual',
+  unavailable: 'unknown',
+};
 
 /** Annual renewal-price cell. Shows the figure with a source tooltip, a skeleton
  *  while pricing is still loading, or "—" when unavailable. */
@@ -194,7 +207,7 @@ export function RenewalCell({
   return (
     <span
       className="font-medium tabular-nums"
-      title={`Renewal source: ${info.source}`}
+      title={`Renewal source: ${SOURCE_LABEL[info.source]}`}
     >
       {fmtUsd(info.renewal)}
     </span>
@@ -203,7 +216,7 @@ export function RenewalCell({
 
 /**
  * The Folder cell: a small colored folder icon plus the folder name when the
- * domain is in a folder, a muted "Hidden" (eye-off) for the built-in hidden
+ * domain is in a folder, a muted "Archive" (box) for the built-in archive
  * folder, or a muted dash when unassigned. Display only — assigning is done from
  * the row menu.
  */
@@ -222,9 +235,9 @@ export function FolderCell({
   folderId: string | undefined;
   onAssign: (folderId: string | null) => void;
 }) {
-  const hidden = folderId === HIDDEN_FOLDER_ID;
+  const archived = folderId === ARCHIVE_FOLDER_ID;
   const current =
-    folderId && !hidden ? folders.find((f) => f.id === folderId) : undefined;
+    folderId && !archived ? folders.find((f) => f.id === folderId) : undefined;
 
   return (
     <DropdownMenu>
@@ -232,12 +245,12 @@ export function FolderCell({
         <button
           type="button"
           title="Assign folder"
-          className="group flex w-full cursor-pointer items-center gap-1.5 px-3 py-3 text-left text-sm text-muted-foreground/40 transition-colors hover:text-foreground"
+          className="group flex w-full cursor-pointer items-center gap-1.5 px-3 py-3 text-left text-sm text-muted-foreground/40 transition-colors hover:text-foreground max-sm:px-2 max-sm:py-1.5 max-sm:text-xs"
         >
-          {hidden ? (
+          {archived ? (
             <span className="inline-flex h-4 items-center gap-2 leading-none text-muted-foreground">
-              <EyeOff className="size-4 shrink-0" />
-              Hidden
+              <Archive className="size-4 shrink-0" />
+              Archive
               <ChevronDown
                 className="ml-auto size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                 aria-hidden
@@ -277,8 +290,8 @@ export function FolderCell({
 
 /**
  * The folder-assignment menu, opened directly from the Folder cell. A flat list
- * of the user's folders followed by "Hidden" (the built-in folder that drops
- * the domain from the table) and "None" (clear).
+ * of the user's folders followed by "None" (clear) and "Archive" (the built-in
+ * folder that drops the domain from the table).
  */
 function FolderMenuContent({
   folders,
@@ -294,43 +307,11 @@ function FolderMenuContent({
       align="start"
       className="max-h-[320px] w-52 overflow-y-auto"
     >
-      {folders.map((f) => (
-        <DropdownMenuItem
-          key={f.id}
-          className="gap-2.5"
-          onSelect={() => onAssign(f.id)}
-        >
-          <FolderIcon
-            className={cn('size-4 shrink-0', folderColorStyle(f.color).text)}
-            aria-hidden
-          />
-          <span className="flex-1 truncate">{f.name}</span>
-          {f.id === folderId && (
-            <Check className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-        </DropdownMenuItem>
-      ))}
-      {folders.length > 0 && <DropdownMenuSeparator />}
-      {/* Hidden is a built-in folder: assigning to it drops the domain from the
-          table until "Hidden" is picked in the Folder filter. */}
-      <DropdownMenuItem
-        className="gap-2.5"
-        onSelect={() => onAssign(HIDDEN_FOLDER_ID)}
-      >
-        <EyeOff className="size-4 shrink-0" aria-hidden />
-        <span className="flex-1">Hidden</span>
-        {folderId === HIDDEN_FOLDER_ID && (
-          <Check className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-      </DropdownMenuItem>
-      <DropdownMenuItem className="gap-2.5" onSelect={() => onAssign(null)}>
-        {/* Spacer keeps "None" aligned with the icon'd rows. */}
-        <span className="size-4 shrink-0" aria-hidden />
-        <span className="flex-1">None</span>
-        {folderId === undefined && (
-          <Check className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-      </DropdownMenuItem>
+      <FolderMenuItems
+        folders={folders}
+        selected={folderId ?? null}
+        onAssign={onAssign}
+      />
     </DropdownMenuContent>
   );
 }
@@ -377,7 +358,7 @@ export function LifecycleBadge({ status }: { status: string }) {
   return (
     <Badge
       className={cn(
-        'border-transparent px-1.5 py-0 text-[11px]',
+        'border-transparent px-1.5 py-0 text-[11px] max-sm:px-1 max-sm:text-[10px]',
         LIFECYCLE_TONE[flag.tone],
       )}
       title={`Registry status: ${status}`}
@@ -432,17 +413,13 @@ const COLUMNS: Column[] = [
     label: 'Domain',
     render: (d) => (
       <span className="inline-flex items-center gap-2">
-        <span className="font-mono">{d.domainName}</span>
+        {/* One step up from the reduced mobile body size — the domain is the
+            row's primary field. Desktop inherits the table's text-sm. */}
+        <span className="font-mono max-sm:text-[13px]">{d.domainName}</span>
         <LifecycleBadge status={d.status} />
       </span>
     ),
     sortValue: (d) => d.domainName.toLowerCase(),
-  },
-  {
-    key: 'accountLabel',
-    label: 'Account',
-    render: (d) => d.accountLabel ?? 'Default',
-    sortValue: (d) => (d.accountLabel ?? 'Default').toLowerCase(),
   },
   {
     key: 'registrar',
@@ -453,6 +430,7 @@ const COLUMNS: Column[] = [
   {
     key: 'createdDate',
     label: 'Created',
+    hideOnMobile: true,
     render: (d) => (
       <span className="font-mono text-muted-foreground">
         {fmtDate(d.createdDate)}
@@ -476,7 +454,9 @@ const COLUMNS: Column[] = [
         >
           <span>{fmtDate(d.expirationDate)}</span>
           {days !== null && (
-            <span className="text-xs opacity-60">{relativeDays(days)}</span>
+            <span className="text-xs opacity-60 max-sm:text-[11px]">
+              {relativeDays(days)}
+            </span>
           )}
         </span>
       );
@@ -497,6 +477,7 @@ const COLUMNS: Column[] = [
     align: 'center',
     compact: true,
     detail: true,
+    hideOnMobile: true,
     render: (d) => (
       <FlagToggle
         domain={d}
@@ -628,27 +609,47 @@ export default function Domains({
     () => multiAccountRegistrars(registrars, portfolio),
     [registrars, portfolio],
   );
-  const showAccountDetails = multipleAccounts.size > 0;
-  const columns = useMemo(
-    () =>
-      COLUMNS.filter((c) => c.key !== 'accountLabel' || showAccountDetails).map(
-        (c) =>
-          c.key === 'accountLabel'
-            ? {
-                ...c,
-                render: (d: Domain) =>
-                  multipleAccounts.has(d.registrar)
-                    ? (d.accountLabel ?? 'Default')
-                    : '—',
-                sortValue: (d: Domain) =>
-                  multipleAccounts.has(d.registrar)
-                    ? (d.accountLabel ?? 'Default').toLowerCase()
-                    : '',
-              }
-            : c,
-      ),
-    [showAccountDetails, multipleAccounts],
-  );
+  // The Registrar column carries the account too: a nickname always shows in
+  // parens; an unnamed account shows its number only when the registrar has
+  // siblings to tell apart. `null` from accountNumber() means a real nickname.
+  const columns = useMemo(() => {
+    const paren = (label: string | undefined, registrar: string) => {
+      const n = accountNumber(label);
+      if (n === null) return label ?? '';
+      return multipleAccounts.has(registrar) ? `#${n}` : '';
+    };
+    return COLUMNS.map((c) =>
+      c.key === 'registrar'
+        ? {
+            ...c,
+            render: (d: Domain, labels: RegistrarLabels) => {
+              const suffix = paren(d.accountLabel, d.registrar);
+              return (
+                <span>
+                  {registrarLabel(d.registrar, labels)}
+                  {suffix && (
+                    <span className="ml-1 text-xs text-muted-foreground/70">
+                      ({suffix})
+                    </span>
+                  )}
+                </span>
+              );
+            },
+            sortValue: (d: Domain, labels: RegistrarLabels) => {
+              const name = registrarLabel(d.registrar, labels).toLowerCase();
+              const n = accountNumber(d.accountLabel);
+              const suffix =
+                n === null
+                  ? (d.accountLabel ?? '').toLowerCase()
+                  : multipleAccounts.has(d.registrar)
+                    ? String(n).padStart(4, '0')
+                    : '';
+              return suffix ? `${name} ${suffix}` : name;
+            },
+          }
+        : c,
+    );
+  }, [multipleAccounts]);
 
   const navigate = useNavigate();
   // Pricing is computed locally in main and arrives with the portfolio; the only
@@ -685,19 +686,11 @@ export default function Domains({
   const [search, setSearch] = useState('');
   // Multi-select filters; an empty array means "no filter" (show all).
   const [tld, setTld] = useState<string[]>([]);
+  // One "Registrar" filter, but its options are individual accounts (keyed by
+  // account id), so a registrar's accounts can be picked apart or selected
+  // together. Old saved values were registrar names; those simply match nothing
+  // now, which reads as "no filter".
   const [registrar, setRegistrar] = useState<string[]>([]);
-  const [account, setAccount] = useState<string[]>([]);
-  const accountOptions = (registrars ?? [])
-    .filter((r) => r.configured && r.enabled)
-    .map((r) => ({
-      value: r.accountId ?? r.name,
-      label: multipleAccounts.has(r.name)
-        ? `${r.displayName} · ${r.accountLabel ?? 'Default'}`
-        : r.displayName,
-      count: portfolio.filter(
-        (d) => (d.accountId ?? d.registrar) === (r.accountId ?? r.name),
-      ).length,
-    }));
   const [expiry, setExpiry] = useState<string[]>([]);
   const [ns, setNs] = useState<string[]>([]);
   const [folder, setFolder] = useState<string[]>([]);
@@ -705,6 +698,9 @@ export default function Domains({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(0);
+  // Phones only: the filter chips collapse behind a "Filters" toggle (they're
+  // always shown at sm+). Search and Reset stay visible.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // The bulk dialog: an op to configure for the current selection, or a
   // running/finished job to view (the bar's progress pill).
@@ -759,16 +755,31 @@ export default function Domains({
       count,
     })).sort((a, b) => a.value.localeCompare(b.value));
   }, [portfolio]);
+  // One option per account (keyed by account id), so accounts of the same
+  // registrar can be filtered apart or, by multi-selecting, together. Labelled
+  // "Registrar · nickname" / "Registrar #2" / "Registrar".
   const registrarOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const d of portfolio)
-      counts.set(d.registrar, (counts.get(d.registrar) ?? 0) + 1);
-    return Array.from(counts, ([value, count]) => ({
+    const acc = new Map<string, { label: string; count: number }>();
+    for (const d of portfolio) {
+      const value = d.accountId ?? d.registrar;
+      const existing = acc.get(value);
+      if (existing) existing.count += 1;
+      else
+        acc.set(value, {
+          label: accountTitle(
+            registrarLabel(d.registrar, portfolioRegistrarLabels),
+            d.accountLabel,
+            multipleAccounts.has(d.registrar),
+          ),
+          count: 1,
+        });
+    }
+    return Array.from(acc, ([value, v]) => ({
       value,
-      label: registrarLabel(value, portfolioRegistrarLabels),
-      count,
+      label: v.label,
+      count: v.count,
     })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [portfolio, portfolioRegistrarLabels]);
+  }, [portfolio, portfolioRegistrarLabels, multipleAccounts]);
   // Expiration windows are cumulative, so their counts intentionally overlap
   // (a domain due in 20 days matches the 30-, 60-, and 90-day options).
   const expiryOptions = useMemo(
@@ -816,33 +827,54 @@ export default function Domains({
   }, [merged]);
 
   // Folder filter options: one per folder (with its assigned-domain count over
-  // the whole portfolio), an "Unassigned" bucket, and an always-present "Hidden"
-  // bucket for the built-in hidden folder. A dangling assignment (its folder was
-  // deleted) counts as unassigned. `hiddenCount` also lets the Folder filter show
-  // when the user has hidden domains but no folders of their own.
-  const { folderOptions, hiddenCount } = useMemo(() => {
+  // the whole portfolio), a "None" bucket (no folder), and an always-present
+  // "Archive" bucket for the built-in archive folder. A dangling assignment (its
+  // folder was deleted) counts as None. `archivedCount` also lets the Folder
+  // filter show when the user has archived domains but no folders of their own.
+  const { folderOptions, archivedCount } = useMemo(() => {
     const counts: Record<string, number> = {};
-    let unassigned = 0;
-    let hidden = 0;
+    let noFolder = 0;
+    let archived = 0;
     for (const d of portfolio) {
       const id = folderAssignments[domainKey(d)];
-      if (id === HIDDEN_FOLDER_ID) {
-        hidden += 1;
+      if (id === ARCHIVE_FOLDER_ID) {
+        archived += 1;
       } else if (id && folders.some((f) => f.id === id)) {
         counts[id] = (counts[id] ?? 0) + 1;
       } else {
-        unassigned += 1;
+        noFolder += 1;
       }
     }
     const opts = folders.map((f) => ({
       value: f.id,
       label: f.name,
       count: counts[f.id] ?? 0,
+      icon: (
+        <FolderIcon
+          className={cn('size-4 shrink-0', folderColorStyle(f.color).text)}
+          aria-hidden
+        />
+      ),
     }));
-    opts.push({ value: UNASSIGNED, label: 'Unassigned', count: unassigned });
-    // Always offer Hidden so it's a discoverable way to reveal hidden domains.
-    opts.push({ value: HIDDEN_FOLDER_ID, label: 'Hidden', count: hidden });
-    return { folderOptions: opts, hiddenCount: hidden };
+    opts.push({
+      value: NONE,
+      label: 'None',
+      count: noFolder,
+      icon: (
+        <FolderOffIcon
+          className="size-4 shrink-0 text-muted-foreground/50"
+          aria-hidden
+        />
+      ),
+    });
+    // Always offer Archive so it's a discoverable way to reveal archived domains.
+    opts.push({
+      value: ARCHIVE_FOLDER_ID,
+      label: 'Archive',
+      count: archived,
+      icon: <Archive className="size-4 shrink-0" aria-hidden />,
+    });
+    return { folderOptions: opts, archivedCount: archived };
   }, [portfolio, folders, folderAssignments]);
 
   // Validate the price inputs, then derive the bounds actually applied. A field
@@ -853,16 +885,24 @@ export default function Domains({
     search.trim() !== '' ||
     tld.length > 0 ||
     registrar.length > 0 ||
-    (showAccountDetails && account.length > 0) ||
     expiry.length > 0 ||
     ns.length > 0 ||
     folder.length > 0;
+
+  // How many filter groups are narrowing the list (search excluded — it has its
+  // own always-visible field). Drives the count badge on the mobile "Filters"
+  // toggle.
+  const activeFilterGroups =
+    (registrar.length > 0 ? 1 : 0) +
+    (tld.length > 0 ? 1 : 0) +
+    (ns.length > 0 ? 1 : 0) +
+    (expiry.length > 0 ? 1 : 0) +
+    (folder.length > 0 ? 1 : 0);
 
   function resetFilters() {
     setSearch('');
     setTld([]);
     setRegistrar([]);
-    setAccount([]);
     setExpiry([]);
     setNs([]);
     setFolder([]);
@@ -873,15 +913,13 @@ export default function Domains({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = merged.filter((d) => {
-      if (
-        showAccountDetails &&
-        account.length &&
-        !account.includes(d.accountId ?? d.registrar)
-      )
-        return false;
       if (q && !d.domainName.toLowerCase().includes(q)) return false;
       if (tld.length > 0 && !tld.includes(tldOf(d.domainName))) return false;
-      if (registrar.length > 0 && !registrar.includes(d.registrar))
+      // The "Registrar" filter picks individual accounts (by account id).
+      if (
+        registrar.length > 0 &&
+        !registrar.includes(d.accountId ?? d.registrar)
+      )
         return false;
       // Expiration: keep a domain matching ANY selected window ("Expired" =
       // past-due; a numeric window = within that many upcoming days).
@@ -895,20 +933,20 @@ export default function Domains({
         if (!keys || !ns.some((k) => keys.has(k))) return false;
       }
       // Folder: resolve each domain to a bucket — a real folder id, the built-in
-      // Hidden id, or "Unassigned" (no folder, or a dangling assignment). With a
+      // Archive id, or "None" (no folder, or a dangling assignment). With a
       // folder filter active, keep only domains whose bucket is selected. With no
-      // folder filter, hide the Hidden bucket (that's the whole point of hiding).
+      // folder filter, drop the Archive bucket (that's the whole point of it).
       {
         const id = folderAssignments[domainKey(d)];
         const bucket =
-          id === HIDDEN_FOLDER_ID
-            ? HIDDEN_FOLDER_ID
+          id === ARCHIVE_FOLDER_ID
+            ? ARCHIVE_FOLDER_ID
             : id && folders.some((f) => f.id === id)
               ? id
-              : UNASSIGNED;
+              : NONE;
         if (folder.length > 0) {
           if (!folder.includes(bucket)) return false;
-        } else if (bucket === HIDDEN_FOLDER_ID) {
+        } else if (bucket === ARCHIVE_FOLDER_ID) {
           return false;
         }
       }
@@ -944,12 +982,10 @@ export default function Domains({
   }, [
     merged,
     columns,
-    showAccountDetails,
     portfolioRegistrarLabels,
     search,
     tld,
     registrar,
-    account,
     expiry,
     ns,
     nsKeysByDomain,
@@ -998,8 +1034,8 @@ export default function Domains({
     const keys = selectedDomains.map((d) => domainKey(d));
     void Promise.all(keys.map((k) => assignFolder(k, folderId))).then(() =>
       toast.success(
-        folderId === HIDDEN_FOLDER_ID
-          ? `Hid ${keys.length} domain${keys.length === 1 ? '' : 's'}`
+        folderId === ARCHIVE_FOLDER_ID
+          ? `Archived ${keys.length} domain${keys.length === 1 ? '' : 's'}`
           : folderId
             ? `Moved ${keys.length} domain${keys.length === 1 ? '' : 's'} to ${
                 folders.find((f) => f.id === folderId)?.name ?? 'folder'
@@ -1082,7 +1118,7 @@ export default function Domains({
     <div className="mx-auto flex max-w-[1400px] flex-col gap-[13px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[32px] font-bold">Domains</h1>
+          <h1 className="text-2xl font-bold sm:text-[32px]">Domains</h1>
           <p className="-mt-0.5 text-sm text-muted-foreground">
             {/* Always a count — "0 domains across 0 registrars" before a load or
               when nothing is configured, never a call-to-action sentence. */}
@@ -1091,7 +1127,7 @@ export default function Domains({
             }`}
           </p>
         </div>
-        {isWeb() && !hidePublication && (
+        {supportsPublishing() && !hidePublication && (
           <Button
             variant="outline"
             onClick={() => navigate('/public-portfolio')}
@@ -1114,7 +1150,7 @@ export default function Domains({
           <TriangleAlert />
           <AlertTitle>
             {portfolioErrors.length}{' '}
-            {showAccountDetails ? 'account' : 'registrar'}
+            {multipleAccounts.size > 0 ? 'account' : 'registrar'}
             {portfolioErrors.length === 1 ? '' : 's'} failed to load
           </AlertTitle>
           <AlertDescription>
@@ -1122,11 +1158,11 @@ export default function Domains({
               {portfolioErrors.map((e) => (
                 <li key={e.accountId ?? e.registrar}>
                   <span className="font-medium text-foreground">
-                    {registrarLabel(e.registrar, portfolioRegistrarLabels)}
-                    {multipleAccounts.has(e.registrar) ? ' · ' : ''}
-                    {multipleAccounts.has(e.registrar)
-                      ? (e.accountLabel ?? 'Default')
-                      : ''}
+                    {accountTitle(
+                      registrarLabel(e.registrar, portfolioRegistrarLabels),
+                      e.accountLabel,
+                      multipleAccounts.has(e.registrar),
+                    )}
                   </span>
                   : {e.message}
                 </li>
@@ -1144,8 +1180,8 @@ export default function Domains({
         {/* Toolbar: search and filters flow inline and wrap together as equal
               items. Extra top margin separates it from the title/refresh row
               above. */}
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[140px] flex-1">
+        <div className="mt-1 flex flex-wrap items-center gap-3 sm:mt-3">
+          <div className="relative min-w-[140px] flex-1 max-sm:basis-full">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
@@ -1159,82 +1195,105 @@ export default function Domains({
             />
           </div>
 
-          <MultiSelectFilter
-            label="Registrar"
-            icon={Building2}
-            options={registrarOptions}
-            selected={registrar}
-            onChange={(next) => {
-              setRegistrar(next);
-              setPage(0);
-            }}
-          />
-          {showAccountDetails && (
+          {/* Phones only: a toggle that collapses the filter chips (below) so the
+              toolbar doesn't wrap onto several lines. At sm+ the chips are always
+              shown and this is hidden. */}
+          <Button
+            variant="outline"
+            onClick={() => setFiltersOpen((o) => !o)}
+            aria-expanded={filtersOpen}
+            className="gap-2 sm:hidden"
+          >
+            <SlidersHorizontal className="size-4 text-muted-foreground" />
+            Filters
+            {activeFilterGroups > 0 && (
+              <Badge className="bg-primary px-1.5 py-0 text-xs tabular-nums text-primary-foreground">
+                {activeFilterGroups}
+              </Badge>
+            )}
+            <ChevronDown
+              className={cn(
+                'size-4 text-muted-foreground transition-transform',
+                filtersOpen && 'rotate-180',
+              )}
+            />
+          </Button>
+
+          {/* The filter chips. On phones this is a collapsible full-width row
+              (shown only when filtersOpen); at sm+ `sm:contents` dissolves the
+              wrapper so the chips flow inline in the toolbar exactly as before. */}
+          <div
+            className={cn(
+              'flex-wrap items-center gap-3 max-sm:basis-full sm:contents',
+              filtersOpen ? 'flex' : 'hidden',
+            )}
+          >
             <MultiSelectFilter
-              label="Account"
+              label="Registrar"
               icon={Building2}
-              options={accountOptions}
-              selected={account}
+              options={registrarOptions}
+              selected={registrar}
               onChange={(next) => {
-                setAccount(next);
+                setRegistrar(next);
                 setPage(0);
               }}
             />
-          )}
-          <MultiSelectFilter
-            label="TLD"
-            icon={Globe}
-            options={tldOptions}
-            selected={tld}
-            onChange={(next) => {
-              setTld(next);
-              setPage(0);
-            }}
-          />
-          <MultiSelectFilter
-            label="Nameservers"
-            icon={Server}
-            options={nsGroups}
-            selected={ns}
-            onChange={(next) => {
-              setNs(next);
-              setPage(0);
-            }}
-          />
-          <MultiSelectFilter
-            label="Expiration"
-            icon={CalendarClock}
-            options={expiryOptions}
-            selected={expiry}
-            onChange={(next) => {
-              setExpiry(next);
-              setPage(0);
-            }}
-          />
-          {/* Offer the Folder filter once there's anything to filter by —
-                  a folder of the user's own, or hidden domains to reveal. */}
-          {(folders.length > 0 || hiddenCount > 0) && (
             <MultiSelectFilter
-              label="Folder"
-              icon={FolderIcon}
-              options={folderOptions}
-              selected={folder}
+              label="TLD"
+              icon={Globe}
+              options={tldOptions}
+              selected={tld}
               onChange={(next) => {
-                setFolder(next);
+                setTld(next);
                 setPage(0);
               }}
             />
-          )}
+            <MultiSelectFilter
+              label="DNS"
+              icon={Server}
+              options={nsGroups}
+              selected={ns}
+              onChange={(next) => {
+                setNs(next);
+                setPage(0);
+              }}
+            />
+            <MultiSelectFilter
+              label="Expires"
+              icon={CalendarClock}
+              options={expiryOptions}
+              selected={expiry}
+              onChange={(next) => {
+                setExpiry(next);
+                setPage(0);
+              }}
+            />
+            {/* Offer the Folder filter once there's anything to filter by —
+                    a folder of the user's own, or archived domains to reveal. */}
+            {(folders.length > 0 || archivedCount > 0) && (
+              <MultiSelectFilter
+                label="Folder"
+                icon={FolderIcon}
+                options={folderOptions}
+                selected={folder}
+                onChange={(next) => {
+                  setFolder(next);
+                  setPage(0);
+                }}
+              />
+            )}
+          </div>
 
           {/* Reset button styled like the filters (no chevron); faded/
-                  disabled when nothing is active. Trialling this alongside the
-                  green header link. */}
+                  disabled when nothing is active. On phones it stays beside the
+                  Filters toggle (sm:order-last pins it after the chips on
+                  desktop, its original spot). */}
           <Button
             variant="outline"
             onClick={resetFilters}
             disabled={!hasActiveFilters}
             className={cn(
-              'gap-2 pr-[14px]! pl-[8px]!',
+              'gap-2 pr-[14px]! pl-[8px]! sm:order-last',
               hasActiveFilters && 'border-[#4f9d6b] dark:border-[#4f9d6b]',
             )}
           >
@@ -1250,7 +1309,7 @@ export default function Domains({
           {exportNote && (
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 text-sm',
+                'inline-flex items-center gap-1.5 text-sm sm:order-last',
                 exportNote.error
                   ? 'text-destructive'
                   : 'text-[#31613b] dark:text-[#7ac28d]',
@@ -1269,7 +1328,7 @@ export default function Domains({
           domains={selectedDomains}
           addingToPortfolio={addingToPortfolio}
           onAddToPortfolio={
-            isWeb() && !hidePublication
+            supportsPublishing() && !hidePublication
               ? () => {
                   setAddingToPortfolio(true);
                   void portfolioEditor
@@ -1300,8 +1359,10 @@ export default function Domains({
         />
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-lg border [&_td]:border-x [&_td]:border-x-border/50 [&_th]:border-x [&_th]:border-x-border/50">
-          <Table>
+        <div className="overflow-x-auto rounded-lg border [&_td]:border-x [&_td]:border-x-border/50 [&_th]:border-x [&_th]:border-x-border/50 max-sm:[&_td]:py-1">
+          {/* Slightly smaller body text on phones (headers keep their own
+              sizes); cells with an explicit size opt down separately. */}
+          <Table className="max-sm:text-xs">
             <TableHeader>
               <TableRow className="[&_th]:h-8 [&_th]:font-medium [&_th]:tracking-wider [&_th]:text-muted-foreground [&_button]:text-[10px] [&_button]:uppercase">
                 {/* Checkbox column reads as part of the Domain column: no
@@ -1335,6 +1396,7 @@ export default function Domains({
                           col.compact && 'w-0 px-1.5',
                           col.key === 'autoRenew' && 'pl-[8px]',
                           col.key === 'domainName' && 'border-l-0! pl-3',
+                          col.hideOnMobile && 'hidden sm:table-cell',
                         )}
                       >
                         <button
@@ -1352,7 +1414,7 @@ export default function Domains({
                       </TableHead>
                       {/* Folder sits right after the domain name, before Registrar. */}
                       {i === 0 && (
-                        <TableHead className="pl-3">
+                        <TableHead className="pl-3 max-sm:pl-2">
                           <button
                             type="button"
                             onClick={() => toggleSort(FOLDER)}
@@ -1432,6 +1494,7 @@ export default function Domains({
                             col.compact && 'w-0 px-1.5',
                             col.key === 'autoRenew' && 'pl-[6px]',
                             col.key === 'domainName' && 'border-l-0! pl-3',
+                            col.hideOnMobile && 'hidden sm:table-cell',
                           )}
                         >
                           {col.key === 'domainName' ? (
@@ -1525,8 +1588,9 @@ export default function Domains({
           </Table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        {/* Pagination. On phones the controls stack above the rows-per-page
+            select (flex-col-reverse), which reads better than side-by-side. */}
+        <div className="flex flex-col-reverse gap-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <span>Rows per page</span>
             <Select
@@ -1551,7 +1615,7 @@ export default function Domains({
             </Select>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 sm:justify-start">
             <span>
               {filtered.length === 0
                 ? '0 of 0'
@@ -1652,7 +1716,13 @@ function MultiSelectFilter({
   icon: Icon,
 }: {
   label: string;
-  options: { value: string; label: string; count?: number }[];
+  options: {
+    value: string;
+    label: string;
+    count?: number;
+    /** Optional leading icon shown before this option's label. */
+    icon?: React.ReactNode;
+  }[];
   selected: string[];
   onChange: (next: string[]) => void;
   /** Optional leading icon shown before the label in the trigger. */
@@ -1693,6 +1763,9 @@ function MultiSelectFilter({
             onSelect={(e) => e.preventDefault()}
             onCheckedChange={() => onChange(toggleValue(selected, o.value))}
           >
+            {o.icon && (
+              <span className="ml-0.5 mr-0.5 flex shrink-0">{o.icon}</span>
+            )}
             <span className="flex-1 truncate">{o.label}</span>
             {o.count != null && (
               <span className="ml-4 shrink-0 text-xs tabular-nums text-muted-foreground">

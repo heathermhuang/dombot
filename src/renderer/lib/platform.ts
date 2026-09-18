@@ -7,11 +7,26 @@ export type AuthMode =
   'password' | 'cloudflare-access' | 'external' | 'gateway';
 
 let web = false;
+let demo = false;
 let authMode: AuthMode | null = null;
 
 export function markWeb(mode: AuthMode): void {
   web = true;
   authMode = mode;
+}
+
+/** The demo build: a browser host (downloads, no stdio) with a few controls
+ *  disabled. Reports the plain web mode so every page keeps its normal copy;
+ *  the footer and the disabled controls branch on isDemo(). See docs/demo.md. */
+export function markDemo(): void {
+  web = true;
+  demo = true;
+  authMode = 'password';
+}
+
+/** True only in the demo build. */
+export function isDemo(): boolean {
+  return demo;
 }
 
 /** True in the self-hosted browser build; false in Electron. */
@@ -22,6 +37,15 @@ export function isWeb(): boolean {
 /** The web host's DOMBOT_AUTH mode; null on desktop. */
 export function webAuthMode(): AuthMode | null {
   return authMode;
+}
+
+/** True when the web build is served from this machine (`npm run web:dev`),
+ *  where "external" auth just means no login, not a real gate in front. */
+export function isLocalWeb(): boolean {
+  return (
+    isWeb() &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  );
 }
 
 /** Ends the web session (password mode) and returns to the login screen. */
@@ -38,4 +62,9 @@ export function hostPath(path: string): string {
   const prefix =
     window.location.pathname.match(/^\/w\/[a-f0-9-]{36}(?=\/)/)?.[0] ?? '';
   return path.startsWith('/') ? prefix + path : path;
+}
+
+/** Publication endpoints exist only on the hosted app, not the local demo. */
+export function supportsPublishing(): boolean {
+  return web && !demo;
 }

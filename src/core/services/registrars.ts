@@ -1,3 +1,4 @@
+import { protectRegistrar, redactRegistrarMessage } from './registrar-errors';
 import {
   RegistrarClient,
   createRegistrar,
@@ -5,13 +6,17 @@ import {
   registrars,
   type OperationResult,
   type RegisterDomainInput,
+  type Registrar,
   type RegistrarCredentials,
   type RegistrarName,
   type RequestOptions,
 } from '@aoxborrow/registrar-client';
 import {
   accountById,
+  assertUniqueAccountLabel,
   createAccount,
+  nextAccountLabel,
+  setAccountProxy,
   isSavedAccount,
   listAccounts,
   removeAccountRecord,
@@ -19,8 +24,13 @@ import {
 import { domainKey } from '../../shared/account-key';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
-import { createProxiedNamecheap } from './namecheap-proxy';
-import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
+import { createProxiedRegistrar } from './proxy-transport';
+import { accountProxyRoute, getProxyProfile } from './proxies';
+import {
+  DEFAULT_PROXY_ID,
+  proxySecrets,
+  type ProxyRoute,
+} from '../../shared/proxy';
 import { resolveNameservers } from '../dns';
 import { isRegistrarEnabled, setRegistrarEnabled } from './registrar-state';
 import {
@@ -33,10 +43,17 @@ import {
 } from './cache';
 import {
   resolvePricing,
+  setTldRate,
   tldOf,
   usesPerNameQuote,
   type RenewalQuote,
 } from './pricing';
+import {
+  dummyNameForTld,
+  planGoDaddyRenewalFetches,
+  renewalFromGodaddyPricing,
+  tldsNeedingPremiumFlags,
+} from './godaddy-renewal-quotes';
 import type {
   Domain,
   RegistrarAccount,
@@ -111,6 +128,34 @@ function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
 
 // Cache one client per account so we don't rebuild it on every call.
 const clients = new Map<string, RegistrarClient>();
+
+/** Builds the provider behind a client. Hosts swap it to run the app against
+ *  something other than the real registrars (the demo's in-memory one). */
+export type RegistrarFactory = (
+  name: RegistrarName,
+  credentials: RegistrarCredentials,
+  accountId: string,
+) => Registrar;
+
+let factory: RegistrarFactory | null = null;
+
+/** Installs (or with null, removes) a replacement provider factory. Existing
+ *  clients keep their provider until `resetRegistrarClients()`. */
+export function configureRegistrarFactory(next: RegistrarFactory | null): void {
+  factory = next;
+}
+
+function buildProvider(
+  name: RegistrarName,
+  credentials: RegistrarCredentials,
+  accountId: string,
+  proxy: ProxyRoute | null,
+): Registrar {
+  if (factory) return factory(name, credentials, accountId);
+  return proxy
+    ? createProxiedRegistrar(name, credentials, proxy)
+    : createRegistrar(name, credentials);
+}
 const clientCredentials = new Map<string, string>();
 const generations = new Map<string, number>();
 function invalidateAccount(id: string): void {
@@ -154,14 +199,20 @@ export function resolveAccount(
         `Account "${accountId}" does not belong to registrar "${name}".`,
       );
   } else {
-    const matches = owners.filter(
-      (a) =>
-        a.registrar === name &&
-        configured.some((c) => c.id === a.id) &&
-        isRegistrarEnabled(a.id),
+    const ownersHere = owners.filter((a) => a.registrar === name);
+    const matches = ownersHere.filter(
+      (a) => configured.some((c) => c.id === a.id) && isRegistrarEnabled(a.id),
     );
     if (matches.length === 1) account = matches[0];
-    else if (matches.length > 1 || configured.length > 1)
+    else if (matches.length > 1)
+      throw new Error(
+        'Multiple accounts match. Pass accountId to disambiguate.',
+      );
+    // A single cached owner that isn't usable (disabled or missing credentials):
+    // resolve to it so the caller gets the precise reason, not a misleading
+    // "multiple accounts match" when only one account actually holds the domain.
+    else if (ownersHere.length === 1) account = ownersHere[0];
+    else if (ownersHere.length > 1 || configured.length > 1)
       throw new Error(
         'Multiple accounts match. Pass accountId to disambiguate.',
       );
@@ -207,24 +258,46 @@ export function getRegistrarClient(
   const account = resolveAccount(name, accountId);
   requireActive(account);
   const credentials = resolveCredentials(name, account.id);
-  const proxy =
-    name === 'namecheap'
-      ? parseNamecheapProxy(getStoredCredentials(account.id))
-      : null;
-  const fingerprint = JSON.stringify({ credentials, proxy });
+  // An account may route through the fixed IP proxy. The route is folded into
+  // the fingerprint below, so editing the proxy or flipping the account's
+  // toggle rebuilds the client.
+  const proxy = accountProxyRoute(account);
+  const fingerprint =
+    JSON.stringify(credentials) +
+    (proxy ? `|proxy:${proxy.url}|${proxy.ip}` : '');
   if (clientCredentials.get(account.id) !== fingerprint)
     invalidateAccount(account.id);
   let client = clients.get(account.id);
   if (!client) {
     client = new RegistrarClient(
-      proxy
-        ? createProxiedNamecheap(credentials, proxy)
-        : createRegistrar(name, credentials),
+      protectRegistrar(
+        buildProvider(name, credentials, account.id, proxy),
+        accountSecrets(account.id, proxy),
+      ),
     );
     clients.set(account.id, client);
     clientCredentials.set(account.id, fingerprint);
   }
   return client;
+}
+
+/** Every string that must never appear in this account's diagnostics. */
+function accountSecrets(
+  accountId: string,
+  proxy?: ProxyRoute | null,
+): Record<string, string | undefined> {
+  const secrets: Record<string, string | undefined> = {
+    ...getStoredCredentials(accountId),
+  };
+  const url =
+    proxy === undefined
+      ? getProxyProfile(
+          listAccounts().find((a) => a.id === accountId)?.proxyId ??
+            DEFAULT_PROXY_ID,
+        )?.url
+      : proxy?.url;
+  proxySecrets(url).forEach((value, i) => (secrets[`proxy:${i}`] = value));
+  return secrets;
 }
 
 export function getConfiguredRegistrars(): RegistrarName[] {
@@ -254,7 +327,10 @@ function readRegistrarEntry(name: string): RegistrarPortfolioEntry | null {
   return {
     ...cached.data,
     lastError: cached.data.lastError
-      ? registrarErrorMessage(cached.data.lastError)
+      ? redactRegistrarMessage(
+          registrarErrorMessage(cached.data.lastError),
+          accountSecrets(name),
+        )
       : null,
     domains: cached.data.domains.map(reviveDomainDates),
   };
@@ -348,10 +424,7 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
   }
   if ((generations.get(accountId) ?? 0) !== generation) return;
   writeEntry('portfolio', accountId, entry);
-  // Refresh per-name renewal quotes as part of the sync. Only registrars that
-  // can price a specific owned domain, and only on premium-capable TLDs, make an
-  // API call here; every other domain resolves from the bundled base rates with
-  // no network. Quotes land in each domain's detail cache (see syncRenewalQuotes).
+  // Refresh renewal quotes as part of the sync (see syncRenewalQuotes).
   if (!entry.lastError)
     await syncRenewalQuotes(name, entry.domains, accountId, generation);
 }
@@ -374,16 +447,51 @@ async function fetchRenewalQuote(
       renewal: typeof pricing.renewal === 'number' ? pricing.renewal : null,
       currency: pricing.currency ?? 'USD',
     };
-  } catch {
+  } catch (err) {
+    console.warn(`[pricing] ${name} getPricing(${domain}) failed`, err);
     return null;
   }
 }
 
 /**
- * During a sync, fetch fresh per-name renewal quotes for the registrar's
- * premium-capable domains and merge each into that domain's detail cache entry.
- * Bounded concurrency keeps us well under any registrar's rate limit. A no-op for
- * registrars that don't price per name — those domains always take the base rate.
+ * The account's own renewal rate for one TLD, from GoDaddy's v3 availability
+ * price. Quotes a random unregistered name rather than an owned one: a taken
+ * name usually comes back with no prices at all, which would leave the TLD on
+ * the bundled list rate. Two dummies (in case one happens to be registered),
+ * then an owned name as a last resort.
+ */
+async function fetchGodaddyTldRenewal(
+  tld: string,
+  ownedSample: string,
+  accountId: string,
+): Promise<number | null> {
+  const names = [dummyNameForTld(tld), dummyNameForTld(tld), ownedSample];
+  for (const domain of names) {
+    try {
+      const pricing = await getRegistrarClient('godaddy', accountId).getPricing(
+        domain,
+      );
+      const renewal = renewalFromGodaddyPricing(pricing);
+      if (renewal != null) return renewal;
+    } catch (err) {
+      console.warn(`[pricing] GoDaddy getPricing(${domain}) failed`, err);
+    }
+  }
+  return null;
+}
+
+/**
+ * During a sync, refresh renewal quotes. Gandi/Dynadot/Name.com quote per-name
+ * on premium-capable TLDs. GoDaddy takes the v3 availability price, which is
+ * quoted for the authenticated shopper (so any account discount is included):
+ * one call per TLD to fill that account's TLD rate, plus a per-name call only
+ * for names availability marked premium.
+ *
+ * Known gap: a premium name we *own* is quoted by its real name, and GoDaddy
+ * often returns no prices for a registered name — so that quote can come back
+ * empty and the name falls back to its TLD rate, understating it. Quoting a
+ * dummy instead is not an option there; a premium price belongs to the
+ * specific name.
  */
 async function syncRenewalQuotes(
   name: RegistrarName,
@@ -391,6 +499,11 @@ async function syncRenewalQuotes(
   accountId: string,
   generation: number,
 ): Promise<void> {
+  if (name === 'godaddy') {
+    await syncGoDaddyRenewalQuotes(domains, accountId, generation);
+    return;
+  }
+
   const todo = domains.filter((d) =>
     usesPerNameQuote(name, tldOf(d.domainName)),
   );
@@ -404,15 +517,92 @@ async function syncRenewalQuotes(
       const quote = await fetchRenewalQuote(name, d.domainName, accountId);
       if ((generations.get(accountId) ?? 0) !== generation) return;
       if (!quote) continue;
-      // Merge onto any existing detail so nameservers/privacy/lock are preserved.
-      const key = detailKey(accountId, d.domainName);
-      const existing = readEntry<DetailRecord>('detail', key)?.data ?? {};
-      writeEntry('detail', key, { ...existing, renewalQuote: quote });
+      writeRenewalQuote(accountId, d.domainName, quote);
     }
   };
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, todo.length) }, worker),
   );
+}
+
+const AVAILABILITY_BATCH = 50;
+
+async function syncGoDaddyRenewalQuotes(
+  domains: Domain[],
+  accountId: string,
+  generation: number,
+): Promise<void> {
+  if (domains.length === 0) return;
+  const stillCurrent = () => (generations.get(accountId) ?? 0) === generation;
+
+  const premiumByDomain = new Map<string, boolean | undefined>();
+  const needFlags = new Set(tldsNeedingPremiumFlags(domains));
+  if (needFlags.size > 0) {
+    const client = getRegistrarClient('godaddy', accountId);
+    const names = domains
+      .filter((d) => needFlags.has(tldOf(d.domainName)))
+      .map((d) => d.domainName);
+    for (let i = 0; i < names.length; i += AVAILABILITY_BATCH) {
+      if (!stillCurrent()) return;
+      const chunk = names.slice(i, i + AVAILABILITY_BATCH);
+      try {
+        const results = await client.checkAvailability(chunk);
+        for (const r of results) {
+          premiumByDomain.set(r.domainName.toLowerCase(), r.premium);
+        }
+      } catch {
+        // Flags stay unknown — we fall back to one TLD sample.
+      }
+    }
+  }
+
+  const plan = planGoDaddyRenewalFetches(domains, premiumByDomain);
+  for (const sample of plan.tldSamples) {
+    if (!stillCurrent()) return;
+    const renewal = await fetchGodaddyTldRenewal(
+      sample.tld,
+      sample.domain,
+      accountId,
+    );
+    if (renewal != null) {
+      setTldRate('godaddy', sample.tld, renewal, accountId);
+    } else {
+      // Leave any existing rate alone and let .base fill in; a failed quote is
+      // not evidence the old rate is wrong.
+      console.warn(`[pricing] GoDaddy .${sample.tld} renewal quote failed`);
+    }
+  }
+
+  const CONCURRENCY = 4;
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < plan.premiums.length) {
+      const domain = plan.premiums[next++];
+      const quote = await fetchRenewalQuote('godaddy', domain, accountId);
+      if (!stillCurrent()) return;
+      // A priceless quote is no better than nothing: storing it would only
+      // pin an empty entry over the TLD rate on the next read.
+      if (quote?.renewal != null) writeRenewalQuote(accountId, domain, quote);
+    }
+  };
+  if (plan.premiums.length > 0) {
+    await Promise.all(
+      Array.from(
+        { length: Math.min(CONCURRENCY, plan.premiums.length) },
+        worker,
+      ),
+    );
+  }
+}
+
+function writeRenewalQuote(
+  accountId: string,
+  domain: string,
+  quote: RenewalQuote,
+): void {
+  const key = detailKey(accountId, domain);
+  const existing = readEntry<DetailRecord>('detail', key)?.data ?? {};
+  writeEntry('detail', key, { ...existing, renewalQuote: quote });
 }
 
 /**
@@ -442,9 +632,15 @@ export async function syncRegistrar(
   accountId?: string,
 ): Promise<Portfolio> {
   const account = resolveAccount(name, accountId);
-  if (isConfigured(name, account.id) && isRegistrarEnabled(account.id))
-    await syncRegistrarInto(account);
-  else clearRegistrarData(account.id);
+  if (isConfigured(name, account.id)) {
+    // A configured account keeps its cached slice even while disabled — the
+    // portfolio just hides it (see setRegistrarEnabledCached, which never
+    // clears). Only sync when it's actually enabled.
+    if (isRegistrarEnabled(account.id)) await syncRegistrarInto(account);
+  } else {
+    // Credentials are gone — drop the stale slice so it can't reappear.
+    clearRegistrarData(account.id);
+  }
   return assemblePortfolio();
 }
 
@@ -518,8 +714,9 @@ export function getCachedDetail(): Record<string, Partial<Domain>> {
 
 /**
  * Renewal pricing for every cached portfolio domain, computed from local data
- * only (manual override → the quote captured at Sync → the bundled base rate).
- * No network — backs the launch snapshot and the store's post-sync refresh.
+ * only (manual override → the quote captured at Sync → shopper TLD rate → the
+ * bundled base rate). No network — backs the launch snapshot and the store's
+ * post-sync refresh.
  */
 export function getPortfolioPricing(): Record<string, RenewalPricing> {
   const portfolio = getCachedPortfolio();
@@ -553,9 +750,10 @@ export async function getRenewalPriceLive(
   accountId?: string,
 ): Promise<RenewalPricing> {
   accountId = resolveDomainAccount(name, domain, accountId).id;
-  const quote = usesPerNameQuote(name, tldOf(domain))
-    ? ((await fetchRenewalQuote(name, domain, accountId)) ?? undefined)
-    : undefined;
+  const quote =
+    name === 'godaddy' || usesPerNameQuote(name, tldOf(domain))
+      ? ((await fetchRenewalQuote(name, domain, accountId)) ?? undefined)
+      : undefined;
   return { ...resolvePricing(name, domain, quote, accountId), accountId };
 }
 
@@ -623,9 +821,11 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
       ...catalog.find((r) => r.name === account.registrar)!,
       accountId: account.id,
       accountLabel: account.label,
-      saved:
-        isSavedAccount(account.id) ||
-        Object.keys(getStoredCredentials(account.id)).length > 0,
+      saved: isSavedAccount(account.id),
+      proxy: Boolean(account.proxyId),
+      proxyEgressIp: account.proxyId
+        ? getProxyProfile(account.proxyId)?.egressIp
+        : undefined,
       configured: isConfigured(account.registrar, account.id),
       enabled: isRegistrarEnabled(account.id),
       sync: {
@@ -646,25 +846,29 @@ export async function connectRegistrarAccount(
   name: RegistrarName,
   credentials: RegistrarCredentials,
   label?: string,
+  useProxy = false,
 ): Promise<RegistrarAccount> {
   const provider = getRegistrarCatalog().find((r) => r.name === name);
   if (!provider) throw new Error('Unknown registrar.');
   const clean: RegistrarCredentials = {};
-  const proxy = name === 'namecheap' ? parseNamecheapProxy(credentials) : null;
+  const proxy = useProxy ? requireProxy() : null;
+  // Through the proxy, its outgoing address is the Client IP Namecheap sees, so
+  // a proxy-only account needs no direct one. It is supplied when the client is
+  // built, never stored as if it were the user's own address.
+  const proxySupplies = (field: string) =>
+    Boolean(proxy) && name === 'namecheap' && field === 'clientIp';
   for (const field of provider.configFields) {
     const value = credentials[field.name]?.trim();
     if (value) clean[field.name] = value;
-    else if (field.required && !(proxy && field.name === 'clientIp'))
+    else if (field.required && !proxySupplies(field.name))
       throw new Error(`${field.label} is required.`);
-  }
-  if (proxy) {
-    clean.proxyUrl = proxy.url;
-    clean.proxyIp = proxy.ip;
   }
   if (!Object.keys(clean).length)
     throw new Error('Enter your account credentials.');
   if ((label?.trim().length ?? 0) > 100)
     throw new Error('Account label must contain at most 100 characters.');
+  // Fail on a taken nickname before spending a network round trip.
+  if (label?.trim()) assertUniqueAccountLabel(name, label);
   const assertNotDuplicate = () => {
     const duplicate = getRegistrarMetadata().find(
       (account) =>
@@ -685,8 +889,13 @@ export async function connectRegistrarAccount(
       );
   };
   assertNotDuplicate();
+  // Validate through the proxy when one is configured, so a fixed-IP account is
+  // tested over the connection it will actually use.
+  const secrets: Record<string, string | undefined> = { ...clean };
+  proxySecrets(proxy?.url).forEach((v, i) => (secrets[`proxy:${i}`] = v));
+  // (The account doesn't exist yet, so the id here is a placeholder.)
   const client = new RegistrarClient(
-    proxy ? createProxiedNamecheap(clean, proxy) : createRegistrar(name, clean),
+    protectRegistrar(buildProvider(name, clean, name, proxy), secrets),
   );
   const result = await client.testConnection();
   if (!result.success)
@@ -698,15 +907,21 @@ export async function connectRegistrarAccount(
   // publish serially, while keeping network tests outside this short queue.
   return publishConnection(name, async () => {
     assertNotDuplicate();
-    const existing = getRegistrarMetadata().filter(
-      (a) => a.name === name && a.saved,
+    return createAccount(
+      name,
+      label?.trim() || nextAccountLabel(name),
+      clean,
+      proxy ? DEFAULT_PROXY_ID : undefined,
     );
-    let number = existing.length + 1;
-    let suggested = existing.length ? `Account ${number}` : 'Main';
-    while (existing.some((a) => a.accountLabel === suggested))
-      suggested = `Account ${++number}`;
-    return createAccount(name, label?.trim() || suggested, clean);
   });
+}
+
+/** The configured proxy, for an account that is about to start using it. */
+function requireProxy(): ProxyRoute {
+  const profile = getProxyProfile();
+  if (!profile)
+    throw new Error('Set up the fixed IP proxy in Settings → Proxy first.');
+  return { url: profile.url, ip: profile.egressIp };
 }
 
 /** The saved credential values for a registrar (for pre-filling the form). */
@@ -728,8 +943,8 @@ export async function saveRegistrarCredentials(
   name: RegistrarName,
   creds: RegistrarCredentials,
   accountId?: string,
+  useProxy?: boolean,
 ): Promise<void> {
-  if (name === 'namecheap') parseNamecheapProxy(creds);
   const account = resolveAccount(name, accountId);
   const previous = getStoredCredentials(account.id);
   const sameNamecheapAccount =
@@ -738,8 +953,19 @@ export async function saveRegistrarCredentials(
     ['username', 'apiKey'].every(
       (field) => previous[field]?.trim() === creds[field]?.trim(),
     );
+  // Check the route exists before persisting anything.
+  if (useProxy && !accountProxyRoute(account)) requireProxy();
   invalidateAccount(account.id);
-  await setStoredCredentials(account.id, creds);
+  // The proxy no longer lives in the credentials; never let it back in.
+  const clean = { ...creds };
+  delete clean.proxyUrl;
+  delete clean.proxyIp;
+  await setStoredCredentials(account.id, clean);
+  if (useProxy !== undefined)
+    await setAccountProxy(
+      account.id,
+      useProxy ? (account.proxyId ?? DEFAULT_PROXY_ID) : null,
+    );
   if (!sameNamecheapAccount) clearRegistrarData(account.id);
 }
 
@@ -886,6 +1112,21 @@ export function getMergedPortfolio(): {
  * Domains table (via the `portfolioChanged` event) — reflect the new value
  * without waiting for the next full sync. No-op for entries that don't exist.
  */
+/** Overlay confirmed field values on a domain's cached rows. */
+export function patchCachedDomain(
+  name: RegistrarName,
+  domainName: string,
+  patch: Partial<Domain>,
+  accountId?: string,
+): void {
+  patchDomainInCaches(
+    name,
+    domainName,
+    patch,
+    resolveDomainAccount(name, domainName, accountId).id,
+  );
+}
+
 function patchDomainInCaches(
   name: RegistrarName,
   domainName: string,
@@ -1000,8 +1241,8 @@ export async function setNameserversCached(
  * re-fetch failure is swallowed — the renewal still succeeded and the next Sync
  * corrects the date. Returns the raw result (no throw).
  *
- * Callers should pass `{ retries: 0 }`: a timed-out renew may have gone
- * through, and a blind retry would renew twice.
+ * No retry override is needed: registrar-client never re-sends a renewal whose
+ * outcome is unknown, so a timed-out one can't be charged twice.
  */
 export async function renewDomainCached(
   name: RegistrarName,
@@ -1075,20 +1316,26 @@ async function lookupNameservers(domainName: string): Promise<string[]> {
 // Resolve a field to the value the user saved in Settings (encrypted at rest
 // by the host). Credentials come only from the GUI store now — no .env or
 // process.env fallback, so ambient vars from other tools can't shadow creds.
+// `accountId` is the storage key (a UUID, or the registrar id for the legacy
+// default account); `registrar` tells us which provider it is so the Namecheap
+// proxy override works for every account, not just the default-keyed one.
 function resolveField(
-  name: RegistrarName,
+  registrar: RegistrarName,
   accountId: string,
   field: string,
 ): string | undefined {
-  const credentials = getStoredCredentials(accountId);
-  if (name === 'namecheap' && field === 'clientIp') {
-    const proxy = parseNamecheapProxy(credentials);
+  if (registrar === 'namecheap' && field === 'clientIp') {
+    // Through the proxy, its outgoing address is the ClientIp Namecheap sees.
+    const account = listAccounts().find((a) => a.id === accountId);
+    const proxy = account ? accountProxyRoute(account) : null;
     if (proxy) return proxy.ip;
   }
-  return credentials[field];
+  return getStoredCredentials(accountId)[field];
 }
 
 function isConfigured(name: RegistrarName, accountId: string): boolean {
+  // A malformed stored proxy makes parseNamecheapProxy throw; treat that account
+  // as unconfigured rather than crashing callers that only ask "is it set up?".
   try {
     const fields = registrars[name].configFields;
     // Every required field must resolve to a value.

@@ -1,8 +1,9 @@
+import { accountDisplayLabel } from '../../shared/account-label';
 import { domainKey } from '../../shared/account-key';
 // Builds the Domains-page CSV export. Kept separate from the page component so
 // the column model and formatting are easy to read and test in isolation.
 
-import { HIDDEN_FOLDER_ID, type Domain, type Folder } from '../../shared/ipc';
+import { ARCHIVE_FOLDER_ID, type Domain, type Folder } from '../../shared/ipc';
 
 /** id → nicely capitalized registrar name, e.g. dynadot → "Dynadot". */
 type RegistrarLabels = Record<string, string>;
@@ -36,12 +37,19 @@ function daysUntil(date: Date | null): string {
 
 /** Quote a field per RFC 4180: wrap in quotes and double any embedded quote when
  *  the value contains a comma, quote, or newline. */
-function csvField(value: string): string {
+function csvField(value: string, numeric = false): string {
+  // CSV quoting does not stop Excel from evaluating a cell as a formula.
+  if (
+    !numeric &&
+    (/^[\s\uFEFF]*[=+@-]/u.test(value) || /^[\t\r\n]/.test(value))
+  )
+    value = "'" + value;
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
 interface CsvColumn {
   header: string;
+  numeric?: boolean;
   value: (
     d: Domain,
     labels: RegistrarLabels,
@@ -52,7 +60,7 @@ interface CsvColumn {
 /** The exported columns, in order. Every value is a plain string. */
 const CSV_COLUMNS: CsvColumn[] = [
   { header: 'Domain', value: (d) => d.domainName },
-  { header: 'Account', value: (d) => d.accountLabel ?? 'Default' },
+  { header: 'Account', value: (d) => accountDisplayLabel(d.accountLabel) },
   { header: 'Account ID', value: (d) => d.accountId ?? d.registrar },
   { header: 'TLD', value: (d) => tldOf(d.domainName) },
   {
@@ -66,7 +74,11 @@ const CSV_COLUMNS: CsvColumn[] = [
   { header: 'Status', value: (d) => d.status },
   { header: 'Created', value: (d) => isoDate(d.createdDate) },
   { header: 'Expires', value: (d) => isoDate(d.expirationDate) },
-  { header: 'Days Until Expiry', value: (d) => daysUntil(d.expirationDate) },
+  {
+    header: 'Days Until Expiry',
+    numeric: true,
+    value: (d) => daysUntil(d.expirationDate),
+  },
   { header: 'Renewal Date', value: (d) => isoDate(d.renewalDate) },
   { header: 'Auto Renew', value: (d) => (d.autoRenew ? 'Yes' : 'No') },
   { header: 'Locked', value: (d) => (d.locked ? 'Yes' : 'No') },
@@ -87,20 +99,20 @@ export function domainsToCsv(
   assignments: Record<string, string>,
 ): string {
   const nameById = new Map(folders.map((f) => [f.id, f.name]));
-  // The assigned folder's name, "Hidden" for the built-in hidden folder, or
+  // The assigned folder's name, "Archive" for the built-in archive folder, or
   // empty when unassigned or the folder is gone.
   const folderName = (d: Domain): string => {
     const id = assignments[domainKey(d)];
-    if (id === HIDDEN_FOLDER_ID) return 'Hidden';
+    if (id === ARCHIVE_FOLDER_ID) return 'Archive';
     return nameById.get(id ?? '') ?? '';
   };
 
   const rows: string[] = [CSV_COLUMNS.map((c) => csvField(c.header)).join(',')];
   for (const d of domains) {
     rows.push(
-      CSV_COLUMNS.map((c) => csvField(c.value(d, labels, folderName))).join(
-        ',',
-      ),
+      CSV_COLUMNS.map((c) =>
+        csvField(c.value(d, labels, folderName), c.numeric),
+      ).join(','),
     );
   }
   return rows.join('\r\n');

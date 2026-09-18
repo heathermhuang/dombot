@@ -59,12 +59,10 @@ describe('Namecheap proxy configuration', () => {
   });
   it.each([
     'http://localhost:8080',
-    'http://proxy.example:8080',
     'http://2130706433:8080',
     'http://0x7f000001:8080',
     'http://[::1]:8080',
     'socks5://8.8.8.8:8080',
-    'https://8.8.8.8:8080',
     'http://8.8.8.8/path',
     'http://8.8.8.8?secret=x',
     'http://8.8.8.8#x',

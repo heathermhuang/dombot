@@ -4,19 +4,38 @@ import {
   NavLink,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from 'react-router-dom';
-import { CalendarClock, Globe, Settings as SettingsIcon } from 'lucide-react';
+import {
+  CalendarClock,
+  Globe,
+  Menu,
+  RefreshCw,
+  Settings as SettingsIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAppStore } from './store/app';
 import Domains from './pages/Domains';
 import Renewals from './pages/Renewals';
 import Settings from './pages/Settings';
 import ApprovalModal from './components/ApprovalModal';
+import DemoBanner from './components/DemoBanner';
 import StatusBar from './components/StatusBar';
-import SyncControl from './components/SyncControl';
+import { isDemo, supportsPublishing, webAuthMode } from './lib/platform';
 import DomainWorkspace from './pages/DomainWorkspace';
-import { isWeb, webAuthMode } from './lib/platform';
+import SyncControl, {
+  SyncStatusMini,
+  useSyncState,
+} from './components/SyncControl';
 import { Toaster } from '@/components/ui/sonner';
 import { portfolioEditor, usePortfolioEditor } from './lib/publication-client';
 
@@ -88,7 +107,8 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex flex-wrap items-center gap-y-3 border-b px-4 py-2 sm:px-6">
+      {isDemo() && <DemoBanner />}
+      <header className="flex items-center border-b px-4 py-2 sm:px-6">
         <div className="flex flex-1 items-center">
           <button
             type="button"
@@ -111,7 +131,9 @@ export default function App() {
             </span>
           </button>
         </div>
-        <nav className="order-3 grid w-full grid-cols-4 gap-1 sm:order-none sm:flex sm:w-auto sm:flex-1 sm:justify-center sm:gap-3">
+        {/* Desktop: the centered, labeled nav. On phones it collapses into the
+            hamburger menu on the right (MobileNav). */}
+        <nav className="hidden flex-1 justify-center gap-4 sm:flex">
           <NavLink to="/" end className={navLinkClass}>
             <Globe className="size-[18px]" />
             Domains
@@ -120,7 +142,7 @@ export default function App() {
             <CalendarClock className="size-[18px]" />
             Renewals
           </NavLink>
-          {isWeb() && (
+          {supportsPublishing() && (
             <NavLink to="/public-page" className={navLinkClass}>
               <Globe className="size-[18px]" />
               Public page
@@ -131,32 +153,45 @@ export default function App() {
             Settings
           </NavLink>
         </nav>
-        {/* Global sync control on the right; also balances the logo so the nav
-            stays centered. */}
-        <div className="flex flex-1 justify-end">
+        {/* Right side. Phones: a compact sync status, right-justified to the
+            left of the hamburger (the Sync action lives inside the menu).
+            Desktop: the hamburger and status are hidden and the full Sync
+            control shows, balancing the logo so the centered nav stays
+            centered. */}
+        <div className="flex flex-1 items-center justify-end gap-2">
           {webAuthMode() === 'gateway' && (
             <a
               href="/account"
-              className="mr-4 self-center text-sm text-muted-foreground hover:text-foreground"
+              className="mr-4 text-sm text-muted-foreground hover:text-foreground"
             >
               Account
             </a>
           )}
-          <SyncControl />
+          <SyncStatusMini className="mr-2 sm:hidden" />
+          <MobileNav />
+          <div className="hidden sm:block">
+            <SyncControl />
+          </div>
         </div>
       </header>
 
       {/* Extra bottom padding clears the fixed status bar (h-6) so the last
           row of a page is never hidden behind it. */}
-      <main className="min-w-0 flex-1 px-4 pt-[21px] pb-16 sm:px-6">
+      <main className="min-w-0 flex-1 px-4 pt-3 pb-16 sm:px-6 sm:pt-[21px]">
         <Routes>
           <Route
             path="/"
-            element={isWeb() ? <DomainWorkspace area="domains" /> : <Domains />}
+            element={
+              supportsPublishing() ? (
+                <DomainWorkspace area="domains" />
+              ) : (
+                <Domains />
+              )
+            }
           />
           <Route path="/renewals" element={<Renewals />} />
           <Route path="/settings" element={<Settings />} />
-          {isWeb() && (
+          {supportsPublishing() && (
             <>
               <Route
                 path="/public-page"
@@ -180,5 +215,82 @@ export default function App() {
       {/* App-wide toast host. Offset above the fixed status bar (h-6). */}
       <Toaster position="bottom-right" offset={32} />
     </div>
+  );
+}
+
+const MOBILE_NAV = [
+  { to: '/', label: 'Domains', icon: Globe },
+  { to: '/public-page', label: 'Public page', icon: Globe },
+  { to: '/renewals', label: 'Renewals', icon: CalendarClock },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon },
+] as const;
+
+/**
+ * Phone-only hamburger: the three primary destinations in a dropdown, since the
+ * labeled nav doesn't fit a narrow header. Hidden at sm+, where the centered nav
+ * takes over. The active route is checked.
+ */
+function MobileNav() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isActive = (to: string) =>
+    to === '/' ? pathname === '/' : pathname.startsWith(to);
+  const {
+    sync,
+    syncing,
+    disabled: syncDisabled,
+    title: syncTitle,
+  } = useSyncState();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Open navigation menu"
+          className="sm:hidden"
+        >
+          <Menu />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        {MOBILE_NAV.filter(
+          (item) => item.to !== '/public-page' || supportsPublishing(),
+        ).map(({ to, label, icon: Icon }) => {
+          const active = isActive(to);
+          return (
+            <DropdownMenuItem
+              key={to}
+              onSelect={() => navigate(to)}
+              // The current route is marked by the green fill (matching the
+              // desktop nav pill), not a trailing check.
+              className={cn(
+                'gap-2.5',
+                active &&
+                  'bg-primary text-primary-foreground focus:bg-primary focus:text-primary-foreground [&_svg]:text-primary-foreground!',
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+              {label}
+            </DropdownMenuItem>
+          );
+        })}
+        {/* The Sync action lives here on phones (the desktop header has its own
+            button); the last-synced time/errors show beside the hamburger. */}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => sync()}
+          disabled={syncDisabled}
+          title={syncTitle}
+          className="gap-2.5"
+        >
+          <RefreshCw
+            className={cn('size-4 shrink-0', syncing && 'animate-spin')}
+          />
+          {syncing ? 'Syncing…' : 'Sync'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

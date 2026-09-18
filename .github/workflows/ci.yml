@@ -42,6 +42,8 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm test
+      - name: Security regression tests
+        run: npx vitest run --config security-review/vitest.config.mts
 
   worker:
     name: Worker build (dry run)
@@ -67,3 +69,7 @@ jobs:
       - name: Bundle the Worker without deploying
         # No account or token needed: --dry-run stops after bundling.
         run: npx wrangler deploy --dry-run --outdir dist/worker
+      - name: Build the demo
+        run: npm run demo:build
+      - name: Build the site
+        run: npm run site:build
