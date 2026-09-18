@@ -1,3 +1,4 @@
+import { accountTitle } from '../../shared/account-label';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { domainKey } from '../../shared/account-key';
 import { useMemo, useState } from 'react';
@@ -150,10 +151,11 @@ export default function Renewals() {
           ?.filter((r) => r.configured && r.enabled)
           .map((r) => (
             <option key={r.accountId ?? r.name} value={r.accountId ?? r.name}>
-              {r.displayName}
-              {multipleAccounts.has(r.name)
-                ? ` · ${r.accountLabel ?? 'Default'}`
-                : ''}
+              {accountTitle(
+                r.displayName,
+                r.accountLabel,
+                multipleAccounts.has(r.name),
+              )}
             </option>
           ))}
       </select>
@@ -329,12 +331,12 @@ function PageHeader({
   return (
     <div className="flex items-end justify-between gap-4">
       <div>
-        <h1 className="text-[32px] font-bold">Renewals</h1>
+        <h1 className="text-2xl font-bold sm:text-[32px]">Renewals</h1>
         <p className="-mt-0.5 text-sm text-muted-foreground">
           {loading
             ? `Pricing… ${summary.priced}/${summary.total}`
             : summary.priced > 0
-              ? `Forward-looking renewal costs · ${summary.priced}/${summary.total} priced · refresh with Sync on the Domains tab`
+              ? `Forward-looking renewal costs · ${summary.priced}/${summary.total} priced`
               : 'Annual renewal costs across your whole portfolio.'}
         </p>
       </div>
@@ -427,14 +429,23 @@ function MonthlyBarChart({ months }: { months: MonthBucket[] }) {
                 />
                 {m.yearly > 0 && (
                   <span
-                    className="absolute left-1/2 -translate-x-1/2 -translate-y-1 text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+                    // Hidden on phones, where 12 centered figures overlap; the
+                    // per-bar amount is still in the bar's hover title.
+                    className="absolute left-1/2 hidden -translate-x-1/2 -translate-y-1 text-[11px] whitespace-nowrap text-muted-foreground tabular-nums sm:block"
                     style={{ bottom: `${pct}%` }}
                   >
                     {usd(m.yearly)}
                   </span>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground">{m.label}</span>
+              <span className="hidden text-xs text-muted-foreground sm:block">
+                {m.label}
+              </span>
+              {/* Just the month abbreviation on phones — the full "Sep 2026"
+                  is wider than a bar and the labels would collide. */}
+              <span className="text-[10px] whitespace-nowrap text-muted-foreground sm:hidden">
+                {m.label.slice(0, 3)}
+              </span>
             </div>
           );
         })}

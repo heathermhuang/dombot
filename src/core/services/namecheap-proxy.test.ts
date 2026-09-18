@@ -5,7 +5,13 @@ import {
   createProxiedNamecheap,
   type NamecheapProxyFetch,
 } from './namecheap-proxy';
-import { namecheapCredentials } from '../../shared/namecheap-proxy';
+import { configureProxyTransport } from './proxy-transport';
+import {
+  saveProxyProfile,
+  getProxyProfile,
+  migrateLegacyProxies,
+} from './proxies';
+import { createAccount } from './accounts';
 import {
   configureStore,
   flushWrites,
@@ -43,9 +49,11 @@ beforeEach(async () => {
   resetRegistrarClients();
   transport.mockReset();
   configureNamecheapProxyTransport(transport);
+  configureProxyTransport(transport);
 });
 afterEach(() => {
   configureNamecheapProxyTransport();
+  configureProxyTransport();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -223,34 +231,31 @@ describe('Namecheap proxy command transport', () => {
 });
 
 describe('account persistence and routing', () => {
-  it('connects and isolates named Namecheap accounts with separate proxies', async () => {
+  it('migrates and isolates named Namecheap accounts with separate legacy proxies', async () => {
     transport.mockImplementation(async () => new Response(xml));
-    const first = await connectRegistrarAccount(
-      'namecheap',
-      { ...configured, clientIp: '' },
-      'Proxy account',
-    );
+    const first = await createAccount('namecheap', 'Proxy account', {
+      ...configured,
+      clientIp: '',
+    });
     const secondValues = {
       ...configured,
       apiKey: 'second-key',
       proxyUrl: 'http://other:secret@4.2.2.1:8080/',
       proxyIp: '4.2.2.2',
     };
-    const second = await connectRegistrarAccount(
+    const second = await createAccount(
       'namecheap',
-      secondValues,
       'Other account',
+      secondValues,
     );
-    expect(getStoredCredentials(first.id)).toMatchObject({
-      proxyUrl: proxy.url,
-      proxyIp: proxy.ip,
-    });
+    expect(await migrateLegacyProxies()).toBe(2);
+    expect(await migrateLegacyProxies()).toBe(0);
+    expect(getStoredCredentials(first.id)).not.toHaveProperty('proxyUrl');
     expect(
       getRegistrarMetadata()
         .filter((a) => [first.id, second.id].includes(a.accountId!))
         .every((a) => a.configured),
     ).toBe(true);
-    transport.mockClear();
     await getRegistrarClient('namecheap', first.id).testConnection();
     await getRegistrarClient('namecheap', second.id).testConnection();
     expect(
@@ -264,37 +269,40 @@ describe('account persistence and routing', () => {
       ),
     ).toEqual([credentials.apiKey, secondValues.apiKey]);
     await expect(
-      connectRegistrarAccount('namecheap', {
-        ...configured,
-        proxyIp: '1.1.1.1',
-      }),
+      connectRegistrarAccount('namecheap', credentials, 'Duplicate', true),
     ).rejects.toThrow(/already connected/);
   });
 
   it('validates proxy settings in named-account imports before replacement', async () => {
     transport.mockImplementation(async () => new Response(xml));
+    await saveProxyProfile({ url: proxy.url, egressIp: proxy.ip });
     const account = await connectRegistrarAccount(
       'namecheap',
-      configured,
+      credentials,
       'Named',
+      true,
     );
     const bundle = JSON.parse(
       exportBundle({ version: 'test', platform: 'web' }),
     );
     bundle.namespaces.credentials[account.id].proxyUrl =
       'http://127.0.0.1:8080';
+    bundle.namespaces.credentials[account.id].proxyIp = proxy.ip;
     await expect(importBundle(JSON.stringify(bundle))).rejects.toThrow(
       /public/,
     );
-    expect(getStoredCredentials(account.id).proxyUrl).toBe(proxy.url);
+    expect(getStoredCredentials(account.id)).toEqual(credentials);
+    expect(getProxyProfile()?.url).toBe(proxy.url);
   });
 
   it('retains cached domains for transport-only edits and refreshes cached clients after hydration', async () => {
     transport.mockImplementation(async () => new Response(xml));
+    await saveProxyProfile({ url: proxy.url, egressIp: proxy.ip });
     const account = await connectRegistrarAccount(
       'namecheap',
-      configured,
+      credentials,
       'Named',
+      true,
     );
     writeEntry('portfolio', account.id, {
       domains: [],
@@ -303,21 +311,20 @@ describe('account persistence and routing', () => {
     });
     await flushWrites();
     const first = getRegistrarClient('namecheap', account.id);
-    const updated = {
-      ...configured,
-      proxyUrl: 'http://other:secret@4.2.2.1:8080/',
-    };
-    await setStoredCredentials(account.id, updated);
+    await saveProxyProfile({
+      url: 'http://other:secret@4.2.2.1:8080/',
+      egressIp: proxy.ip,
+    });
     await flushWrites();
     await hydrateStores();
     expect(getRegistrarClient('namecheap', account.id)).not.toBe(first);
-    await saveRegistrarCredentials('namecheap', configured, account.id);
+    await saveRegistrarCredentials('namecheap', credentials, account.id, true);
     expect(readEntry('portfolio', account.id)?.data).toMatchObject({
       lastSyncedAt: 100,
     });
     await saveRegistrarCredentials(
       'namecheap',
-      { ...configured, apiKey: 'changed-identity' },
+      { ...credentials, apiKey: 'changed-identity' },
       account.id,
     );
     expect(readEntry('portfolio', account.id)).toBeNull();
@@ -338,10 +345,7 @@ describe('account persistence and routing', () => {
   it('validates before changing saved credentials', async () => {
     await saveRegistrarCredentials('namecheap', credentials);
     await expect(
-      saveRegistrarCredentials('namecheap', {
-        ...configured,
-        proxyIp: '127.0.0.1',
-      }),
+      saveProxyProfile({ url: proxy.url, egressIp: '127.0.0.1' }),
     ).rejects.toThrow(/public/);
     expect(getStoredCredentials('namecheap')).toEqual(credentials);
     const bundle = JSON.parse(
@@ -365,7 +369,8 @@ describe('account persistence and routing', () => {
       ),
     );
     await hydrateStores();
-    await saveRegistrarCredentials('namecheap', configured);
+    await setStoredCredentials('namecheap', configured);
+    await migrateLegacyProxies();
     await flushWrites();
     expect(await disk.get('credentials', 'namecheap')).toMatchObject({
       __sealed: 1,
@@ -377,24 +382,29 @@ describe('account persistence and routing', () => {
     await importBundle(bundle);
     await flushWrites();
     await hydrateStores();
-    expect(getStoredCredentials('namecheap')).toEqual(configured);
+    expect(getStoredCredentials('namecheap')).toEqual(credentials);
+    expect(getProxyProfile()?.url).toBe(proxy.url);
+    expect(await disk.get('proxies', 'default')).toMatchObject({ __sealed: 1 });
+    expect(JSON.stringify(await disk.list('proxies'))).not.toContain(
+      'proxy-secret',
+    );
     expect(
       getRegistrarMetadata().find((r) => r.name === 'namecheap')?.configured,
     ).toBe(true);
   });
   it('supports a new proxied account without requiring a direct IP and restores direct routing when disabled', async () => {
-    await saveRegistrarCredentials('namecheap', {
-      ...configured,
-      clientIp: '',
-    });
+    await saveProxyProfile({ url: proxy.url, egressIp: proxy.ip });
+    await saveRegistrarCredentials(
+      'namecheap',
+      { ...credentials, clientIp: '' },
+      undefined,
+      true,
+    );
     expect(
       getRegistrarMetadata().find((r) => r.name === 'namecheap')?.configured,
     ).toBe(true);
     const proxied = getRegistrarClient('namecheap');
-    await saveRegistrarCredentials(
-      'namecheap',
-      namecheapCredentials(configured, false),
-    );
+    await saveRegistrarCredentials('namecheap', credentials, undefined, false);
     const direct = getRegistrarClient('namecheap');
     expect(direct).not.toBe(proxied);
     expect(getStoredCredentials('namecheap').clientIp).toBe('9.9.9.9');

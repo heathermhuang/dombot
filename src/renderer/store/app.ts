@@ -55,12 +55,8 @@ let detailAllInFlight = false;
 interface AppState {
   appInfo: AppInfo | null;
   mcpInfo: McpInfo | null;
-  domains: Domain[];
-  domainsLoading: boolean;
-  domainsError: string | null;
   loadAppInfo: () => Promise<void>;
   loadMcpInfo: () => Promise<void>;
-  loadDynadotDomains: () => Promise<void>;
 
   // Aggregated portfolio across every configured registrar.
   portfolio: Domain[];
@@ -149,9 +145,9 @@ interface AppState {
 
   // Annual renewal pricing, keyed by `${registrar}:${domainName}`. Backs the
   // Renewals dashboard and the Domains renewal column. Computed in main from
-  // local data (base rates + Sync-captured quotes + manual overrides); it arrives
-  // with the launch snapshot and is refreshed after each Sync — there's no
-  // separate pricing fetch or refresh.
+  // local data (base rates + TLD rates + Sync-captured quotes + manual
+  // overrides); it arrives with the launch snapshot and is refreshed after
+  // each Sync — there's no separate pricing fetch or refresh.
   pricing: Record<string, RenewalPricing>;
   /** Re-read the whole-portfolio pricing map from main (local, no network). */
   loadPricing: () => Promise<void>;
@@ -214,9 +210,6 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   appInfo: null,
   mcpInfo: null,
-  domains: [],
-  domainsLoading: false,
-  domainsError: null,
   loadAppInfo: async () => {
     const appInfo = await window.api.getAppInfo();
     set({ appInfo });
@@ -224,18 +217,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadMcpInfo: async () => {
     const mcpInfo = await window.api.getMcpInfo();
     set({ mcpInfo });
-  },
-  loadDynadotDomains: async () => {
-    set({ domainsLoading: true, domainsError: null });
-    try {
-      const domains = await window.api.listDynadotDomains();
-      set({ domains, domainsLoading: false });
-    } catch (err) {
-      set({
-        domainsLoading: false,
-        domainsError: err instanceof Error ? err.message : String(err),
-      });
-    }
   },
 
   portfolio: [],

@@ -1,5 +1,4 @@
 import { validateAccountRecords } from '../services/accounts';
-import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
 import {
   broadcastApprovalsChanged,
   broadcastPortfolioChanged,
@@ -8,10 +7,14 @@ import { restartAutoSync } from '../services/auto-sync';
 import { resetRegistrarClients } from '../services/registrars';
 import { getSettings, notifySettingsChanged } from '../services/settings';
 import { exportNamespaces, importNamespaces } from './namespace';
+import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
+import { PROXIES_NAMESPACE, parseProxy } from '../../shared/proxy';
+import { migrateLegacyProxies } from '../services/proxies';
+import { sanitizeBundleDiagnostics } from './sanitize-diagnostics';
 
 // A portable copy of everything DomBot stores — registrar keys, portfolio
-// cache, folders, manual prices, settings, MCP pairings, bulk-job history —
-// as one JSON document. It's the backup story for a self-hosted instance
+// cache, folders, manual prices, TLD rates, settings, MCP pairings, bulk-job
+// history — as one JSON document. It's the backup story for a self-hosted instance
 // (whose data is unreadable without its root secret), the way to move from
 // the desktop app to a web instance without re-entering keys, and what the
 // secret-rotation script round-trips through.
@@ -22,14 +25,16 @@ import { exportNamespaces, importNamespaces } from './namespace';
 // a Worker's CPU budget. This module only ever sees plain bundles.
 
 export const BUNDLE_FORMAT = 'dombot-data';
-export const BUNDLE_VERSION = 2;
+// v3 adds the `proxies` namespace and `proxyId` on accounts. Older builds would
+// silently drop both and then connect directly, so they must refuse the file.
+export const BUNDLE_VERSION = 3;
 
 /** Host-specific or transient namespaces that never travel. */
 const NEVER_EXPORTED: ReadonlySet<string> = new Set(['auth', 'meta']);
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
-  version: 1 | typeof BUNDLE_VERSION;
+  version: 1 | 2 | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -71,7 +76,7 @@ export function parseBundle(text: string): DataBundle {
   if (!head || head.format !== BUNDLE_FORMAT) {
     throw new BundleError('Not a DomBot data file.');
   }
-  if (head.version !== 1 && head.version !== BUNDLE_VERSION) {
+  if (![1, 2, BUNDLE_VERSION].includes(head.version as number)) {
     throw new BundleError(
       `This file was made by a newer DomBot (format v${String(head.version)}). Update and try again.`,
     );
@@ -90,22 +95,69 @@ export function parseBundle(text: string): DataBundle {
     }
   }
   try {
-    const accounts = head.namespaces['registrar-accounts'] ?? {};
-    validateAccountRecords(accounts);
-    for (const [id, credentials] of Object.entries(
-      head.namespaces.credentials ?? {},
-    )) {
-      const account = accounts[id] as { registrar?: string } | undefined;
-      if (
-        (id === 'namecheap' || account?.registrar === 'namecheap') &&
-        credentials &&
-        typeof credentials === 'object'
-      ) {
-        parseNamecheapProxy(credentials as Record<string, unknown>);
-      }
-    }
+    validateAccountRecords(head.namespaces['registrar-accounts'] ?? {});
   } catch (err) {
     throw new BundleError(err instanceof Error ? err.message : String(err));
+  }
+  // Validate every proxy profile, and every account's pointer to one, so an
+  // import can't smuggle in a private/reserved-IP or otherwise malformed proxy
+  // or leave an account pointing at nothing.
+  const profiles = (head.namespaces[PROXIES_NAMESPACE] ?? {}) as Record<
+    string,
+    { id?: unknown; url?: unknown; egressIp?: unknown } | null
+  >;
+  for (const [id, profile] of Object.entries(profiles)) {
+    try {
+      if (!profile || typeof profile !== 'object' || profile.id !== id)
+        throw new Error('Malformed proxy settings.');
+      if (!parseProxy(profile)) throw new Error('Incomplete proxy settings.');
+    } catch (error) {
+      throw new BundleError(
+        error instanceof Error ? error.message : 'Invalid proxy settings.',
+      );
+    }
+  }
+  for (const record of Object.values(
+    (head.namespaces['registrar-accounts'] ?? {}) as Record<
+      string,
+      { proxyId?: string; removed?: boolean } | null
+    >,
+  )) {
+    if (record?.proxyId && !record.removed && !profiles[record.proxyId])
+      throw new BundleError(
+        'An account in this file uses a proxy the file does not contain.',
+      );
+  }
+  // Older bundles kept a Namecheap account's proxy in its credentials — the
+  // legacy default key plus any UUID-keyed accounts. Validate those too; they
+  // are lifted into a profile after import.
+  const accountRecords = (head.namespaces['registrar-accounts'] ??
+    {}) as Record<string, { registrar?: unknown } | null>;
+  const namecheapIds = new Set<string>(['namecheap']);
+  for (const [id, record] of Object.entries(accountRecords))
+    if (
+      record &&
+      typeof record === 'object' &&
+      record.registrar === 'namecheap'
+    )
+      namecheapIds.add(id);
+  const credentials = (head.namespaces.credentials ?? {}) as Record<
+    string,
+    unknown
+  >;
+  for (const id of namecheapIds) {
+    const bag = credentials[id];
+    if (bag && typeof bag === 'object') {
+      try {
+        parseNamecheapProxy(bag as Record<string, unknown>);
+      } catch (error) {
+        throw new BundleError(
+          error instanceof Error
+            ? error.message
+            : 'Invalid Namecheap proxy settings.',
+        );
+      }
+    }
   }
   return head as DataBundle;
 }
@@ -118,8 +170,10 @@ export async function importBundle(
   text: string,
 ): Promise<{ namespaces: number; entries: number }> {
   const bundle = parseBundle(text);
+  sanitizeBundleDiagnostics(bundle.namespaces);
   const prevSettings = getSettings();
   const result = importNamespaces(bundle.namespaces, NEVER_EXPORTED);
+  await migrateLegacyProxies();
   // Everyone holding a derived view refreshes: the registrar clients built
   // from the old credentials, the UI (portfolio, pairings), the host's
   // settings listeners (the MCP server toggle), the sync timer.

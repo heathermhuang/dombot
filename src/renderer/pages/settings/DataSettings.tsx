@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -19,10 +19,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  MAX_BUNDLE_BYTES,
   isSealedBundle,
   openBundle,
   sealBundle,
 } from '../../../shared/bundle-seal';
+import { isDemo } from '../../lib/platform';
 import { useAppStore } from '../../store/app';
 import { SettingsCard } from './SettingsCard';
 
@@ -185,6 +187,10 @@ function DataBundleCard() {
 
   const onPick = async (file: File | undefined) => {
     if (!file) return;
+    if (file.size > MAX_BUNDLE_BYTES) {
+      toast.error('Data file is too large (maximum 32 MiB).');
+      return;
+    }
     const text = await file.text();
     setImportPass('');
     setImportError(null);
@@ -230,9 +236,8 @@ function DataBundleCard() {
             <Label htmlFor="export-pass" className="text-xs">
               Passphrase (optional)
             </Label>
-            <Input
+            <PasswordInput
               id="export-pass"
-              type="password"
               autoComplete="new-password"
               className="w-56"
               value={exportPass}
@@ -261,7 +266,11 @@ function DataBundleCard() {
               e.target.value = '';
             }}
           />
-          <Button variant="outline" onClick={() => fileInput.current?.click()}>
+          <Button
+            variant="outline"
+            disabled={isDemo()}
+            onClick={() => fileInput.current?.click()}
+          >
             Import data…
           </Button>
         </div>
@@ -286,9 +295,8 @@ function DataBundleCard() {
               <Label htmlFor="import-pass" className="text-xs">
                 Passphrase
               </Label>
-              <Input
+              <PasswordInput
                 id="import-pass"
-                type="password"
                 autoComplete="off"
                 value={importPass}
                 onChange={(e) => setImportPass(e.target.value)}

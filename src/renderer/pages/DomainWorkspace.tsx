@@ -12,7 +12,7 @@ import {
   sortManagementRows,
 } from '../../shared/domain-catalog';
 import { domainKey } from '../../shared/account-key';
-import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
+import { ARCHIVE_FOLDER_ID } from '../../shared/ipc';
 import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
 import LegacyDomains from './Domains';
 import { useEffect, useMemo, useState } from 'react';
@@ -246,7 +246,7 @@ export default function DomainWorkspace({
           },
           assignments,
           new Set(folders.map((folder) => folder.id)),
-          HIDDEN_FOLDER_ID,
+          ARCHIVE_FOLDER_ID,
         ),
     );
     return sortManagementRows(candidates, catalog, pricing, sort);
@@ -1337,7 +1337,7 @@ export default function DomainWorkspace({
                         {f.name}
                       </option>
                     ))}
-                    <option value={HIDDEN_FOLDER_ID}>Hidden</option>
+                    <option value={ARCHIVE_FOLDER_ID}>Archive</option>
                   </select>
                 </label>
                 <label>

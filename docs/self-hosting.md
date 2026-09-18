@@ -33,8 +33,21 @@ npx wrangler login
 npx wrangler d1 create dombot
 ```
 
-Paste the `database_id` the last command prints into `wrangler.jsonc`
-(replacing the zeros). Then:
+Put the `database_id` the last command prints, and a name for your Worker,
+in a `wrangler.local.json` next to `wrangler.jsonc`:
+
+```json
+{
+  "name": "dombot-yourname",
+  "database_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
+
+That file is gitignored. Every `npm run web:*` script applies it on top of
+the template (`scripts/wrangler.mjs`), so your instance's details never land
+in a commit and pulling updates never conflicts. It also accepts `vars`,
+`routes` (for a custom domain), and any other top-level wrangler key. If you
+would rather edit `wrangler.jsonc` directly, that still works. Then:
 
 ```bash
 npm run web:secrets
@@ -56,14 +69,44 @@ npm run web:deploy
 This builds the renderer, applies the D1 schema, and deploys the Worker.
 Open the URL it prints and sign in.
 
-## Redeploying from GitHub Actions
+## Redeploying automatically
 
-`.github/workflows/deploy-worker.yml` deploys on every push to `main` of
-_your_ fork, once two repository secrets exist (Settings → Secrets and
-variables → Actions): `CLOUDFLARE_API_TOKEN` (an API token from the
-"Edit Cloudflare Workers" template with D1 edit permission added) and
-`CLOUDFLARE_ACCOUNT_ID`. Without them the workflow exits quietly. It never
-touches `DOMBOT_SECRET` / `DOMBOT_PASSWORD` — those stay Worker secrets.
+Two ways to have your instance follow a branch. Neither touches
+`DOMBOT_SECRET` / `DOMBOT_PASSWORD`; those stay Worker secrets.
+
+**Workers Builds (no token).** In the Cloudflare dashboard open your Worker
+→ Settings → Builds, connect the repository (yours or a fork) and the branch
+to follow, and set:
+
+| Setting        | Value            |
+| -------------- | ---------------- |
+| Build command  | `npm run build`  |
+| Deploy command | `npm run deploy` |
+
+plus these build variables, which stand in for the `wrangler.local.json` a
+build machine doesn't have:
+
+| Variable                        | Value                                                             |
+| ------------------------------- | ----------------------------------------------------------------- |
+| `DOMBOT_WORKER_NAME`            | your Worker's name                                                |
+| `DOMBOT_D1_DATABASE_ID`         | your D1 database id                                               |
+| `DOMBOT_D1_DATABASE_NAME`       | its name, if not `dombot`                                         |
+| `DOMBOT_CUSTOM_DOMAIN`          | optional: your own hostname, on a zone in your Cloudflare account |
+| `ELECTRON_SKIP_BINARY_DOWNLOAD` | `1` (skips a large download)                                      |
+
+`npm run deploy` applies any new D1 migrations and then deploys. The
+dashboard may warn that the repository's `wrangler.jsonc` names a different
+Worker; that's the public template, and the deploy uses your name. Don't
+merge a pull request that offers to rename it.
+
+**GitHub Actions.** `.github/workflows/deploy-worker.yml` deploys on every
+push to `main` of _your_ fork, once two repository secrets exist (Settings →
+Secrets and variables → Actions): `CLOUDFLARE_API_TOKEN` (an API token from
+the "Edit Cloudflare Workers" template with D1 edit permission added) and
+`CLOUDFLARE_ACCOUNT_ID`. Without them the workflow exits quietly. Set the
+same `DOMBOT_WORKER_NAME` / `DOMBOT_D1_DATABASE_ID` (and optionally
+`DOMBOT_D1_DATABASE_NAME` / `DOMBOT_CUSTOM_DOMAIN`) values as repository
+_variables_ so the deploy targets your Worker and database.
 
 ## Day to day
 
@@ -82,14 +125,14 @@ touches `DOMBOT_SECRET` / `DOMBOT_PASSWORD` — those stay Worker secrets.
   DOMBOT_PASSWORD='something-long' npm run web:rotate-password
   ```
 
-- **Brute-force protection**: after three wrong passwords each further
-  attempt waits twice as long (up to an hour). That counter is per
-  instance, not per client, and a burst spread across several of
-  Cloudflare's isolates can land a few extra guesses before it catches up.
-  For a public instance add a [rate limiting
-  rule](https://developers.cloudflare.com/waf/rate-limiting-rules/) on
-  `POST /auth/login` (say, 5 requests per minute per IP) in the zone's
-  WAF; it costs nothing on the free plan. And use a long password.
+- **Brute-force protection**: each source IP gets at most 10 attempts per
+  15-minute window. D1 reserves attempts atomically across isolates; another
+  source's failures cannot lock out your login. Successful login resets your
+  source's window. Apply migration `0002_login_attempts.sql` before upgrading
+  (the deploy script applies migrations). Source addresses are stored as HMACs,
+  not raw IPs. Cloudflare's `CF-Connecting-IP` header is required outside local
+  development. Use a long random password; distributed attackers still warrant
+  an additional edge rate-limit rule or Cloudflare Access restricted to you.
 - **Updating**: pull, then `npm run web:deploy` again (or push, with the
   workflow above).
 - **Backups and moving**: Settings → Sync → **Export data** writes everything
@@ -125,6 +168,10 @@ MCP clients can't pass an Access login or a password prompt. Behind a gate,
 MCP works only if the gate excludes the MCP paths (`/mcp`, `/authorize`,
 `/token`, `/register`, `/revoke`, `/oauth/status`, `/.well-known/*`), which
 Cloudflare Access can do and platform password protection generally can't.
+
+Version preview URLs are disabled by default (`preview_urls: false`) so a gate
+configured for the production hostname cannot be bypassed through a preview
+hostname. If you enable previews, protect those hostnames separately as well.
 
 ## Connecting an MCP client
 
@@ -176,54 +223,103 @@ Nothing about authentication is stored in the database. Rotating the
 password invalidates every session because the session-signing key is
 derived from it.
 
-## Optional fixed IP proxy for Namecheap
+## Optional fixed IP proxy
 
-When configuring Namecheap in **Settings → Registrars**, turn on **Use fixed IP
-proxy** if the machine running DomBot cannot connect from an allowlisted IPv4
-address. Enter:
+Some registrars only accept API requests from an address you have allowlisted.
+If the machine running DomBot has no fixed address of its own, which is always
+true of a Worker, send those requests through a proxy that does. It works the
+same in the desktop app and on a self-hosted instance, so one proxy account and
+one allowlisted address can serve both.
 
-- **Proxy URL:** an HTTP CONNECT proxy with a public IPv4 endpoint. Use the form
-  `http://username:password@IP:port`, percent-encoding special characters in the
-  username or password. Unauthenticated proxies are also supported. Hostnames,
-  private/reserved addresses, HTTPS/SOCKS proxy URLs, paths and query strings
-  are not supported by this first version.
-- **Outgoing IPv4 address:** the IP Namecheap sees, which may differ from the
-  proxy endpoint. Add it to your Namecheap API allowlist before syncing.
+**1. Set the proxy up once, under Settings → Proxy.**
 
-Save starts the normal sync. This connection is used by all Namecheap operations,
-including scheduled sync and MCP. Other registrars keep their normal connections.
-Proxy failure never silently switches to a direct request.
+- **Proxy URL:** an HTTP or HTTPS CONNECT proxy, as
+  `http://username:password@host:port` or `https://username:password@host:port`,
+  percent-encoding special characters in the username or password. The host may
+  be a hostname or a public IPv4 address; credentials are optional. With an
+  HTTPS proxy the connection to the proxy itself is encrypted and its
+  certificate is verified against the hostname, so use a hostname there rather
+  than a bare IP. With an HTTP proxy the username and password travel
+  unencrypted to the proxy (the registrar request inside the tunnel is still
+  HTTPS). IPv6 literals, private/reserved IPv4 addresses, `localhost`, SOCKS
+  URLs, paths and query strings are rejected.
+- **Outgoing IPv4 address:** the address registrars see, which may differ from
+  the proxy endpoint. Add it to each registrar's API allowlist.
+- **Test** sends one request through the proxy and reports the address it left
+  from, so a wrong outgoing address shows up here rather than as a registrar
+  rejection. It checks the values in the form, saved or not.
 
-The proxy fields are stored with the Namecheap credentials under the existing
-host encryption scheme and included in data exports. A plain export therefore
-contains proxy credentials too; use the export passphrase option when appropriate.
-The saved direct Client IP is retained separately. Turn the proxy switch off and
-save to remove the proxy credentials and restore direct configuration. If the
-account was first configured with a proxy, enter a direct Client IP before saving
-in direct mode.
+**2. Turn on “Use fixed IP proxy” for each account that needs it**, in that
+account's card under Settings → Registrars. It works for every registrar.
+Saving re-syncs the account over the new route. For Namecheap, the
+proxy's outgoing address replaces the Client IP, so an account that only ever
+connects through the proxy needs no Client IP of its own. A Client IP you did
+enter is kept, and is used again if you turn the toggle off.
+
+The route applies to everything that account does, including scheduled sync and
+MCP. Accounts without the toggle keep their normal connections. A proxy failure
+never silently switches to a direct request. The proxy can't be removed while an
+account still uses it; the Proxy page lists those accounts.
+
+The proxy is stored under the same host encryption as registrar credentials and
+is included in data exports. A plain export therefore contains the proxy
+password too; use the export passphrase option when appropriate. MCP reports
+only whether an account uses the proxy, never its address or credentials.
+
+**Upgrading:** earlier versions kept the proxy inside each Namecheap account's
+credentials. On first start after upgrading it is moved to Settings → Proxy and
+those accounts keep using it; nothing needs re-entering. Older data exports are
+converted the same way on import.
 
 ### Transport limitations and security review
 
+A proxied account makes exactly the requests it would make directly.
+`@aoxborrow/registrar-client` builds each request and DomBot hands it to the
+host's tunnel instead of the network, so timeouts, retries, error handling and
+the redaction of credentials from diagnostics are the same either way. Requests
+are pinned to the registrar's own API origin over HTTPS; anything else is
+refused rather than tunnelled. Redirects are never followed.
+
 Workers use pinned `tunnelfetch` 1.13.0 with certificate verification enabled,
-redirects unfollowed, bounded timeouts and a 2 MiB decoded-response limit. A new
-client is closed after every request so no open socket crosses Worker invocation
-boundaries. Native Workers `startTls` cannot verify a different destination after
-an HTTP CONNECT tunnel. `tunnelfetch` implements TLS 1.2/1.3 and certificate
-validation in JavaScript/WebCrypto; its authors state that it has not had an
-external security audit. This opt-in feature requires review of that additional
-trust boundary and may need Workers Paid for the additional CPU cost.
+bounded timeouts and a 2 MiB decoded-response limit. A new client is closed
+after every request so no open socket crosses Worker invocation boundaries.
+Native Workers `startTls` cannot verify a different destination after an HTTP
+CONNECT tunnel. `tunnelfetch` implements TLS 1.2/1.3 and certificate validation
+in JavaScript/WebCrypto; its authors state that it has not had an external
+security audit. This opt-in feature requires review of that additional trust
+boundary and may need Workers Paid for the additional CPU cost.
 
-Desktop uses `https-proxy-agent` with Node's native TLS verification. HTTP proxy
-authentication itself is not encrypted between DomBot and the proxy; the registrar
-request is encrypted end to end inside the HTTPS tunnel. Use a proxy provider and
-network you trust. No setting disables certificate verification.
+Desktop uses `https-proxy-agent` with Node's native TLS verification. An HTTPS
+proxy URL encrypts the CONNECT handshake, including any proxy password; a
+separate verified TLS connection protects registrar traffic inside the tunnel
+either way. No setting disables certificate verification. On the Worker,
+Cloudflare additionally blocks outbound sockets to private network ranges
+whatever the proxy hostname resolves to.
 
-Only Namecheap's production API is reachable through this transport. Namecheap
-uses GET for writes as well as reads, so retries use an explicit read-command
-allowlist. Writes, renewals and unknown commands are never automatically replayed.
-After an uncertain write failure, check the outcome in Namecheap before retrying.
-Provider error codes are shown without raw response bodies or credential-bearing
-request URLs.
+A failure before the tunnel is up (proxy unreachable, wrong proxy password,
+CONNECT refused, certificate not verifiable) means the registrar never saw the
+request. It is reported as a proxy problem in plain words, never with the proxy
+URL, and is retried for any operation. Once a request may have reached the
+registrar, the rules below apply exactly as they do without a proxy.
+
+### When a change may or may not have gone through
+
+If a write times out, loses its connection mid-response, or gets a 5xx, the
+registrar may already have applied it. DomBot never sends it again on its own:
+a second renewal is charged twice. Instead it re-reads the domain and tells you
+what actually happened:
+
+- **The change is there.** Reported as done.
+- **It isn't, and repeating it is harmless** (auto-renew, lock, privacy,
+  nameservers, fetching an auth code). Reported as failed and safe to try again.
+- **It isn't, but it costs money, or DomBot can't tell.** Reported as
+  **Unconfirmed**, with a note to check the domain at the registrar first. A
+  renewal is only ever confirmed by its expiry date moving, and an unconfirmed
+  one is never offered for retry, since registrars can take a while to show it.
+  URL and email forwarding changes are reported this way too.
+
+Reads are simply retried. This applies to the app, bulk jobs and MCP alike, and
+to direct and proxied accounts alike.
 
 References: [Namecheap API parameters](https://www.namecheap.com/support/api/global-parameters/),
 [Cloudflare sockets implementation](https://github.com/cloudflare/workerd/blob/main/src/workerd/api/sockets.c++),

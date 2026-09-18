@@ -294,7 +294,7 @@ const queryShape = {
     .string()
     .optional()
     .describe(
-      'Only domains in this folder — a folder name or id, or "Hidden" for the built-in hidden group. Unknown folder → no rows.',
+      'Only domains in this folder — a folder name or id, or "Archive" for the built-in archive group. Unknown folder → no rows.',
     ),
   nameContains: z
     .string()
@@ -426,6 +426,7 @@ export function registerTools(
             label: r.accountLabel,
             configured: r.configured,
             enabled: r.enabled,
+            proxy: Boolean(r.proxy),
             sync: r.sync,
           })),
           configured: getConfiguredRegistrars(),
@@ -1077,7 +1078,7 @@ export function registerTools(
       {
         title: 'Estimate renewal price',
         description:
-          'For a single domain: DomBot’s estimated annual renewal price, with provenance — a manual override, else a per-name registrar quote where supported, else the base per-TLD database. Distinct from registrar_pricing, which is the registrar’s own live quote.',
+          'For a single domain: DomBot’s estimated annual renewal price, with provenance — a manual override, else a per-name registrar quote where supported, else the account’s own TLD rate captured on Sync, else the base per-TLD database. Distinct from registrar_pricing, which is the registrar’s own live quote.',
         inputSchema: { accountId, registrar: optionalRegistrar, domain },
         annotations: { readOnlyHint: true },
       },

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HIDDEN_FOLDER_ID, type Domain, type Folder } from '../../shared/ipc';
+import { ARCHIVE_FOLDER_ID, type Domain, type Folder } from '../../shared/ipc';
 import { csvFilename, domainsToCsv } from './csv';
 
 const NOW = new Date('2026-06-15T12:00:00Z');
@@ -60,6 +60,25 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('domainsToCsv', () => {
+  it.each(['=1+1', '+1+1', '-1+1', '@SUM(1)', '  =1+1', '\t=1+1'])(
+    'exports untrusted text as literal text: %s',
+    (label) => {
+      const csv = domainsToCsv(
+        [
+          domain({
+            domainName: 'example.com',
+            accountLabel: label,
+            expirationDate: new Date('2026-06-14T12:00:00Z'),
+          }),
+        ],
+        {},
+        [],
+        {},
+      );
+      expect(col(csv, 1, 'Account')).toBe("'" + label);
+      expect(col(csv, 1, 'Days Until Expiry')).toBe('-1');
+    },
+  );
   it('emits the header row first, in column order', () => {
     const csv = domainsToCsv([], {}, [], {});
     expect(fields(rows(csv)[0])).toEqual([
@@ -123,7 +142,7 @@ describe('domainsToCsv', () => {
     expect(col(domainsToCsv([d], {}, [], {}), 1, 'Registrar')).toBe('porkbun');
   });
 
-  it('resolves folder names, Hidden, and blanks for unassigned/missing', () => {
+  it('resolves folder names, Archive, and blanks for unassigned/missing', () => {
     const a = domain({ domainName: 'a.com' });
     const h = domain({ domainName: 'h.com' });
     const g = domain({ domainName: 'g.com' }); // assigned to a gone folder
@@ -131,12 +150,12 @@ describe('domainsToCsv', () => {
     const folders = [folder('f1', 'Clients')];
     const assignments = {
       'dynadot:a.com': 'f1',
-      'dynadot:h.com': HIDDEN_FOLDER_ID,
+      'dynadot:h.com': ARCHIVE_FOLDER_ID,
       'dynadot:g.com': 'gone',
     };
     const csv = domainsToCsv([a, h, g, u], {}, folders, assignments);
     expect(col(csv, 1, 'Folder')).toBe('Clients');
-    expect(col(csv, 2, 'Folder')).toBe('Hidden');
+    expect(col(csv, 2, 'Folder')).toBe('Archive');
     expect(col(csv, 3, 'Folder')).toBe('');
     expect(col(csv, 4, 'Folder')).toBe('');
   });

@@ -220,6 +220,29 @@ async function driveBulk(jobId: string, seenResults: number): Promise<void> {
 
 // ── the api object ──────────────────────────────────────────────────────────
 
+/** `openExternal` in a browser: a new tab. */
+export function openExternalInBrowser(url: string): void {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** `saveTextFile` in a browser: a download. CSV gets a BOM for Excel. */
+export function saveTextFileInBrowser(
+  content: string,
+  suggestedName: string,
+): { saved: true; path: string } {
+  const csv = /\.csv$/i.test(suggestedName);
+  const blob = new Blob([csv ? '\ufeff' + content : content], {
+    type: csv ? 'text/csv;charset=utf-8' : 'application/json',
+  });
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = suggestedName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  return { saved: true, path: suggestedName };
+}
+
 export function createHttpApi(): DombotApi {
   const poller = new Poller(() => driving !== null);
   const m =
@@ -230,22 +253,9 @@ export function createHttpApi(): DombotApi {
   return {
     ping: m<string>('ping'),
     getAppInfo: m('getAppInfo'),
-    openExternal: async (url) => {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    },
-    saveTextFile: async (content, suggestedName) => {
-      const csv = /\.csv$/i.test(suggestedName);
-      const blob = new Blob([csv ? '﻿' + content : content], {
-        type: csv ? 'text/csv;charset=utf-8' : 'application/json',
-      });
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = href;
-      a.download = suggestedName;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(href), 10_000);
-      return { saved: true, path: suggestedName };
-    },
+    openExternal: async (url) => openExternalInBrowser(url),
+    saveTextFile: async (content, suggestedName) =>
+      saveTextFileInBrowser(content, suggestedName),
 
     hydrateFromCache: async () => {
       const snap =
@@ -266,8 +276,6 @@ export function createHttpApi(): DombotApi {
     getPortfolioPricing: m('getPortfolioPricing'),
     setManualPrice: m('setManualPrice'),
 
-    listDynadotDomains: async () =>
-      (await call<Domain[]>('listDynadotDomains')).map(reviveDomain),
     listPortfolio: async (refresh) =>
       reviveDomains(
         await call<Awaited<ReturnType<DombotApi['listPortfolio']>>>(
@@ -348,6 +356,10 @@ export function createHttpApi(): DombotApi {
     getRegistrarMetadata: m('getRegistrarMetadata'),
     getRegistrarCredentials: m('getRegistrarCredentials'),
     saveRegistrarCredentials: m('saveRegistrarCredentials'),
+    getProxySettings: m('getProxySettings'),
+    saveProxySettings: m('saveProxySettings'),
+    removeProxySettings: m('removeProxySettings'),
+    testProxySettings: m('testProxySettings'),
     setRegistrarEnabled: async (name, enabled, accountId) =>
       reviveDomains(
         await call<Awaited<ReturnType<DombotApi['setRegistrarEnabled']>>>(

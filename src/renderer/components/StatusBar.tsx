@@ -4,7 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '../store/app';
 import { timeAgo } from '../lib/time';
-import { isWeb, signOut, webAuthMode } from '../lib/platform';
+import {
+  isDemo,
+  isLocalWeb,
+  isWeb,
+  signOut,
+  webAuthMode,
+} from '../lib/platform';
 
 /**
  * App-wide bottom status bar (VS Code style): a thin bar fixed across the
@@ -97,6 +103,9 @@ export default function StatusBar() {
         <div className="flex items-center gap-3">
           {showRefreshed && (
             <span
+              // Hidden on phones to keep the bar to one line; the sync pill to
+              // its right still carries the synced state.
+              className="hidden sm:inline"
               title={`Last synced ${new Date(portfolioLoadedAt).toLocaleString()}`}
             >
               Last synced {timeAgo(portfolioLoadedAt)}
@@ -151,6 +160,14 @@ function SessionStatus() {
       {label}
     </button>
   );
+  if (isDemo()) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        {dot}
+        Demo mode
+      </span>
+    );
+  }
   if (mode === 'cloudflare-access') {
     return (
       <span className="inline-flex items-center gap-1.5">
@@ -159,6 +176,17 @@ function SessionStatus() {
         {link('Sign out', () => {
           window.location.assign('/cdn-cgi/access/logout');
         })}
+      </span>
+    );
+  }
+  if (mode === 'external' && isLocalWeb()) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5"
+        title="Served from this computer with no login"
+      >
+        {dot}
+        Local dev mode
       </span>
     );
   }
