@@ -10,6 +10,7 @@ import {
   saveProxyProfile,
   getProxyProfile,
   migrateLegacyProxies,
+  removeProxyProfile,
 } from './proxies';
 import { createAccount } from './accounts';
 import {
@@ -272,6 +273,46 @@ describe('account persistence and routing', () => {
       connectRegistrarAccount('namecheap', credentials, 'Duplicate', true),
     ).rejects.toThrow(/already connected/);
   });
+
+  it.each([false, true])(
+    'preserves a migrated secondary route when saving credentials (default removed: %s)',
+    async (removeDefault) => {
+      transport.mockImplementation(async () => new Response(xml));
+      await createAccount('namecheap', 'First', configured);
+      const second = await createAccount('namecheap', 'Second', {
+        ...configured,
+        apiKey: 'second-key',
+        proxyUrl: 'http://other:secret@4.2.2.1:8080/',
+        proxyIp: '4.2.2.2',
+      });
+      await migrateLegacyProxies();
+      if (removeDefault) await removeProxyProfile();
+      expect(
+        getRegistrarMetadata().find((a) => a.accountId === second.id),
+      ).toMatchObject({ proxy: true, proxyEgressIp: '4.2.2.2' });
+      await saveRegistrarCredentials(
+        'namecheap',
+        {
+          ...getStoredCredentials(second.id),
+          apiKey: 'rotated-second-key',
+        },
+        second.id,
+        true,
+      );
+      await flushWrites();
+      await hydrateStores();
+      await getRegistrarClient('namecheap', second.id).testConnection();
+      const [route, url] = transport.mock.calls[0];
+      expect(route).toEqual({
+        url: 'http://other:secret@4.2.2.1:8080/',
+        ip: '4.2.2.2',
+      });
+      expect(new URL(url).searchParams.get('ClientIp')).toBe('4.2.2.2');
+      expect(new URL(url).searchParams.get('ApiKey')).toBe(
+        'rotated-second-key',
+      );
+    },
+  );
 
   it('validates proxy settings in named-account imports before replacement', async () => {
     transport.mockImplementation(async () => new Response(xml));

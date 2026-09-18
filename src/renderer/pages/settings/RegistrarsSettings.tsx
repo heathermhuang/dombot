@@ -656,7 +656,11 @@ function AccountCard({
             <ProxyToggle
               id={`${id}-proxy`}
               provider={provider}
-              proxy={proxy}
+              proxy={
+                account.proxy && account.proxyEgressIp
+                  ? { egressIp: account.proxyEgressIp }
+                  : proxy
+              }
               enabled={proxyEnabled}
               disabled={locked}
               onChange={setProxyEnabled}
@@ -926,7 +930,7 @@ function ProxyToggle({
 }: {
   id: string;
   provider: RegistrarDefinition;
-  proxy: ProxySettings['proxy'];
+  proxy: Pick<NonNullable<ProxySettings['proxy']>, 'egressIp'> | null;
   enabled: boolean;
   disabled: boolean;
   onChange: (enabled: boolean) => void;

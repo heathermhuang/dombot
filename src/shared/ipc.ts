@@ -228,6 +228,8 @@ export interface RegistrarMeta {
   accountLabel?: string;
   /** Whether this account's API traffic goes through the fixed IP proxy. */
   proxy?: boolean;
+  /** Public outgoing IP for this account; never includes proxy credentials. */
+  proxyEgressIp?: string;
   name: RegistrarName;
   displayName: string;
   supportsSandbox: boolean;

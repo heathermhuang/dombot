@@ -823,6 +823,9 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
       accountLabel: account.label,
       saved: isSavedAccount(account.id),
       proxy: Boolean(account.proxyId),
+      proxyEgressIp: account.proxyId
+        ? getProxyProfile(account.proxyId)?.egressIp
+        : undefined,
       configured: isConfigured(account.registrar, account.id),
       enabled: isRegistrarEnabled(account.id),
       sync: {
@@ -951,7 +954,7 @@ export async function saveRegistrarCredentials(
       (field) => previous[field]?.trim() === creds[field]?.trim(),
     );
   // Check the route exists before persisting anything.
-  if (useProxy) requireProxy();
+  if (useProxy && !accountProxyRoute(account)) requireProxy();
   invalidateAccount(account.id);
   // The proxy no longer lives in the credentials; never let it back in.
   const clean = { ...creds };
@@ -959,7 +962,10 @@ export async function saveRegistrarCredentials(
   delete clean.proxyIp;
   await setStoredCredentials(account.id, clean);
   if (useProxy !== undefined)
-    await setAccountProxy(account.id, useProxy ? DEFAULT_PROXY_ID : null);
+    await setAccountProxy(
+      account.id,
+      useProxy ? (account.proxyId ?? DEFAULT_PROXY_ID) : null,
+    );
   if (!sameNamecheapAccount) clearRegistrarData(account.id);
 }
 

@@ -257,6 +257,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       portfolioRegistrarLabels: result.registrarLabels,
       portfolioLoadedAt: result.fetchedAt ?? Date.now(),
       portfolioSource: state.portfolioSource ?? 'live',
+      refreshTick: state.refreshTick + 1,
     }));
     // Refresh sync statuses (this registrar's lastSyncedAt/lastError) for the
     // Settings cards and the status-bar pill, and the pricing map so this
