@@ -1330,3 +1330,14 @@
     display: none;
   }
 }
+
+/* Density applies to desktop rows; phone cards retain their touch targets. */
+@media (min-width: 651px) {
+  .pf-workspace.compact .pf-table {
+    font-size: 0.75rem;
+  }
+  .pf-workspace.compact .pf-table td {
+    height: 40px;
+    padding-block: 5px;
+  }
+}

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useDomainList } from './domain-list';
+import { usePreferences, DEFAULT_PREFERENCES } from '../lib/preferences';
 const initial = useDomainList.getState();
-beforeEach(() =>
-  useDomainList.setState({ ...initial, picked: new Set() }, true),
-);
+beforeEach(() => {
+  usePreferences.setState(DEFAULT_PREFERENCES);
+  useDomainList.setState({ ...initial, picked: new Set() }, true);
+});
 describe('shared Manage/Publish context', () => {
   it('preserves filters, search, page and selection when changing columns', () => {
     useDomainList.getState().setFilters({
@@ -69,4 +71,30 @@ it('explicit Add and Manage tasks clear incompatible filters and selection', () 
   expect(useDomainList.getState().picked.size).toBe(0);
   list.startTask('listed');
   expect(useDomainList.getState().scope).toBe('listed');
+});
+
+it('applies hosted table preferences without losing the active filter context', () => {
+  const list = useDomainList.getState();
+  list.setFilters({ query: 'example', account: 'account-b', sort: 'price' });
+  list.setPage(4);
+  list.setPicked(new Set(['one.example']));
+  usePreferences.getState().setPreferences({ density: 'compact' });
+  expect(useDomainList.getState()).toMatchObject({ sort: 'price', page: 4 });
+  expect(useDomainList.getState().picked.size).toBe(1);
+  usePreferences
+    .getState()
+    .setPreferences({
+      sortKey: 'expirationDate',
+      sortDir: 'desc',
+      pageSize: 25,
+    });
+  expect(useDomainList.getState()).toMatchObject({
+    query: 'example',
+    account: 'account-b',
+    sort: 'expiry-desc',
+    page: 1,
+  });
+  expect(useDomainList.getState().picked.size).toBe(0);
+  list.startTask('registered');
+  expect(useDomainList.getState().sort).toBe('expiry-desc');
 });
