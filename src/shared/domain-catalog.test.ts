@@ -185,5 +185,21 @@ describe('one domain catalog with exact registrar targets', () => {
         'renewal',
       ).map((i) => i.domain),
     ).toEqual(['soon.example', 'later.example', 'unknown.example']);
+    expect(
+      sortManagementRows(listings, catalog, {}, 'expiry-desc').map(
+        (i) => i.domain,
+      ),
+    ).toEqual(['later.example', 'soon.example', 'unknown.example']);
+    expect(
+      sortManagementRows(
+        listings,
+        catalog,
+        {
+          'b:soon.example': { renewal: 100 },
+          'a:later.example': { renewal: 5 },
+        },
+        'renewal-asc',
+      ).map((i) => i.domain),
+    ).toEqual(['later.example', 'soon.example', 'unknown.example']);
   });
 });

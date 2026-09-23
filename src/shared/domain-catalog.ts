@@ -168,11 +168,12 @@ export function sortManagementRows<T extends PortfolioListing>(
   pricing: Record<string, { renewal: number | null }>,
   sort: string,
 ): T[] {
-  if (sort !== 'expiry' && sort !== 'renewal') return rows;
+  const renewal = sort === 'renewal' || sort === 'renewal-asc';
+  if (!renewal && sort !== 'expiry' && sort !== 'expiry-desc') return rows;
   const value = (row: T) => {
     const target = catalog.get(row.domain)?.target;
     if (!target) return null;
-    if (sort === 'renewal') return pricing[domainKey(target)]?.renewal ?? null;
+    if (renewal) return pricing[domainKey(target)]?.renewal ?? null;
     return target.expirationDate
       ? new Date(target.expirationDate).getTime()
       : null;
@@ -183,6 +184,6 @@ export function sortManagementRows<T extends PortfolioListing>(
     if (av === null || !Number.isFinite(av))
       return bv === null || !Number.isFinite(bv) ? 0 : 1;
     if (bv === null || !Number.isFinite(bv)) return -1;
-    return sort === 'renewal' ? bv - av : av - bv;
+    return sort === 'renewal' || sort === 'expiry-desc' ? bv - av : av - bv;
   });
 }

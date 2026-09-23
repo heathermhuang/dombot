@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { usePreferences, workspaceSort } from '../lib/preferences';
 import type {
   OwnershipFilter,
   PortfolioScope,
@@ -33,7 +34,7 @@ export const useDomainList = create<DomainListState>((set) => ({
   ownership: 'all',
   query: '',
   collection: '',
-  sort: 'az',
+  sort: workspaceSort(usePreferences.getState()),
   account: '',
   tld: '',
   expiry: '',
@@ -48,7 +49,7 @@ export const useDomainList = create<DomainListState>((set) => ({
       mode: scope === 'registered' ? 'manage' : 'publish',
       query: '',
       collection: '',
-      sort: 'az',
+      sort: workspaceSort(usePreferences.getState()),
       account: '',
       tld: '',
       expiry: '',
@@ -62,3 +63,15 @@ export const useDomainList = create<DomainListState>((set) => ({
   setPage: (page) => set({ page }),
   setPicked: (picked) => set({ picked }),
 }));
+
+// Preferences change the next inventory view while ordinary navigation keeps
+// the user's current filters, sort and selection intact.
+const unsubscribePreferences = usePreferences.subscribe((next, previous) => {
+  if (next.sortKey !== previous.sortKey || next.sortDir !== previous.sortDir)
+    useDomainList.getState().setFilters({ sort: workspaceSort(next) });
+  if (next.pageSize !== previous.pageSize) {
+    useDomainList.getState().setPage(1);
+    useDomainList.getState().setPicked(new Set());
+  }
+});
+if (import.meta.hot) import.meta.hot.dispose(unsubscribePreferences);

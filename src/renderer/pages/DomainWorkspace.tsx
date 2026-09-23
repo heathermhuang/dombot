@@ -83,13 +83,15 @@ import {
 import { PortfolioSettings } from '../components/portfolio/PortfolioSettings';
 import { PortfolioReview } from '../components/portfolio/PortfolioReview';
 import '../components/portfolio/portfolio.css';
+import { usePreferences } from '../lib/preferences';
 
-const PAGE_SIZE = 50;
 export default function DomainWorkspace({
   area,
 }: {
   area: 'domains' | 'page';
 }) {
+  const pageSize = usePreferences((s) => s.pageSize);
+  const density = usePreferences((s) => s.density);
   const {
     state,
     draft: savedDraft,
@@ -270,10 +272,10 @@ export default function DomainWorkspace({
   ]);
   const displayedPage = Math.min(
     page,
-    Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)),
+    Math.max(1, Math.ceil(filtered.length / pageSize)),
   );
   const visibleNames = filtered
-    .slice((displayedPage - 1) * PAGE_SIZE, displayedPage * PAGE_SIZE)
+    .slice((displayedPage - 1) * pageSize, displayedPage * pageSize)
     .map((item) => item.domain);
   const management = useRegistrarManagement({
     catalog,
@@ -317,7 +319,9 @@ export default function DomainWorkspace({
     );
   if (!draft || !state)
     return (
-      <section className="pf-workspace">
+      <section
+        className={`pf-workspace${density === 'compact' ? ' compact' : ''}`}
+      >
         <header className="pf-header">
           <div>
             <span className="pf-eyebrow">Portfolio</span>
@@ -376,16 +380,16 @@ export default function DomainWorkspace({
     ? hostPath(`/p/${state.published.handle}`)
     : null;
   const rows = filtered.slice(
-    (Math.min(page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))) - 1) *
-      PAGE_SIZE,
-    Math.min(page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))) *
-      PAGE_SIZE,
+    (Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))) - 1) *
+      pageSize,
+    Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))) *
+      pageSize,
   );
   const actualPage = Math.min(
     page,
-    Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)),
+    Math.max(1, Math.ceil(filtered.length / pageSize)),
   );
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visibleSelected = rows.filter((item) => picked.has(item.domain)).length;
   const chosen = draft.listings.filter((item) => picked.has(item.domain));
   const selectedPrivate = chosen.filter(
@@ -520,7 +524,9 @@ export default function DomainWorkspace({
       );
 
   return (
-    <section className="pf-workspace">
+    <section
+      className={`pf-workspace${density === 'compact' ? ' compact' : ''}`}
+    >
       {area === 'page' && (
         <button className="pf-back" onClick={() => navigateView('domains')}>
           <ArrowLeft />
@@ -1237,7 +1243,9 @@ export default function DomainWorkspace({
                 <option value="za">Name Z–A</option>
                 <option value="price">Asking price by currency</option>
                 <option value="expiry">Expiration soonest</option>
+                <option value="expiry-desc">Expiration latest</option>
                 <option value="renewal">Renewal cost highest</option>
+                <option value="renewal-asc">Renewal cost lowest</option>
               </select>
             </div>
             <details className="domain-more-filters">
@@ -1818,7 +1826,7 @@ export default function DomainWorkspace({
             <div className="pf-footer">
               <span>
                 {filtered.length
-                  ? `${(actualPage - 1) * PAGE_SIZE + 1}–${Math.min(actualPage * PAGE_SIZE, filtered.length)} of ${filtered.length} domains`
+                  ? `${(actualPage - 1) * pageSize + 1}–${Math.min(actualPage * pageSize, filtered.length)} of ${filtered.length} domains`
                   : '0 domains'}
                 {picked.size ? ` · ${picked.size} selected` : ''}
               </span>
