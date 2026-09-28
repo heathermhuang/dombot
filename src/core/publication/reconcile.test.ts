@@ -22,7 +22,12 @@ const account: RegistrarMeta = {
   supportsSandbox: false,
   configFields: [],
   features: [],
-  sync: { lastSyncedAt: now - 1000, lastError: null, domainCount: 1 },
+  sync: {
+    lastSyncedAt: now - 1000,
+    lastError: null,
+    domainCount: 1,
+    trackedSince: null,
+  },
 };
 const owned = {
   domainName: 'Example.COM',

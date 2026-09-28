@@ -2,6 +2,9 @@ import { Fragment, useEffect, useState } from 'react';
 import { Eye, EyeOff, Lock, LockOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { domainKey } from '../../../shared/account-key';
+import { toAscii } from '../../../shared/domain-name';
+import { ownershipByDomain } from '../../../shared/ownership';
+import { isOpenAlert, resolvedIds } from '../../../shared/sync-diff';
 import type { Domain, DomainOp } from '../../../shared/ipc';
 import type { CatalogEntry } from '../../../shared/domain-catalog';
 import { selectedRegistrarTargets } from '../../../shared/domain-catalog';
@@ -15,7 +18,15 @@ import {
 import { FlagToggle } from '../domains/FlagToggle';
 import { NameserversCell } from '../domains/NameserversCell';
 import { RowActionsMenu } from '../domains/RowActionsMenu';
-import { BulkBar } from '../domains/BulkBar';
+import { BulkBar, type OwnershipAction } from '../domains/BulkBar';
+import { PurchaseDialog } from '../domains/PurchaseDialog';
+import { SaleDialog } from '../domains/SaleDialog';
+import {
+  DeleteDomainsDialog,
+  DispositionDialog,
+  MarkSoldDialog,
+  RestoreOwnedDialog,
+} from '../actions/OwnershipDialogs';
 import { BulkActionDialog } from '../domains/BulkActionDialog';
 import { AuthCodeDialog } from '../domains/AuthCodeDialog';
 import { RenewDialog } from '../domains/RenewDialog';
@@ -59,12 +70,39 @@ export function useRegistrarManagement({
     enrichVisible,
     loadAllDetail,
     bulk,
+    domainEvents,
+    restoreOwned,
   } = useAppStore();
   const refreshTick = useAppStore((s) => s.refreshTick);
   const [authFor, setAuthFor] = useState<Domain | null>(null);
   const [renewFor, setRenewFor] = useState<Domain | null>(null);
   const [urlFor, setUrlFor] = useState<Domain | null>(null);
   const [emailFor, setEmailFor] = useState<Domain | null>(null);
+  const [purchaseFor, setPurchaseFor] = useState<Domain | null>(null);
+  const [saleFor, setSaleFor] = useState<Domain | null>(null);
+  const [markSoldFor, setMarkSoldFor] = useState<Domain | null>(null);
+  const [ownershipDialog, setOwnershipDialog] = useState<{
+    action: OwnershipAction;
+    domains: Domain[];
+  } | null>(null);
+  const ownership = ownershipByDomain(domainEvents);
+  const resolved = resolvedIds(domainEvents);
+  const openRemoval = new Map(
+    domainEvents
+      .filter(
+        (event) => event.type === 'removed' && isOpenAlert(event, resolved),
+      )
+      .map((event) => [event.domain, event.id]),
+  );
+  const ownershipItems = (domains: Domain[]) =>
+    domains.map((domain) => ({
+      domainName: domain.domainName,
+      resolves: openRemoval.get(toAscii(domain.domainName)),
+    }));
+  const openOwnership = (action: OwnershipAction, domains: Domain[]) => {
+    if (action === 'sold' && domains.length === 1) setMarkSoldFor(domains[0]);
+    else setOwnershipDialog({ action, domains });
+  };
   const [job, setJob] = useState<{
     op: DomainOp;
     targets: Domain[];
@@ -142,6 +180,8 @@ export function useRegistrarManagement({
       {active && (
         <BulkBar
           domains={targets}
+          archiveView={false}
+          onOwnership={(action) => openOwnership(action, [...targets])}
           folders={folders}
           onClear={clearSelection}
           onRefresh={() => {
@@ -152,7 +192,7 @@ export function useRegistrarManagement({
           onExport={() => void exportRows(targets)}
           onAssignFolder={(id) => {
             void Promise.all(
-              targets.map((target) => assignFolder(domainKey(target), id)),
+              targets.map((target) => assignFolder(target.domainName, id)),
             ).then(() => toast.success('Folders updated.'));
           }}
           onKind={(kind) =>
@@ -191,8 +231,8 @@ export function useRegistrarManagement({
         <td className="pf-manage-folder" data-label="Folder">
           <FolderCell
             folders={folders}
-            folderId={folderAssignments[key]}
-            onAssign={(id) => void assignFolder(key, id)}
+            folderId={folderAssignments[toAscii(d.domainName)]}
+            onAssign={(id) => void assignFolder(d.domainName, id)}
           />
         </td>
         <td className="pf-manage-date" data-label="Created">
@@ -238,13 +278,27 @@ export function useRegistrarManagement({
           <RowActionsMenu
             domain={d}
             folders={folders}
-            folderId={folderAssignments[key]}
+            folderId={folderAssignments[toAscii(d.domainName)]}
             onRefresh={() => refresh(d)}
             onUrlForwarding={() => setUrlFor(d)}
             onEmailForwarding={() => setEmailFor(d)}
             onAuthCode={() => setAuthFor(d)}
             onRenew={() => setRenewFor(d)}
-            onAssignFolder={(id) => void assignFolder(key, id)}
+            onEditPurchase={() => setPurchaseFor(d)}
+            onEditSale={() => setSaleFor(d)}
+            archive={ownership.get(toAscii(d.domainName))?.label ?? null}
+            onMarkSold={() => openOwnership('sold', [d])}
+            onMarkDropped={() => openOwnership('dropped', [d])}
+            onMarkArchived={() => openOwnership('archived', [d])}
+            onRestoreOwned={() => {
+              void restoreOwned([d.domainName])
+                .then(() =>
+                  toast.success(`Moved ${d.domainName} back to Owned`),
+                )
+                .catch((error: Error) => toast.error(error.message));
+            }}
+            onDelete={() => openOwnership('delete', [d])}
+            onAssignFolder={(id) => void assignFolder(d.domainName, id)}
           />
         </td>
       </Fragment>
@@ -252,6 +306,69 @@ export function useRegistrarManagement({
   };
   const dialogs = (
     <Fragment>
+      {purchaseFor && (
+        <PurchaseDialog
+          domain={purchaseFor}
+          onClose={() => setPurchaseFor(null)}
+        />
+      )}
+      {saleFor && (
+        <SaleDialog domain={saleFor} onClose={() => setSaleFor(null)} />
+      )}
+      {markSoldFor && (
+        <SaleDialog
+          domain={markSoldFor}
+          mode="mark"
+          resolves={openRemoval.get(toAscii(markSoldFor.domainName))}
+          onSaved={clearSelection}
+          onClose={() => setMarkSoldFor(null)}
+        />
+      )}
+      {ownershipDialog &&
+        (() => {
+          const { action, domains } = ownershipDialog;
+          const onClose = () => setOwnershipDialog(null);
+          if (action === 'dropped' || action === 'archived')
+            return (
+              <DispositionDialog
+                type={action}
+                items={ownershipItems(domains)}
+                onDone={clearSelection}
+                onClose={onClose}
+              />
+            );
+          if (action === 'sold')
+            return (
+              <MarkSoldDialog
+                items={ownershipItems(domains)}
+                onDone={clearSelection}
+                onClose={onClose}
+              />
+            );
+          if (action === 'restore')
+            return (
+              <RestoreOwnedDialog
+                names={domains.map((domain) => domain.domainName)}
+                restorable={
+                  domains.filter((domain) => {
+                    const label = ownership.get(
+                      toAscii(domain.domainName),
+                    )?.label;
+                    return label != null && label !== 'removed';
+                  }).length
+                }
+                onDone={clearSelection}
+                onClose={onClose}
+              />
+            );
+          return (
+            <DeleteDomainsDialog
+              domains={domains}
+              onDone={clearSelection}
+              onClose={onClose}
+            />
+          );
+        })()}
       {authFor && (
         <AuthCodeDialog domain={authFor} onClose={() => setAuthFor(null)} />
       )}

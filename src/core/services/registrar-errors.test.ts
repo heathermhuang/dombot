@@ -32,7 +32,7 @@ it('keeps query credentials out of portfolio storage and MCP errors', async () =
   });
   await syncRegistrar('namesilo');
   await flushWrites();
-  expect(JSON.stringify(await disk.list('cache-portfolio'))).not.toContain(
+  expect(JSON.stringify(await disk.list('registrar-domains'))).not.toContain(
     'AUDIT_FAKE_SECRET_123',
   );
   expect(JSON.stringify(getMergedPortfolio().errors)).not.toContain(

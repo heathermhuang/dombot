@@ -4,8 +4,8 @@
 // the cache reads (merged domains, folders, assignments).
 
 import type { Domain } from '../../shared/ipc';
-import { domainKey } from '../../shared/account-key';
-import { ARCHIVE_FOLDER_ID, STALE_AFTER_MS } from '../../shared/ipc';
+import { toAscii } from '../../shared/domain-name';
+import { HIDDEN_FOLDER_ID, STALE_AFTER_MS } from '../../shared/ipc';
 
 export const DEFAULT_LIMIT = 50;
 export const MAX_LIMIT = 500;
@@ -95,12 +95,12 @@ function tldSuffix(tld: string): string {
   return `.${t}`;
 }
 
-/** Resolves a folder filter (name / id / "Archive") to the folderId to match, or
+/** Resolves a folder filter (name / id / "Hidden") to the folderId to match, or
  *  null when it names no known folder (→ the query returns no rows). */
 function resolveFolderId(param: string, folders: FolderRef[]): string | null {
   const p = param.trim();
-  if (param === ARCHIVE_FOLDER_ID || p.toLowerCase() === 'archive')
-    return ARCHIVE_FOLDER_ID;
+  if (param === HIDDEN_FOLDER_ID || p.toLowerCase() === 'hidden')
+    return HIDDEN_FOLDER_ID;
   const lower = p.toLowerCase();
   const match =
     folders.find((f) => f.id === param) ??
@@ -122,9 +122,9 @@ export function queryPortfolio(
   args: QueryArgs,
 ): QueryResult {
   const folderNameFor = (d: Domain): string | null => {
-    const id = assignments[domainKey(d)];
+    const id = assignments[toAscii(d.domainName)];
     if (!id) return null;
-    if (id === ARCHIVE_FOLDER_ID) return 'Archive';
+    if (id === HIDDEN_FOLDER_ID) return 'Hidden';
     return folders.find((f) => f.id === id)?.name ?? null;
   };
 
@@ -151,7 +151,7 @@ export function queryPortfolio(
     if (suffix != null && !d.domainName.toLowerCase().endsWith(suffix))
       return false;
     if (folderId !== undefined) {
-      if (assignments[domainKey(d)] !== folderId) return false;
+      if (assignments[toAscii(d.domainName)] !== folderId) return false;
     }
     if (nameNeedle && !d.domainName.toLowerCase().includes(nameNeedle))
       return false;

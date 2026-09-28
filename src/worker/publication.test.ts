@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { Hono } from 'hono';
-import { aesGcmCipher } from '../core/storage/encrypted';
+import { aesGcmCipher, EncryptedDocStore } from '../core/storage/encrypted';
+import { runMigrations } from '../core/storage/migrations';
+import { D1DocStore } from './storage/d1-doc-store';
 import { MemoryDocStore } from '../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../core/storage/namespace';
 import { emptyDraft, privateListing } from '../shared/publication';
@@ -115,11 +117,11 @@ beforeEach(async () => {
   ]);
   privateReads = 0;
   const memory = new MemoryDocStore();
-  await memory.put('credentials', 'dynadot', {
+  await memory.put('registrar-credentials', 'dynadot', {
     apiKey: 'NEVER_PUBLIC_CREDENTIAL',
     apiSecret: 'NEVER_PUBLIC_SECRET',
   });
-  await memory.put('cache-portfolio', 'dynadot', {
+  await memory.put('registrar-domains', 'dynadot', {
     fetchedAt: Date.now(),
     data: {
       lastSyncedAt: Date.now(),
@@ -137,6 +139,95 @@ beforeEach(async () => {
 });
 
 describe('publication database and HTTP boundary', () => {
+  it('migrates sealed hosted data while preserving account proxy routes and publication rows', async () => {
+    await db.exec(
+      readFileSync(
+        new URL('../../migrations/0001_docs.sql', import.meta.url),
+        'utf8',
+      )
+        .replace(/^--.*$/gm, '')
+        .replace(/\n/g, ' '),
+    );
+    const saved = await call('/publishing', 'PUT', { draft, revision: null });
+    const { revision } = await saved.json();
+    expect(
+      (await call('/publishing/publish', 'POST', { revision })).status,
+    ).toBe(200);
+    const publicationRows = async () => ({
+      draft: (await db.prepare('SELECT * FROM portfolio_drafts').all()).results,
+      published: (await db.prepare('SELECT * FROM published_portfolios').all())
+        .results,
+    });
+    const before = await publicationRows();
+    const raw = new D1DocStore(db);
+    const sealed = new EncryptedDocStore(
+      raw,
+      await aesGcmCipher(await deriveEncryptionKey(root)),
+    );
+    const accountId = '11111111-2222-4333-8444-555555555555';
+    const proxyId = '22222222-3333-4444-8555-666666666666';
+    const account = {
+      id: accountId,
+      registrar: 'namecheap',
+      label: 'Secondary',
+      proxyId,
+    };
+    const credentials = {
+      username: 'test-user',
+      apiKey: 'NEVER_PUBLIC_CREDENTIAL',
+      clientIp: '9.9.9.10',
+    };
+    const proxy = {
+      id: proxyId,
+      url: 'http://user:NEVER_PUBLIC_SECRET@9.9.9.9:3128/',
+      egressIp: '9.9.9.10',
+    };
+    await sealed.put('registrar-accounts', accountId, account);
+    await sealed.put('credentials', accountId, credentials);
+    await sealed.put('proxies', proxyId, proxy);
+    await sealed.put('cache-portfolio', accountId, {
+      fetchedAt: 123,
+      data: {
+        lastSyncedAt: 123,
+        lastError: null,
+        domains: [
+          { domainName: 'visible.com', registrar: 'namecheap', accountId },
+        ],
+      },
+    });
+    await sealed.put('folders', 'assignments', {
+      [`${accountId}:visible.com`]: '__archive__',
+    });
+    await sealed.put('pricing-overrides', `${accountId}:visible.com`, 25);
+    const credentialCiphertext = await raw.get('credentials', accountId);
+    const proxyCiphertext = await raw.get('proxies', proxyId);
+
+    await runMigrations(raw, sealed);
+
+    expect(await sealed.get('registrar-accounts', accountId)).toEqual(account);
+    expect(await sealed.get('registrar-credentials', accountId)).toEqual(
+      credentials,
+    );
+    expect(await sealed.get('registrar-proxies', proxyId)).toEqual(proxy);
+    expect(await raw.get('registrar-credentials', accountId)).toEqual(
+      credentialCiphertext,
+    );
+    expect(await raw.get('registrar-proxies', proxyId)).toEqual(
+      proxyCiphertext,
+    );
+    expect(await sealed.get('registrar-domains', accountId)).toMatchObject({
+      data: { domains: [{ domainName: 'visible.com', accountId }] },
+    });
+    expect(await sealed.list('domain-folders')).toEqual({
+      'visible.com': '__hidden__',
+    });
+    expect(await sealed.get('domain-prices', 'visible.com')).toBe(25);
+    expect(await publicationRows()).toEqual(before);
+    const after = await raw.loadAll();
+    await runMigrations(raw, sealed);
+    expect(await raw.loadAll()).toEqual(after);
+  });
+
   it('requires authentication for read, preview, save, publish and unpublish before private hydration', async () => {
     for (const [path, method] of [
       ['/publishing', 'GET'],
