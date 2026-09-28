@@ -24,14 +24,8 @@ const api: DombotApi = {
   clearAllCaches: () => ipcRenderer.invoke(IpcChannels.clearAllCaches),
   getPortfolioPricing: () =>
     ipcRenderer.invoke(IpcChannels.getPortfolioPricing),
-  setManualPrice: (registrar, domain, price, accountId) =>
-    ipcRenderer.invoke(
-      IpcChannels.setManualPrice,
-      registrar,
-      domain,
-      price,
-      accountId,
-    ),
+  setManualPrice: (domain, price) =>
+    ipcRenderer.invoke(IpcChannels.setManualPrice, domain, price),
 
   // Registrars
   getDomainDetail: (registrar, domainName, refresh, accountId) =>
@@ -128,13 +122,37 @@ const api: DombotApi = {
   updateFolder: (id, patch) =>
     ipcRenderer.invoke(IpcChannels.updateFolder, id, patch),
   deleteFolder: (id) => ipcRenderer.invoke(IpcChannels.deleteFolder, id),
-  assignFolder: (domainKey, folderId) =>
-    ipcRenderer.invoke(IpcChannels.assignFolder, domainKey, folderId),
+  assignFolder: (domainName, folderId) =>
+    ipcRenderer.invoke(IpcChannels.assignFolder, domainName, folderId),
 
   // Settings
   getSettings: () => ipcRenderer.invoke(IpcChannels.getSettings),
   updateSettings: (patch) =>
     ipcRenderer.invoke(IpcChannels.updateSettings, patch),
+  getPurchases: () => ipcRenderer.invoke(IpcChannels.getPurchases),
+  setPurchase: (input) => ipcRenderer.invoke(IpcChannels.setPurchase, input),
+  setSale: (input) => ipcRenderer.invoke(IpcChannels.setSale, input),
+  getDomainEvents: () => ipcRenderer.invoke(IpcChannels.getDomainEvents),
+  setDispositions: (items, type, date) =>
+    ipcRenderer.invoke(IpcChannels.setDispositions, items, type, date),
+  markSold: (items, date) =>
+    ipcRenderer.invoke(IpcChannels.markSold, items, date),
+  restoreOwned: (domainNames) =>
+    ipcRenderer.invoke(IpcChannels.restoreOwned, domainNames),
+  setAlertsDismissed: (ids, dismissed) =>
+    ipcRenderer.invoke(IpcChannels.setAlertsDismissed, ids, dismissed),
+  deleteUserEvent: (id) => ipcRenderer.invoke(IpcChannels.deleteUserEvent, id),
+  deleteDomains: (domainNames) =>
+    ipcRenderer.invoke(IpcChannels.deleteDomains, domainNames),
+  lookupRegistrations: (domainNames) =>
+    ipcRenderer.invoke(IpcChannels.lookupRegistrations, domainNames),
+  getRegistrationQuote: (registrar, domainName, accountId) =>
+    ipcRenderer.invoke(
+      IpcChannels.getRegistrationQuote,
+      registrar,
+      domainName,
+      accountId,
+    ),
 
   // Events (polling)
   getRevisions: () => ipcRenderer.invoke(IpcChannels.getRevisions),

@@ -326,9 +326,9 @@ describe('account persistence and routing', () => {
     const bundle = JSON.parse(
       exportBundle({ version: 'test', platform: 'web' }),
     );
-    bundle.namespaces.credentials[account.id].proxyUrl =
+    bundle.namespaces['registrar-credentials'][account.id].proxyUrl =
       'http://127.0.0.1:8080';
-    bundle.namespaces.credentials[account.id].proxyIp = proxy.ip;
+    bundle.namespaces['registrar-credentials'][account.id].proxyIp = proxy.ip;
     await expect(importBundle(JSON.stringify(bundle))).rejects.toThrow(
       /public/,
     );
@@ -392,7 +392,7 @@ describe('account persistence and routing', () => {
     const bundle = JSON.parse(
       exportBundle({ version: 'test', platform: 'web' }),
     );
-    bundle.namespaces.credentials.namecheap = {
+    bundle.namespaces['registrar-credentials'].namecheap = {
       ...configured,
       proxyUrl: 'http://127.0.0.1:8080',
     };
@@ -413,20 +413,22 @@ describe('account persistence and routing', () => {
     await setStoredCredentials('namecheap', configured);
     await migrateLegacyProxies();
     await flushWrites();
-    expect(await disk.get('credentials', 'namecheap')).toMatchObject({
+    expect(await disk.get('registrar-credentials', 'namecheap')).toMatchObject({
       __sealed: 1,
     });
-    expect(JSON.stringify(await disk.list('credentials'))).not.toContain(
-      'proxy-secret',
-    );
+    expect(
+      JSON.stringify(await disk.list('registrar-credentials')),
+    ).not.toContain('proxy-secret');
     const bundle = exportBundle({ version: 'test', platform: 'web' });
     await importBundle(bundle);
     await flushWrites();
     await hydrateStores();
     expect(getStoredCredentials('namecheap')).toEqual(credentials);
     expect(getProxyProfile()?.url).toBe(proxy.url);
-    expect(await disk.get('proxies', 'default')).toMatchObject({ __sealed: 1 });
-    expect(JSON.stringify(await disk.list('proxies'))).not.toContain(
+    expect(await disk.get('registrar-proxies', 'default')).toMatchObject({
+      __sealed: 1,
+    });
+    expect(JSON.stringify(await disk.list('registrar-proxies'))).not.toContain(
       'proxy-secret',
     );
     expect(

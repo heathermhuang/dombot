@@ -53,6 +53,9 @@ it('refreshes publication ownership after a single-account sync without discardi
       },
       getRegistrarMetadata: async () => [],
       getPortfolioPricing: async () => ({}),
+      getPurchases: async () => ({}),
+      getDomainEvents: async () => [],
+      getFolders: async () => ({ folders: [], assignments: {} }),
     },
   });
   let refreshing: Promise<void> | undefined;

@@ -110,7 +110,7 @@ describe('one domain catalog with exact registrar targets', () => {
         .accountId,
     ).toBe('a');
   });
-  it('applies expiration, folder and DNS filters within the explicitly selected account', () => {
+  it('keeps account-specific expiry and DNS filters while sharing folders by domain name', () => {
     const name = 'shared.example';
     const a = record(name, 'a', {
         expirationDate: new Date('2030-01-01'),
@@ -127,7 +127,19 @@ describe('one domain catalog with exact registrar targets', () => {
       'a',
     ).get(name)!;
     const now = Date.parse('2026-09-10');
-    const folders = { 'a:shared.example': 'one', 'b:shared.example': 'two' };
+    const folders = { 'shared.example': 'one' };
+    for (const account of ['a', 'b']) {
+      expect(
+        matchesRegistrarFilters(
+          entry,
+          { ...filters, account, folder: 'one' },
+          folders,
+          new Set(['one', 'two']),
+          'hidden',
+          now,
+        ),
+      ).toBe(true);
+    }
     expect(
       matchesRegistrarFilters(
         entry,

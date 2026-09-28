@@ -1,6 +1,7 @@
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { useEffect, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '../store/app';
 import { timeAgo } from '../lib/time';
@@ -14,8 +15,8 @@ import {
 } from '../lib/platform';
 
 /**
- * App-wide bottom status bar (VS Code style): a thin bar fixed across the
- * viewport bottom, with page content scrolling underneath it. Surfaces the
+ * App-wide bottom status bar (VS Code style): a thin bar across the bottom of
+ * the window, below the scrolling page area. Surfaces the
  * embedded MCP server's status on the left (a link into MCP settings) — on the
  * web build, preceded by the session status and a sign-out link — and the
  * last-synced time plus a Sync Domains link on the right. Shown on every route.
@@ -67,6 +68,7 @@ export default function StatusBar() {
   const syncedCount = configured.filter(
     (r) => r.sync.lastSyncedAt != null && r.sync.lastError == null,
   ).length;
+  const failedCount = configured.filter((r) => r.sync.lastError != null).length;
   const noneConfigured = registrars !== null && configuredCount === 0;
   const allSynced = configuredCount > 0 && syncedCount === configuredCount;
   // Show the sync pill once we know the metadata (0/0 amber when nothing is
@@ -76,7 +78,7 @@ export default function StatusBar() {
   const showRefreshed = portfolioLoadedAt !== null && configuredCount > 0;
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-40 flex min-h-[29px] flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t bg-background px-4 py-1 text-xs text-muted-foreground whitespace-nowrap select-none sm:py-0">
+    <footer className="relative z-40 flex min-h-[29px] shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t bg-background px-4 py-1 text-xs text-muted-foreground whitespace-nowrap select-none sm:py-0">
       <div className="flex items-center gap-4">
         {isWeb() && <SessionStatus />}
         <button
@@ -104,7 +106,7 @@ export default function StatusBar() {
           Hidden on phones, where the side groups already fill the bar. */}
       <ModeToggle
         bare
-        className="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:inline-flex"
+        className="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:inline-flex"
       />
 
       {(showRefreshed || showSync) && (
@@ -125,23 +127,33 @@ export default function StatusBar() {
               onClick={() => navigate('/settings?tab=registrars')}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-sm hover:text-foreground',
-                !allSynced && 'text-amber-600 dark:text-amber-400',
+                // A warning color stays that color on hover, just brighter.
+                failedCount > 0
+                  ? 'text-destructive hover:text-destructive hover:brightness-125'
+                  : !allSynced &&
+                      'text-amber-600 hover:text-amber-600 hover:brightness-125 dark:text-amber-400 dark:hover:text-amber-400',
               )}
               title={
                 noneConfigured
                   ? `No ${unit} configured — open registrar settings`
-                  : allSynced
-                    ? `All configured ${unit} have a successful sync. Publication readiness also requires fresh verification.`
-                    : `${configuredCount - syncedCount} ${unit} need a successful sync — open registrar settings`
+                  : failedCount > 0
+                    ? `${failedCount} ${failedCount === 1 ? unit.replace(/s$/, '') : unit} failed to sync — open registrar settings`
+                    : allSynced
+                      ? `All configured ${unit} have a successful sync. Publication readiness also requires fresh verification.`
+                      : `${configuredCount - syncedCount} ${unit} need a successful sync — open registrar settings`
               }
             >
-              <span
-                className={cn(
-                  'size-2 rounded-full',
-                  allSynced ? 'bg-brand' : 'bg-amber-500 dark:bg-amber-400',
-                )}
-                aria-hidden
-              />
+              {failedCount > 0 ? (
+                <CircleAlert className="size-3.5" aria-hidden />
+              ) : (
+                <span
+                  className={cn(
+                    'size-2 rounded-full',
+                    allSynced ? 'bg-brand' : 'bg-amber-500 dark:bg-amber-400',
+                  )}
+                  aria-hidden
+                />
+              )}
               {syncedCount}/{configuredCount} {unit} last sync succeeded
             </button>
           )}

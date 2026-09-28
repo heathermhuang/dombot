@@ -5,6 +5,7 @@ import {
   type PortfolioListing,
 } from './publication';
 import { domainKey } from './account-key';
+import { toAscii } from './domain-name';
 import type { Domain, RegistrarMeta } from './ipc';
 
 export interface CatalogEntry {
@@ -141,7 +142,7 @@ export function matchesRegistrarFilters(
   )
     return false;
   const folderOf = (record: Domain) => {
-    const id = assignments[domainKey(record)];
+    const id = assignments[toAscii(record.domainName)];
     return id === hiddenFolderId || folderIds.has(id) ? id : undefined;
   };
   if (
