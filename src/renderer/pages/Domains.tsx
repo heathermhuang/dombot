@@ -382,9 +382,15 @@ function domainLifecycle(
 }
 
 /** A distinctly-colored pill per lifecycle state; nothing when healthy. */
-export function LifecycleBadge({ status }: { status: string }) {
+export function LifecycleBadge({
+  status,
+  showStatus = false,
+}: {
+  status: string;
+  showStatus?: boolean;
+}) {
   const flag = domainLifecycle(status);
-  if (!flag) return null;
+  if (!flag) return showStatus ? <span>{status || 'Not reported'}</span> : null;
   return (
     <Badge
       className={cn(
