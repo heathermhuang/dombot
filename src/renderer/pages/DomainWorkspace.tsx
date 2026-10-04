@@ -564,26 +564,30 @@ export default function DomainWorkspace({
                 domains in inventory
               </span>
             )}
-            {state.published ? (
-              <span>
-                <i className="pf-live-dot" />
-                {area === 'domains'
-                  ? `${state.published.count} live on public page`
-                  : `Live · ${state.published.count} names`}
-              </span>
-            ) : (
-              <span>Not published</span>
-            )}
-            <span aria-hidden="true">/</span>
-            <span role="status">
-              {status === 'saved' && <Check />}
-              {saveStatus}
-            </span>
-            {changes.count > 0 && (
-              <span>
-                · {changes.count} unpublished{' '}
-                {changes.count === 1 ? 'change' : 'changes'}
-              </span>
+            {(area === 'page' || mode === 'publish') && (
+              <>
+                {state.published ? (
+                  <span>
+                    <i className="pf-live-dot" />
+                    {area === 'domains'
+                      ? `${state.published.count} live on public page`
+                      : `Live · ${state.published.count} names`}
+                  </span>
+                ) : (
+                  <span>Not published</span>
+                )}
+                <span aria-hidden="true">/</span>
+                <span role="status">
+                  {status === 'saved' && <Check />}
+                  {saveStatus}
+                </span>
+                {changes.count > 0 && (
+                  <span>
+                    · {changes.count} unpublished{' '}
+                    {changes.count === 1 ? 'change' : 'changes'}
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1542,15 +1546,16 @@ export default function DomainWorkspace({
                       />
                     </th>
                     <th>Domain</th>
-                    <th>Public page</th>
+                    {mode === 'publish' && <th>Public page</th>}
                     {mode === 'manage' ? (
                       <>
                         <th>Registrar / account</th>
                         <th>Folder</th>
                         <th>Created</th>
                         <th>Expires</th>
+                        <th>Status</th>
                         <th>Renewal</th>
-                        <th>Auto</th>
+                        <th>Auto renew</th>
                         <th>Privacy</th>
                         <th>Locked</th>
                         <th>Nameservers</th>
@@ -1603,6 +1608,7 @@ export default function DomainWorkspace({
                           {mode === 'manage' && (
                             <button
                               className="pf-mobile-registrar-toggle"
+                              aria-label={`More details for ${item.domain}`}
                               aria-expanded={registrarExpanded.has(item.domain)}
                               onClick={() =>
                                 setRegistrarExpanded((previous) => {
@@ -1615,89 +1621,92 @@ export default function DomainWorkspace({
                               }
                             >
                               {registrarExpanded.has(item.domain)
-                                ? 'Hide registrar details'
-                                : 'Registrar details'}
+                                ? 'Hide details'
+                                : 'More details'}
                             </button>
                           )}
                         </td>
-                        <td className="page-action-cell">
-                          <div>
-                            <span
-                              data-page-state={pageMembership(
-                                item,
-                                liveItems.get(item.domain),
-                                editedItems.has(item.domain),
-                              )}
-                            >
-                              {
-                                pageMembershipLabel[
-                                  pageMembership(
-                                    item,
-                                    liveItems.get(item.domain),
-                                    editedItems.has(item.domain),
+                        {mode === 'publish' && (
+                          <td className="page-action-cell">
+                            <div>
+                              <span
+                                data-page-state={pageMembership(
+                                  item,
+                                  liveItems.get(item.domain),
+                                  editedItems.has(item.domain),
+                                )}
+                              >
+                                {
+                                  pageMembershipLabel[
+                                    pageMembership(
+                                      item,
+                                      liveItems.get(item.domain),
+                                      editedItems.has(item.domain),
+                                    )
+                                  ]
+                                }
+                              </span>
+                              {check !== 'owned' &&
+                                item.visibility !== 'historical' && (
+                                  <button
+                                    className="pf-verification-reason"
+                                    onClick={() => openInspector(item.domain)}
+                                  >
+                                    {ownershipLabel[check]} · Resolve
+                                  </button>
+                                )}
+                              <div className="page-row-actions">
+                                {item.visibility === 'private' ? (
+                                  liveItems.has(item.domain) ? (
+                                    <button
+                                      className="pf-text-button"
+                                      onClick={() =>
+                                        update(item.domain, {
+                                          visibility: liveItems.get(
+                                            item.domain,
+                                          )!.visibility,
+                                        })
+                                      }
+                                    >
+                                      Keep on page
+                                    </button>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={check !== 'owned'}
+                                      onClick={() =>
+                                        apply(
+                                          { kind: 'include' },
+                                          new Set([item.domain]),
+                                        )
+                                      }
+                                    >
+                                      Add to public page
+                                    </Button>
                                   )
-                                ]
-                              }
-                            </span>
-                            {check !== 'owned' &&
-                              item.visibility !== 'historical' && (
-                                <button
-                                  className="pf-verification-reason"
-                                  onClick={() => openInspector(item.domain)}
-                                >
-                                  {ownershipLabel[check]} · Resolve
-                                </button>
-                              )}
-                            <div className="page-row-actions">
-                              {item.visibility === 'private' ? (
-                                liveItems.has(item.domain) ? (
-                                  <button
-                                    className="pf-text-button"
-                                    onClick={() =>
-                                      update(item.domain, {
-                                        visibility: liveItems.get(item.domain)!
-                                          .visibility,
-                                      })
-                                    }
-                                  >
-                                    Keep on page
-                                  </button>
                                 ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={check !== 'owned'}
-                                    onClick={() =>
-                                      apply(
-                                        { kind: 'include' },
-                                        new Set([item.domain]),
-                                      )
-                                    }
-                                  >
-                                    Add to public page
-                                  </Button>
-                                )
-                              ) : (
-                                <>
-                                  <button
-                                    className="pf-text-button"
-                                    onClick={() =>
-                                      apply(
-                                        {
-                                          kind: 'visibility',
-                                          value: 'private',
-                                        },
-                                        new Set([item.domain]),
-                                      )
-                                    }
-                                  >
-                                    Remove
-                                  </button>
-                                </>
-                              )}
+                                  <>
+                                    <button
+                                      className="pf-text-button"
+                                      onClick={() =>
+                                        apply(
+                                          {
+                                            kind: 'visibility',
+                                            value: 'private',
+                                          },
+                                          new Set([item.domain]),
+                                        )
+                                      }
+                                    >
+                                      Remove
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
+                        )}
                         {mode === 'manage' ? (
                           management.cells(catalog.get(item.domain))
                         ) : (
@@ -1863,32 +1872,34 @@ export default function DomainWorkspace({
               </div>
             </div>
           </div>
-          <div className="pf-health-line">
-            <Check />
-            <span>
-              {state.accounts.filter((account) => account.healthy).length}/
-              {state.accounts.length} accounts ready for publication (fresh
-              verification).
-            </span>
-            {blockers.length > 0 ? (
-              <button
-                className="pf-text-button"
-                onClick={() => selectScope('listed', 'blocking')}
-              >
-                {blockers.length} listed names block publishing
-              </button>
-            ) : (
-              <span>No ownership blockers on your page.</span>
-            )}
-            {unmatched.length > 0 && (
-              <button
-                className="pf-text-button"
-                onClick={() => selectScope('private', 'attention')}
-              >
-                {unmatched.length} unlisted names need review
-              </button>
-            )}
-          </div>
+          {mode === 'publish' && (
+            <div className="pf-health-line">
+              <Check />
+              <span>
+                {state.accounts.filter((account) => account.healthy).length}/
+                {state.accounts.length} accounts ready for publication (fresh
+                verification).
+              </span>
+              {blockers.length > 0 ? (
+                <button
+                  className="pf-text-button"
+                  onClick={() => selectScope('listed', 'blocking')}
+                >
+                  {blockers.length} listed names block publishing
+                </button>
+              ) : (
+                <span>No ownership blockers on your page.</span>
+              )}
+              {unmatched.length > 0 && (
+                <button
+                  className="pf-text-button"
+                  onClick={() => selectScope('private', 'attention')}
+                >
+                  {unmatched.length} unlisted names need review
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
       {management.dialogs}

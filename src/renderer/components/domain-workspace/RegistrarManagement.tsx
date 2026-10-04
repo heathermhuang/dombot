@@ -211,7 +211,7 @@ export function useRegistrarManagement({
     if (!d)
       return (
         <>
-          <td colSpan={9} className="pf-readonly-record">
+          <td colSpan={10} className="pf-readonly-record">
             <span>{entry?.reason ?? 'No registrar record'}</span>
           </td>
           <td />
@@ -228,30 +228,43 @@ export function useRegistrarManagement({
             <small className="pf-hint block">{d.accountLabel}</small>
           )}
         </td>
-        <td className="pf-manage-folder" data-label="Folder">
+        <td
+          className="pf-manage-folder"
+          data-label="Folder"
+          data-mobile-secondary
+        >
           <FolderCell
             folders={folders}
             folderId={folderAssignments[toAscii(d.domainName)]}
             onAssign={(id) => void assignFolder(d.domainName, id)}
           />
         </td>
-        <td className="pf-manage-date" data-label="Created">
+        <td
+          className="pf-manage-date"
+          data-label="Created"
+          data-mobile-secondary
+        >
           {date(d.createdDate)}
         </td>
         <td className="pf-manage-date" data-label="Expires">
           {date(d.expirationDate)}
-          <LifecycleBadge status={d.status} />
         </td>
-        <td data-label="Renewal">
+        <td className="pf-manage-status" data-label="Status">
+          <LifecycleBadge status={d.status} showStatus />
+        </td>
+        <td data-label="Renewal" data-mobile-secondary>
           <RenewalCell
             info={pricing[key]}
             loading={Object.keys(pricing).length === 0}
           />
         </td>
         <td data-label="Auto renew">
-          <AutoRenewSwitch domain={d} />
+          <span className="pf-auto-renew">
+            <AutoRenewSwitch domain={d} />
+            <span>{d.autoRenew ? 'On' : 'Off'}</span>
+          </span>
         </td>
-        <td data-label="Privacy">
+        <td data-label="Privacy" data-mobile-secondary>
           <FlagToggle
             domain={d}
             kind="privacy"
@@ -261,7 +274,7 @@ export function useRegistrarManagement({
             offLabel="privacy off"
           />
         </td>
-        <td data-label="Lock">
+        <td data-label="Lock" data-mobile-secondary>
           <FlagToggle
             domain={d}
             kind="lock"
@@ -271,10 +284,10 @@ export function useRegistrarManagement({
             offLabel="unlocked"
           />
         </td>
-        <td data-label="Nameservers">
+        <td data-label="Nameservers" data-mobile-secondary>
           <NameserversCell domain={d} />
         </td>
-        <td data-label="Registrar actions">
+        <td data-label="Registrar actions" data-mobile-secondary>
           <RowActionsMenu
             domain={d}
             folders={folders}

@@ -1318,17 +1318,32 @@
 .pf-mobile-registrar-toggle {
   display: none;
 }
+.pf-auto-renew {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pf-manage-status > span {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 650px) {
   .pf-mobile-registrar-toggle {
     display: block;
     color: var(--pf-muted);
     text-decoration: underline;
     text-align: left;
+    min-height: 44px;
   }
   .pf-table[data-mode='manage']
     tbody
     tr:not([data-registrar-expanded='true'])
-    td:nth-child(n + 4) {
+    td[data-mobile-secondary] {
+    display: none;
+  }
+  .pf-table[data-mode='manage']
+    tr:not([data-registrar-expanded='true'])
+    .pf-auto-renew
+    [role='switch'] {
     display: none;
   }
 }
