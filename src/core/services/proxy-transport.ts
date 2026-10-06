@@ -5,6 +5,7 @@ import {
   type Registrar,
   type RegistrarCredentials,
   type RegistrarName,
+  type RegistrarOptions,
 } from '@aoxborrow/registrar-client';
 import { parseProxy, type ProxyRoute } from '../../shared/proxy';
 
@@ -126,6 +127,7 @@ export function createProxiedRegistrar(
   name: RegistrarName,
   credentials: RegistrarCredentials,
   route: ProxyRoute,
+  wrapFetch?: (send: typeof globalThis.fetch) => typeof globalThis.fetch,
 ): Registrar {
   const proxy = parseProxy({ url: route.url, egressIp: route.ip });
   if (!proxy) throw new Error('Configure the proxy URL and outgoing IP.');
@@ -165,7 +167,7 @@ export function createProxiedRegistrar(
     name,
     // Through the proxy, its outgoing address is the Client IP Namecheap sees.
     name === 'namecheap' ? { ...credentials, clientIp: proxy.ip } : credentials,
-    { fetch },
+    { fetch: wrapFetch ? wrapFetch(fetch) : fetch } satisfies RegistrarOptions,
   );
   const baseUrl = (
     provider as unknown as { http?: { config?: { baseUrl?: string } } }
