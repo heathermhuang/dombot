@@ -1489,7 +1489,7 @@ export async function setNameserversCached(
     nameservers,
     opts,
   );
-  if (result.success)
+  if (result.success && !result.pending)
     patchDomainInCaches(name, domainName, { nameservers }, accountId);
   return result;
 }
