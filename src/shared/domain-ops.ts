@@ -24,6 +24,17 @@ const REQUIRED_FEATURE: Partial<Record<DomainOpKind, string>> = {
 const KNOWN_GAPS: Partial<
   Record<RegistrarName, (op: DomainOp) => string | null>
 > = {
+  '101domain': (op) =>
+    op.kind === 'autoRenew' ||
+    op.kind === 'lock' ||
+    op.kind === 'privacy' ||
+    op.kind === 'renew'
+      ? '101domain’s API does not offer this change yet — use your 101domain account.'
+      : op.kind === 'urlForwarding' &&
+          (op.forwards.length > 1 ||
+            op.forwards.some((f) => f.host !== '@' || f.type !== 'permanent'))
+        ? '101domain supports one permanent URL forwarding rule for the domain root.'
+        : null,
   cloudflare: (op) =>
     op.kind === 'autoRenew' ||
     op.kind === 'lock' ||

@@ -123,3 +123,6 @@ wrangler.local.jsonc
 
 # Local browser QA state
 .gstack/
+
+# Pinned 101domain adapter until its upstream package release
+!vendor/aoxborrow-registrar-client-0.7.0-101domain.2.tgz
