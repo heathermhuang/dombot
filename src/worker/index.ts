@@ -8,6 +8,10 @@ import { ApiValidationError, invoke, type ApiMethodName } from '../core/api';
 import { MCP_PUBLIC_PATHS, createMcpRoutes } from '../core/mcp/routes';
 import { setAppIdentity } from '../core/app-info';
 import { syncAll } from '../core/services/auto-sync';
+import {
+  configureIncrementalRenewalPricing,
+  stepRenewalPricing,
+} from '../core/services/registrars';
 import { resetBulkMemory } from '../core/services/bulk-jobs';
 import { getSettings } from '../core/services/settings';
 import { BundleError } from '../core/storage/bundle';
@@ -89,6 +93,7 @@ function bootOnce(env: Env): Promise<Boot> {
     // this boot. Renames copy raw rows, so values move still sealed.
     await runMigrations(raw, store);
     configureProxyTransport(workerProxyFetch);
+    configureIncrementalRenewalPricing(true);
     return { auth: await buildAuthConfig(env, root) };
   })().catch((err) => {
     boot = null; // let the next request retry (e.g. secret set after deploy)
@@ -331,6 +336,7 @@ export default {
         return;
       }
       const ran = await syncAll(minutes * 60_000);
+      await stepRenewalPricing();
       console.log(
         ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
       );

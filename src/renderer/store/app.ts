@@ -68,6 +68,7 @@ interface AppState {
   // Aggregated portfolio across every configured registrar.
   portfolio: Domain[];
   portfolioErrors: PortfolioErrorInfo[];
+  renewalPricing: { remaining: number; failed: number } | null;
   portfolioRegistrars: string[];
   /** Map of registrar id → nicely capitalized display name. */
   portfolioRegistrarLabels: Record<string, string>;
@@ -263,6 +264,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   portfolio: [],
   portfolioErrors: [],
+  renewalPricing: null,
   portfolioRegistrars: [],
   portfolioRegistrarLabels: {},
   portfolioLoading: false,
@@ -295,6 +297,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       portfolio: result.domains,
       portfolioErrors: result.errors,
+      renewalPricing: result.renewalPricing ?? null,
       portfolioRegistrars: result.registrars,
       portfolioRegistrarLabels: result.registrarLabels,
       portfolioLoadedAt: result.fetchedAt ?? Date.now(),
@@ -330,6 +333,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       portfolio: result.domains,
       portfolioErrors: result.errors,
+      renewalPricing: result.renewalPricing ?? null,
       portfolioRegistrars: result.registrars,
       portfolioRegistrarLabels: result.registrarLabels,
       portfolioLoadedAt:
@@ -363,6 +367,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       portfolio: portfolio.domains,
       portfolioErrors: portfolio.errors,
+      renewalPricing: portfolio.renewalPricing ?? null,
       portfolioRegistrars: portfolio.registrars,
       portfolioRegistrarLabels: portfolio.registrarLabels,
       portfolioLoadedAt: portfolio.fetchedAt,
@@ -382,6 +387,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         portfolio: [],
         portfolioErrors: [],
+        renewalPricing: null,
         portfolioRegistrars: [],
         enriched: {},
         pricing: {},
@@ -404,12 +410,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         portfolio: portfolio.domains,
         portfolioErrors: portfolio.errors,
+        renewalPricing: portfolio.renewalPricing ?? null,
         portfolioRegistrars: portfolio.registrars,
         portfolioRegistrarLabels: portfolio.registrarLabels,
         portfolioLoadedAt: portfolio.fetchedAt,
         enriched,
       };
     });
+    await get().loadPricing();
     await get().loadDomainEvents();
     await get().loadFolders();
   },
@@ -422,6 +430,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       portfolio: [],
       portfolioErrors: [],
+      renewalPricing: null,
       portfolioRegistrars: [],
       portfolioRegistrarLabels: {},
       portfolioLoadedAt: null,
@@ -447,6 +456,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({
         portfolio: result.domains,
         portfolioErrors: result.errors,
+        renewalPricing: result.renewalPricing ?? null,
         portfolioRegistrars: result.registrars,
         portfolioRegistrarLabels: result.registrarLabels,
         portfolioLoading: false,

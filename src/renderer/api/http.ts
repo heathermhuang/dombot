@@ -138,7 +138,11 @@ class Poller {
     }
     this.busy = true;
     try {
-      const rev = await call<Revisions>('getRevisions');
+      const rev =
+        await call<Awaited<ReturnType<DombotApi['getRevisions']>>>(
+          'getRevisions',
+        );
+      if (rev.renewalPricingPending) void driveRenewalPricing();
       if (this.last) {
         for (const kind of ['portfolio', 'bulk', 'approvals'] as const) {
           if (rev[kind] !== this.last[kind]) {
@@ -173,6 +177,29 @@ class Poller {
 
 /** Whether this client is currently stepping a job (drives the poll rate). */
 let driving: string | null = null;
+let pricingDriving = false;
+
+/** Read-only pricing work is persisted by the Worker. Visible owner tabs
+ * advance small batches; closing or hiding a tab leaves the rest resumable. */
+async function driveRenewalPricing(): Promise<void> {
+  if (pricingDriving) return;
+  pricingDriving = true;
+  try {
+    while (document.visibilityState === 'visible') {
+      const status =
+        await call<Awaited<ReturnType<DombotApi['stepRenewalPricing']>>>(
+          'stepRenewalPricing',
+        );
+      if (status.remaining === 0) return;
+      const wait = Math.max(2000, (status.nextAt ?? 0) - Date.now());
+      await new Promise<void>((resolve) => setTimeout(resolve, wait));
+    }
+  } catch {
+    // The next revision poll resumes the persisted pending reads.
+  } finally {
+    pricingDriving = false;
+  }
+}
 
 const progressListeners = new Set<Listener<BulkProgress>>();
 const finishedListeners = new Set<Listener<BulkJob>>();
@@ -244,7 +271,7 @@ export function saveTextFileInBrowser(
 }
 
 export function createHttpApi(): DombotApi {
-  const poller = new Poller(() => driving !== null);
+  const poller = new Poller(() => driving !== null || pricingDriving);
   const m =
     <T>(name: string) =>
     (...args: unknown[]) =>
@@ -274,6 +301,7 @@ export function createHttpApi(): DombotApi {
     exportData: m('exportData'),
     importData: m('importData'),
     getPortfolioPricing: m('getPortfolioPricing'),
+    stepRenewalPricing: m('stepRenewalPricing'),
     setManualPrice: m('setManualPrice'),
 
     listPortfolio: async (refresh) =>

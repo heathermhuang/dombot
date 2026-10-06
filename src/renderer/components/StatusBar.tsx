@@ -25,6 +25,7 @@ export default function StatusBar() {
   const mcpInfo = useAppStore((s) => s.mcpInfo);
   const loadMcpInfo = useAppStore((s) => s.loadMcpInfo);
   const portfolioLoadedAt = useAppStore((s) => s.portfolioLoadedAt);
+  const renewalPricing = useAppStore((s) => s.renewalPricing);
   const registrars = useAppStore((s) => s.registrars);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const navigate = useNavigate();
@@ -110,16 +111,29 @@ export default function StatusBar() {
       />
 
       {(showRefreshed || showSync) && (
-        <div className="flex items-center gap-3">
-          {showRefreshed && (
+        <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+          {renewalPricing &&
+          (renewalPricing.remaining > 0 || renewalPricing.failed > 0) ? (
             <span
-              // Hidden on phones to keep the bar to one line; the sync pill to
-              // its right still carries the synced state.
-              className="hidden sm:inline"
-              title={`Last synced ${new Date(portfolioLoadedAt).toLocaleString()}`}
+              role="status"
+              className="text-muted-foreground"
+              title="Renewal prices update separately. Last saved prices stay visible while new quotes are fetched."
             >
-              Last synced {timeAgo(portfolioLoadedAt)}
+              {renewalPricing.remaining > 0
+                ? `Updating renewal prices · ${renewalPricing.remaining} left`
+                : `${renewalPricing.failed} renewal prices could not update`}
             </span>
+          ) : (
+            showRefreshed && (
+              <span
+                // Hidden on phones to keep the bar to one line; the sync pill to
+                // its right still carries the synced state.
+                className="hidden sm:inline"
+                title={`Last synced ${new Date(portfolioLoadedAt).toLocaleString()}`}
+              >
+                Last synced {timeAgo(portfolioLoadedAt)}
+              </span>
+            )
           )}
           {showSync && (
             <button

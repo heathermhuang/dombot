@@ -32,6 +32,8 @@ import {
 import { listEvents } from '../services/domain-events';
 import { lookupRegistrations } from '../services/registration-lookup';
 import {
+  getRenewalPricingStatus,
+  stepRenewalPricing,
   getRegistrarCatalog,
   connectRegistrarAccount,
   removeRegistrarAccount,
@@ -415,7 +417,13 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
   ),
 
   // ── Events (polling) ──────────────────────────────────────────────────────
-  getRevisions: method(none, async () => getRevisions()),
+  getRevisions: method(none, async () => ({
+    ...getRevisions(),
+    ...(getRenewalPricingStatus().remaining > 0
+      ? { renewalPricingPending: true }
+      : {}),
+  })),
+  stepRenewalPricing: method(none, async () => stepRenewalPricing()),
 
   // ── MCP pairing ───────────────────────────────────────────────────────────
   // The OAuth state is in the store, so the approval UI works on both hosts;

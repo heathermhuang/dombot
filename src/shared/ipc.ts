@@ -84,6 +84,7 @@ export const IpcChannels = {
   getBulkJob: 'bulk:get',
   stepBulk: 'bulk:step',
   getPortfolioPricing: 'pricing:getPortfolio',
+  stepRenewalPricing: 'pricing:step',
   setManualPrice: 'pricing:setManualPrice',
   openExternal: 'app:openExternal',
   saveTextFile: 'app:saveTextFile',
@@ -560,6 +561,15 @@ export interface Portfolio {
   /** When this portfolio was fetched from the registrars (ms epoch). Null for
    * a live result that predates caching; set for cached and freshly-fetched. */
   fetchedAt: number | null;
+  /** Hosted renewal quotes refresh separately from the domain inventory. */
+  renewalPricing?: RenewalPricingProgress;
+}
+
+export interface RenewalPricingProgress {
+  remaining: number;
+  failed: number;
+  /** Earliest retry when all pending quotes are temporarily paused. */
+  nextAt?: number;
 }
 
 /**
@@ -782,6 +792,7 @@ export interface DombotApi {
    * main process drives the job itself; calling this is harmless there.
    */
   stepBulk: (jobId: string) => Promise<BulkStep>;
+  stepRenewalPricing: () => Promise<RenewalPricingProgress>;
   onBulkProgress: (callback: (p: BulkProgress) => void) => () => void;
   onBulkFinished: (callback: (job: BulkJob) => void) => () => void;
   getRegistrarCatalog: () => Promise<RegistrarDefinition[]>;
@@ -920,5 +931,5 @@ export interface DombotApi {
 
   // Events (polling)
   /** Current change counters — see `Revisions`. */
-  getRevisions: () => Promise<Revisions>;
+  getRevisions: () => Promise<Revisions & { renewalPricingPending?: boolean }>;
 }
