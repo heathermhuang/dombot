@@ -189,8 +189,9 @@ export function getRenewalPricingStatus(): RenewalPricingProgress {
 /** At most one quote per account per request. Never performs a paid operation.
  * A failed/crashed request leaves its pending read available for another step. */
 export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
-  if (!incrementalRenewalPricing || isBulkRunning())
-    return getRenewalPricingStatus();
+  if (!incrementalRenewalPricing) return getRenewalPricingStatus();
+  if (isBulkRunning())
+    return { ...getRenewalPricingStatus(), nextAt: Date.now() + 15_000 };
   const active = new Map(getActiveAccounts().map((a) => [a.id, a]));
   let changed = false;
   const results = await Promise.allSettled(
