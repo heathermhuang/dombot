@@ -29,6 +29,7 @@ import { recordSync } from './domain-history';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { createProxiedRegistrar } from './proxy-transport';
+import { createDynadotFetch } from './dynadot-transport';
 import { accountProxyRoute, getProxyProfile } from './proxies';
 import {
   DEFAULT_PROXY_ID,
@@ -156,9 +157,16 @@ function buildProvider(
   proxy: ProxyRoute | null,
 ): Registrar {
   if (factory) return factory(name, credentials, accountId);
+  const wrapFetch = name === 'dynadot' ? createDynadotFetch : undefined;
   return proxy
-    ? createProxiedRegistrar(name, credentials, proxy)
-    : createRegistrar(name, credentials);
+    ? createProxiedRegistrar(name, credentials, proxy, wrapFetch)
+    : createRegistrar(
+        name,
+        credentials,
+        wrapFetch
+          ? { fetch: wrapFetch(globalThis.fetch.bind(globalThis)) }
+          : undefined,
+      );
 }
 const clientCredentials = new Map<string, string>();
 const generations = new Map<string, number>();
