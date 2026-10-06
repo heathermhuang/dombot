@@ -132,7 +132,9 @@ export class ApiValidationError extends Error {
 /**
  * Validates `rawArgs` against a method's schema and runs it. Omitted trailing
  * arguments are padded with `undefined` so optional parameters behave like
- * they do in a direct call. Throws ApiValidationError on bad input.
+ * they do in a direct call. JSON also encodes omitted middle args as null;
+ * restore those only when the schema accepts undefined but rejects null.
+ * Throws ApiValidationError on bad input.
  */
 export async function invoke<K extends ApiMethodName>(
   name: K,
@@ -144,7 +146,15 @@ export async function invoke<K extends ApiMethodName>(
     rawArgs.length < arity
       ? [...rawArgs, ...new Array<undefined>(arity - rawArgs.length)]
       : rawArgs;
-  const parsed = entry.args.safeParse(padded);
+  const restored = padded.map((value, index) => {
+    const schema = entry.args.items[index];
+    return value === null &&
+      schema?.isOptional() &&
+      !schema.safeParse(null).success
+      ? undefined
+      : value;
+  });
+  const parsed = entry.args.safeParse(restored);
   if (!parsed.success) throw new ApiValidationError(name, parsed.error.issues);
   return entry.handler(...(parsed.data as Args<K>));
 }
