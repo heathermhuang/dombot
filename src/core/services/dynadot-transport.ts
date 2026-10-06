@@ -38,7 +38,7 @@ async function pause(ms: number, signal?: AbortSignal | null): Promise<void> {
 export function createDynadotFetch(
   send: typeof globalThis.fetch,
 ): typeof globalThis.fetch {
-  let pending: Promise<unknown> = Promise.resolve();
+  let pending: Promise<Response> | null = null;
   let nextAt = 0;
   let limitedUntil = 0;
   return (input, init) => {
@@ -100,8 +100,14 @@ export function createDynadotFetch(
         headers,
       });
     };
-    const result = pending.then(run);
-    pending = result.catch(() => undefined);
+    const result = pending ? pending.catch(() => undefined).then(run) : run();
+    pending = result;
+    const clear = () => {
+      if (pending === result) pending = null;
+    };
+    // Keep request-associated promises only while their lane is active.
+    // Workers reuse this provider across separate HTTP requests.
+    void result.then(clear, clear);
     return result;
   };
 }

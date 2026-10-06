@@ -470,7 +470,7 @@ describe('GoDaddy shopper renewal quotes on sync', () => {
     // One .com quote, and it was a dummy rather than the owned name.
     expect(quotedNames()).not.toContain('404cosgrove.com');
     expect(quotedNames().filter((n) => n.endsWith('.com'))).toHaveLength(1);
-    expect(store.detail['godaddy:fancy.io'].data).toEqual({
+    expect(store.detail['godaddy:fancy.io'].data).toMatchObject({
       renewalQuote: { renewal: 199, currency: 'USD' },
     });
     // Standard names ride the TLD rate; nothing per-name is stored for them.

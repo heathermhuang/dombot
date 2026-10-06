@@ -1,6 +1,8 @@
 import { protectRegistrar, redactRegistrarMessage } from './registrar-errors';
 import {
   NotImplementedError,
+  RateLimitError,
+  RegistrarError,
   RegistrarClient,
   createRegistrar,
   listPortfolio,
@@ -30,6 +32,9 @@ import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { createProxiedRegistrar } from './proxy-transport';
 import { createDynadotFetch } from './dynadot-transport';
+import { Namespace } from '../storage/namespace';
+import { broadcastPortfolioChanged } from '../events';
+import { isBulkRunning } from './bulk-jobs';
 import { accountProxyRoute, getProxyProfile } from './proxies';
 import {
   DEFAULT_PROXY_ID,
@@ -67,6 +72,7 @@ import type {
   PortfolioErrorInfo,
   RegistrarMeta,
   RenewalPricing,
+  RenewalPricingProgress,
 } from '../../shared/ipc';
 
 const detailKey = (accountId: string, domain: string): string =>
@@ -77,12 +83,16 @@ const detailKey = (accountId: string, domain: string): string =>
 // during Sync for the registrars that can price a specific owned domain. Keeping
 // the quote here means one cache for all domain data — refreshed and cleared with
 // the detail, never on a separate pricing schedule.
-type DetailRecord = Partial<Domain> & { renewalQuote?: RenewalQuote };
+type DetailRecord = Partial<Domain> & {
+  renewalQuote?: RenewalQuote;
+  renewalQuoteFetchedAt?: number;
+};
 
 /** A detail record without its renewal quote — the domain-only view callers get. */
 function withoutQuote(record: DetailRecord): Partial<Domain> {
   const rest = { ...record };
   delete rest.renewalQuote;
+  delete rest.renewalQuoteFetchedAt;
   delete rest.accountId;
   delete rest.accountLabel;
   return rest;
@@ -133,6 +143,135 @@ function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
 
 // Cache one client per account so we don't rebuild it on every call.
 const clients = new Map<string, RegistrarClient>();
+
+interface RenewalPricingJob {
+  syncedAt: number;
+  pending: string[];
+  failed: number;
+  notBefore?: number;
+  attempts?: number;
+}
+const renewalJobs = new Namespace<RenewalPricingJob>('renewal-pricing-jobs', {
+  cache: true,
+  local: true,
+});
+let incrementalRenewalPricing = false;
+/** Workers advance read-only pricing in bounded requests; desktop keeps its
+ * existing in-process sync. Jobs survive reloads and stay out of data exports. */
+export function configureIncrementalRenewalPricing(enabled: boolean): void {
+  incrementalRenewalPricing = enabled;
+}
+
+export function getRenewalPricingStatus(): RenewalPricingProgress {
+  const active = new Set(getActiveAccounts().map((a) => a.id));
+  let remaining = 0;
+  let failed = 0;
+  let nextAt = Infinity;
+  for (const [id, job] of Object.entries(renewalJobs.all())) {
+    const entry = readRegistrarEntry(id);
+    if (
+      !active.has(id) ||
+      entry?.lastSyncedAt !== job.syncedAt ||
+      entry.lastError
+    )
+      continue;
+    remaining += job.pending.length;
+    failed += job.failed;
+    if (job.pending.length > 0) nextAt = Math.min(nextAt, job.notBefore ?? 0);
+  }
+  return {
+    remaining,
+    failed,
+    ...(nextAt > Date.now() && Number.isFinite(nextAt) ? { nextAt } : {}),
+  };
+}
+
+/** At most one quote per account per request. Never performs a paid operation.
+ * A failed/crashed request leaves its pending read available for another step. */
+export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
+  if (!incrementalRenewalPricing || isBulkRunning())
+    return getRenewalPricingStatus();
+  const active = new Map(getActiveAccounts().map((a) => [a.id, a]));
+  let changed = false;
+  const results = await Promise.allSettled(
+    Object.entries(renewalJobs.all()).map(async ([id, job]) => {
+      const account = active.get(id);
+      const entry = readRegistrarEntry(id);
+      if (!account || entry?.lastSyncedAt !== job.syncedAt || entry.lastError) {
+        await renewalJobs.delete(id);
+        return;
+      }
+      const domain = job.pending[0];
+      if (!domain) return;
+      if ((job.notBefore ?? 0) > Date.now()) return;
+      if (!entry.domains.some((d) => d.domainName === domain)) {
+        await renewalJobs.set(id, { ...job, pending: job.pending.slice(1) });
+        changed = true;
+        return;
+      }
+      let generation = generations.get(id) ?? 0;
+      let quote: RenewalQuote | null = null;
+      let failure: unknown;
+      // Background slices don't spend minutes retrying one optional quote.
+      try {
+        getRegistrarClient(account.registrar, id);
+        generation = generations.get(id) ?? 0;
+        quote = await fetchRenewalQuote(
+          account.registrar,
+          domain,
+          id,
+          {
+            retries: 0,
+          },
+          (error) => {
+            failure = error;
+          },
+        );
+      } catch (error) {
+        failure = error;
+        // An unavailable provider leaves the last saved quote visible.
+      }
+      if (
+        renewalJobs.get(id)?.syncedAt !== job.syncedAt ||
+        readRegistrarEntry(id)?.lastSyncedAt !== job.syncedAt ||
+        !isRegistrarEnabled(id)
+      )
+        return;
+      if ((generations.get(id) ?? 0) !== generation) return;
+      if (
+        failure instanceof RateLimitError ||
+        (failure instanceof RegistrarError &&
+          failure.shouldRetry() &&
+          (job.attempts ?? 0) < 2)
+      ) {
+        const seconds =
+          failure instanceof RateLimitError
+            ? Math.max(60, failure.retryAfter ?? 60)
+            : 30;
+        await renewalJobs.set(id, {
+          ...job,
+          notBefore: Date.now() + seconds * 1000,
+          attempts: (job.attempts ?? 0) + 1,
+        });
+        changed = true;
+        return;
+      }
+      if (quote?.renewal != null) writeRenewalQuote(id, domain, quote);
+      await renewalJobs.set(id, {
+        ...job,
+        pending: job.pending.slice(1),
+        failed: job.failed + (quote?.renewal == null ? 1 : 0),
+        notBefore: 0,
+        attempts: 0,
+      });
+      changed = true;
+    }),
+  );
+  if (changed) broadcastPortfolioChanged();
+  const failedWrite = results.find((result) => result.status === 'rejected');
+  if (failedWrite?.status === 'rejected') throw failedWrite.reason;
+  return getRenewalPricingStatus();
+}
 
 /** Builds the provider behind a client. Hosts swap it to run the app against
  *  something other than the real registrars (the demo's in-memory one). */
@@ -431,6 +570,9 @@ function assemblePortfolio(): Portfolio {
     registrars: [...new Set(registrarIds)],
     registrarLabels: registrarLabelMap(),
     fetchedAt,
+    ...(incrementalRenewalPricing
+      ? { renewalPricing: getRenewalPricingStatus() }
+      : {}),
   };
 }
 
@@ -469,8 +611,31 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
   if ((generations.get(accountId) ?? 0) !== generation) return;
   writeEntry('portfolio', accountId, entry);
   // Refresh renewal quotes as part of the sync (see syncRenewalQuotes).
-  if (!entry.lastError)
-    await syncRenewalQuotes(name, entry.domains, accountId, generation);
+  if (!entry.lastError && entry.lastSyncedAt != null) {
+    if (incrementalRenewalPricing && name === 'dynadot') {
+      const pending = entry.domains
+        .filter((d) => usesPerNameQuote(name, tldOf(d.domainName)))
+        .filter((d) => {
+          const detail = readEntry<DetailRecord>(
+            'detail',
+            detailKey(accountId, d.domainName),
+          );
+          const quotedAt = detail?.data.renewalQuoteFetchedAt ?? 0;
+          return (
+            detail?.data.renewalQuote?.renewal == null ||
+            Date.now() - quotedAt >= 24 * 60 * 60_000
+          );
+        })
+        .map((d) => d.domainName);
+      await renewalJobs.set(accountId, {
+        syncedAt: entry.lastSyncedAt,
+        pending,
+        failed: 0,
+      });
+    } else {
+      await syncRenewalQuotes(name, entry.domains, accountId, generation);
+    }
+  }
 }
 
 /**
@@ -482,16 +647,20 @@ async function fetchRenewalQuote(
   name: RegistrarName,
   domain: string,
   accountId: string,
+  opts?: RequestOptions,
+  onError?: (error: unknown) => void,
 ): Promise<RenewalQuote | null> {
   try {
     const pricing = await getRegistrarClient(name, accountId).getPricing(
       domain,
+      opts,
     );
     return {
       renewal: typeof pricing.renewal === 'number' ? pricing.renewal : null,
       currency: pricing.currency ?? 'USD',
     };
   } catch (err) {
+    onError?.(err);
     console.warn(`[pricing] ${name} getPricing(${domain}) failed`, err);
     return null;
   }
@@ -646,7 +815,11 @@ function writeRenewalQuote(
 ): void {
   const key = detailKey(accountId, domain);
   const existing = readEntry<DetailRecord>('detail', key)?.data ?? {};
-  writeEntry('detail', key, { ...existing, renewalQuote: quote });
+  writeEntry('detail', key, {
+    ...existing,
+    renewalQuote: quote,
+    renewalQuoteFetchedAt: Date.now(),
+  });
 }
 
 /** Domain names currently cached for one account. `synced` is true only after
@@ -745,6 +918,7 @@ export async function removeRegistrarAccount(accountId: string): Promise<void> {
 
 /** Drops a registrar's cached portfolio slice and every one of its detail entries. */
 function clearRegistrarData(name: string): void {
+  void renewalJobs.delete(name);
   clearEntry('portfolio', name);
   const prefix = `${name}:`;
   for (const key of Object.keys(readAll<DetailRecord>('detail'))) {
@@ -1074,9 +1248,16 @@ export async function getDomainDetail(
   const key = detailKey(accountId, domainName);
   // Preserve any renewal quote captured at Sync when we rewrite this entry below,
   // so refreshing detail doesn't drop the domain's price.
-  const priorQuote = readEntry<DetailRecord>('detail', key)?.data.renewalQuote;
+  const priorRecord = readEntry<DetailRecord>('detail', key)?.data;
+  const priorQuote = priorRecord?.renewalQuote;
   const withQuote = <T extends object>(record: T): T & DetailRecord =>
-    priorQuote ? { ...record, renewalQuote: priorQuote } : record;
+    priorQuote
+      ? {
+          ...record,
+          renewalQuote: priorQuote,
+          renewalQuoteFetchedAt: priorRecord?.renewalQuoteFetchedAt,
+        }
+      : record;
   if (!refresh) {
     const cached = readEntry<DetailRecord>('detail', key);
     // Serve a fresh-enough cached partial without any network calls.

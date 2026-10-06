@@ -300,6 +300,16 @@ today's in-memory `AbortController`.
   Per-registrar sync also runs in a request when the user hits Sync, as
   today.
 
+Hosted Dynadot inventory Sync returns after listing domains. Renewal-price
+lookups run separately in persisted, read-only batches, with at most one quote
+per account in each request. Visible owner tabs advance these batches; a reload
+or closed tab preserves the remaining work. The existing cron advances a batch
+when automatic sync is enabled. The status bar shows remaining price updates
+and reports unavailable quotes separately from inventory sync failures.
+Last saved prices remain visible, and successful quotes are reused for 24 hours.
+The queue is encrypted, cleared with caches, and excluded from data exports.
+Desktop Sync keeps its existing in-process pricing refresh.
+
 **Nameserver lookup** moves from `node:dns` to DNS-over-HTTPS
 (`https://cloudflare-dns.com/dns-query?name=…&type=NS` with
 `accept: application/dns-json`, with Google's resolver as a fallback). One
