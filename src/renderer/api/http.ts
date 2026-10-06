@@ -179,20 +179,21 @@ class Poller {
 let driving: string | null = null;
 let pricingDriving = false;
 
-/** Read-only pricing work is persisted by the Worker. Visible owner tabs
- * advance small batches; closing or hiding a tab leaves the rest resumable. */
+/** Read-only pricing work is persisted by the Worker. Open owner tabs advance
+ * small batches even when another tab is selected; reloads resume the rest. */
 async function driveRenewalPricing(): Promise<void> {
   if (pricingDriving) return;
   pricingDriving = true;
   try {
-    while (document.visibilityState === 'visible') {
+    for (;;) {
       const status =
         await call<Awaited<ReturnType<DombotApi['stepRenewalPricing']>>>(
           'stepRenewalPricing',
         );
       if (status.remaining === 0) return;
-      const wait = Math.max(2000, (status.nextAt ?? 0) - Date.now());
-      await new Promise<void>((resolve) => setTimeout(resolve, wait));
+      const wait = (status.nextAt ?? 0) - Date.now();
+      if (wait > 0)
+        await new Promise<void>((resolve) => setTimeout(resolve, wait));
     }
   } catch {
     // The next revision poll resumes the persisted pending reads.
@@ -289,6 +290,7 @@ export function createHttpApi(): DombotApi {
         await call<Awaited<ReturnType<DombotApi['hydrateFromCache']>>>(
           'hydrateFromCache',
         );
+      if (snap.portfolio?.renewalPricing?.remaining) void driveRenewalPricing();
       return {
         ...snap,
         portfolio: snap.portfolio ? reviveDomains(snap.portfolio) : null,
@@ -304,20 +306,20 @@ export function createHttpApi(): DombotApi {
     stepRenewalPricing: m('stepRenewalPricing'),
     setManualPrice: m('setManualPrice'),
 
-    listPortfolio: async (refresh) =>
-      reviveDomains(
-        await call<Awaited<ReturnType<DombotApi['listPortfolio']>>>(
-          'listPortfolio',
-          [refresh],
-        ),
-      ),
-    syncRegistrar: async (name, accountId) =>
-      reviveDomains(
-        await call<Awaited<ReturnType<DombotApi['syncRegistrar']>>>(
-          'syncRegistrar',
-          [name, accountId],
-        ),
-      ),
+    listPortfolio: async (refresh) => {
+      const portfolio = await call<
+        Awaited<ReturnType<DombotApi['listPortfolio']>>
+      >('listPortfolio', [refresh]);
+      if (portfolio.renewalPricing?.remaining) void driveRenewalPricing();
+      return reviveDomains(portfolio);
+    },
+    syncRegistrar: async (name, accountId) => {
+      const portfolio = await call<
+        Awaited<ReturnType<DombotApi['syncRegistrar']>>
+      >('syncRegistrar', [name, accountId]);
+      if (portfolio.renewalPricing?.remaining) void driveRenewalPricing();
+      return reviveDomains(portfolio);
+    },
     getDomainDetail: async (
       registrar,
       domainName,

@@ -302,8 +302,9 @@ today's in-memory `AbortController`.
 
 Hosted Dynadot inventory Sync returns after listing domains. Renewal-price
 lookups run separately in persisted, read-only batches, with at most one quote
-per account in each request. Visible owner tabs advance these batches; a reload
-or closed tab preserves the remaining work. The existing cron advances a batch
+per account in each request. Open owner tabs advance these batches, including
+when another tab is selected; a reload or closed tab preserves the remaining work.
+The existing cron advances a batch
 when automatic sync is enabled. The status bar shows remaining price updates
 and reports unavailable quotes separately from inventory sync failures.
 Last saved prices remain visible, and successful quotes are reused for 24 hours.
