@@ -16,7 +16,7 @@ unavailable; UI, bulk and MCP dispatch reject the unavailable operations.
 A nameserver change accepted for registry processing reports pending; the app
 keeps the currently active nameservers until a later read confirms the change.
 Privacy is not reported by this API; the normalized boolean default is not a
-verified privacy state. Missing or premium renewal prices remain unavailable
+verified privacy state; the UI shows “Not reported” instead of an off toggle. Missing or premium renewal prices remain unavailable
 rather than being inferred from generic TLD/search pricing.
 
 The provider lives in registrar-client, pinned here until an upstream release

@@ -86,7 +86,7 @@
     "miniflare": "5.20260915.0-alpha"
   },
   "dependencies": {
-    "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-0.7.0-101domain.1.tgz",
+    "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-0.7.0-101domain.2.tgz",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
