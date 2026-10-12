@@ -155,7 +155,14 @@ export default function App() {
           columns match), and the bell just right of the tabs. The tabs run
           along the bottom edge, on the tab bar color that also shows above
           them. */}
-      <header className="relative grid h-12 grid-cols-[1fr_auto_1fr] border-b bg-tab-bar px-4 sm:px-6">
+      <header
+        className={cn(
+          'relative h-12 border-b bg-tab-bar px-4 sm:px-6',
+          supportsPublishing()
+            ? 'flex items-center'
+            : 'grid grid-cols-[1fr_auto_1fr]',
+        )}
+      >
         <div className="flex flex-1 items-center">
           <button
             type="button"
@@ -204,7 +211,14 @@ export default function App() {
           })}
         </TabStrip>
         {/* Hosted account access, activity, and the global hosted Sync action. */}
-        <div className="col-start-3 flex items-center justify-end gap-2 sm:pl-3">
+        <div
+          className={cn(
+            'flex items-center gap-2',
+            supportsPublishing()
+              ? 'shrink-0 justify-end'
+              : 'col-start-3 justify-end sm:justify-start sm:pl-3',
+          )}
+        >
           {webAuthMode() === 'gateway' && (
             <a
               href="/account"
@@ -225,7 +239,10 @@ export default function App() {
             <button
               type="button"
               onClick={() => navigate('/settings?tab=about')}
-              className="absolute top-[7px] right-[10px] hidden rounded-sm text-[11px] leading-none text-muted-foreground/40 hover:text-muted-foreground lg:inline"
+              className={cn(
+                'hidden rounded-sm text-[11px] leading-none text-muted-foreground/40 hover:text-muted-foreground lg:inline',
+                !supportsPublishing() && 'absolute top-[7px] right-[10px]',
+              )}
               title="About this version"
             >
               {/* A serif italic "v", dimmer than the monospace digits (like
