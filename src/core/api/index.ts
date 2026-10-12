@@ -15,9 +15,10 @@ import {
   getFolders,
   updateFolder,
 } from '../services/folders';
-import { setManualPrice } from '../services/pricing';
+import { getManualPrices, setManualPrice } from '../services/pricing';
 import {
   getPurchases,
+  setNotes,
   setPurchase,
   markSold,
   setSale,
@@ -30,6 +31,13 @@ import {
   setDispositions,
 } from '../services/domain-history';
 import { listEvents } from '../services/domain-events';
+import { getReleaseFeed } from '../services/releases';
+import { getListPrices, setListPrices } from '../services/list-prices';
+import { importDomains, planImport } from '../services/domain-import';
+import {
+  getImportedDomains,
+  updateImportedDomain,
+} from '../services/imported-domains';
 import { lookupRegistrations } from '../services/registration-lookup';
 import {
   getRenewalPricingStatus,
@@ -144,7 +152,17 @@ export async function invoke<K extends ApiMethodName>(
     rawArgs.length < arity
       ? [...rawArgs, ...new Array<undefined>(arity - rawArgs.length)]
       : rawArgs;
-  const parsed = entry.args.safeParse(padded);
+  // JSON preserves omitted middle arguments as null; restore only optional
+  // slots whose schema rejects null, keeping meaningful/required nulls intact.
+  const restored = padded.map((value, index) => {
+    const schema = entry.args.items[index];
+    return value === null &&
+      schema?.isOptional() &&
+      !schema.safeParse(null).success
+      ? undefined
+      : value;
+  });
+  const parsed = entry.args.safeParse(restored);
   if (!parsed.success) throw new ApiValidationError(name, parsed.error.issues);
   return entry.handler(...(parsed.data as Args<K>));
 }
@@ -165,7 +183,14 @@ const proxyInput = z.object({
 
 export type CoreMethodName = Exclude<
   ApiMethodName,
-  'ping' | 'getAppInfo' | 'openExternal' | 'saveTextFile' | 'getMcpInfo'
+  | 'ping'
+  | 'getAppInfo'
+  | 'openExternal'
+  | 'saveTextFile'
+  | 'getMcpInfo'
+  | 'getUpdaterState'
+  | 'downloadUpdate'
+  | 'installUpdate'
 >;
 
 export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
@@ -180,7 +205,8 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     // registrars. Drop it and hydrate nothing.
     if (getConfiguredRegistrars().length === 0) {
       clearAll();
-      return { portfolio: null, detail: {}, pricing: {} };
+      // Imported names aren't registrar data: their pricing stays.
+      return { portfolio: null, detail: {}, pricing: getPortfolioPricing() };
     }
     return {
       portfolio: getCachedPortfolio(),
@@ -191,6 +217,11 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
   clearAllCaches: method(none, async () => {
     clearAll();
   }),
+
+  // ── Updates ───────────────────────────────────────────────────────────────
+  getReleaseFeed: method(z.tuple([z.boolean()]), async (force) =>
+    getReleaseFeed(force),
+  ),
 
   // ── Data bundle (backup / move / secret rotation) ──────────────────────────
   // Plain text both ways; the client seals/opens with the passphrase
@@ -205,8 +236,9 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
 
   // ── Pricing ───────────────────────────────────────────────────────────────
   getPortfolioPricing: method(none, async () => getPortfolioPricing()),
+  getManualPrices: method(none, async () => getManualPrices()),
   setManualPrice: method(
-    z.tuple([s.domainName, z.number().nullable()]),
+    z.tuple([s.domainName, s.renewalPriceInput.nullable()]),
     async (domain, price) => {
       setManualPrice(domain, price);
     },
@@ -363,6 +395,36 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     setPurchase(input),
   ),
   setSale: method(z.tuple([s.saleInput]), async (input) => setSale(input)),
+  setNotes: method(
+    z.tuple([s.domainName, s.noteText]),
+    async (domainName, notes) => setNotes(domainName, notes),
+  ),
+
+  // ── Domain import ─────────────────────────────────────────────────────────
+  previewDomainImport: method(z.tuple([s.importRows]), async (rows) =>
+    planImport(rows),
+  ),
+  importDomains: method(
+    z.tuple([s.importRows, s.importApply]),
+    async (rows, options) => importDomains(rows, options),
+  ),
+
+  // ── Imported domains ────────────────────────────────────────────────────────
+  getImportedDomains: method(none, async () => getImportedDomains()),
+  updateImportedDomain: method(
+    z.tuple([s.domainName, s.importedDomainFields]),
+    async (domainName, fields) => {
+      updateImportedDomain(domainName, fields);
+      return getImportedDomains();
+    },
+  ),
+
+  // ── Asking prices ─────────────────────────────────────────────────────────
+  getListPrices: method(none, async () => getListPrices()),
+  setListPrices: method(z.tuple([s.listPriceInputs]), async (inputs) => {
+    setListPrices(inputs);
+    return getListPrices();
+  }),
 
   lookupRegistrations: method(z.tuple([s.domainNameList]), async (names) =>
     lookupRegistrations(names),

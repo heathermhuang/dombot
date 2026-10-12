@@ -4,8 +4,7 @@
  * gives us a single, type-checked source of truth for every IPC round trip.
  */
 
-// Type-only import: erased at build time, so the renderer bundle never resolves
-// the library — only tsc uses it (via the tsconfig `paths` alias to source).
+import type { ReleaseFeed } from './releases';
 import type {
   Domain as ProviderDomain,
   ConnectionResult,
@@ -32,6 +31,10 @@ export interface RegistrarAccount {
    */
   trackedSince?: number;
 }
+
+/** Where a Domain row comes from (see `Domain.source`). */
+export type DomainSource = 'registrar' | 'imported';
+
 export type Domain = ProviderDomain & {
   accountId?: string;
   accountLabel?: string;
@@ -47,9 +50,58 @@ export type Domain = ProviderDomain & {
   registrationPending?: boolean;
   /** RDAP says nobody holds the name. Those three cells are a dash. */
   unregistered?: boolean;
-  /** Current registrar from RDAP, which may not be an account of yours. */
+  /**
+   * Current registrar from RDAP, which may not be an account of yours. The
+   * mapped name ("Name.com"), else what RDAP or IANA calls it.
+   */
   registrationRegistrar?: string;
+  /** RDAP's own name and IANA ID for that registrar, for a tooltip. */
+  registrationRegistrarDetail?: string;
+  /** The built-in registrar that registrar maps to, for its logo. */
+  registrationRegistrarId?: RegistrarName;
+  /**
+   * Where the row comes from. `registrar`: an account's sync. A name in
+   * Archive is one too: `departed` says no account reports it any more, and
+   * its registrar is the last one it was seen at (empty when unknown).
+   * `imported`: a name you added that no connected account reports
+   * (`imported-domains`); registrar actions don't apply, and its registrar
+   * fields are yours to edit.
+   */
+  source: DomainSource;
+  /** An imported name's registrar as you typed it, when DomBot doesn't know it. */
+  importedRegistrarLabel?: string;
+  /** An imported name whose auto-renew you haven't set (`autoRenew` reads false). */
+  autoRenewUnknown?: boolean;
 };
+
+/**
+ * A name you own that no connected account reports, kept in
+ * `imported-domains` (docs/domain-import-export.md). Dates are `YYYY-MM-DD`.
+ */
+export interface ImportedDomain {
+  /** A registrar DomBot knows (registrar-client's id), or null. */
+  registrar: string | null;
+  /** Free text when DomBot doesn't know the registrar, e.g. "Epik". */
+  registrarLabel?: string | null;
+  expirationDate?: string | null;
+  createdDate?: string | null;
+  autoRenew?: boolean | null;
+  /** ms epoch, when it was added. */
+  addedAt: number;
+  /** ms epoch, the last edit; null until edited. */
+  updatedAt: number | null;
+  /** The import that added it, if one did. */
+  importId?: string | null;
+}
+
+/** An imported name's registration fields, as edited. */
+export interface ImportedDomainFields {
+  registrar: string | null;
+  registrarLabel: string | null;
+  createdDate: string | null;
+  expirationDate: string | null;
+  autoRenew: boolean | null;
+}
 
 /** The one proxy the app manages, and the saved accounts routed through it. */
 export interface ProxySettings {
@@ -74,6 +126,10 @@ export interface ProxyTestResult {
 export const IpcChannels = {
   ping: 'app:ping',
   getAppInfo: 'app:getAppInfo',
+  getReleaseFeed: 'app:getReleaseFeed',
+  getUpdaterState: 'app:getUpdaterState',
+  downloadUpdate: 'app:downloadUpdate',
+  installUpdate: 'app:installUpdate',
   listPortfolio: 'registrar:listPortfolio',
   getDomainDetail: 'registrar:getDomainDetail',
   applyDomainOp: 'domain:apply',
@@ -85,6 +141,7 @@ export const IpcChannels = {
   stepBulk: 'bulk:step',
   getPortfolioPricing: 'pricing:getPortfolio',
   stepRenewalPricing: 'pricing:step',
+  getManualPrices: 'pricing:getManualPrices',
   setManualPrice: 'pricing:setManualPrice',
   openExternal: 'app:openExternal',
   saveTextFile: 'app:saveTextFile',
@@ -122,6 +179,13 @@ export const IpcChannels = {
   getPurchases: 'purchases:list',
   setPurchase: 'purchases:set',
   setSale: 'purchases:setSale',
+  setNotes: 'purchases:setNotes',
+  previewDomainImport: 'domainImport:preview',
+  importDomains: 'domainImport:apply',
+  getImportedDomains: 'importedDomains:list',
+  updateImportedDomain: 'importedDomains:update',
+  getListPrices: 'listPrices:list',
+  setListPrices: 'listPrices:set',
   getDomainEvents: 'domainEvents:list',
   setDispositions: 'domainEvents:setDispositions',
   markSold: 'domainEvents:markSold',
@@ -145,6 +209,11 @@ export const IpcEvents = {
    * store directly and don't rely on this.
    */
   portfolioChanged: 'portfolio:changed',
+  /** The app menu's Sync Now was chosen (desktop only). */
+  syncRequested: 'sync:requested',
+  /** An app menu item wants a route shown, e.g. Settings → About (payload:
+   *  the hash route; desktop only). */
+  navigateRequested: 'app:navigateRequested',
   /** One bulk-job item finished (payload: BulkProgress). */
   bulkProgress: 'bulk:progress',
   /** A bulk job ended — done or cancelled (payload: the final BulkJob). */
@@ -170,6 +239,18 @@ export interface AppInfo {
   /** `process.platform` on desktop ('darwin', 'win32', 'linux', …); 'web'
    *  for a self-hosted browser instance. */
   platform: string;
+}
+
+/** The desktop app's update-on-click progress (Settings → About). */
+export interface UpdaterState {
+  /** Whether this copy can update itself; if not, About shows a plain
+   *  download link instead. */
+  supported: boolean;
+  /** Why not, when that's worth telling the user (null for a dev build). */
+  unsupportedReason: string | null;
+  status: 'idle' | 'downloading' | 'ready' | 'error';
+  /** The last download's failure, when `status` is 'error'. */
+  error: string | null;
 }
 
 /** Status of the embedded local MCP server. */
@@ -235,6 +316,12 @@ export interface AppSettings {
    * Separate from which currency the money is in. Fresh install is US style.
    */
   numberFormat: NumberFormatId;
+  /**
+   * Whether DomBot checks dombot.ai for a newer release (once a week) and
+   * shows a banner when there is one. On by default; "Check now" in
+   * Settings → About works either way.
+   */
+  updateChecks: boolean;
 }
 
 /** The registrar's registration fee for one name. `amount` is null when unknown. */
@@ -250,7 +337,19 @@ export interface RegistrationQuote {
  */
 export interface RegistrationLookup {
   registered: boolean;
+  /** The registrar's name as RDAP reports it, e.g. "Name.com, Inc.". */
   registrar: string | null;
+  /** IANA Registrar ID from RDAP `publicIds`. Absent on rows cached before it was read. */
+  registrarIanaId?: number | null;
+  /** The reseller RDAP names, when the registrar sold it through one. */
+  reseller?: string | null;
+  /**
+   * The registrar to show, mapped from the ID or name (data/registrar-mapping.json),
+   * e.g. "Name.com". Added to each row as it's returned, never stored.
+   */
+  registrarLabel?: string | null;
+  /** The built-in registrar it maps to, if any. Added like `registrarLabel`. */
+  mappedRegistrar?: RegistrarName | null;
   /** ISO timestamp, or null. */
   created: string | null;
   expires: string | null;
@@ -267,6 +366,12 @@ export interface DomainPurchase {
   purchaseDate: string | null;
   amount: string | null;
   currency: string | null;
+  /** Hand-registered or bought; absent when there's no purchase on record. */
+  purchaseType?: 'registered' | 'purchased';
+  /** The purchase's term in years, when recorded. */
+  purchaseYears?: number;
+  /** The purchase's event id: one newer than an arrival was recorded after it. */
+  acquisitionId?: string;
   notes: string;
   /** Absent on records saved before a sale could be stored. */
   saleDate?: string | null;
@@ -309,6 +414,106 @@ export interface SaleInput {
   mark?: boolean;
 }
 
+/**
+ * Your asking price for a name, synced or imported (docs/domain-import-export.md).
+ * Amounts are canonical decimals, all in `currency`. At least one is set.
+ */
+export interface ListPrice {
+  /** What you'd sell it for; null when only offers are set. */
+  amount: string | null;
+  /** The lowest offer you'll consider. */
+  minOffer?: string | null;
+  /** The lowest price you'd accept; never shown to buyers. */
+  floor?: string | null;
+  currency: string;
+  /** ms epoch, the last change. */
+  updatedAt: number;
+}
+
+/**
+ * Your yearly renewal price for a name, in any currency. Stored in
+ * `domain-prices`; the amount is a canonical decimal.
+ */
+export interface RenewalPriceInput {
+  amount: string;
+  currency: string;
+}
+
+/**
+ * One name's row from an imported file, normalized
+ * (docs/domain-import-export.md, "Normalized rows"). Every value is already
+ * in stored form; an absent field was blank in the file and means "keep".
+ */
+export interface ImportRow {
+  /** The file line the row came from (the first, when rows were merged). */
+  line: number;
+  /** `toAscii(name)`. */
+  domain: string;
+  status?: 'owned' | 'sold' | 'dropped' | 'archived' | 'removed';
+  /** A folder name; "Hidden" is the built-in one. */
+  folder?: string;
+  notes?: string;
+  registration?: {
+    /** A registrar id DomBot knows. */
+    registrar?: string;
+    /** Free text, for a registrar DomBot doesn't know. */
+    registrarLabel?: string;
+    createdDate?: string;
+    expirationDate?: string;
+    autoRenew?: boolean;
+  };
+  renewal?: { amount: string; currency: string };
+  listPrice?: {
+    amount?: string;
+    minOffer?: string;
+    floor?: string;
+    currency: string;
+  };
+  purchase?: {
+    type?: 'registered' | 'purchased';
+    date?: string;
+    amount?: string;
+    currency?: string;
+    years?: number;
+  };
+  sale?: { date?: string; amount?: string; currency?: string };
+}
+
+export interface ImportChange {
+  field: string;
+  from: string | null;
+  to: string | null;
+}
+
+/** What an import does, or would do, to one name. */
+export interface ImportOutcome {
+  line: number;
+  domain: string;
+  /**
+   * `new`: added as an imported name. `update`: something changes.
+   * `unchanged`: nothing to do. `history`: a name that's only in Archive.
+   */
+  result: 'new' | 'update' | 'unchanged' | 'history';
+  changes: ImportChange[];
+  warnings: string[];
+}
+
+export interface ImportPlan {
+  outcomes: ImportOutcome[];
+  counts: Record<ImportOutcome['result'], number>;
+  /** Folders the import creates. */
+  newFolders: string[];
+}
+
+/** One name's asking price to save. All three amounts blank clears it. */
+export interface ListPriceInput {
+  domainName: string;
+  amount: string | null;
+  minOffer: string | null;
+  floor: string | null;
+  currency: string | null;
+}
+
 /** One input in a registrar's credential form. */
 export interface RegistrarConfigField {
   name: string;
@@ -329,6 +534,9 @@ export interface RegistrarSync {
   lastSyncedAt: number | null;
   /** Error from the most recent sync attempt, or null when it succeeded. */
   lastError: string | null;
+  /** When that error happened (ms epoch); null when there's none, or it
+   *  predates this being recorded. */
+  lastErrorAt: number | null;
   /** Domains held from the last successful sync. */
   domainCount: number;
   /** When sync started recording this account's changes (ms epoch), or null. */
@@ -419,7 +627,7 @@ export interface RenewalPricing {
   accountId?: string;
   domain: string;
   registrar: string;
-  /** Annual renewal price in USD, or null when unknown. */
+  /** Annual renewal price in `currency`, or null when unknown. */
   renewal: number | null;
   currency: string;
   source: PriceSource;
@@ -699,6 +907,18 @@ export interface FoldersSnapshot {
 export interface DombotApi {
   ping: () => Promise<string>;
   getAppInfo: () => Promise<AppInfo>;
+  /**
+   * Published releases with their notes, from dombot.ai. Cached for a few
+   * hours on the host; `force` refetches (Settings → About → Check now).
+   */
+  getReleaseFeed: (force: boolean) => Promise<ReleaseFeed>;
+  /** Desktop update-on-click: whether this copy can update itself, and how
+   *  far along a download is. Self-hosted and the demo can't. */
+  getUpdaterState: () => Promise<UpdaterState>;
+  /** Download the newest release; resolves when it's ready (or failed). */
+  downloadUpdate: () => Promise<UpdaterState>;
+  /** Quit and relaunch into the downloaded release. */
+  installUpdate: () => Promise<void>;
   /** Open a URL in the user's default browser. */
   openExternal: (url: string) => Promise<void>;
   /**
@@ -730,9 +950,15 @@ export interface DombotApi {
    *  Computed locally (base rates + TLD rates + Sync-captured quotes +
    *  manual overrides). */
   getPortfolioPricing: () => Promise<Record<string, RenewalPricing>>;
-  /** Set (or clear, with null) a manual annual renewal price for a domain.
-   *  Keyed by name, so it applies whichever account holds the domain. */
-  setManualPrice: (domain: string, price: number | null) => Promise<void>;
+  /** Every manual renewal price, keyed by the normalized domain name, for
+   *  names you own or not (the CSV export reads Archive names' prices here). */
+  getManualPrices: () => Promise<Record<string, RenewalPriceInput>>;
+  /** Set (or clear, with null) a manual annual renewal price for a domain, in
+   *  any currency. Keyed by name, so it applies whichever account holds it. */
+  setManualPrice: (
+    domain: string,
+    price: RenewalPriceInput | null,
+  ) => Promise<void>;
 
   // Registrars
   /**
@@ -856,6 +1082,13 @@ export interface DombotApi {
   /** Subscribe to out-of-band portfolio/detail cache changes (from MCP writes).
    * Returns an unsubscribe function. */
   onPortfolioChanged: (callback: () => void) => () => void;
+  /** Subscribe to the app menu's Sync Now (desktop only; a no-op elsewhere).
+   * Returns an unsubscribe function. */
+  onSyncRequested: (callback: () => void) => () => void;
+  /** Subscribe to the app menu asking for a route (About DomBot, Check for
+   *  Updates…, Settings…; desktop only, a no-op elsewhere). Returns an
+   *  unsubscribe function. */
+  onNavigateRequested: (callback: (route: string) => void) => () => void;
 
   // Folders
   /** The folder definitions plus the domain→folder map, read from disk. */
@@ -883,6 +1116,40 @@ export interface DombotApi {
   setPurchase: (input: PurchaseInput) => Promise<DomainPurchase | null>;
   /** Save what a sold name went for, and the shared notes. Keeps what you paid. */
   setSale: (input: SaleInput) => Promise<DomainPurchase | null>;
+  /** Save a name's note alone; its purchase and sale stay. Blank deletes it. */
+  setNotes: (
+    domainName: string,
+    notes: string,
+  ) => Promise<DomainPurchase | null>;
+
+  // Domain import (docs/domain-import-export.md)
+  /** What importing these normalized rows would change. Writes nothing. */
+  previewDomainImport: (rows: ImportRow[]) => Promise<ImportPlan>;
+  /** Import the rows (a chunk of up to 10,000, under one `importId`). */
+  importDomains: (
+    rows: ImportRow[],
+    options: { importId: string },
+  ) => Promise<ImportPlan & { importId: string }>;
+
+  // Imported domains (names no connected account reports)
+  /** Every imported name, keyed by the normalized domain name. */
+  getImportedDomains: () => Promise<Record<string, ImportedDomain>>;
+  /** Edit an imported name's registration fields. Returns every imported name. */
+  updateImportedDomain: (
+    domainName: string,
+    fields: ImportedDomainFields,
+  ) => Promise<Record<string, ImportedDomain>>;
+
+  // Asking prices (keyed by domain name; any name, synced or imported)
+  /** Every asking price, keyed by the normalized domain name. */
+  getListPrices: () => Promise<Record<string, ListPrice>>;
+  /**
+   * Set or clear (all amounts blank) asking prices in one write. Returns every
+   * asking price afterwards.
+   */
+  setListPrices: (
+    inputs: ListPriceInput[],
+  ) => Promise<Record<string, ListPrice>>;
 
   // Domain history (docs/storage-model.md). Each change returns the whole log.
   /** Every domain event, oldest first. */

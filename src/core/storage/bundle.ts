@@ -11,7 +11,11 @@ import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
 import { PROXIES_NAMESPACE, parseProxy } from '../../shared/proxy';
 import { migrateLegacyProxies } from '../services/proxies';
 import { sanitizeBundleDiagnostics } from './sanitize-diagnostics';
-import { hiddenFolderAssignments, upgradeLegacyNamespaces } from './migrations';
+import {
+  LEGACY_IMPORTED_NAMESPACE,
+  hiddenFolderAssignments,
+  upgradeLegacyNamespaces,
+} from './migrations';
 import {
   EVENTS_NAMESPACE,
   NOTES_NAMESPACE,
@@ -19,7 +23,13 @@ import {
   cleanEvent,
   cleanNote,
 } from '../services/domain-events';
-import { CREDENTIALS_NAMESPACE } from './names';
+import { CREDENTIALS_NAMESPACE, RENEWAL_PRICES_NAMESPACE } from './names';
+import { LIST_PRICES_NAMESPACE, cleanListPrice } from '../services/list-prices';
+import { cleanRenewalPrice } from '../services/pricing';
+import {
+  IMPORTED_DOMAINS_NAMESPACE,
+  cleanImportedDomain,
+} from '../services/imported-domains';
 
 // A portable copy of everything DomBot stores — registrar keys, portfolio
 // cache, folders, manual prices, TLD rates, settings, MCP pairings, bulk-job
@@ -43,11 +53,16 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // `registrar-last-sync`). A v4 build would skip those namespaces and silently
 // drop the history, so it must refuse the file. Rule: any release that adds a non-cache namespace bumps
 // this version.
-export const BUNDLE_VERSION = 5;
+// v6 adds `domain-list-prices` (docs/domain-import-export.md).
+// v7 stores manual renewal prices with a currency (`domain-prices` values
+// become `{ amount, currency }`); an older build would read them as no price.
+// v8 adds `imported-domains` (`manual-domains` in builds from main before
+// the rename, which import maps across).
+export const BUNDLE_VERSION = 8;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
-  version: 1 | 2 | 3 | 4 | typeof BUNDLE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -89,7 +104,7 @@ export function parseBundle(text: string): DataBundle {
   if (!head || head.format !== BUNDLE_FORMAT) {
     throw new BundleError('Not a DomBot data file.');
   }
-  if (![1, 2, 3, 4, BUNDLE_VERSION].includes(head.version as number)) {
+  if (![1, 2, 3, 4, 5, 6, 7, BUNDLE_VERSION].includes(head.version as number)) {
     throw new BundleError(
       `This file was made by a newer DomBot (format v${String(head.version)}). Update and try again.`,
     );
@@ -119,6 +134,15 @@ export function parseBundle(text: string): DataBundle {
     head.namespaces['domain-folders'] =
       hiddenFolderAssignments(folderAssignments);
   }
+  // A v8 file from main before the rename has `manual-domains` (migration 4).
+  const legacyImported = head.namespaces[LEGACY_IMPORTED_NAMESPACE];
+  if (legacyImported) {
+    delete head.namespaces[LEGACY_IMPORTED_NAMESPACE];
+    head.namespaces[IMPORTED_DOMAINS_NAMESPACE] = {
+      ...legacyImported,
+      ...head.namespaces[IMPORTED_DOMAINS_NAMESPACE],
+    };
+  }
   head.version = BUNDLE_VERSION;
   try {
     validateAccountRecords(head.namespaces['registrar-accounts'] ?? {});
@@ -141,6 +165,29 @@ export function parseBundle(text: string): DataBundle {
       NOTES_NAMESPACE,
       notes,
       cleanNote,
+    );
+  // Manual renewal prices: a file before v7 has USD numbers, which become
+  // USD amounts here (as migration 3 does for the store).
+  const renewals = head.namespaces[RENEWAL_PRICES_NAMESPACE];
+  if (renewals)
+    head.namespaces[RENEWAL_PRICES_NAMESPACE] = cleanEntries(
+      RENEWAL_PRICES_NAMESPACE,
+      renewals,
+      cleanRenewalPrice,
+    );
+  const imported = head.namespaces[IMPORTED_DOMAINS_NAMESPACE];
+  if (imported)
+    head.namespaces[IMPORTED_DOMAINS_NAMESPACE] = cleanEntries(
+      IMPORTED_DOMAINS_NAMESPACE,
+      imported,
+      cleanImportedDomain,
+    );
+  const listPrices = head.namespaces[LIST_PRICES_NAMESPACE];
+  if (listPrices)
+    head.namespaces[LIST_PRICES_NAMESPACE] = cleanEntries(
+      LIST_PRICES_NAMESPACE,
+      listPrices,
+      cleanListPrice,
     );
   // Validate every proxy profile, and every account's pointer to one, so an
   // import can't smuggle in a private/reserved-IP or otherwise malformed proxy

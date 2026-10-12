@@ -30,6 +30,7 @@ import Activity from './pages/Activity';
 import Settings from './pages/Settings';
 import ApprovalModal from './components/ApprovalModal';
 import DemoBanner from './components/DemoBanner';
+import { useWeeklyUpdateCheck } from './lib/updates';
 import StatusBar from './components/StatusBar';
 import { isDemo, supportsPublishing, webAuthMode } from './lib/platform';
 import DomainWorkspace from './pages/DomainWorkspace';
@@ -40,10 +41,7 @@ import {
   TabStrip,
   type TabProps,
 } from './components/TabStrip';
-import SyncControl, {
-  SyncStatusMini,
-  useSyncState,
-} from './components/SyncControl';
+import { useSyncState } from './lib/sync-state';
 import { ActivityBell } from './components/activity/ActivityBell';
 import { Toaster } from '@/components/ui/sonner';
 import { portfolioEditor, usePortfolioEditor } from './lib/publication-client';
@@ -60,10 +58,8 @@ const TAB_OPTIONS: Record<
   '/': { metric: 'domains', pillFrom: 'md' },
   '/public-page': { iconOnlyBelow: 'xl' },
   '/renewals': { metric: 'renewals', pillFrom: 'lg' },
-  '/activity': { metric: 'activity', iconOnlyBelow: 'lg', pillFrom: 'lg' },
+  '/activity': { metric: 'activity', pillFrom: 'lg' },
   '/settings': {
-    metric: 'settings',
-    iconOnlyBelow: 'md',
     pillFrom: 'lg',
     // The gear is drawn smaller than the other icons, so it's bumped up.
     iconClassName: 'size-[17px]',
@@ -81,6 +77,8 @@ export default function App() {
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, [publication]);
+  useWeeklyUpdateCheck();
+  const appInfo = useAppStore((s) => s.appInfo);
   const hydrateFromCache = useAppStore((s) => s.hydrateFromCache);
   const applyPortfolioCacheUpdate = useAppStore(
     (s) => s.applyPortfolioCacheUpdate,
@@ -88,6 +86,7 @@ export default function App() {
   const loadFolders = useAppStore((s) => s.loadFolders);
   const loadSettings = useAppStore((s) => s.loadSettings);
   const loadPurchases = useAppStore((s) => s.loadPurchases);
+  const loadListPrices = useAppStore((s) => s.loadListPrices);
   const loadDomainEvents = useAppStore((s) => s.loadDomainEvents);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const attachBulk = useAppStore((s) => s.attachBulk);
@@ -109,6 +108,7 @@ export default function App() {
     void loadFolders();
     void loadSettings();
     void loadPurchases();
+    void loadListPrices();
     void loadDomainEvents();
     // The bell lists sync errors from any page.
     void loadRegistrars();
@@ -116,9 +116,16 @@ export default function App() {
     loadFolders,
     loadSettings,
     loadPurchases,
+    loadListPrices,
     loadDomainEvents,
     loadRegistrars,
   ]);
+
+  // The macOS app menu's About DomBot / Check for Updates… / Settings….
+  useEffect(
+    () => window.api.onNavigateRequested((route) => navigate(route)),
+    [navigate],
+  );
 
   // An MCP tool write mutates the on-disk cache out of band; re-read it and
   // overlay the change so an open Domains table updates live, without a Sync.
@@ -144,10 +151,11 @@ export default function App() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
       {isDemo() && <DemoBanner />}
-      {/* Three columns: the logo, the tab strip (right-aligned, so it sits
-          against the actions), and the header actions. The tabs run along the
-          bottom edge, on the tab bar color that also shows above them. */}
-      <header className="grid h-12 grid-cols-[auto_1fr_auto] border-b bg-tab-bar px-4 sm:px-6">
+      {/* Three columns: the logo, the tab strip (centered, so the two side
+          columns match), and the bell just right of the tabs. The tabs run
+          along the bottom edge, on the tab bar color that also shows above
+          them. */}
+      <header className="relative grid h-12 grid-cols-[1fr_auto_1fr] border-b bg-tab-bar px-4 sm:px-6">
         <div className="flex flex-1 items-center">
           <button
             type="button"
@@ -195,11 +203,8 @@ export default function App() {
             );
           })}
         </TabStrip>
-        {/* Right side. Phones: a compact sync status, right-justified to the
-            left of the hamburger (the Sync action lives inside the menu).
-            Desktop: the hamburger and status are hidden and the full Sync
-            control shows. */}
-        <div className="flex flex-1 items-center justify-end gap-2">
+        {/* Hosted account access, activity, and the global hosted Sync action. */}
+        <div className="col-start-3 flex items-center justify-end gap-2 sm:pl-3">
           {webAuthMode() === 'gateway' && (
             <a
               href="/account"
@@ -208,24 +213,29 @@ export default function App() {
               Account
             </a>
           )}
-          <span
-            className={cn(
-              'mr-2 inline-flex items-center gap-2.5',
-              supportsPublishing() ? 'lg:hidden' : 'sm:hidden',
-            )}
-          >
+          <span className="mr-2 inline-flex sm:mr-0">
             <ActivityBell />
-            <SyncStatusMini />
           </span>
           <MobileNav />
-          <div
-            className={cn(
-              'hidden items-center gap-2.5',
-              supportsPublishing() ? 'lg:flex' : 'sm:flex',
-            )}
-          >
-            <SyncControl />
-          </div>
+          {supportsPublishing() && <HostedSyncControl />}
+          {/* The running version, dim, tucked into the window's top-right
+              corner; opens Settings → About. Hidden below lg, where the tab
+              pills hide too and the header gets tight. */}
+          {appInfo && (
+            <button
+              type="button"
+              onClick={() => navigate('/settings?tab=about')}
+              className="absolute top-[7px] right-[10px] hidden rounded-sm text-[11px] leading-none text-muted-foreground/40 hover:text-muted-foreground lg:inline"
+              title="About this version"
+            >
+              {/* A serif italic "v", dimmer than the monospace digits (like
+                  the domain names) and set a little apart from them. */}
+              <span className="mr-px font-serif text-[12px] italic opacity-60">
+                v
+              </span>
+              <span className="font-mono text-[10px]">{appInfo.version}</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -272,6 +282,23 @@ export default function App() {
       {/* App-wide toast host. Offset above the fixed status bar (h-6). */}
       <Toaster position="bottom-right" offset={32} />
     </div>
+  );
+}
+
+/** The hosted inventory has its own header; keep its global Sync action. */
+function HostedSyncControl() {
+  const { sync, syncing, disabled, title } = useSyncState();
+  return (
+    <Button
+      size="sm"
+      className="hidden lg:inline-flex"
+      onClick={sync}
+      disabled={disabled}
+      title={title}
+    >
+      <RefreshCw className={cn('size-3.5', syncing && 'animate-spin')} />
+      {syncing ? 'Syncing…' : 'Sync'}
+    </Button>
   );
 }
 
@@ -343,20 +370,24 @@ function MobileNav() {
             </DropdownMenuItem>
           );
         })}
-        {/* The Sync action lives here on phones (the desktop header has its own
-            button); the last-synced time/errors show beside the hamburger. */}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => sync()}
-          disabled={syncDisabled}
-          title={syncTitle}
-          className="gap-2.5"
-        >
-          <RefreshCw
-            className={cn('size-4 shrink-0', syncing && 'animate-spin')}
-          />
-          {syncing ? 'Syncing…' : 'Sync'}
-        </DropdownMenuItem>
+        {/* The Sync action lives here on phones; on wider screens it's in the
+            status bar. Domains has its own in the page header. */}
+        {pathname !== '/' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => sync()}
+              disabled={syncDisabled}
+              title={syncTitle}
+              className="gap-2.5"
+            >
+              <RefreshCw
+                className={cn('size-4 shrink-0', syncing && 'animate-spin')}
+              />
+              {syncing ? 'Syncing…' : 'Sync'}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

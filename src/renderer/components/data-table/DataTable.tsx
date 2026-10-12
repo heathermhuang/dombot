@@ -9,9 +9,18 @@ import {
   ChevronsUpDown,
 } from 'lucide-react';
 import { DomainTableScroll } from '../../lib/domain-table-scroll';
-import { PAGE_SIZES, usePreferences } from '../../lib/preferences';
+import { DensityMediumIcon, DensitySmallIcon } from '../icons/DensityIcons';
+import {
+  PAGE_SIZES,
+  usePreferences,
+  type Preferences,
+} from '../../lib/preferences';
 import { paginate, rangeKeys, type SortDir } from './table-state';
 import { cn } from '@/lib/utils';
+import {
+  SegmentedControl,
+  type SegmentedOption,
+} from '@/components/ui/segmented-control';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -79,6 +88,7 @@ export function DataTable<T>({
   rowClassName,
   empty,
   className,
+  density: fixedDensity,
 }: {
   rows: T[];
   columns: DataColumn<T>[];
@@ -96,8 +106,12 @@ export function DataTable<T>({
   empty: ReactNode;
   /** Extra classes on the outer container (e.g. spacing above). */
   className?: string;
+  /** A fixed density: ignores the preference and hides its switch. */
+  density?: Preferences['density'];
 }) {
-  const density = usePreferences((s) => s.density);
+  const preferred = usePreferences((s) => s.density);
+  const density = fixedDensity ?? preferred;
+  const setPreferences = usePreferences((s) => s.setPreferences);
   const {
     pageCount,
     page: current,
@@ -147,8 +161,10 @@ export function DataTable<T>({
           // text (icon buttons overlap into it with negative margins, so they
           // don't drive it): 45px normal, ~36px compact. align-top keeps
           // inline-level cell content (checkbox, switch, inline-flex spans)
-          // from adding baseline descent under the line box.
-          'domain-table-scroll absolute inset-0 overflow-auto rounded-lg border [&_td]:border-x [&_td]:border-x-border/50 [&_th]:border-x [&_th]:border-x-border/50 [&_td]:py-3 [&_td>*]:align-top compact:[&_td]:py-[9px]',
+          // from adding baseline descent under the line box. Column rules
+          // sit between cells only: the outer cells' would double the frame's
+          // border, a darker strip just inside it.
+          'domain-table-scroll absolute inset-0 overflow-auto rounded-lg border [&_td]:border-x [&_td]:border-x-border/50 [&_th]:border-x [&_th]:border-x-border/50 [&_tr>*:first-child]:border-l-0 [&_tr>*:last-child]:border-r-0 [&_td]:py-3 [&_td>*]:align-top compact:[&_td]:py-[9px]',
           density === 'compact' && 'compact',
         )}
       >
@@ -229,7 +245,9 @@ export function DataTable<T>({
               return (
                 <TableRow
                   key={key}
+                  // `group/row` lets a cell reveal controls on row hover.
                   className={cn(
+                    'group/row',
                     isSelected && 'bg-muted/50',
                     rowClassName?.(row, isSelected),
                   )}
@@ -311,6 +329,12 @@ export function DataTable<T>({
               </SelectGroup>
             </SelectContent>
           </Select>
+          {!fixedDensity && (
+            <DensitySwitch
+              value={density}
+              onChange={(next) => setPreferences({ density: next })}
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-3 sm:justify-start">
@@ -362,6 +386,38 @@ export function DataTable<T>({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+const DENSITIES: SegmentedOption<Preferences['density']>[] = [
+  { value: 'normal', title: 'Normal rows', icon: DensityMediumIcon },
+  { value: 'compact', title: 'Compact rows', icon: DensitySmallIcon },
+];
+
+/**
+ * Row density beside Rows per page: a labelled icon pair for the same setting
+ * as Settings → General (it's remembered). Hidden on phones, which are always
+ * compact.
+ */
+function DensitySwitch({
+  value,
+  onChange,
+}: {
+  value: Preferences['density'];
+  onChange: (value: Preferences['density']) => void;
+}) {
+  return (
+    <div className="ml-3 flex items-center gap-2 max-sm:hidden">
+      <span id="density-label">Density</span>
+      <SegmentedControl
+        size="sm"
+        tone="grey"
+        aria-labelledby="density-label"
+        value={value}
+        onChange={onChange}
+        options={DENSITIES}
+      />
     </div>
   );
 }

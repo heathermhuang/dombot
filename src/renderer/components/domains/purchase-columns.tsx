@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { toAscii } from '../../../shared/domain-name';
-import type { Domain, DomainPurchase } from '../../../shared/ipc';
+import type { ListPrice, Domain, DomainPurchase } from '../../../shared/ipc';
 import { formatMoney, type NumberFormatId } from '../../../shared/money';
 import { cn } from '@/lib/utils';
 
@@ -20,12 +20,6 @@ function recordOf(
   domain: Domain,
 ): DomainPurchase | undefined {
   return purchases[toAscii(domain.domainName)];
-}
-
-function preview(notes: string): string {
-  const line = notes.split(/\r?\n/)[0]?.trim() ?? '';
-  if (line.length <= 40) return line;
-  return `${line.slice(0, 40)}…`;
 }
 
 /** Fills the cell, including its padding, so one click anywhere opens the editor. */
@@ -67,25 +61,80 @@ function PurchaseCell({
   );
 }
 
-/** Purchase date, amount, and notes. History also gets sold date and amount first. */
+/**
+ * Money columns for the Domains table: Archive gets the sold date and
+ * amount, Owned gets the BIN price and minimum offer. What you paid is edited
+ * from the row menu (Purchase details).
+ */
 export function purchaseColumns({
   purchases,
   preferredCurrency,
   numberFormat,
-  onEdit,
   onEditSale,
   showSale = false,
   isSold,
+  listPrices,
+  onEditListPrice,
 }: {
   purchases: Record<string, DomainPurchase>;
   preferredCurrency: string;
   numberFormat: NumberFormatId;
-  onEdit: (domain: Domain) => void;
   onEditSale?: (domain: Domain) => void;
-  /** History view: sold date and sold amount, before the purchase columns. */
+  /** Archive view: sold date and sold amount. */
   showSale?: boolean;
   isSold?: (domain: Domain) => boolean;
+  /** Owned view: the BIN price and Min offer columns. */
+  listPrices?: Record<string, ListPrice>;
+  onEditListPrice?: (domain: Domain) => void;
 }): PurchaseColumn[] {
+  // Owned view: BIN price and Min offer (Floor is in the editor), each
+  // opening the same editor.
+  const listPriceOf = (d: Domain) => listPrices?.[toAscii(d.domainName)];
+  const listPriceColumn = (
+    key: string,
+    label: string,
+    field: 'amount' | 'minOffer' | 'floor',
+    editLabel: string,
+  ): PurchaseColumn => ({
+    key,
+    label,
+    align: 'right',
+    hideOnMobile: true,
+    render: (d) => {
+      const p = listPriceOf(d);
+      const value = p?.[field];
+      return (
+        <PurchaseCell
+          domain={d}
+          onEdit={onEditListPrice!}
+          align="right"
+          empty={!value}
+          editLabel={editLabel}
+        >
+          {value
+            ? formatMoney(
+                value,
+                p!.currency,
+                preferredCurrency,
+                numberFormat,
+                true,
+              )
+            : '—'}
+        </PurchaseCell>
+      );
+    },
+    sortValue: (d) => {
+      const value = listPriceOf(d)?.[field];
+      return value == null ? null : Number(value);
+    },
+  });
+  const pricing: PurchaseColumn[] =
+    listPrices && onEditListPrice && !showSale
+      ? [
+          listPriceColumn('binPrice', 'BIN price', 'amount', 'BIN price'),
+          listPriceColumn('minOffer', 'Min offer', 'minOffer', 'Minimum offer'),
+        ]
+      : [];
   const sale: PurchaseColumn[] = showSale
     ? [
         {
@@ -158,66 +207,5 @@ export function purchaseColumns({
       ]
     : [];
 
-  return [
-    ...sale,
-    {
-      key: 'purchaseDate',
-      label: 'Purchased',
-      hideOnMobile: true,
-      render: (d) => {
-        const date = recordOf(purchases, d)?.purchaseDate;
-        return (
-          <PurchaseCell domain={d} onEdit={onEdit} empty={!date}>
-            {date || '—'}
-          </PurchaseCell>
-        );
-      },
-      sortValue: (d) => recordOf(purchases, d)?.purchaseDate ?? null,
-    },
-    {
-      key: 'purchaseAmount',
-      label: 'Paid',
-      align: 'right',
-      render: (d) => {
-        const record = recordOf(purchases, d);
-        const text =
-          record?.amount && record.currency
-            ? formatMoney(
-                record.amount,
-                record.currency,
-                preferredCurrency,
-                numberFormat,
-              )
-            : null;
-        return (
-          <PurchaseCell domain={d} onEdit={onEdit} align="right" empty={!text}>
-            {text || '—'}
-          </PurchaseCell>
-        );
-      },
-      sortValue: (d) => {
-        const amount = recordOf(purchases, d)?.amount;
-        return amount == null ? null : Number(amount);
-      },
-    },
-    {
-      key: 'purchaseNotes',
-      label: 'Notes',
-      hideOnMobile: true,
-      render: (d) => {
-        const notes = recordOf(purchases, d)?.notes ?? '';
-        return (
-          <PurchaseCell
-            domain={d}
-            onEdit={onEdit}
-            title={notes || undefined}
-            empty={!notes}
-          >
-            {notes ? preview(notes) : '—'}
-          </PurchaseCell>
-        );
-      },
-      sortValue: (d) => recordOf(purchases, d)?.notes?.toLowerCase() || null,
-    },
-  ];
+  return [...sale, ...pricing];
 }

@@ -1,44 +1,46 @@
 import { useMemo } from 'react';
 import { useAppStore } from '../store/app';
 import { notifications } from '../../shared/notifications';
-import { summarize } from './renewals';
+import { summarize, wholeMoney } from './renewals';
+import { importedRows } from '../../shared/imported-domains';
 
 export interface TabMetric {
   /** Short display value for the tab's pill, e.g. "1,050" or "$4.2k". */
   value: string;
   /** Longer form for the tooltip. */
   title: string;
-  /** Tinted red when the number is a problem count (Settings sync issues). */
+  /** Tinted red when the number is a problem count. */
   alert?: boolean;
 }
 
-/** Compact whole-dollar USD: "$820", "$4.2k", "$12k". */
-function usdCompact(n: number): string {
-  if (n < 1000) return `$${Math.round(n).toLocaleString('en-US')}`;
+/** Compact whole amount: "$820", "$4.2k", "€12k". */
+function compactMoney(n: number, currency: string): string {
+  if (n < 1000) return wholeMoney(n, currency);
   const k = n / 1000;
-  return `$${k < 10 ? k.toFixed(1).replace(/\.0$/, '') : Math.round(k)}k`;
+  const symbol = wholeMoney(0, currency).replace(/[\d\s.,]/g, '');
+  return `${symbol}${k < 10 ? k.toFixed(1).replace(/\.0$/, '') : Math.round(k)}k`;
 }
 
 export interface TabMetrics {
   domains: TabMetric | null;
   renewals: TabMetric | null;
   activity: TabMetric | null;
-  settings: TabMetric | null;
 }
 
 /**
  * The headline number each top-level tab shows in its pill: Domains → portfolio
  * size, Renewals → known annual renewal spend, Activity → alerts that need
- * review, Settings → accounts whose last sync failed (Activity and Settings
- * only when there are any). `null` hides the pill.
+ * review (only when there are any). Settings has none: sync failures show in
+ * the bell and the status bar. `null` hides the pill.
  */
 export function useTabMetrics(): TabMetrics {
-  const portfolio = useAppStore((s) => s.portfolio);
+  const synced = useAppStore((s) => s.portfolio);
+  const importedDomains = useAppStore((s) => s.importedDomains);
   const pricing = useAppStore((s) => s.pricing);
-  const registrars = useAppStore((s) => s.registrars);
   const events = useAppStore((s) => s.domainEvents);
 
   return useMemo(() => {
+    const portfolio = [...synced, ...importedRows(importedDomains, synced)];
     const n = portfolio.length.toLocaleString('en-US');
     const domains =
       portfolio.length > 0
@@ -52,13 +54,12 @@ export function useTabMetrics(): TabMetrics {
     const renewals =
       summary.priced > 0
         ? {
-            value: usdCompact(summary.yearly),
-            title: `$${Math.round(summary.yearly).toLocaleString('en-US')} per year in renewals (${summary.priced} of ${summary.total} priced)`,
+            value: compactMoney(summary.yearly, summary.currency),
+            title: `${wholeMoney(summary.yearly, summary.currency)} per year in renewals (${summary.priced} of ${summary.total} priced)${summary.others.map((o) => `, plus ${wholeMoney(o.yearly, o.currency)}`).join('')}`,
           }
         : null;
 
-    // The same alerts as the header bell, without its sync errors (those
-    // count on Settings).
+    // The same alerts as the header bell, without its sync errors.
     const open = notifications(events, []).length;
     const activity =
       open > 0
@@ -68,20 +69,6 @@ export function useTabMetrics(): TabMetrics {
           }
         : null;
 
-    // Enabled accounts, for the Settings sync-issue count.
-    const configured = (registrars ?? []).filter(
-      (r) => r.configured && r.enabled,
-    );
-    const issues = configured.filter((r) => r.sync.lastError != null).length;
-    const settings =
-      issues > 0
-        ? {
-            value: String(issues),
-            title: `${issues} account${issues === 1 ? '' : 's'} failed to sync`,
-            alert: true,
-          }
-        : null;
-
-    return { domains, renewals, activity, settings };
-  }, [portfolio, pricing, registrars, events]);
+    return { domains, renewals, activity };
+  }, [synced, importedDomains, pricing, events]);
 }

@@ -54,15 +54,20 @@ export const DEFAULT_DEMO_SIZE = 524;
 const MAX_LABEL_REPEATS = 2;
 
 // ── the registrars in the demo ───────────────────────────────────────────────
-// Shares sum to 1. Gandi, NameSilo, NameBright and Name.com are left
-// unconfigured so the settings page shows both states.
+// Shares sum to 1. NameSilo, NameBright and Name.com are left unconfigured
+// so the settings page shows both states. Gandi is connected and also has a
+// name you added by hand (api/demo.ts), so both kinds show side by side.
+// Namecheap has two accounts with account names, to show how siblings read.
+// A registrar's first account keeps the default id (the registrar name); a
+// second one gets a UUID like any account added in the app — fixed, so every
+// visitor sees the same one — which also lets a demo export re-import.
 
-const ACCOUNTS: Omit<DemoAccount, 'id'>[] = [
+const ACCOUNTS: (Omit<DemoAccount, 'id'> & { id?: string })[] = [
   {
     registrar: 'godaddy',
     label: 'Default',
     credentials: { apiToken: 'demo_gd_3f9a1c7e2b4d5a6f8e1c9b7d3a2f4e6c' },
-    share: 0.36,
+    share: 0.33,
   },
   {
     registrar: 'porkbun',
@@ -93,13 +98,24 @@ const ACCOUNTS: Omit<DemoAccount, 'id'>[] = [
   },
   {
     registrar: 'namecheap',
-    label: 'Default',
+    label: 'Personal',
     credentials: {
       username: 'demo-portfolio',
       apiKey: 'demo_nc_a1b2c3d4e5f60718293a4b5c6d7e8f90',
       clientIp: '203.0.113.42',
     },
-    share: 0.06,
+    share: 0.03,
+  },
+  {
+    registrar: 'namecheap',
+    id: '3b8f2c1e-6d4a-4f7e-9a25-c1d0e8b7f640',
+    label: 'Selling',
+    credentials: {
+      username: 'demo-selling',
+      apiKey: 'demo_nc_0f9e8d7c6b5a49382716a5b4c3d2e1f0',
+      clientIp: '203.0.113.42',
+    },
+    share: 0.03,
   },
   {
     registrar: 'spaceship',
@@ -109,6 +125,12 @@ const ACCOUNTS: Omit<DemoAccount, 'id'>[] = [
       apiSecret: 'demo_ss_secret_1a3c5e7b9d2f4a6c',
     },
     share: 0.04,
+  },
+  {
+    registrar: 'gandi',
+    label: 'Default',
+    credentials: { apiKey: 'demo_gandi_pat_6d1f3b8e2a4c7e9f0b5d' },
+    share: 0.03,
   },
 ];
 
@@ -861,7 +883,7 @@ export function generateDemoSeed(
   const r = rng(seed);
   const accounts: DemoAccount[] = ACCOUNTS.map((a) => ({
     ...a,
-    id: a.registrar,
+    id: a.id ?? a.registrar,
   }));
   const records: DemoDomainRecord[] = [];
   const used = new Set<string>();

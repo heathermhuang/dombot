@@ -7,6 +7,7 @@ import {
   type OperationResult,
 } from '@aoxborrow/registrar-client';
 import type { DomainOp, DomainTarget } from '../../shared/ipc';
+import type { ConfirmedRenewal } from './domain-history';
 
 // ── Mock the registrar boundary and the window broadcast ─────────────────────
 // applyDomainOp only touches these two modules; mocking them keeps Electron and
@@ -61,6 +62,11 @@ vi.mock('../events', () => ({
   broadcastPortfolioChanged: () => broadcastPortfolioChanged(),
 }));
 
+const recordRenewals = vi.fn();
+vi.mock('./domain-history', () => ({
+  recordRenewals: (...a: unknown[]) => recordRenewals(...a),
+}));
+
 // Imported after the mocks are registered.
 import { applyDomainOp } from './domain-ops';
 
@@ -94,6 +100,28 @@ beforeEach(() => {
 });
 
 describe('applyDomainOp — up-front capability gate', () => {
+  it('blocks 101domain auto-renew before reaching the registrar', async () => {
+    const r = await applyDomainOp(
+      { registrar: '101domain', domainName: 'example.com' },
+      { kind: 'autoRenew', enabled: true },
+    );
+    expect(r.status).toBe('unsupported');
+    expect(setAutoRenewCached).not.toHaveBeenCalled();
+  });
+  it('keeps active nameservers unchanged when the registry accepted a pending change', async () => {
+    setNameserversCached.mockResolvedValue({
+      success: true,
+      pending: true,
+      message: 'Pending registry processing',
+    });
+    const r = await applyDomainOp(
+      { registrar: '101domain', domainName: 'example.com' },
+      { kind: 'nameservers', nameservers: ['ns1.new.net', 'ns2.new.net'] },
+    );
+    expect(r.status).toBe('ok');
+    expect(r.message).toContain('Pending');
+    expect(r.patch).toBeUndefined();
+  });
   it('returns unsupported and makes no network call when the registrar lacks the feature', async () => {
     getRegistrarFeatures.mockReturnValue([]); // no getAuthCode
     const r = await applyDomainOp(target, { kind: 'authCode' });
@@ -255,6 +283,42 @@ describe('applyDomainOp — renew', () => {
       { signal: undefined },
       'dynadot',
     );
+    expect(recordRenewals).toHaveBeenCalledWith([
+      {
+        domainName: 'example.com',
+        accountId: 'dynadot',
+        years: 2,
+        charge: null,
+      },
+    ]);
+  });
+
+  it('records what the registrar charged, when it says', async () => {
+    renewDomainCached.mockResolvedValue({
+      result: { ...ok('Renewed'), charge: { amount: 12.5, currency: 'usd' } },
+      patch: {},
+    });
+    await applyDomainOp(target, { kind: 'renew', years: 1 });
+    expect(recordRenewals.mock.calls[0][0][0]).toMatchObject({
+      charge: { amount: '12.50', currency: 'USD' },
+    });
+  });
+
+  it('ignores a malformed charge rather than storing a guess', async () => {
+    renewDomainCached.mockResolvedValue({
+      result: { ...ok('Renewed'), charge: { amount: '-3', currency: 'USD' } },
+      patch: {},
+    });
+    await applyDomainOp(target, { kind: 'renew', years: 1 });
+    expect(recordRenewals.mock.calls[0][0][0].charge).toBeNull();
+  });
+
+  it('collects renewals for the bulk runner instead of recording each', async () => {
+    renewDomainCached.mockResolvedValue({ result: ok('Renewed'), patch: {} });
+    const renewals: ConfirmedRenewal[] = [];
+    await applyDomainOp(target, { kind: 'renew', years: 1 }, { renewals });
+    expect(renewals).toHaveLength(1);
+    expect(recordRenewals).not.toHaveBeenCalled();
   });
 
   it('soft-fails without applying the patch', async () => {
@@ -266,6 +330,7 @@ describe('applyDomainOp — renew', () => {
     expect(r.status).toBe('failed');
     expect(r.message).toBe('Payment declined');
     expect(r.patch).toBeUndefined();
+    expect(recordRenewals).not.toHaveBeenCalled();
   });
 });
 
@@ -458,6 +523,8 @@ describe('applyDomainOp — a write whose outcome is unknown', () => {
     expect(r.message).toMatch(/before renewing again/);
     expect(r.message).not.toMatch(/safe/i);
     expect(renewDomainCached).toHaveBeenCalledOnce();
+    // Unknown writes nothing: sync records it once the expiry moves.
+    expect(recordRenewals).not.toHaveBeenCalled();
   });
 
   it('stays unknown when the domain cannot be re-read or the field is missing', async () => {

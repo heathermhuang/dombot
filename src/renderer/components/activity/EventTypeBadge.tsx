@@ -7,30 +7,42 @@ import { Badge } from '@/components/ui/badge';
 // Archive's Status column (a name's status there is its latest ownership
 // event: Sold, Dropped, Archived, or Removed).
 
-/** Badge colors: added green, removed amber, moves blue, … */
+// Colored by group, and calm: urgency is the Activity status column's job
+// (lib/severity.ts), so no type uses red, orange, or yellow. Names coming in
+// (added, registered, purchased) are blue, sold green, and the changes to a
+// name you keep (renewed, moved) indigo. Losing a name is neutral: removed in
+// plain text, dropped and archived muted gray.
+const IN =
+  'border-blue-700/30 text-blue-700 dark:border-blue-300/30 dark:text-blue-300';
+const IN_DOT = 'bg-blue-700 dark:bg-blue-300';
+const KEPT = 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400';
+const KEPT_DOT = 'bg-indigo-500 dark:bg-indigo-400';
+const GRAY = 'border-border text-muted-foreground';
+const GRAY_DOT = 'bg-muted-foreground/60';
+
 const TYPE_STYLE: Record<DomainEvent['type'], string> = {
-  added: 'border-brand/40 text-brand-600 dark:text-brand',
-  removed: 'border-amber-500/40 text-amber-600 dark:text-amber-400',
-  moved: 'border-sky-500/40 text-sky-600 dark:text-sky-400',
-  registered: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400',
-  purchased: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400',
-  sold: 'border-violet-500/40 text-violet-600 dark:text-violet-400',
-  dropped: 'border-red-500/40 text-red-600 dark:text-red-400',
-  archived: 'border-border text-muted-foreground',
-  renewed: 'border-teal-500/40 text-teal-600 dark:text-teal-400',
+  added: IN,
+  registered: IN,
+  purchased: IN,
+  removed: 'border-foreground/25 text-foreground',
+  dropped: GRAY,
+  archived: GRAY,
+  sold: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400',
+  moved: KEPT,
+  renewed: KEPT,
 };
 
 /** The same colors as a dot, for filter options. */
 const TYPE_DOT: Record<DomainEvent['type'], string> = {
-  added: 'bg-brand-600 dark:bg-brand',
-  removed: 'bg-amber-500 dark:bg-amber-400',
-  moved: 'bg-sky-500 dark:bg-sky-400',
-  registered: 'bg-emerald-500 dark:bg-emerald-400',
-  purchased: 'bg-emerald-500 dark:bg-emerald-400',
-  sold: 'bg-violet-500 dark:bg-violet-400',
-  dropped: 'bg-red-500 dark:bg-red-400',
-  archived: 'bg-muted-foreground/60',
-  renewed: 'bg-teal-500 dark:bg-teal-400',
+  added: IN_DOT,
+  registered: IN_DOT,
+  purchased: IN_DOT,
+  removed: 'bg-foreground/70',
+  dropped: GRAY_DOT,
+  archived: GRAY_DOT,
+  sold: 'bg-emerald-500 dark:bg-emerald-400',
+  moved: KEPT_DOT,
+  renewed: KEPT_DOT,
 };
 
 export function EventTypeBadge({

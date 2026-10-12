@@ -17,6 +17,7 @@ const record = (
   accountId,
   accountLabel: accountId,
   registrar: 'dynadot',
+  source: 'registrar',
   status: 'active',
   createdDate: null,
   expirationDate: new Date('2030-01-01'),

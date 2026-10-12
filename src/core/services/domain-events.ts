@@ -1,12 +1,14 @@
 import { isCurrencyCode } from '../../shared/currencies';
 import { isDomainKey, toAscii } from '../../shared/domain-name';
 import {
+  DomainEventSource,
   isDomainEventSource,
   isDomainEventType,
   newEventId,
   type DomainEvent,
   type DomainNote,
 } from '../../shared/domain-events';
+import { ownershipByDomain, type ArchiveLabel } from '../../shared/ownership';
 import { parseCanonicalAmount, parsePurchaseDate } from '../../shared/money';
 import { Namespace } from '../storage/namespace';
 
@@ -72,6 +74,34 @@ export function deleteDomainEvents(ids: string[], domain?: string): void {
   }
 }
 
+/**
+ * Setting a name's state replaces the one you set: if its current state is
+ * your Sold, Dropped, or Archived, that event is deleted, and the alert it
+ * answered is returned for the new one to answer instead. So a name you
+ * change your mind about keeps one entry, not a trail of them. A state that
+ * sync set (a removal) is left alone.
+ */
+export function replaceLabel(domain: string): {
+  /** The label that was replaced, or null when there was none of yours. */
+  label: ArchiveLabel | null;
+  resolves: string | undefined;
+} {
+  const key = toAscii(domain);
+  const o = ownershipByDomain(eventsFor(key)).get(key);
+  const e = o?.event;
+  if (!o?.label || !e || e.source === DomainEventSource.Sync)
+    return { label: null, resolves: undefined };
+  deleteDomainEvents([e.id]);
+  return { label: o.label, resolves: e.resolves };
+}
+
+/** A name's current state, when it's one you set (for skipping no-ops). */
+export function currentLabel(domain: string): ArchiveLabel | null {
+  const key = toAscii(domain);
+  const o = ownershipByDomain(eventsFor(key)).get(key);
+  return o?.event && o.event.source !== DomainEventSource.Sync ? o.label : null;
+}
+
 // ── notes ───────────────────────────────────────────────────────────────────
 
 /** The note about the name itself (not about one of its events). */
@@ -124,6 +154,28 @@ export function setNameNote(domain: string, text: string): void {
   if (note) void notes.set(note.id, note);
 }
 
+/** Sets many names' notes in one store write. Blank text is skipped. */
+export function setNameNotes(entries: [domain: string, text: string][]): void {
+  const now = Date.now();
+  const byDomain = new Map(
+    Object.values(notes.all())
+      .filter((n) => n.eventId === null)
+      .map((n) => [n.domain, n]),
+  );
+  const writes: [string, DomainNote][] = [];
+  for (const [domain, text] of entries) {
+    const key = toAscii(domain);
+    const trimmed = text.trim().slice(0, MAX_NOTE_LENGTH);
+    if (!trimmed) continue;
+    const note = nextNameNote(byDomain.get(key), key, trimmed, now);
+    if (note) {
+      byDomain.set(key, note);
+      writes.push([note.id, note]);
+    }
+  }
+  if (writes.length > 0) void notes.setMany(writes);
+}
+
 // ── import validation ───────────────────────────────────────────────────────
 
 const optionalId = (v: unknown) =>
@@ -143,6 +195,7 @@ export function cleanEvent(id: string, value: unknown): DomainEvent | null {
   if (v.resolves !== undefined && typeof v.resolves !== 'string') return null;
   if (v.dismissed !== undefined && typeof v.dismissed !== 'boolean')
     return null;
+  if (v.importId !== undefined && typeof v.importId !== 'string') return null;
   let date: string | null;
   try {
     date = v.date === null ? null : parsePurchaseDate(String(v.date), 'Date');

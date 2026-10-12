@@ -16,6 +16,7 @@ import {
 } from '../events';
 import { Namespace } from '../storage/namespace';
 import { applyDomainOp } from './domain-ops';
+import { recordRenewals, type ConfirmedRenewal } from './domain-history';
 
 // The bulk-job runner: one `DomainOp` over many targets, respecting each
 // registrar's rate limits (one lane per registrar, with a concurrency and a
@@ -45,6 +46,7 @@ const DEFAULT_POLICY: LanePolicy = { lanes: 2, spacingMs: 500 };
 // Starting points from the library's registrar notes (docs/registrars/*.md);
 // tune against real accounts.
 const LANE_POLICY: Partial<Record<RegistrarName, LanePolicy>> = {
+  '101domain': { lanes: 1, spacingMs: 1000 }, // per-account RPS/RPH quotas
   dynadot: { lanes: 1, spacingMs: 1000 }, // Regular tier: 1 thread / 60 req-min
   porkbun: { lanes: 1, spacingMs: 1000 },
   namebright: { lanes: 1, spacingMs: 1000 }, // ~30 req / 30 s
@@ -348,6 +350,8 @@ async function runStep(j: StoredJob): Promise<BulkStep> {
 
   const controller = new AbortController();
   stepController = controller;
+  // Confirmed renewals in this slice, recorded together (one write).
+  const renewals: ConfirmedRenewal[] = [];
   try {
     await Promise.all(
       slice.map(async (target) => {
@@ -356,6 +360,7 @@ async function runStep(j: StoredJob): Promise<BulkStep> {
           : await applyDomainOp(target, j.op, {
               signal: controller.signal,
               silent: true,
+              renewals,
             });
         if (result.status === 'rate-limited') {
           j.notBefore[target.registrar] = Date.now() + RATE_LIMIT_PAUSE_MS;
@@ -365,6 +370,11 @@ async function runStep(j: StoredJob): Promise<BulkStep> {
     );
   } finally {
     stepController = null;
+    try {
+      recordRenewals(renewals);
+    } catch (err) {
+      console.error('[domain-history] recording renewals failed', err);
+    }
   }
 
   if (j.cancelRequested) {

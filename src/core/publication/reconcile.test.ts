@@ -25,6 +25,7 @@ const account: RegistrarMeta = {
   sync: {
     lastSyncedAt: now - 1000,
     lastError: null,
+    lastErrorAt: null,
     domainCount: 1,
     trackedSince: null,
   },
