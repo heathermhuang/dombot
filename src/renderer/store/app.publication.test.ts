@@ -55,6 +55,7 @@ it('refreshes publication ownership after a single-account sync without discardi
       getPortfolioPricing: async () => ({}),
       getPurchases: async () => ({}),
       getDomainEvents: async () => [],
+      getImportedDomains: async () => ({}),
       getFolders: async () => ({ folders: [], assignments: {} }),
     },
   });

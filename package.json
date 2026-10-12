@@ -1,7 +1,7 @@
 {
   "name": "dombot",
   "productName": "DomBot",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Cross-platform desktop app built with Electron, React, TypeScript, and Vite.",
   "main": ".vite/build/index.js",
   "private": true,
@@ -12,6 +12,9 @@
       },
       "DOMBOT_PASSWORD": {
         "description": "The password you'll sign in with. Generate one with `openssl rand -base64 32` (or choose your own long one). Rotate later with `npm run web:rotate-password`."
+      },
+      "DOMBOT_AUTH": {
+        "description": "Leave as `password`. To sign in with Cloudflare Access instead, follow docs/self-hosting.md: changing only this value locks you out."
       }
     }
   },
@@ -26,6 +29,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pricing:build": "node scripts/build-base-pricing.mjs",
+    "registrars:update": "node scripts/update-registrars.mjs",
     "site:dev": "vite site",
     "site:build": "vite build site",
     "site:preview": "vite preview site",
@@ -82,14 +86,14 @@
     "typescript": "~5.6.3",
     "vite": "^6.4.3",
     "vitest": "^4.1.11",
-    "wrangler": "^4.132.0",
-    "miniflare": "5.20260915.0-alpha"
+    "wrangler": "^4.146.0",
+    "miniflare": "5.20261001.0-alpha"
   },
   "dependencies": {
-    "@aoxborrow/registrar-client": "^0.7.0",
+    "@aoxborrow/registrar-client": "^0.9.2",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.1",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-squirrel-startup": "^1.0.1",

@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CurrencyPicker } from './CurrencyPicker';
+import { MoneyInput } from './MoneyInput';
 import {
   NOTES_MAX,
   NotesLimit,
@@ -64,16 +65,18 @@ export function PurchaseDialog({
   const preferred = settings?.preferredCurrency ?? DEFAULT_CURRENCY;
   const record = purchases[toAscii(domain.domainName)];
   // Answering an arrival records a new holding: start blank rather than from
-  // the previous purchase. The note belongs to the name, so it still shows.
-  const existing = resolves ? undefined : record;
+  // the previous purchase, unless one was recorded since the name arrived (an
+  // import): then it's that purchase, and saving edits it. The note belongs
+  // to the name, so it still shows.
+  const existing = resolves
+    ? record?.acquisitionId && record.acquisitionId > resolves
+      ? record
+      : undefined
+    : record;
 
   const recorded = !!(existing?.purchaseDate || existing?.amount);
-  // Answering an arrival records a purchase, so it starts dated today. This is
-  // also the notes editor, so otherwise the date starts as stored (blank for a
-  // name with no purchase): saving only a note mustn't record a purchase.
-  const [date, setDate] = useState(
-    resolves ? todayInput : (existing?.purchaseDate ?? ''),
-  );
+  // The date starts as stored, or today when there's none yet.
+  const [date, setDate] = useState(existing?.purchaseDate || todayInput);
   const [amount, setAmount] = useState(
     existing?.amount
       ? formatAmountInput(
@@ -163,10 +166,7 @@ export function PurchaseDialog({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-md">
-        <ActionHeader
-          title={recorded ? 'Edit purchase' : 'Record purchase'}
-          names={[domain.domainName]}
-        />
+        <ActionHeader title="Purchase details" names={[domain.domainName]} />
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
             What you paid and when. Kept even if the name leaves the account.
@@ -211,9 +211,9 @@ export function PurchaseDialog({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="purchase-amount">Purchase amount</Label>
-              <Input
+              <MoneyInput
                 id="purchase-amount"
-                inputMode="decimal"
+                currency={currency}
                 value={amount}
                 placeholder={formatAmountInput('0', currency, formatId)}
                 onChange={(e) => setAmount(e.target.value)}

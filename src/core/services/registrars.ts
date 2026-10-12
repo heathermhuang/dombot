@@ -1,4 +1,6 @@
 import { protectRegistrar, redactRegistrarMessage } from './registrar-errors';
+import { importedRows } from '../../shared/imported-domains';
+import { getImportedDomains } from './imported-domains';
 import {
   NotImplementedError,
   RateLimitError,
@@ -25,8 +27,9 @@ import {
   removeAccountRecord,
 } from './accounts';
 import { domainKey } from '../../shared/account-key';
+import { toAscii } from '../../shared/domain-name';
 import { currencyInfo } from '../../shared/money';
-import type { AccountHoldings } from '../../shared/sync-diff';
+import { expiryDay, type AccountHoldings } from '../../shared/sync-diff';
 import { recordSync } from './domain-history';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
@@ -98,17 +101,24 @@ function withoutQuote(record: DetailRecord): Partial<Domain> {
   return rest;
 }
 
+/** A cached row: what the account's list returned. `assemblePortfolio`
+ *  stamps the account and `source` on it. */
+type CachedDomain = Omit<Domain, 'source'>;
+
 /**
  * One registrar's slice of the portfolio, cached under the 'portfolio' namespace
  * keyed by registrar id (so each syncs independently). `lastSyncedAt` is the last
  * time domains were fetched *successfully*; `lastError` is the most recent
- * attempt's error (null when it succeeded). On a failed sync we keep the last-good
- * `domains` and `lastSyncedAt`, and only set `lastError`.
+ * attempt's error (null when it succeeded), and `lastErrorAt` when it happened.
+ * On a failed sync we keep the last-good `domains` and `lastSyncedAt`, and only
+ * set the error.
  */
 interface RegistrarPortfolioEntry {
-  domains: Domain[];
+  domains: CachedDomain[];
   lastSyncedAt: number | null;
   lastError: string | null;
+  /** Absent in entries written before it was recorded. */
+  lastErrorAt?: number | null;
 }
 
 /** Older bundles can contain raw transport errors with credentials in URLs
@@ -504,6 +514,14 @@ export function getActiveRegistrars(): RegistrarName[] {
   return [...new Set(getActiveAccounts().map((a) => a.registrar))];
 }
 
+// A registrar row needs a name to be a domain. A bad registrar response can
+// list rows without one (NameBright did when its API changed casing); they'd
+// show as blank rows and fail every per-domain call, so they're dropped on sync
+// and on read (the latter for rows cached before this guard).
+function hasDomainName(d: { domainName: string }): boolean {
+  return typeof d.domainName === 'string' && d.domainName.trim() !== '';
+}
+
 /** One registrar's cached slice (dates revived), or null when never synced. */
 function readRegistrarEntry(name: string): RegistrarPortfolioEntry | null {
   const cached = readEntry<RegistrarPortfolioEntry>('portfolio', name);
@@ -516,7 +534,7 @@ function readRegistrarEntry(name: string): RegistrarPortfolioEntry | null {
           accountSecrets(name),
         )
       : null,
-    domains: cached.data.domains.map(reviveDomainDates),
+    domains: cached.data.domains.filter(hasDomainName).map(reviveDomainDates),
   };
 }
 
@@ -545,11 +563,12 @@ function assemblePortfolio(): Portfolio {
     const entry = readRegistrarEntry(account.id);
     if (!entry) continue;
     domains.push(
-      ...entry.domains.map((d) => ({
+      ...entry.domains.map((d): Domain => ({
         ...d,
         registrar: name,
         accountId: account.id,
         accountLabel: account.label,
+        source: 'registrar',
       })),
     );
     if (entry.lastError)
@@ -600,13 +619,20 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
           domains: prev?.domains ?? [],
           lastSyncedAt: prev?.lastSyncedAt ?? null,
           lastError: registrarErrorMessage(error),
+          lastErrorAt: Date.now(),
         }
-      : { domains, lastSyncedAt: Date.now(), lastError: null };
+      : {
+          domains: domains.filter(hasDomainName),
+          lastSyncedAt: Date.now(),
+          lastError: null,
+          lastErrorAt: null,
+        };
   } catch (err) {
     entry = {
       domains: prev?.domains ?? [],
       lastSyncedAt: prev?.lastSyncedAt ?? null,
       lastError: registrarErrorMessage(err),
+      lastErrorAt: Date.now(),
     };
   }
   if ((generations.get(accountId) ?? 0) !== generation) return;
@@ -699,7 +725,9 @@ async function fetchGodaddyTldRenewal(
  * on premium-capable TLDs. GoDaddy takes the v3 availability price, which is
  * quoted for the authenticated shopper (so any account discount is included):
  * one call per TLD to fill that account's TLD rate, plus a per-name call only
- * for names availability marked premium.
+ * for names availability marked premium. Namecheap prices per TLD for the
+ * authenticated user and reads premium renewals off its availability check
+ * (see syncNamecheapRenewalQuotes).
  *
  * Known gap: a premium name we *own* is quoted by its real name, and GoDaddy
  * often returns no prices for a registered name — so that quote can come back
@@ -709,12 +737,16 @@ async function fetchGodaddyTldRenewal(
  */
 async function syncRenewalQuotes(
   name: RegistrarName,
-  domains: Domain[],
+  domains: CachedDomain[],
   accountId: string,
   generation: number,
 ): Promise<void> {
   if (name === 'godaddy') {
     await syncGoDaddyRenewalQuotes(domains, accountId, generation);
+    return;
+  }
+  if (name === 'namecheap') {
+    await syncNamecheapRenewalQuotes(domains, accountId, generation);
     return;
   }
 
@@ -742,7 +774,7 @@ async function syncRenewalQuotes(
 const AVAILABILITY_BATCH = 50;
 
 async function syncGoDaddyRenewalQuotes(
-  domains: Domain[],
+  domains: CachedDomain[],
   accountId: string,
   generation: number,
 ): Promise<void> {
@@ -809,6 +841,106 @@ async function syncGoDaddyRenewalQuotes(
   }
 }
 
+/**
+ * Namecheap's renewal quotes: the account's TLD rates, then a per-name quote
+ * for each premium name. A failed TLD pass skips the premium check, since it
+ * most likely hit the rate limit.
+ */
+async function syncNamecheapRenewalQuotes(
+  domains: CachedDomain[],
+  accountId: string,
+  generation: number,
+): Promise<void> {
+  if (await syncNamecheapTldRates(domains, accountId, generation)) {
+    await syncNamecheapPremiumQuotes(domains, accountId, generation);
+  }
+}
+
+/**
+ * Fill the account's TLD rates from Namecheap's users.getPricing, one call per
+ * distinct TLD. That table is priced for the authenticated user: `Price` is
+ * what the account pays (any discount included) and `RegularPrice` the list
+ * price the base table already holds. The ICANN fee (`AdditionalCost`) is left
+ * out, matching the base table. Calls run one at a time to stay well inside
+ * Namecheap's per-minute limit, and the first failure ends the pass — it is
+ * most likely that limit or a credential problem, and every later call would
+ * fail the same way. A TLD that isn't priced keeps whatever rate it had.
+ * Resolves true when every TLD was asked.
+ */
+async function syncNamecheapTldRates(
+  domains: CachedDomain[],
+  accountId: string,
+  generation: number,
+): Promise<boolean> {
+  const tlds = [
+    ...new Set(domains.map((d) => tldOf(d.domainName)).filter(Boolean)),
+  ];
+  const client = getRegistrarClient('namecheap', accountId);
+  for (const tld of tlds) {
+    if ((generations.get(accountId) ?? 0) !== generation) return false;
+    try {
+      // getPricing reads a dotted argument as a domain and keeps what follows
+      // its first dot, so a bare multi-part TLD ("br.com") would be priced as
+      // "com". Hand it a name instead.
+      const pricing = await client.getPricing(`example.${tld}`);
+      // TLD rates are USD; a quote in anything else would be misread.
+      const currency = (pricing.currency ?? 'USD').toUpperCase();
+      if (typeof pricing.renewal === 'number' && currency === 'USD') {
+        setTldRate('namecheap', tld, pricing.renewal, accountId);
+      }
+    } catch (err) {
+      console.warn(`[pricing] Namecheap getPricing(${tld}) failed`, err);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Per-name quotes for premium Namecheap names. domains.check flags premium
+ * names and reports their own renewal price (`PremiumRenewalPrice`, USD,
+ * without the ICANN fee), 50 names a call. Only TLDs that can carry premium
+ * names are checked. A name the check calls standard drops any premium quote
+ * it held, so it falls back to the TLD rate; a failed check leaves the rest
+ * as they were, as does a result with no premium flag.
+ */
+async function syncNamecheapPremiumQuotes(
+  domains: CachedDomain[],
+  accountId: string,
+  generation: number,
+): Promise<void> {
+  const needFlags = new Set(tldsNeedingPremiumFlags(domains));
+  const names = domains
+    .filter((d) => needFlags.has(tldOf(d.domainName)))
+    .map((d) => d.domainName);
+  const client = getRegistrarClient('namecheap', accountId);
+  for (let i = 0; i < names.length; i += AVAILABILITY_BATCH) {
+    if ((generations.get(accountId) ?? 0) !== generation) return;
+    const chunk = names.slice(i, i + AVAILABILITY_BATCH);
+    let results;
+    try {
+      results = await client.checkAvailability(chunk);
+    } catch (err) {
+      console.warn('[pricing] Namecheap premium check failed', err);
+      return;
+    }
+    if ((generations.get(accountId) ?? 0) !== generation) return;
+    const byName = new Map(results.map((r) => [r.domainName.toLowerCase(), r]));
+    for (const domain of chunk) {
+      const result = byName.get(domain.toLowerCase());
+      if (!result) continue;
+      if (result.premium && typeof result.renewalPrice === 'number') {
+        writeRenewalQuote(accountId, domain, {
+          renewal: result.renewalPrice,
+          currency: 'USD',
+        });
+      } else if (result.premium === false) {
+        clearRenewalQuote(accountId, domain);
+      }
+    }
+  }
+}
+
 function writeRenewalQuote(
   accountId: string,
   domain: string,
@@ -823,6 +955,17 @@ function writeRenewalQuote(
   });
 }
 
+// Patched rather than rewritten, so the domain detail keeps its fetchedAt.
+function clearRenewalQuote(accountId: string, domain: string): void {
+  const key = detailKey(accountId, domain);
+  if (!readEntry<DetailRecord>('detail', key)?.data.renewalQuote) return;
+  patchEntryData<DetailRecord>('detail', key, (data) => {
+    const rest = { ...data };
+    delete rest.renewalQuote;
+    return rest;
+  });
+}
+
 /** Domain names currently cached for one account. `synced` is true only after
  * a successful pull in this batch — a failure keeps the old list and is not a
  * starting point and not a diff. */
@@ -831,9 +974,15 @@ function holdingsOf(
   synced: boolean,
 ): AccountHoldings {
   const entry = readRegistrarEntry(account.id);
+  const expirations: Record<string, string> = {};
+  for (const domain of entry?.domains ?? []) {
+    const day = expiryDay(domain.expirationDate);
+    if (day) expirations[toAscii(domain.domainName)] = day;
+  }
   return {
     accountId: account.id,
     names: (entry?.domains ?? []).map((domain) => domain.domainName),
+    expirations,
     known: entry != null && entry.lastSyncedAt != null,
     synced:
       synced &&
@@ -843,7 +992,7 @@ function holdingsOf(
   };
 }
 
-/** Pull these accounts, then record arrivals, departures, and moves. */
+/** Pull these accounts, then record arrivals, departures, moves, and renewals. */
 async function syncAccounts(accounts: RegistrarAccount[]): Promise<void> {
   await Promise.all(accounts.map((account) => syncRegistrarInto(account)));
   const attempted = new Set(accounts.map((account) => account.id));
@@ -973,9 +1122,20 @@ export function getCachedDetail(): Record<string, Partial<Domain>> {
  */
 export function getPortfolioPricing(): Record<string, RenewalPricing> {
   const portfolio = getCachedPortfolio();
-  if (!portfolio) return {};
-  const quotes = readAll<DetailRecord>('detail');
   const out: Record<string, RenewalPricing> = {};
+  // Imported names: your price, else the base rate when the registrar is one
+  // DomBot knows. Keyed like their rows (`domainKey`).
+  for (const d of importedRows(
+    getImportedDomains(),
+    portfolio?.domains ?? [],
+  )) {
+    out[domainKey(d)] = resolvePricing(
+      d.registrar as RegistrarName,
+      d.domainName,
+    );
+  }
+  if (!portfolio) return out;
+  const quotes = readAll<DetailRecord>('detail');
   for (const d of portfolio.domains) {
     const registrar = d.registrar as RegistrarName;
     const key = domainKey(d);
@@ -1003,10 +1163,15 @@ export async function getRenewalPriceLive(
   accountId?: string,
 ): Promise<RenewalPricing> {
   accountId = resolveDomainAccount(name, domain, accountId).id;
-  const quote =
+  const live =
     name === 'godaddy' || usesPerNameQuote(name, tldOf(domain))
-      ? ((await fetchRenewalQuote(name, domain, accountId)) ?? undefined)
-      : undefined;
+      ? await fetchRenewalQuote(name, domain, accountId)
+      : null;
+  // Without a live quote, use the one Sync stored (a Namecheap premium, say).
+  const quote =
+    live ??
+    readEntry<DetailRecord>('detail', detailKey(accountId, domain))?.data
+      .renewalQuote;
   return { ...resolvePricing(name, domain, quote, accountId), accountId };
 }
 
@@ -1086,7 +1251,8 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
         lastError: sync?.lastError
           ? registrarErrorMessage(sync.lastError)
           : null,
-        domainCount: sync?.domains.length ?? 0,
+        lastErrorAt: sync?.lastError ? (sync.lastErrorAt ?? null) : null,
+        domainCount: sync?.domains.filter(hasDomainName).length ?? 0,
         trackedSince: account.trackedSince ?? null,
       },
     };
@@ -1120,7 +1286,7 @@ export async function connectRegistrarAccount(
   if (!Object.keys(clean).length)
     throw new Error('Enter your account credentials.');
   if ((label?.trim().length ?? 0) > 100)
-    throw new Error('Account label must contain at most 100 characters.');
+    throw new Error('Account name must contain at most 100 characters.');
   // Fail on a taken nickname before spending a network round trip.
   if (label?.trim()) assertUniqueAccountLabel(name, label);
   const assertNotDuplicate = () => {
@@ -1272,7 +1438,7 @@ export async function getDomainDetail(
     }
   }
 
-  let domain: Domain | null = null;
+  let domain: CachedDomain | null = null;
   try {
     domain = await client.getDomain(domainName);
   } catch {
@@ -1489,7 +1655,7 @@ export async function setNameserversCached(
     nameservers,
     opts,
   );
-  if (result.success)
+  if (result.success && !result.pending)
     patchDomainInCaches(name, domainName, { nameservers }, accountId);
   return result;
 }

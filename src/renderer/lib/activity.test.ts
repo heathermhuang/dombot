@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from '../../shared/domain-events';
+import { importedRows } from '../../shared/imported-domains';
 import {
-  alertStatus,
+  alertDomain,
   eventAccounts,
   eventDay,
   eventDetails,
@@ -17,44 +18,6 @@ const event = (patch: Partial<DomainEvent>): DomainEvent => ({
   createdAt: 1,
   updatedAt: null,
   ...patch,
-});
-
-describe('alertStatus', () => {
-  it('is open until answered or dismissed', () => {
-    expect(alertStatus(event({}), undefined)).toEqual({
-      text: 'Needs review',
-      open: true,
-      undo: null,
-    });
-  });
-
-  it('offers Undo only for what you did', () => {
-    const sold = event({ id: 'E2', type: 'sold', source: 'user' });
-    expect(alertStatus(event({}), sold)).toMatchObject({
-      text: 'Sold',
-      undo: 'answer',
-    });
-    expect(
-      alertStatus(event({ dismissed: true, updatedAt: 5 }), undefined),
-    ).toMatchObject({ text: 'Dismissed', undo: 'dismissal' });
-    // Closed by sync on its own: nothing to undo.
-    const back = event({ id: 'E3', type: 'added', resolves: 'E1' });
-    expect(alertStatus(event({}), back)).toMatchObject({
-      text: 'Came back',
-      undo: null,
-    });
-    expect(
-      alertStatus(event({ type: 'added', dismissed: true }), undefined),
-    ).toMatchObject({ text: 'Came back', undo: null });
-    expect(alertStatus(event({ dismissed: true }), undefined)).toMatchObject({
-      text: 'Already labeled',
-      undo: null,
-    });
-  });
-
-  it('is not an alert for other events', () => {
-    expect(alertStatus(event({ type: 'moved' }), undefined)).toBeNull();
-  });
 });
 
 describe('event helpers', () => {
@@ -90,5 +53,37 @@ describe('event helpers', () => {
       ),
     ).toBe('$10.00 · 2 yr');
     expect(eventDetails(event({}), 'us', 'USD')).toBeNull();
+  });
+});
+
+describe('alertDomain', () => {
+  it("opens on an imported name's own row, and builds one for a departed name", () => {
+    const imported = importedRows(
+      {
+        'hand.com': {
+          registrar: 'gandi',
+          createdDate: null,
+          expirationDate: null,
+          autoRenew: null,
+          addedAt: 1,
+          updatedAt: null,
+        },
+      },
+      [],
+    );
+    const arrival = event({
+      domain: 'hand.com',
+      type: 'added',
+      source: 'user',
+      accountId: null,
+    });
+    expect(alertDomain(arrival, imported, null)).toMatchObject({
+      domainName: 'hand.com',
+      registrar: 'gandi',
+      source: 'imported',
+    });
+    expect(
+      alertDomain(event({ domain: 'gone.com' }), imported, null),
+    ).toMatchObject({ source: 'registrar', departed: true });
   });
 });

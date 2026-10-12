@@ -35,7 +35,11 @@ import {
   EmailForwardingDialog,
 } from '../domains/ForwardingDialogs';
 import { defaultBulkOp } from '../../lib/bulk';
-import { domainsToCsv, csvFilename } from '../../lib/csv';
+import { domainsToCsv, domainsCsvFilename } from '../../../shared/domain-csv';
+import { accountName } from '../../lib/domain-history';
+import { BulkNotesDialog } from '../domains/BulkNotesDialog';
+import { ListPriceDialog } from '../domains/ListPriceDialog';
+import { ImportedDomainDialog } from '../domains/ImportedDomainDialog';
 
 let forcedTick = 0;
 const date = (value: Date | null) =>
@@ -65,6 +69,9 @@ export function useRegistrarManagement({
     folders,
     folderAssignments,
     pricing,
+    purchases,
+    listPrices,
+    registrars,
     portfolioRegistrarLabels,
     assignFolder,
     enrichVisible,
@@ -74,6 +81,9 @@ export function useRegistrarManagement({
     restoreOwned,
   } = useAppStore();
   const refreshTick = useAppStore((s) => s.refreshTick);
+  const [notesFor, setNotesFor] = useState<string[] | null>(null);
+  const [pricesFor, setPricesFor] = useState<Domain[] | null>(null);
+  const [detailsFor, setDetailsFor] = useState<Domain | null>(null);
   const [authFor, setAuthFor] = useState<Domain | null>(null);
   const [renewFor, setRenewFor] = useState<Domain | null>(null);
   const [urlFor, setUrlFor] = useState<Domain | null>(null);
@@ -146,13 +156,21 @@ export function useRegistrarManagement({
   const exportRows = async (domains: Domain[]) => {
     try {
       const result = await window.api.saveTextFile(
-        domainsToCsv(
-          domains,
-          portfolioRegistrarLabels,
+        domainsToCsv(domains, {
+          registrarLabels: portfolioRegistrarLabels,
           folders,
-          folderAssignments,
-        ),
-        csvFilename(),
+          assignments: folderAssignments,
+          purchases,
+          listPrices,
+          pricing,
+          manualPrices: await window.api.getManualPrices(),
+          archiveLabel: (name) => ownership.get(name)?.label ?? null,
+          accountName: (d) =>
+            accountName(registrars, d.accountId ?? d.registrar) ??
+            portfolioRegistrarLabels[d.registrar] ??
+            d.registrar,
+        }),
+        domainsCsvFilename(),
       );
       if (result.saved) toast.success(`Exported ${domains.length} domains`);
     } catch (error) {
@@ -190,6 +208,8 @@ export function useRegistrarManagement({
             );
           }}
           onExport={() => void exportRows(targets)}
+          onNotes={() => setNotesFor(targets.map((d) => d.domainName))}
+          onListPrice={() => setPricesFor([...targets])}
           onAssignFolder={(id) => {
             void Promise.all(
               targets.map((target) => assignFolder(target.domainName, id)),
@@ -298,6 +318,9 @@ export function useRegistrarManagement({
             onAuthCode={() => setAuthFor(d)}
             onRenew={() => setRenewFor(d)}
             onEditPurchase={() => setPurchaseFor(d)}
+            onNotes={() => setNotesFor([d.domainName])}
+            onEditListPrice={() => setPricesFor([d])}
+            onEditDetails={() => setDetailsFor(d)}
             onEditSale={() => setSaleFor(d)}
             archive={ownership.get(toAscii(d.domainName))?.label ?? null}
             onMarkSold={() => openOwnership('sold', [d])}
@@ -319,6 +342,24 @@ export function useRegistrarManagement({
   };
   const dialogs = (
     <Fragment>
+      {notesFor && (
+        <BulkNotesDialog
+          domainNames={notesFor}
+          onClose={() => setNotesFor(null)}
+        />
+      )}
+      {pricesFor && (
+        <ListPriceDialog
+          domains={pricesFor}
+          onClose={() => setPricesFor(null)}
+        />
+      )}
+      {detailsFor && (
+        <ImportedDomainDialog
+          domain={detailsFor}
+          onClose={() => setDetailsFor(null)}
+        />
+      )}
       {purchaseFor && (
         <PurchaseDialog
           domain={purchaseFor}
@@ -362,14 +403,16 @@ export function useRegistrarManagement({
             return (
               <RestoreOwnedDialog
                 names={domains.map((domain) => domain.domainName)}
-                restorable={
-                  domains.filter((domain) => {
+                restorable={domains
+                  .filter((domain) => {
                     const label = ownership.get(
                       toAscii(domain.domainName),
                     )?.label;
-                    return label != null && label !== 'removed';
-                  }).length
-                }
+                    return (
+                      label != null && label !== 'removed' && !domain.departed
+                    );
+                  })
+                  .map((domain) => domain.domainName)}
                 onDone={clearSelection}
                 onClose={onClose}
               />

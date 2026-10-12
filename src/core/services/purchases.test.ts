@@ -8,7 +8,7 @@ import {
 import { clearAll } from './cache';
 import { exportBundle, importBundle } from '../storage/bundle';
 import { listEvents } from './domain-events';
-import { getPurchases, setPurchase, setSale } from './purchases';
+import { getPurchases, setNotes, setPurchase, setSale } from './purchases';
 
 let store: MemoryDocStore;
 beforeEach(async () => {
@@ -20,6 +20,34 @@ beforeEach(async () => {
 });
 
 describe('purchases', () => {
+  it('records what an agent saves as the agent’s', () => {
+    setPurchase(
+      {
+        domainName: 'a.com',
+        purchaseDate: '2024-01-02',
+        amount: '10',
+        currency: 'USD',
+        notes: '',
+      },
+      'agent',
+    );
+    setSale(
+      {
+        domainName: 'a.com',
+        saleDate: null,
+        amount: null,
+        currency: null,
+        notes: '',
+        mark: true,
+      },
+      'agent',
+    );
+    expect(listEvents().map((e) => [e.type, e.source])).toEqual([
+      ['purchased', 'agent'],
+      ['sold', 'agent'],
+    ]);
+  });
+
   it('saves by domain name and keeps the record when the cache is cleared', async () => {
     setPurchase({
       domainName: 'Example.COM',
@@ -32,6 +60,8 @@ describe('purchases', () => {
       purchaseDate: '2020-01-02',
       amount: '0.00',
       currency: 'USD',
+      purchaseType: 'purchased',
+      acquisitionId: expect.any(String),
       notes: 'hand reg',
       saleDate: null,
       saleAmount: null,
@@ -60,6 +90,29 @@ describe('purchases', () => {
         text: 'hand reg',
       }),
     ]);
+  });
+
+  it('saves a note on its own, without recording a purchase', () => {
+    expect(setNotes('a.com', 'call the buyer back')).toMatchObject({
+      notes: 'call the buyer back',
+      purchaseDate: null,
+      amount: null,
+    });
+    expect(listEvents()).toEqual([]);
+    setPurchase({
+      domainName: 'a.com',
+      purchaseDate: '2020-01-02',
+      amount: '10',
+      currency: 'USD',
+      notes: 'call the buyer back',
+    });
+    // Editing the note leaves the purchase as it was; blank deletes it.
+    expect(setNotes('a.com', '')).toMatchObject({
+      notes: '',
+      purchaseDate: '2020-01-02',
+      amount: '10.00',
+    });
+    expect(setNotes('b.com', '')).toBeNull();
   });
 
   it('deletes the record when every field is cleared', () => {

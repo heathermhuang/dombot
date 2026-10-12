@@ -24,6 +24,7 @@ function domain(partial: Partial<Domain> & { domainName: string }): Domain {
     nameservers: [],
     syncedAt: new Date(0),
     deleted: false,
+    source: 'registrar',
     ...partial,
   };
 }
@@ -38,6 +39,7 @@ const meta = (name: RegistrarMeta['name'], features: string[] = []) =>
     sync: {
       lastSyncedAt: null,
       lastError: null,
+      lastErrorAt: null,
       domainCount: 0,
       trackedSince: null,
     },

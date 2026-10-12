@@ -221,7 +221,10 @@ describe('publication database and HTTP boundary', () => {
     expect(await sealed.list('domain-folders')).toEqual({
       'visible.com': '__hidden__',
     });
-    expect(await sealed.get('domain-prices', 'visible.com')).toBe(25);
+    expect(await sealed.get('domain-prices', 'visible.com')).toEqual({
+      amount: '25.00',
+      currency: 'USD',
+    });
     expect(await publicationRows()).toEqual(before);
     const after = await raw.loadAll();
     await runMigrations(raw, sealed);

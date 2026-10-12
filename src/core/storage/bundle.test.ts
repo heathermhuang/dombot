@@ -58,7 +58,7 @@ describe('buildBundle', () => {
     );
     expect(b.namespaces.meta).toBeUndefined();
     expect(b.namespaces.auth).toBeUndefined();
-    expect(b.version).toBe(5);
+    expect(b.version).toBe(8);
     expect(b.namespaces['registrar-credentials'].godaddy).toEqual({
       apiToken: 'k',
     });
@@ -253,7 +253,7 @@ describe('export → import', () => {
     });
     // Keyed by name; the second account's entry for the same name is dropped.
     expect(await store.list('domain-prices')).toEqual({
-      'xn--mnich-kva.de': 40,
+      'xn--mnich-kva.de': { amount: '40.00', currency: 'USD' },
     });
     expect(getFolders()).toEqual({
       folders: [{ id: 'f1', name: 'Keep', description: '', color: 'red' }],
@@ -263,15 +263,40 @@ describe('export → import', () => {
       expect(await store.list(old)).toEqual({});
   });
 
-  it('imports a v4 file (no history yet) and refuses one newer than v5', async () => {
+  it('imports a v4 file (no history yet) and refuses one newer than v8', async () => {
     await seed();
     const v4 = { ...buildBundle(APP), version: 4 };
     await importBundle(JSON.stringify(v4));
     expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
-    expect(buildBundle(APP).version).toBe(5);
-    expect(() => parseBundle(JSON.stringify({ ...v4, version: 6 }))).toThrow(
+    expect(buildBundle(APP).version).toBe(8);
+    expect(() => parseBundle(JSON.stringify({ ...v4, version: 9 }))).toThrow(
       /newer DomBot/,
     );
+  });
+
+  it('keeps valid BIN prices from a file and drops the rest', async () => {
+    const bundle = {
+      ...buildBundle(APP),
+      namespaces: {
+        ...buildBundle(APP).namespaces,
+        'domain-list-prices': {
+          'a.com': { amount: '2500', currency: 'usd', updatedAt: 1 },
+          'b.com': { amount: '-5', currency: 'USD', updatedAt: 1 },
+          'Not A Name': { amount: '10', currency: 'USD', updatedAt: 1 },
+          'c.com': {
+            amount: '100.00',
+            minOffer: '500.00',
+            currency: 'USD',
+            updatedAt: 1,
+          },
+        },
+      },
+    };
+    await importBundle(JSON.stringify(bundle));
+    await flushWrites();
+    expect(await store.list('domain-list-prices')).toEqual({
+      'a.com': { amount: '2500', currency: 'USD', updatedAt: 1 },
+    });
   });
 
   it("moves a v4 file's Archive folder assignments to Hidden", async () => {
@@ -289,5 +314,28 @@ describe('export → import', () => {
       'a.com': HIDDEN_FOLDER_ID,
       'b.com': 'f1',
     });
+  });
+
+  it('reads a v8 file from before the rename: manual-domains', async () => {
+    const entry = {
+      registrar: null,
+      registrarLabel: 'Epik',
+      createdDate: null,
+      expirationDate: null,
+      autoRenew: null,
+      addedAt: 1,
+      updatedAt: null,
+    };
+    const v8 = {
+      ...buildBundle(APP),
+      namespaces: {
+        ...buildBundle(APP).namespaces,
+        'manual-domains': { 'a.com': entry },
+      },
+    };
+    await importBundle(JSON.stringify(v8));
+    await flushWrites();
+    expect(await store.list('imported-domains')).toEqual({ 'a.com': entry });
+    expect(await store.list('manual-domains')).toEqual({});
   });
 });

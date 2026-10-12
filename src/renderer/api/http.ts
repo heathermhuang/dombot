@@ -281,6 +281,10 @@ export function createHttpApi(): DombotApi {
   return {
     ping: m<string>('ping'),
     getAppInfo: m('getAppInfo'),
+    getReleaseFeed: m('getReleaseFeed'),
+    getUpdaterState: m('getUpdaterState'),
+    downloadUpdate: m('downloadUpdate'),
+    installUpdate: m('installUpdate'),
     openExternal: async (url) => openExternalInBrowser(url),
     saveTextFile: async (content, suggestedName) =>
       saveTextFileInBrowser(content, suggestedName),
@@ -304,6 +308,7 @@ export function createHttpApi(): DombotApi {
     importData: m('importData'),
     getPortfolioPricing: m('getPortfolioPricing'),
     stepRenewalPricing: m('stepRenewalPricing'),
+    getManualPrices: m('getManualPrices'),
     setManualPrice: m('setManualPrice'),
 
     listPortfolio: async (refresh) => {
@@ -416,6 +421,9 @@ export function createHttpApi(): DombotApi {
     revokeMcpClient: m('revokeMcpClient'),
     onApprovalsChanged: (cb) => poller.subscribe('approvals', cb),
     onPortfolioChanged: (cb) => poller.subscribe('portfolio', cb),
+    // No app menu in the browser.
+    onSyncRequested: () => () => {},
+    onNavigateRequested: () => () => {},
 
     getFolders: m('getFolders'),
     createFolder: m('createFolder'),
@@ -427,6 +435,13 @@ export function createHttpApi(): DombotApi {
     updateSettings: m('updateSettings'),
     getPurchases: m('getPurchases'),
     setPurchase: m('setPurchase'),
+    setNotes: m('setNotes'),
+    previewDomainImport: m('previewDomainImport'),
+    importDomains: m('importDomains'),
+    getImportedDomains: m('getImportedDomains'),
+    updateImportedDomain: m('updateImportedDomain'),
+    getListPrices: m('getListPrices'),
+    setListPrices: m('setListPrices'),
     setSale: m('setSale'),
     getDomainEvents: m('getDomainEvents'),
     setDispositions: m('setDispositions'),

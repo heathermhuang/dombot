@@ -6,7 +6,6 @@ import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { SyncErrorsAlert } from '../components/SyncErrorsAlert';
 import {
   EyeOff,
   Building2,
@@ -19,13 +18,14 @@ import {
   Server,
   ShieldBan,
   ShieldCheck,
-  SlidersHorizontal,
-  TriangleAlert,
+  Upload,
 } from 'lucide-react';
 import type {
   Domain,
   DomainOp,
   Folder,
+  RegistrarName,
+  RegistrationLookup,
   RenewalPricing,
 } from '../../shared/ipc';
 import { LockClosedIcon, LockOpenIcon } from '@heroicons/react/20/solid';
@@ -36,9 +36,19 @@ import {
   isHiddenFolder,
 } from '../../shared/ipc';
 import { DomainEventType } from '../../shared/domain-events';
-import { ownershipByDomain, type ArchiveLabel } from '../../shared/ownership';
+import {
+  archiveRows,
+  ownershipByDomain,
+  type ArchiveLabel,
+} from '../../shared/ownership';
 import { isOpenAlert, resolvedIds } from '../../shared/sync-diff';
-import { ARCHIVE_LABEL, archiveRows } from '../lib/domain-history';
+import { ARCHIVE_LABEL, accountName } from '../lib/domain-history';
+import {
+  ImportedRegistrarIcon,
+  RegistrarLogo,
+} from '../components/RegistrarLogo';
+import { NotesButton } from '../components/domains/NotesButton';
+import { BulkNotesDialog } from '../components/domains/BulkNotesDialog';
 import {
   DeleteDomainsDialog,
   DispositionDialog,
@@ -46,7 +56,9 @@ import {
   RestoreOwnedDialog,
 } from '../components/actions/OwnershipDialogs';
 import { useAppStore } from '../store/app';
-import { csvFilename, domainsToCsv } from '../lib/csv';
+import { domainsCsvFilename, domainsToCsv } from '../../shared/domain-csv';
+import { importedRows } from '../../shared/imported-domains';
+import { priceMoney } from '../lib/renewals';
 import { nameserverGroup } from '../lib/nameservers';
 import { folderColorStyle } from '../lib/folders';
 import {
@@ -54,10 +66,12 @@ import {
   targetOf,
   useOpUnsupportedReason,
 } from '../lib/domain-ops';
+import { CashIcon } from '../components/icons/CashIcon';
 import { FolderIcon } from '../components/icons/FolderIcon';
 import { FolderOffIcon } from '../components/icons/FolderOffIcon';
 import { FolderMenuItems } from '../components/domains/FolderMenuItems';
 import { OwnershipSwitch } from '../components/domains/OwnershipSwitch';
+import { SyncSplitButton } from '../components/domains/SyncSplitButton';
 import {
   EventTypeBadge,
   EventTypeDot,
@@ -65,9 +79,16 @@ import {
 import { FlagToggle } from '../components/domains/FlagToggle';
 import { RowActionsMenu } from '../components/domains/RowActionsMenu';
 import { purchaseColumns } from '../components/domains/purchase-columns';
+import { ImportDomainsDialog } from '../components/domains/ImportDomainsDialog';
 import { PurchaseDialog } from '../components/domains/PurchaseDialog';
+import { ListPriceDialog } from '../components/domains/ListPriceDialog';
+import { ImportedDomainDialog } from '../components/domains/ImportedDomainDialog';
 import { SaleDialog } from '../components/domains/SaleDialog';
-import { DEFAULT_CURRENCY, DEFAULT_NUMBER_FORMAT } from '../../shared/money';
+import {
+  DEFAULT_CURRENCY,
+  DEFAULT_NUMBER_FORMAT,
+  formatMoney,
+} from '../../shared/money';
 import { NameserversCell } from '../components/domains/NameserversCell';
 import { AuthCodeDialog } from '../components/domains/AuthCodeDialog';
 import { RenewDialog } from '../components/domains/RenewDialog';
@@ -82,10 +103,15 @@ import { usePreferences } from '../lib/preferences';
 import { DataTable, type DataColumn } from '../components/data-table/DataTable';
 import { paginate, sortRows } from '../components/data-table/table-state';
 import {
-  MultiSelectFilter,
-  ResetButton,
-  SearchField,
+  RangeInputs,
+  rangeSummary,
+  type FilterOption,
 } from '../components/data-table/Toolbar';
+import { type FilterField } from '../components/data-table/FilterBar';
+import {
+  FilterToolbar,
+  listField,
+} from '../components/data-table/FilterToolbar';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,7 +121,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {} from '@/components/ui/table';
 
 // Which `refreshTick` the detail fetch has already force-refreshed. Module-level
@@ -134,6 +159,29 @@ interface Column {
 }
 
 /** Everything after the first dot, e.g. "example.co.uk" → "co.uk". */
+/**
+ * Registrar filter value for a name you added that no account reports: one
+ * per registrar name (so a known "gandi" and a typed "Gandi.net" meet), and
+ * "imported:" alone for names with no registrar (Unknown).
+ */
+function importedRegistrarValue(label: string): string {
+  return `imported:${label.trim().toLowerCase()}`;
+}
+
+/** An imported name's registrar as shown: DomBot's name for it, or your text. */
+function importedRegistrarName(d: Domain, labels: RegistrarLabels): string {
+  return d.registrar
+    ? registrarLabel(d.registrar, labels)
+    : (d.importedRegistrarLabel ?? '');
+}
+
+/** Distinct names among rows (a name two accounts hold is one row in a CSV). */
+function nameCount(rows: Domain[]): number {
+  return new Set(rows.map((d) => toAscii(d.domainName))).size;
+}
+
+// Asking filter values: names with an asking price, and names without one.
+
 function tldOf(domainName: string): string {
   const dot = domainName.indexOf('.');
   return dot === -1 ? '' : domainName.slice(dot + 1).toLowerCase();
@@ -142,6 +190,16 @@ function tldOf(domainName: string): string {
 /** A registrar's display name, falling back to its raw id. */
 function registrarLabel(id: string, labels: RegistrarLabels): string {
   return labels[id] ?? id;
+}
+
+/** RDAP's own registrar name, IANA ID and reseller, for the cell's tooltip. */
+function registrarDetail(lookup: RegistrationLookup): string | undefined {
+  const parts = [
+    lookup.registrar,
+    lookup.registrarIanaId != null ? `IANA ${lookup.registrarIanaId}` : null,
+    lookup.reseller ? `reseller ${lookup.reseller}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 function toTime(date: Date | null): number | null {
@@ -184,11 +242,6 @@ const NONE = '__none__';
 
 const RENEWAL = 'renewal';
 
-/** Whole/decimal USD, e.g. "$12" or "$12.99". */
-function fmtUsd(n: number): string {
-  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-}
-
 const SOURCE_LABEL: Record<RenewalPricing['source'], string> = {
   api: 'registrar quote',
   tld: 'account rate',
@@ -215,7 +268,7 @@ export function RenewalCell({
       className="font-medium tabular-nums"
       title={`Renewal source: ${SOURCE_LABEL[info.source]}`}
     >
-      {fmtUsd(info.renewal)}
+      {priceMoney(info.renewal, info.currency)}
     </span>
   );
 }
@@ -500,6 +553,15 @@ const COLUMNS: Column[] = [
           />
         </a>
         <LifecycleBadge status={d.status} />
+        {d.source === 'imported' && (
+          <Badge
+            variant="outline"
+            className="px-1.5 py-0 text-[11px] font-normal text-muted-foreground"
+            title="Added by you. No connected account reports this name."
+          >
+            Imported
+          </Badge>
+        )}
       </span>
     ),
     sortValue: (d) => d.domainName.toLowerCase(),
@@ -508,7 +570,11 @@ const COLUMNS: Column[] = [
     key: 'registrar',
     label: 'Registrar',
     render: (d, labels) => registrarLabel(d.registrar, labels),
-    sortValue: (d, labels) => registrarLabel(d.registrar, labels).toLowerCase(),
+    // An Archive name sorts by the registrar it shows now, not its old account.
+    sortValue: (d, labels) =>
+      (
+        d.registrationRegistrar ?? registrarLabel(d.registrar, labels)
+      ).toLowerCase(),
   },
   {
     key: 'createdDate',
@@ -692,6 +758,8 @@ export default function Domains({
     clearSelection,
     bulk,
     purchases,
+    listPrices,
+    importedDomains,
     settings,
     domainEvents,
     registrationLookups,
@@ -725,6 +793,11 @@ export default function Domains({
     [registrars, portfolio],
   );
   const [purchaseFor, setPurchaseFor] = useState<Domain | null>(null);
+  const [importing, setImporting] = useState(false);
+  // Asking price for one name (its cell or row menu) or the selection.
+  const [listPriceFor, setListPriceFor] = useState<Domain[] | null>(null);
+  // Edit details for an imported name.
+  const [detailsFor, setDetailsFor] = useState<Domain | null>(null);
   const [saleFor, setSaleFor] = useState<Domain | null>(null);
   // Mark as Sold for one name: the sale dialog, which takes the price.
   const [markSoldFor, setMarkSoldFor] = useState<Domain | null>(null);
@@ -747,10 +820,29 @@ export default function Domains({
         ? {
             ...c,
             render: (d: Domain, labels: RegistrarLabels) => {
+              // Names you added: a faint building rather than the logo, so
+              // they read apart from a connected account's names.
+              if (d.source === 'imported') {
+                const name = importedRegistrarName(d, labels);
+                return (
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <ImportedRegistrarIcon />
+                    {name || (
+                      <span className="text-muted-foreground">Unknown</span>
+                    )}
+                  </span>
+                );
+              }
               const suffix = paren(d.accountLabel, d.registrar);
+              const label = registrarLabel(d.registrar, labels);
               return (
-                <span>
-                  {registrarLabel(d.registrar, labels)}
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <RegistrarLogo
+                    name={d.registrar as RegistrarName}
+                    label={label}
+                    className="size-4"
+                  />
+                  {label}
                   {suffix && (
                     <span className="ml-1 text-xs text-muted-foreground/70">
                       ({suffix})
@@ -760,6 +852,11 @@ export default function Domains({
               );
             },
             sortValue: (d: Domain, labels: RegistrarLabels) => {
+              if (d.source === 'imported')
+                return (
+                  d.importedRegistrarLabel ??
+                  registrarLabel(d.registrar, labels)
+                ).toLowerCase();
               const name = registrarLabel(d.registrar, labels).toLowerCase();
               const n = accountNumber(d.accountLabel);
               const suffix =
@@ -773,19 +870,31 @@ export default function Domains({
           }
         : c,
     );
-    const purchasedAt = base.findIndex((c) => c.key === 'createdDate');
+    // Owned: pricing sits right after the name (and its Folder, added when
+    // the table is drawn). Archive: Sold and Sold for come after Created.
+    const at = base.findIndex(
+      (c) => c.key === (archiveView ? 'createdDate' : 'domainName'),
+    );
     const extra = purchaseColumns({
       purchases,
       preferredCurrency: settings?.preferredCurrency ?? DEFAULT_CURRENCY,
       numberFormat: settings?.numberFormat ?? DEFAULT_NUMBER_FORMAT,
-      onEdit: setPurchaseFor,
       onEditSale: setSaleFor,
       showSale: archiveView,
       isSold: (d) => ownership.get(toAscii(d.domainName))?.label === 'sold',
+      listPrices,
+      onEditListPrice: (d) => setListPriceFor([d]),
     });
-    base.splice(purchasedAt + 1, 0, ...extra);
+    base.splice(at + 1, 0, ...extra);
     return base;
-  }, [multipleAccounts, purchases, settings, archiveView, ownership]);
+  }, [
+    multipleAccounts,
+    purchases,
+    listPrices,
+    settings,
+    archiveView,
+    ownership,
+  ]);
 
   const tableColumns = archiveView
     ? columns.filter((col) => !ARCHIVE_HIDDEN_COLUMNS.has(col.key))
@@ -808,9 +917,14 @@ export default function Domains({
 
   // Overlay lazily-fetched per-domain detail (nameservers/privacy/lock) onto the
   // fast summary. Filtering, sorting, and rendering all use this merged view.
+  // Names you added that no account reports join the registrar rows.
+  const importedList = useMemo(
+    () => importedRows(importedDomains, portfolio),
+    [importedDomains, portfolio],
+  );
   const merged = useMemo(
-    () =>
-      portfolio.map((d) =>
+    () => [
+      ...portfolio.map((d) =>
         enriched[domainKey(d)]
           ? {
               ...enriched[domainKey(d)],
@@ -819,14 +933,19 @@ export default function Domains({
             }
           : d,
       ),
-    [portfolio, enriched],
+      ...importedList,
+    ],
+    [portfolio, enriched, importedList],
   );
 
   // Names in Archive that no registrar reports any more. They're not in
   // `merged`; the Archive view is what shows them.
   const listed = useMemo(
-    () => [...merged, ...archiveRows(ownership, portfolio, registrars)],
-    [merged, ownership, portfolio, registrars],
+    () => [
+      ...merged,
+      ...archiveRows(ownership, [...portfolio, ...importedList], registrars),
+    ],
+    [merged, ownership, portfolio, importedList, registrars],
   );
 
   // Archive asks RDAP for names that have left, so created and expires stay
@@ -848,7 +967,8 @@ export default function Domains({
     return listed.map((d) => {
       if (!d.departed) return d;
       const lookup = registrationLookups[toAscii(d.domainName)];
-      if (!lookup) return { ...d, registrationPending: true };
+      if (lookup === undefined) return { ...d, registrationPending: true };
+      if (lookup === null) return { ...d, registrationPending: false };
       if (!lookup.registered) {
         return {
           ...d,
@@ -862,24 +982,39 @@ export default function Domains({
         ...d,
         registrationPending: false,
         unregistered: false,
-        registrationRegistrar: lookup.registrar ?? undefined,
+        registrationRegistrar:
+          lookup.registrarLabel ?? lookup.registrar ?? undefined,
+        registrationRegistrarDetail: registrarDetail(lookup),
+        registrationRegistrarId: lookup.mappedRegistrar ?? undefined,
         createdDate: lookup.created ? new Date(lookup.created) : null,
         expirationDate: lookup.expires ? new Date(lookup.expires) : null,
       };
     });
   }, [listed, archiveView, registrationLookups]);
 
-  const [search, setSearch] = useState('');
+  // Starts from ?q= so another page (Activity's Show in Domains) can open it
+  // on one name.
+  const [search, setSearch] = useState(() => params.get('q') ?? '');
   // Multi-select filters; an empty array means "no filter" (show all).
   const [tld, setTld] = useState<string[]>([]);
   // One "Registrar" filter, but its options are individual accounts (keyed by
   // account id), so a registrar's accounts can be picked apart or selected
   // together. Old saved values were registrar names; those simply match nothing
   // now, which reads as "no filter".
-  const [registrar, setRegistrar] = useState<string[]>([]);
+  // Starts from ?account= so a registrar card's domain count opens on it.
+  const [registrar, setRegistrar] = useState<string[]>(() => {
+    const account = params.get('account');
+    return account ? [account] : [];
+  });
   const [expiry, setExpiry] = useState<string[]>([]);
   const [ns, setNs] = useState<string[]>([]);
   const [folder, setFolder] = useState<string[]>([]);
+  // Owned only: names with or without an asking price.
+  // BIN price range ("" is unbounded). A name without a price counts as $0,
+  // so a max of 0 finds the unpriced ones.
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const pricingFilter = priceMin !== '' || priceMax !== '';
   // Sort and page size open at the Settings → General defaults; changes made
   // here last for this visit only.
   const [sortKey, setSortKey] = useState(
@@ -892,9 +1027,6 @@ export default function Domains({
     () => usePreferences.getState().pageSize,
   );
   const [page, setPage] = useState(0);
-  // Phones only: the filter chips collapse behind a "Filters" toggle (they're
-  // always shown at sm+). Search and Reset stay visible.
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // The bulk dialog: an op to configure for the current selection, or a
   // running/finished job to view (the bar's progress pill).
@@ -910,6 +1042,10 @@ export default function Domains({
   const [emailForwardingFor, setEmailForwardingFor] = useState<Domain | null>(
     null,
   );
+  // The row (by domain key) whose notes editor is open, from its sticky note
+  // or its menu's Notes…; and the selection's bulk Notes dialog.
+  const [notesFor, setNotesFor] = useState<string | null>(null);
+  const [bulkNotesFor, setBulkNotesFor] = useState<Domain[] | null>(null);
   // Re-fetch one row's full record from its registrar (bypassing the detail
   // cache) — the row's detail cells show skeletons while it's in flight.
   const refreshDomain = (d: Domain) => {
@@ -937,9 +1073,14 @@ export default function Domains({
   // Distinct filter options with per-option domain counts, derived from the
   // loaded portfolio. Counts are over the whole portfolio (independent of the
   // other active filters), matching the Nameservers and Folder filters.
+  // Imported names count alongside the registrar rows.
+  const ownedRows = useMemo(
+    () => [...portfolio, ...importedList],
+    [portfolio, importedList],
+  );
   const tldOptions = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const d of portfolio) {
+    for (const d of ownedRows) {
       const t = tldOf(d.domainName);
       if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
     }
@@ -948,12 +1089,17 @@ export default function Domains({
       label: `.${value}`,
       count,
     })).sort((a, b) => a.value.localeCompare(b.value));
-  }, [portfolio]);
+  }, [ownedRows]);
   // One option per account (keyed by account id), so accounts of the same
   // registrar can be filtered apart or, by multi-selecting, together. Labelled
-  // "Registrar · nickname" / "Registrar #2" / "Registrar".
+  // "Registrar · nickname" / "Registrar #2" / "Registrar". Then, past a line,
+  // the names you added, by the registrar you gave them (a faint building, no
+  // logo, as no account backs them), with Unknown last.
   const registrarOptions = useMemo(() => {
-    const acc = new Map<string, { label: string; count: number }>();
+    const acc = new Map<
+      string,
+      { label: string; registrar: string; count: number }
+    >();
     for (const d of portfolio) {
       const value = d.accountId ?? d.registrar;
       const existing = acc.get(value);
@@ -965,29 +1111,59 @@ export default function Domains({
             d.accountLabel,
             multipleAccounts.has(d.registrar),
           ),
+          registrar: d.registrar,
           count: 1,
         });
     }
-    return Array.from(acc, ([value, v]) => ({
+    const accounts = Array.from(acc, ([value, v]) => ({
       value,
       label: v.label,
       count: v.count,
+      icon: (
+        <RegistrarLogo
+          name={v.registrar as RegistrarName}
+          label={v.label}
+          className="size-4"
+        />
+      ),
     })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [portfolio, portfolioRegistrarLabels, multipleAccounts]);
+    const imported = new Map<string, { label: string; count: number }>();
+    for (const d of importedList) {
+      const label = importedRegistrarName(d, portfolioRegistrarLabels);
+      const value = importedRegistrarValue(label);
+      const existing = imported.get(value);
+      if (existing) existing.count += 1;
+      else imported.set(value, { label: label || 'Unknown', count: 1 });
+    }
+    const unknown = importedRegistrarValue('');
+    const added: FilterOption[] = Array.from(imported, ([value, v]) => ({
+      value,
+      label: v.label,
+      count: v.count,
+      icon: <ImportedRegistrarIcon />,
+    })).sort(
+      (a, b) =>
+        Number(a.value === unknown) - Number(b.value === unknown) ||
+        a.label.localeCompare(b.label),
+    );
+    if (accounts.length > 0 && added.length > 0) added[0].divider = true;
+    return [...accounts, ...added];
+  }, [portfolio, importedList, portfolioRegistrarLabels, multipleAccounts]);
   // Expiration windows are cumulative, so their counts intentionally overlap
   // (a domain due in 20 days matches the 30-, 60-, and 90-day options).
+
   const expiryOptions = useMemo(
     () =>
       EXPIRY_OPTIONS.map((o) => ({
         ...o,
-        count: portfolio.reduce(
+        count: ownedRows.reduce(
           (n, d) =>
             n +
             (matchesExpiryOption(o.value, daysUntil(d.expirationDate)) ? 1 : 0),
           0,
         ),
       })),
-    [portfolio],
+    [ownedRows],
   );
 
   // Nameserver groups (by base domain, with per-provider splits) plus the set of
@@ -1093,40 +1269,122 @@ export default function Domains({
       };
     }, [listed, folders, folderAssignments, ownership]);
 
-  // Validate the price inputs, then derive the bounds actually applied. A field
-  // error (or min > max) leaves the range unapplied until it's corrected.
-  // Whether any search/filter is narrowing the list — drives the "Reset filters"
-  // affordance and clearing them all at once.
-  const hasActiveFilters =
-    search.trim() !== '' ||
-    tld.length > 0 ||
-    registrar.length > 0 ||
-    expiry.length > 0 ||
-    ns.length > 0 ||
-    folder.length > 0;
-
-  // How many filter groups are narrowing the list (search excluded — it has its
-  // own always-visible field). Drives the count badge on the mobile "Filters"
-  // toggle.
-  const activeFilterGroups =
-    (registrar.length > 0 ? 1 : 0) +
-    (tld.length > 0 ? 1 : 0) +
-    (ns.length > 0 ? 1 : 0) +
-    (expiry.length > 0 ? 1 : 0) +
-    (folder.length > 0 ? 1 : 0);
-
-  function resetFilters() {
-    setSearch('');
-    setTld([]);
-    setRegistrar([]);
-    setExpiry([]);
-    setNs([]);
-    setFolder([]);
-    setPage(0);
-  }
+  // The filter bar's fields, in the Add filter menu's order (the order the
+  // old filter buttons had). Each set field shows as a chip; clearing is per
+  // chip.
+  const currency = settings?.preferredCurrency ?? DEFAULT_CURRENCY;
+  const listFilter = (
+    field: Parameters<typeof listField>[0],
+    set: (next: string[]) => void,
+  ) =>
+    listField(field, (next) => {
+      set(next);
+      setPage(0);
+    });
+  const filterFields: FilterField[] = [
+    listFilter(
+      {
+        key: 'registrar',
+        label: 'Registrar',
+        icon: Building2,
+        options: registrarOptions,
+        selected: registrar,
+        plural: 'registrars',
+      },
+      setRegistrar,
+    ),
+    listFilter(
+      {
+        key: 'tld',
+        label: 'TLD',
+        icon: Globe,
+        options: tldOptions,
+        selected: tld,
+        plural: 'TLDs',
+      },
+      setTld,
+    ),
+    listFilter(
+      {
+        key: 'dns',
+        label: 'Nameservers',
+        icon: Server,
+        options: nsGroups,
+        selected: ns,
+        plural: 'providers',
+      },
+      setNs,
+    ),
+    listFilter(
+      {
+        key: 'expires',
+        label: 'Expiration',
+        icon: CalendarClock,
+        options: expiryOptions,
+        selected: expiry,
+        plural: 'ranges',
+      },
+      setExpiry,
+    ),
+    // Owned: folders and Hidden. Archive: status.
+    ...(!archiveView || archiveCount > 0
+      ? [
+          listFilter(
+            {
+              key: 'folder',
+              label: archiveView ? 'Status' : 'Folder',
+              icon: FolderIcon,
+              options: archiveView ? archiveStatusOptions : ownedFolderOptions,
+              selected: folder,
+              plural: archiveView ? 'statuses' : 'folders',
+            },
+            setFolder,
+          ),
+        ]
+      : []),
+    ...(archiveView
+      ? []
+      : [
+          {
+            kind: 'custom' as const,
+            key: 'price',
+            label: 'Pricing',
+            icon: CashIcon,
+            summary: rangeSummary(priceMin, priceMax, (n) =>
+              formatMoney(
+                String(n),
+                currency,
+                currency,
+                settings?.numberFormat ?? DEFAULT_NUMBER_FORMAT,
+                true,
+              ),
+            ),
+            onClear: () => {
+              setPriceMin('');
+              setPriceMax('');
+              setPage(0);
+            },
+            content: (
+              <RangeInputs
+                label="BIN price"
+                min={priceMin}
+                max={priceMax}
+                onChange={(min, max) => {
+                  setPriceMin(min);
+                  setPriceMax(max);
+                  setPage(0);
+                }}
+                currency={currency}
+              />
+            ),
+          },
+        ]),
+  ];
 
   function setListView(next: 'owned' | 'archive') {
     setFolder([]);
+    setPriceMin('');
+    setPriceMax('');
     setPage(0);
     const nextParams = new URLSearchParams(params);
     if (next === 'archive') nextParams.set('view', 'archive');
@@ -1140,10 +1398,17 @@ export default function Domains({
     const rows = shown.filter((d) => {
       if (q && !d.domainName.toLowerCase().includes(q)) return false;
       if (tld.length > 0 && !tld.includes(tldOf(d.domainName))) return false;
-      // The "Registrar" filter picks individual accounts (by account id).
+      // The "Registrar" filter picks individual accounts (by account id), or
+      // the names you added by their registrar.
       if (
         registrar.length > 0 &&
-        !registrar.includes(d.accountId ?? d.registrar)
+        !registrar.includes(
+          d.source === 'imported'
+            ? importedRegistrarValue(
+                importedRegistrarName(d, portfolioRegistrarLabels),
+              )
+            : (d.accountId ?? d.registrar),
+        )
       )
         return false;
       // Expiration: keep a domain matching ANY selected window ("Expired" =
@@ -1156,6 +1421,11 @@ export default function Domains({
       if (ns.length > 0) {
         const keys = nsKeysByDomain.get(domainKey(d));
         if (!keys || !ns.some((k) => keys.has(k))) return false;
+      }
+      if (pricingFilter && !archiveView) {
+        const price = Number(listPrices[toAscii(d.domainName)]?.amount ?? 0);
+        if (priceMin !== '' && price < Number(priceMin)) return false;
+        if (priceMax !== '' && price > Number(priceMax)) return false;
       }
       // Owned vs Archive comes from the event log. In Archive the filter is
       // the status; in Owned it's the folder (a real folder, Hidden, or None),
@@ -1215,6 +1485,10 @@ export default function Domains({
     folder,
     folders,
     folderAssignments,
+    pricingFilter,
+    priceMin,
+    priceMax,
+    listPrices,
     archiveView,
     archiveLabelOf,
     sortKey,
@@ -1233,9 +1507,14 @@ export default function Domains({
   );
   // Bulk: re-fetch every selected domain's detail from its registrar, bypassing
   // the detail cache (their cells show skeletons while in flight).
+  // Registrar actions act on the selected names an account still holds.
+  // The selected names at a connected account: what registrar actions run on.
+  const selectedHeld = selectedDomains.filter(
+    (d) => !d.departed && d.source !== 'imported',
+  );
   const bulkRefresh = () => {
-    const n = selectedDomains.length;
-    void enrichVisible(selectedDomains, true).then(() =>
+    const n = selectedHeld.length;
+    void enrichVisible(selectedHeld, true).then(() =>
       toast.success(`Refreshed ${n} domain${n === 1 ? '' : 's'}`),
     );
   };
@@ -1271,16 +1550,11 @@ export default function Domains({
     else setOwnershipDialog({ action, domains: ds });
   }
 
-  // Undoing one name's label is one click (and reversible); many go through
-  // the dialog.
+  // Moving one name back is one click (and reversible); many go through the
+  // dialog. Only a name an account still holds offers it.
   function moveBackToOwned(d: Domain) {
-    const label = archiveLabelOf(d);
     void restoreOwned([d.domainName]).then(() =>
-      toast.success(
-        d.departed && label
-          ? `Undid ${ARCHIVE_LABEL[label]} for ${d.domainName}`
-          : `Moved ${d.domainName} back to Owned`,
-      ),
+      toast.success(`Moved ${d.domainName} back to Owned`),
     );
   }
 
@@ -1338,19 +1612,25 @@ export default function Domains({
   // native save dialog in main.
   async function exportCsv(rows: Domain[] = filtered) {
     try {
-      const csv = domainsToCsv(
-        rows,
-        portfolioRegistrarLabels,
+      const csv = domainsToCsv(rows, {
+        registrarLabels: portfolioRegistrarLabels,
         folders,
-        folderAssignments,
+        assignments: folderAssignments,
         purchases,
-      );
-      const result = await window.api.saveTextFile(csv, csvFilename());
+        listPrices,
+        pricing,
+        manualPrices: await window.api.getManualPrices(),
+        archiveLabel: (name) => ownership.get(name)?.label ?? null,
+        accountName: (d) =>
+          accountName(registrars, d.accountId ?? d.registrar) ??
+          registrarLabel(d.registrar, portfolioRegistrarLabels),
+      });
+      const result = await window.api.saveTextFile(csv, domainsCsvFilename());
       if (!result.saved) return; // user cancelled the dialog
       const name = result.path?.split(/[/\\]/).pop() ?? 'file';
-      const n = rows.length;
+      const n = nameCount(rows);
       flashExportNote(
-        `Exported ${n} row${n === 1 ? '' : 's'} to ${name}`,
+        `Exported ${n} name${n === 1 ? '' : 's'} to ${name}`,
         false,
       );
     } catch (err) {
@@ -1370,29 +1650,42 @@ export default function Domains({
       col.key === 'createdDate' ||
       col.key === 'expirationDate';
     if (col.key === 'domainName') {
-      // The row's "⋯" menu lives in the Domain cell, pinned to its right edge.
+      // The row's "⋯" menu lives in the Domain cell, pinned to its right edge,
+      // with the name's sticky note (when it has one) just before it.
+      const key = domainKey(d);
       return (
         <div className="flex items-center justify-between gap-2">
           {col.render(d, portfolioRegistrarLabels)}
-          <RowActionsMenu
-            domain={d}
-            folders={folders}
-            folderId={folderAssignments[toAscii(d.domainName)]}
-            onRefresh={() => refreshDomain(d)}
-            onUrlForwarding={() => setUrlForwardingFor(d)}
-            onEmailForwarding={() => setEmailForwardingFor(d)}
-            onAuthCode={() => setAuthCodeFor(d)}
-            onRenew={() => setRenewFor(d)}
-            onEditPurchase={() => setPurchaseFor(d)}
-            onEditSale={() => setSaleFor(d)}
-            onAssignFolder={(folderId) => applyFolders([d], folderId)}
-            archive={archiveLabelOf(d)}
-            onMarkSold={() => openOwnership('sold', [d])}
-            onMarkDropped={() => openOwnership('dropped', [d])}
-            onMarkArchived={() => openOwnership('archived', [d])}
-            onRestoreOwned={() => moveBackToOwned(d)}
-            onDelete={() => openOwnership('delete', [d])}
-          />
+          <div className="flex items-center">
+            <NotesButton
+              domainName={d.domainName}
+              notes={purchases[toAscii(d.domainName)]?.notes ?? ''}
+              editing={notesFor === key}
+              onEditingChange={(open) => setNotesFor(open ? key : null)}
+            />
+            <RowActionsMenu
+              domain={d}
+              folders={folders}
+              folderId={folderAssignments[toAscii(d.domainName)]}
+              onRefresh={() => refreshDomain(d)}
+              onUrlForwarding={() => setUrlForwardingFor(d)}
+              onEmailForwarding={() => setEmailForwardingFor(d)}
+              onAuthCode={() => setAuthCodeFor(d)}
+              onRenew={() => setRenewFor(d)}
+              onNotes={() => setNotesFor(key)}
+              onEditPurchase={() => setPurchaseFor(d)}
+              onEditSale={() => setSaleFor(d)}
+              onEditListPrice={() => setListPriceFor([d])}
+              onEditDetails={() => setDetailsFor(d)}
+              onAssignFolder={(folderId) => applyFolders([d], folderId)}
+              archive={archiveLabelOf(d)}
+              onMarkSold={() => openOwnership('sold', [d])}
+              onMarkDropped={() => openOwnership('dropped', [d])}
+              onMarkArchived={() => openOwnership('archived', [d])}
+              onRestoreOwned={() => moveBackToOwned(d)}
+              onDelete={() => openOwnership('delete', [d])}
+            />
+          </div>
         </div>
       );
     }
@@ -1401,8 +1694,31 @@ export default function Domains({
     if (d.unregistered && registration)
       return <span className="text-muted-foreground">—</span>;
     if (col.key === 'registrar' && d.registrationRegistrar)
-      return <span>{d.registrationRegistrar}</span>;
-    if (d.departed && (col.detail || col.key === 'autoRenew'))
+      return (
+        <span
+          className="inline-flex items-center gap-1.5 whitespace-nowrap"
+          title={d.registrationRegistrarDetail}
+        >
+          {d.registrationRegistrarId && (
+            <RegistrarLogo
+              name={d.registrationRegistrarId}
+              label={d.registrationRegistrar}
+              className="size-4"
+            />
+          )}
+          {d.registrationRegistrar}
+        </span>
+      );
+    if (d.source === 'imported' && col.key === 'autoRenew')
+      return (
+        <span className="text-muted-foreground">
+          {d.autoRenewUnknown ? '—' : d.autoRenew ? 'On' : 'Off'}
+        </span>
+      );
+    if (
+      (d.departed || d.source === 'imported') &&
+      (col.detail || col.key === 'autoRenew')
+    )
       return <span className="text-muted-foreground/50">—</span>;
     if (col.detail && enriching[domainKey(d)] === true)
       return <CellSkeleton align={col.align} />;
@@ -1452,64 +1768,69 @@ export default function Domains({
     }
   }
 
-  return (
-    <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col">
-      {/* Title and filters scroll away on a short screen so the column names
-          and the row-count bar keep a slice of the page. The -m-1 p-1
-          pair leaves room for focus rings, which the scroll box would clip. */}
-      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1">
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div>
-            <h1 className="text-2xl font-bold leading-none sm:text-[32px]">
-              Domains
-            </h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              {archiveView
-                ? `${archiveCount} domain${archiveCount === 1 ? '' : 's'} you no longer own`
-                : `${portfolio.length} domain${portfolio.length === 1 ? '' : 's'} across ${portfolioRegistrars.length} registrar${
-                    portfolioRegistrars.length === 1 ? '' : 's'
-                  }`}
-            </p>
-          </div>
-          <OwnershipSwitch
-            archive={archiveView}
-            ownedCount={ownedCount}
-            archiveCount={archiveCount}
-            onOwned={() => setListView('owned')}
-            onArchive={() => setListView('archive')}
-          />
-        </div>
-
-        {portfolioError && (
-          <Alert variant="destructive">
-            <TriangleAlert />
-            <AlertTitle>Couldn’t load your portfolio</AlertTitle>
-            <AlertDescription>{portfolioError}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Which accounts failed; the errors themselves are on their cards
-            in Settings → Registrars. */}
-        {portfolioErrors.length > 0 && (
-          <SyncErrorsAlert
-            label={`${multipleAccounts.size > 0 ? 'Account' : 'Registrar'}${portfolioErrors.length === 1 ? '' : 's'} failed to sync`}
-            names={portfolioErrors.map((e) =>
+  // Sync failures, in red under the Sync button: the whole sync, or which
+  // accounts failed (their errors are on their cards in Settings → Registrars).
+  const syncErrors = (portfolioError || portfolioErrors.length > 0) && (
+    <div className="flex flex-col items-end gap-0.5 text-right text-xs text-destructive">
+      {portfolioError && <p>Sync failed: {portfolioError}</p>}
+      {portfolioErrors.length > 0 && (
+        <p>
+          {portfolioErrors
+            .map((e) =>
               accountTitle(
                 registrarLabel(e.registrar, portfolioRegistrarLabels),
                 e.accountLabel,
                 multipleAccounts.has(e.registrar),
               ),
+            )
+            .join(', ')}{' '}
+          failed to sync ·{' '}
+          <Link
+            to="/settings?tab=registrars"
+            className="whitespace-nowrap underline underline-offset-4"
+          >
+            Registrar settings
+          </Link>
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-0 w-full flex-1 flex-col">
+      {/* Title and filters scroll away on a short screen so the column names
+          and the row-count bar keep a slice of the page. The -m-1 p-1
+          pair leaves room for focus rings, which the scroll box would clip. */}
+      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1">
+        <div className="flex items-start justify-between gap-x-6">
+          {/* Centred on the 36px Sync button beside it. */}
+          <h1 className="mt-1.5 min-w-0 text-2xl font-bold leading-none sm:mt-0.5 sm:text-[32px]">
+            Domains
+          </h1>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <SyncSplitButton
+              registrarCount={portfolioRegistrars.length}
+              viewCount={nameCount(filtered)}
+              allCount={nameCount(shown)}
+              onImport={() => setImporting(true)}
+              onExportView={() => void exportCsv(filtered)}
+              onExportAll={() =>
+                void exportCsv(
+                  [...shown].sort((a, b) =>
+                    toAscii(a.domainName).localeCompare(toAscii(b.domainName)),
+                  ),
+                )
+              }
+            />
+            {syncErrors && (
+              <div className="hidden max-w-md sm:block">{syncErrors}</div>
             )}
-            action={
-              <Link
-                to="/settings?tab=registrars"
-                className="font-medium whitespace-nowrap underline underline-offset-4"
-              >
-                Open registrar settings
-              </Link>
-            }
-          />
-        )}
+          </div>
+        </div>
+
+        {/* On phones, where the header column is narrow, the sync errors
+            get their own row. */}
+        {syncErrors && <div className="-mt-1.5 sm:hidden">{syncErrors}</div>}
 
         {/* The table always renders — even before a load or with no registrars
           configured — so its toolbar and structure stay put; the empty body row
@@ -1518,108 +1839,28 @@ export default function Domains({
         {/* Toolbar: search and filters flow inline and wrap together as equal
               items. Extra top margin separates it from the title/refresh row
               above. */}
-        <div className="mt-1 flex flex-wrap items-center gap-3 sm:mt-3">
-          <SearchField
-            value={search}
-            onChange={(value) => {
-              setSearch(value);
-              setPage(0);
-            }}
-            placeholder="Search domains…"
-          />
-
-          {/* Phones only: a toggle that collapses the filter chips (below) so the
-              toolbar doesn't wrap onto several lines. At sm+ the chips are always
-              shown and this is hidden. */}
-          <Button
-            variant="outline"
-            onClick={() => setFiltersOpen((o) => !o)}
-            aria-expanded={filtersOpen}
-            className="gap-2 sm:hidden"
-          >
-            <SlidersHorizontal className="size-4 text-muted-foreground" />
-            Filters
-            {activeFilterGroups > 0 && (
-              <Badge className="bg-primary px-1.5 py-0 text-xs tabular-nums text-primary-foreground">
-                {activeFilterGroups}
-              </Badge>
-            )}
-            <ChevronDown
-              className={cn(
-                'size-4 text-muted-foreground transition-transform',
-                filtersOpen && 'rotate-180',
-              )}
+        <FilterToolbar
+          id="domains"
+          // Active/Archive leads the toolbar; its counts stand in for a
+          // subtitle under the title.
+          switch={
+            <OwnershipSwitch
+              archive={archiveView}
+              ownedCount={ownedCount}
+              archiveCount={archiveCount}
+              onOwned={() => setListView('owned')}
+              onArchive={() => setListView('archive')}
             />
-          </Button>
-
-          {/* The filter chips. On phones this is a collapsible full-width row
-              (shown only when filtersOpen); at sm+ `sm:contents` dissolves the
-              wrapper so the chips flow inline in the toolbar exactly as before. */}
-          <div
-            className={cn(
-              'flex-wrap items-center gap-3 max-sm:basis-full sm:contents',
-              filtersOpen ? 'flex' : 'hidden',
-            )}
-          >
-            <MultiSelectFilter
-              label="Registrar"
-              icon={Building2}
-              options={registrarOptions}
-              selected={registrar}
-              onChange={(next) => {
-                setRegistrar(next);
-                setPage(0);
-              }}
-            />
-            <MultiSelectFilter
-              label="TLD"
-              icon={Globe}
-              options={tldOptions}
-              selected={tld}
-              onChange={(next) => {
-                setTld(next);
-                setPage(0);
-              }}
-            />
-            <MultiSelectFilter
-              label="DNS"
-              icon={Server}
-              options={nsGroups}
-              selected={ns}
-              onChange={(next) => {
-                setNs(next);
-                setPage(0);
-              }}
-            />
-            <MultiSelectFilter
-              label="Expires"
-              icon={CalendarClock}
-              options={expiryOptions}
-              selected={expiry}
-              onChange={(next) => {
-                setExpiry(next);
-                setPage(0);
-              }}
-            />
-            {/* Owned: folders and Hidden. Archive: status. */}
-            {(!archiveView || archiveCount > 0) && (
-              <MultiSelectFilter
-                label={archiveView ? 'Status' : 'Folder'}
-                icon={FolderIcon}
-                options={
-                  archiveView ? archiveStatusOptions : ownedFolderOptions
-                }
-                selected={folder}
-                onChange={(next) => {
-                  setFolder(next);
-                  setPage(0);
-                }}
-              />
-            )}
-          </div>
-
-          <ResetButton active={hasActiveFilters} onReset={resetFilters} />
-
+          }
+          search={search}
+          onSearch={(value) => {
+            setSearch(value);
+            setPage(0);
+          }}
+          searchPlaceholder="Search domains…"
+          fields={filterFields}
+          presets={['registrar', 'tld', 'folder']}
+        >
           {exportNote && (
             <span
               className={cn(
@@ -1632,7 +1873,7 @@ export default function Domains({
               {exportNote.text}
             </span>
           )}
-        </div>
+        </FilterToolbar>
 
         {/* Bulk action bar — contextual: appears once any row is selected, or
             while a bulk job is running (as a progress pill). */}
@@ -1662,14 +1903,16 @@ export default function Domains({
           onRefresh={bulkRefresh}
           onExport={() => void exportCsv(selectedDomains)}
           onAssignFolder={(folderId) => applyFolders(selectedDomains, folderId)}
+          onNotes={() => setBulkNotesFor(selectedDomains)}
           onKind={(kind) =>
-            setBulkDialog({ op: defaultBulkOp(kind, selectedDomains) })
+            setBulkDialog({ op: defaultBulkOp(kind, selectedHeld) })
           }
           onViewJob={() => {
             if (bulk) setBulkDialog({ op: bulk.op, jobId: bulk.id });
           }}
           archiveView={archiveView}
           onOwnership={(action) => openOwnership(action, selectedDomains)}
+          onListPrice={() => setListPriceFor(selectedDomains)}
         />
       </div>
 
@@ -1692,7 +1935,7 @@ export default function Domains({
           rowLabel: (d) => `Select ${d.domainName}`,
         }}
         empty={
-          noneConfigured ? (
+          noneConfigured && importedList.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-4">
               <div>
                 <p className="font-medium text-foreground">
@@ -1700,13 +1943,19 @@ export default function Domains({
                 </p>
                 <p className="mt-0.5">
                   Add API credentials for a registrar to load your domains into
-                  this table.
+                  this table, or import them from a spreadsheet.
                 </p>
               </div>
-              <Button onClick={() => navigate('/settings?tab=registrars')}>
-                <Plug />
-                Configure registrars
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => navigate('/settings?tab=registrars')}>
+                  <Plug />
+                  Configure registrars
+                </Button>
+                <Button variant="outline" onClick={() => setImporting(true)}>
+                  <Upload />
+                  Import domains
+                </Button>
+              </div>
             </div>
           ) : archiveView && archiveCount === 0 ? (
             'Names you mark Sold, Dropped, or Archived, and names that leave your accounts, show up here.'
@@ -1714,7 +1963,7 @@ export default function Domains({
             hasLoaded ? (
               'No domains found in any configured registrar.'
             ) : (
-              'Click “Sync domains” to load your portfolio.'
+              'Your domains show up here after the first sync.'
             )
           ) : (
             'No domains match the current filters.'
@@ -1743,11 +1992,30 @@ export default function Domains({
       {bulkDialog && (
         <BulkActionDialog
           initialOp={bulkDialog.op}
-          domains={selectedDomains}
+          domains={selectedHeld}
           jobId={bulkDialog.jobId}
           onClose={() => setBulkDialog(null)}
         />
       )}
+      {detailsFor && (
+        <ImportedDomainDialog
+          domain={detailsFor}
+          onClose={() => setDetailsFor(null)}
+        />
+      )}
+      {listPriceFor && (
+        <ListPriceDialog
+          domains={listPriceFor}
+          onClose={() => setListPriceFor(null)}
+        />
+      )}
+      {bulkNotesFor && (
+        <BulkNotesDialog
+          domainNames={bulkNotesFor.map((d) => d.domainName)}
+          onClose={() => setBulkNotesFor(null)}
+        />
+      )}
+      {importing && <ImportDomainsDialog onClose={() => setImporting(false)} />}
       {purchaseFor && (
         <PurchaseDialog
           domain={purchaseFor}
@@ -1792,12 +2060,12 @@ export default function Domains({
             return (
               <RestoreOwnedDialog
                 names={ds.map((d) => d.domainName)}
-                restorable={
-                  ds.filter((d) => {
+                restorable={ds
+                  .filter((d) => {
                     const o = ownership.get(toAscii(d.domainName));
-                    return o?.event && o.event.source !== 'sync';
-                  }).length
-                }
+                    return !d.departed && o?.event && o.event.source !== 'sync';
+                  })
+                  .map((d) => d.domainName)}
                 onDone={done}
                 onClose={close}
               />

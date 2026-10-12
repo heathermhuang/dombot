@@ -21,7 +21,8 @@ describe('createDemoApi', () => {
     const snap = await api.hydrateFromCache();
     expect(snap.portfolio?.domains).toHaveLength(40);
     expect(snap.portfolio?.domains[0].expirationDate).toBeInstanceOf(Date);
-    expect(Object.keys(snap.pricing)).toHaveLength(40);
+    // The 40 synced names, plus the two the demo adds by hand.
+    expect(Object.keys(snap.pricing)).toHaveLength(42);
 
     const meta = await api.getRegistrarMetadata();
     expect(meta.filter((m) => m.configured)).toHaveLength(
@@ -74,6 +75,31 @@ describe('createDemoApi', () => {
     const detail = await api.getDomainDetail('porkbun', targets[0].domainName);
     expect(detail?.autoRenew).toBe(false);
   }, 20_000);
+
+  it('re-imports its own data export', async () => {
+    const { api } = await createDemoApi({
+      latencyMs: 0,
+      size: 40,
+      sampleChanges: true,
+    });
+    const text = await api.exportData();
+    const before = JSON.parse(text);
+    expect(Object.keys(before.namespaces['registrar-accounts'])).not.toEqual(
+      [],
+    );
+
+    await api.importData(text);
+    expect(JSON.parse(await api.exportData()).namespaces).toEqual(
+      before.namespaces,
+    );
+    const namecheap = (await api.getRegistrarMetadata()).filter(
+      (m) => m.name === 'namecheap',
+    );
+    expect(namecheap.map((m) => m.accountLabel).sort()).toEqual([
+      'Personal',
+      'Selling',
+    ]);
+  });
 
   it('a fresh boot starts over from the seed', async () => {
     const a = await createDemoApi({ latencyMs: 0, size: 12 });

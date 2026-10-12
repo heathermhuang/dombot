@@ -30,9 +30,15 @@ export const DomainEventSource = {
   Sync: 'sync',
   Import: 'import',
   Lookup: 'lookup', // the registration check (the automatic drop only)
+  Agent: 'agent', // an MCP client, on your behalf
 } as const;
 export type DomainEventSource =
   (typeof DomainEventSource)[keyof typeof DomainEventSource];
+
+/** Who records a change you asked for: you in the app, or an MCP client. */
+export type UserSource =
+  | typeof DomainEventSource.User
+  | typeof DomainEventSource.Agent;
 
 const EVENT_TYPES = new Set<string>(Object.values(DomainEventType));
 const EVENT_SOURCES = new Set<string>(Object.values(DomainEventSource));
@@ -81,6 +87,8 @@ export interface DomainEvent {
   resolves?: string;
   /** A sync alert acknowledged with no action. */
   dismissed?: boolean;
+  /** The import that wrote it, if one did (docs/domain-import-export.md). */
+  importId?: string;
 }
 
 /** A note on a name, or on one of its events. Stored in `domain-notes`. */
