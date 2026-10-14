@@ -115,7 +115,7 @@ type Vars = { auth: AuthConfig };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 function retainRequestWork(c: Context, work: Promise<unknown>): void {
-  let context: ExecutionContext;
+  let context: Pick<ExecutionContext, 'waitUntil'>;
   try {
     context = c.executionCtx;
   } catch {
