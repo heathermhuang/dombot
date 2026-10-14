@@ -31,11 +31,15 @@ describe('Worker initialization recovery', () => {
       DOMBOT_SECRET: btoa('synthetic-test-root-key-32-bytes!!'),
       DOMBOT_AUTH: 'external',
     } as Env;
+    const kept: Promise<unknown>[] = [];
+    const context = {
+      waitUntil: (work: Promise<unknown>) => kept.push(work),
+    } as ExecutionContext;
     const status = () =>
       worker.fetch(
         new Request('https://worker.example/auth/status'),
         env,
-        {} as ExecutionContext,
+        context,
       );
     const first = status();
     await started;
@@ -51,6 +55,8 @@ describe('Worker initialization recovery', () => {
     });
     expect((await status()).status).toBe(200);
     expect(migration.calls).toBe(2);
+    expect(kept).toHaveLength(2);
+    await expect(Promise.all(kept)).resolves.toHaveLength(2);
 
     // Once initialized, the auth-status read must not wait behind a stateful
     // registrar request. It needs only the completed auth configuration.
