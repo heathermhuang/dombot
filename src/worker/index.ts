@@ -60,7 +60,7 @@ interface Boot {
   auth: AuthConfig;
 }
 
-let boot: Promise<Boot> | null = null;
+let boot: Boot | null = null;
 let bootFor = '';
 
 /** The env values boot depends on. If they change under a live isolate
@@ -78,27 +78,28 @@ function bootFingerprint(env: Env): string {
   ].join('\u0000');
 }
 
-function bootOnce(env: Env): Promise<Boot> {
+/** Called under the request lock. Cache only completed initialization: an
+ * in-flight migration belongs to its incoming Worker request. */
+async function bootOnce(env: Env): Promise<Boot> {
   const fp = bootFingerprint(env);
   if (boot && bootFor === fp) return boot;
-  bootFor = fp;
-  boot = (async () => {
+  boot = null;
+  const initialized = await (async () => {
     setAppIdentity({ version: APP_VERSION, platform: 'web' });
     const root = parseRootSecret(env.DOMBOT_SECRET);
     const cipher = await aesGcmCipher(await deriveEncryptionKey(root));
     const raw = new D1DocStore(env.DB);
     const store = new EncryptedDocStore(raw, cipher);
     configureStore(store);
-    // Once per isolate, before any request hydrates: every request awaits
-    // this boot. Renames copy raw rows, so values move still sealed.
+    // Once per isolate, before any request hydrates. Renames copy raw rows,
+    // so values move still sealed.
     await runMigrations(raw, store);
     configureProxyTransport(workerProxyFetch);
     configureIncrementalRenewalPricing(true);
     return { auth: await buildAuthConfig(env, root) };
-  })().catch((err) => {
-    boot = null; // let the next request retry (e.g. secret set after deploy)
-    throw err;
-  });
+  })();
+  bootFor = fp;
+  boot = initialized;
   return boot;
 }
 
@@ -121,7 +122,10 @@ app.route('/', createPublicPortfolioRoutes());
 app.use('*', async (c, next) => {
   let b: Boot;
   try {
-    b = await bootOnce(c.env);
+    b =
+      boot && bootFor === bootFingerprint(c.env)
+        ? boot
+        : await withRequestLock(() => bootOnce(c.env));
   } catch (err) {
     // Misconfigured instance: say exactly what's missing, to the operator
     // only (this page is reachable before any auth exists).
@@ -327,8 +331,8 @@ export default {
   // Hourly cron (wrangler.jsonc). syncAll() runs only when the cache is older
   // than the configured interval, so the setting decides the real cadence.
   async scheduled(_controller, env) {
-    await bootOnce(env);
     await withRequestLock(async () => {
+      await bootOnce(env);
       await hydrate();
       const minutes = getSettings().autoSyncIntervalMinutes;
       if (minutes <= 0) {

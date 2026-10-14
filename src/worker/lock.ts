@@ -19,19 +19,23 @@ let depth = 0;
 
 /** Runs `fn` once every earlier `withRequestLock` call has finished. */
 export function withRequestLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = tail.then(() => {
-    depth++;
-    return fn();
+  const previous = tail;
+  let release!: () => void;
+  // Share a coordination gate, never the previous request's I/O promise.
+  // Each caller resumes its own async function before starting its I/O.
+  tail = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  tail = run.then(
-    () => {
+  return (async () => {
+    await previous;
+    depth++;
+    try {
+      return await fn();
+    } finally {
       depth--;
-    },
-    () => {
-      depth--;
-    },
-  );
-  return run;
+      release();
+    }
+  })();
 }
 
 /** Whether a locked section is running right now (tests, diagnostics). */

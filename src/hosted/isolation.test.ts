@@ -212,6 +212,10 @@ describe('real gateway and isolated Worker instances', () => {
       );
     const responses = await Promise.all([claim(), claim()]);
     expect(responses.map((r) => r.status).sort()).toEqual([303, 400]);
+    cookies[2] = responses
+      .find((response) => response.status === 303)!
+      .headers.get('set-cookie')!
+      .split(';')[0];
     const control = await mf.getD1Database('CONTROL_DB', 'gateway');
     expect(
       await control
@@ -220,6 +224,30 @@ describe('real gateway and isolated Worker instances', () => {
         .first(),
     ).toEqual({ count: 1 });
   });
+  it('serves a cold workspace bootstrap burst without stranding queued reads', async () => {
+    const methods = [
+      'getAppInfo',
+      'getRegistrarMetadata',
+      'getMcpInfo',
+      'hydrateFromCache',
+      'getFolders',
+      'getSettings',
+    ];
+    const responses = await Promise.all([
+      request(`/w/${ids[2]}/publishing`, 'GET', undefined, cookies[2]),
+      ...methods.map((method) => api(2, method)),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual(
+      responses.map(() => 200),
+    );
+    expect(await responses[1].json()).toMatchObject({
+      result: { platform: 'web' },
+    });
+    expect(await responses[4].json()).toMatchObject({
+      result: { portfolio: null },
+    });
+    expect((await api(2, 'getRegistrarMetadata')).status).toBe(200);
+  }, 10_000);
   it('creates distinct workspaces and rejects invitation reuse', async () => {
     for (let i = 0; i < 2; i++) {
       const response = await request('/session', 'GET', undefined, cookies[i]);
