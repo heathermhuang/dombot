@@ -114,6 +114,18 @@ async function hydrate(): Promise<void> {
 type Vars = { auth: AuthConfig };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
+function retainRequestWork(c: Context, work: Promise<unknown>): void {
+  let context: Pick<ExecutionContext, 'waitUntil'>;
+  try {
+    context = c.executionCtx;
+  } catch {
+    // The same Hono app is exercised without a Worker context in Node tests.
+    // Those callers still await the foreground work.
+    return;
+  }
+  context.waitUntil(work.catch(() => {}));
+}
+
 // Anonymous access is limited to the published projection. Never hydrate the
 // private store or decrypt credentials to serve these pages.
 app.route('/', createPublicPortfolioRoutes());
@@ -122,10 +134,14 @@ app.route('/', createPublicPortfolioRoutes());
 app.use('*', async (c, next) => {
   let b: Boot;
   try {
-    b =
-      boot && bootFor === bootFingerprint(c.env)
-        ? boot
-        : await withRequestLock(() => bootOnce(c.env));
+    if (boot && bootFor === bootFingerprint(c.env)) b = boot;
+    else {
+      const initialize = withRequestLock(() => bootOnce(c.env));
+      // A client disconnect must not discard initialization while another
+      // request is waiting for its coordination gate to be released.
+      retainRequestWork(c, initialize);
+      b = await initialize;
+    }
   } catch (err) {
     // Misconfigured instance: say exactly what's missing, to the operator
     // only (this page is reachable before any auth exists).
@@ -146,8 +162,8 @@ app.use('*', async (c, next) => {
 const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
   c,
   next,
-) =>
-  withRequestLock(async () => {
+) => {
+  const work = withRequestLock(async () => {
     await hydrate();
     await next();
     try {
@@ -160,6 +176,11 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
       c.res = c.json({ error: `Could not save changes: ${message}` }, 500);
     }
   });
+  // Finish the already-authorized work and release the queue even when the
+  // browser aborts a timed-out read. Keep failures on the foreground promise.
+  retainRequestWork(c, work);
+  return work;
+};
 // The MCP surface is bearer-authenticated by its own routes, and the gate
 // (Settings → MCP) and OAuth state live in the store, so those paths hydrate
 // before their handlers run.
