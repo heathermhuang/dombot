@@ -21,27 +21,9 @@ const LOGOS: Record<string, string> = Object.fromEntries(
   ]),
 );
 
-/**
- * Strip the brand fills so the logo renders as a flat monochrome mark that
- * inherits `currentColor` — letting a `text-*` class tint it a uniform grey.
- * Drops width/height too so the size comes from CSS.
- */
-function monochrome(svg: string): string {
-  return (
-    svg
-      // Drop the XML prolog and comments some exports carry (e.g. dynadot).
-      .replace(/<\?xml[\s\S]*?\?>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      // Drop <style> blocks (e.g. dynadot colors its paths via a `.st0` class).
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/\s(?:width|height|fill)="[^"]*"/g, '')
-      // Neutralize any inline `fill:#…` left in style attributes.
-      .replace(/fill:\s*#[0-9a-fA-F]{3,8}/g, 'fill:currentColor')
-      .replace('<svg', '<svg fill="currentColor"')
-      .trim()
-  );
-}
-
+/** SVGs are decoded only as CSS images, never inserted as document markup.
+ * Alpha masking preserves the monochrome currentColor treatment without
+ * interpreting exported style/comment strings as a sanitizer. */
 /**
  * The registrar's logo, shown as a small grey mark before the name. Reuses the
  * marketing site's brand SVGs, flattened to `currentColor` for a uniform tint.
@@ -62,10 +44,16 @@ export function RegistrarLogo({
       role="img"
       aria-label={`${label} logo`}
       className={cn(
-        'inline-flex size-[27px] shrink-0 items-center justify-center text-muted-foreground/70 [&>svg]:size-full',
+        'inline-flex size-[27px] shrink-0 items-center justify-center text-muted-foreground/70',
         className,
       )}
-      dangerouslySetInnerHTML={{ __html: monochrome(svg) }}
+      style={{
+        backgroundColor: 'currentColor',
+        maskImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
+        maskRepeat: 'no-repeat',
+        maskPosition: 'center',
+        maskSize: 'contain',
+      }}
     />
   );
 }
