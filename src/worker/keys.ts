@@ -5,7 +5,7 @@
 //   enc      AES-256-GCM key sealing every value in D1 (EncryptedDocStore)
 //   session  HMAC key signing login cookies — mixed with a hash of
 //            DOMBOT_PASSWORD, so rotating the password invalidates every
-//            session with no server-side state
+//            session without changing logout revocation records
 //
 // (MCP access tokens need no key: they're random and stored by hash in the
 // encrypted `mcp` namespace — src/core/mcp/oauth.ts.)

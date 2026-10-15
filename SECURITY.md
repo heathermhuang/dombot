@@ -42,6 +42,14 @@ requires a one-time in-app **Approve/Deny** prompt with a matching code. See
 [`src/electron/mcp/server.ts`](src/electron/mcp/server.ts) and the README's
 [Embedded MCP server](README.md#embedded-mcp-server) section.
 
+The desktop stdio bridge uses a fresh owner-only file key for each listener
+start. It sends one-use, short-lived HMAC proofs bound to each request instead
+of sending that key as a bearer token, and verifies authenticated responses
+before forwarding them to the agent. A fake loopback listener cannot capture a
+reusable credential or supply an accepted unsigned reply. Requests cannot
+follow redirects or change their configured endpoint. Restart DomBot and
+reconnect agents after upgrading; old per-install bearer tokens are rejected.
+
 ## Verify it yourself
 
 You don't have to believe any of the above. Here's how to check.

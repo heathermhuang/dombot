@@ -56,6 +56,14 @@ describe('keys', () => {
 });
 
 describe('sessions', () => {
+  it('issues independent sessions even when logins share a timestamp', async () => {
+    const key = await deriveSessionKey(parseRootSecret(ROOT), 'pw');
+    const tokens = await Promise.all([
+      createSession(key, 1000),
+      createSession(key, 1000),
+    ]);
+    expect(tokens[0]).not.toBe(tokens[1]);
+  });
   it('round-trips a signed session and rejects tampering', async () => {
     const key = await deriveSessionKey(parseRootSecret(ROOT), 'pw');
     const token = await createSession(key);
@@ -113,7 +121,11 @@ describe('auth config + gate', () => {
     const req = new Request('https://x/', {
       headers: { cookie: `dombot_session=${token}` },
     });
-    expect(await isAuthenticated(cfg, req)).toBe(true);
+    const db = {
+      prepare: () => ({ bind: () => ({ first: async () => null }) }),
+    } as unknown as D1Database;
+    expect(await isAuthenticated(cfg, req, db)).toBe(true);
+    expect(await isAuthenticated(cfg, req)).toBe(false);
   });
 
   it('cloudflare-access mode: no header → not authenticated', async () => {
