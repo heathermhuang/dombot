@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import { manageStdio } from './stdio-lifecycle';
+import { createStdioFetch } from './stdio-auth';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   StreamableHTTPClientTransport,
@@ -36,6 +37,14 @@ export function isStdioShimMode(argv: string[] = process.argv): boolean {
 const WAIT_FOR_SERVER_MS = 30_000;
 const POLL_MS = 500;
 
+export function createStdioTransport(
+  cfg: StdioConfig,
+): StreamableHTTPClientTransport {
+  return new StreamableHTTPClientTransport(new URL(cfg.url), {
+    fetch: createStdioFetch(cfg),
+  });
+}
+
 /** Bridges stdin/stdout to the app's MCP endpoint until the client hangs up. */
 export async function runStdioShim(): Promise<never> {
   // stdout is the JSON-RPC channel: everything we'd log goes to stderr.
@@ -65,9 +74,7 @@ export async function runStdioShim(): Promise<never> {
 
   const connect = async (): Promise<StreamableHTTPClientTransport> => {
     const cfg = await waitForServer();
-    const transport = new StreamableHTTPClientTransport(new URL(cfg.url), {
-      requestInit: { headers: { Authorization: `Bearer ${cfg.token}` } },
-    });
+    const transport = createStdioTransport(cfg);
     transport.onmessage = (msg) => {
       if ('id' in msg && msg.id !== undefined && swallow.delete(msg.id)) return;
       void lifecycle.send(msg);
@@ -148,15 +155,14 @@ function describe(err: unknown): string {
 
 /**
  * Resolves once the app's MCP server answers, launching the app if needed.
- * Any HTTP response counts (an unauthenticated GET is a 401) — we only need to
- * know the port is ours.
+ * Only a response authenticated by the file key establishes server identity.
  */
 async function waitForServer(): Promise<StdioConfig> {
   const deadline = Date.now() + WAIT_FOR_SERVER_MS;
   let launched = false;
   while (Date.now() < deadline) {
     const cfg = readStdioConfig();
-    if (cfg && (await isReachable(cfg.url))) return cfg;
+    if (cfg && (await isReachable(cfg))) return cfg;
     if (!launched) {
       launchApp();
       launched = true;
@@ -168,9 +174,12 @@ async function waitForServer(): Promise<StdioConfig> {
   );
 }
 
-async function isReachable(url: string): Promise<boolean> {
+async function isReachable(config: StdioConfig): Promise<boolean> {
   try {
-    await fetch(url, { method: 'GET', signal: AbortSignal.timeout(1000) });
+    await createStdioFetch(config)(config.url, {
+      method: 'GET',
+      signal: AbortSignal.timeout(1000),
+    });
     return true;
   } catch {
     return false;

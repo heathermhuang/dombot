@@ -122,7 +122,8 @@ round-tripping the data through a sealed bundle.
 
 ### Auth for the web UI
 
-Single user, no external identity provider, no auth state in the database.
+Single user, no external identity provider. D1 holds hashed logout revocations
+and per-source login backoff; it never stores a usable session cookie.
 
 1. **Login** compares the submitted password against the `DOMBOT_PASSWORD`
    binding in constant time, hashing both sides first so length leaks
@@ -131,10 +132,16 @@ Single user, no external identity provider, no auth state in the database.
    (`src/worker/login-rate-limit.ts`): 10 per 15 minutes, with the source
    address stored only as an HMAC.
 2. **Session** → `dombot_session` cookie: HttpOnly, Secure, SameSite=Strict,
-   HMAC-SHA256-signed `{ issuedAt, expiresAt }`, 30-day expiry. The signing
+   HMAC-SHA256-signed claims with a random session ID, 30-day expiry. Logout
+   durably revokes that session in `session_revocations` before returning success.
+   Every password-authenticated route checks D1, including fresh runtimes, and
+   storage failures deny access. Previously issued cookies are revocable too;
+   alternate signature encodings cannot bypass revocation. The signing
    key is HKDF-derived from `DOMBOT_SECRET` _mixed with a hash of
    `DOMBOT_PASSWORD`_, so rotating the password invalidates every session
    automatically — no generation counter, no "sign out everywhere" feature.
+   Apply `migrations/0003_session_revocations.sql` before deploying this version
+   (`npm run web:migrate`). Expired revocations are removed on subsequent logout.
 3. **Mutations** additionally require an `Origin` header matching the request
    host (belt-and-braces with SameSite).
 4. **No reset page, no change-password page, no setup page.** Rotating the

@@ -1,9 +1,15 @@
 import type { Server } from 'node:http';
 import { app } from 'electron';
+import { randomBytes } from 'node:crypto';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { createMcpRoutes } from '../../core/mcp/routes';
-import { getStdioToken, writeStdioConfig } from './stdio-config';
+import { writeStdioConfig } from './stdio-config';
+import {
+  createStdioVerifier,
+  isStdioProof,
+  signStdioResponse,
+} from './stdio-auth';
 import { stdioCommand } from './stdio';
 import type { McpInfo } from '../../shared/ipc';
 
@@ -24,17 +30,20 @@ export function getMcpInfo(): McpInfo {
 const TOKEN_TTL_SEC = 365 * 24 * 60 * 60;
 
 /** Tokens the desktop accepts without the approval flow. */
-function verifyStaticToken(token: string) {
+async function verifyStaticToken(
+  token: string,
+  request: Request,
+  verifyStdio: ReturnType<typeof createStdioVerifier>,
+) {
   const expiresAt = Math.floor(Date.now() / 1000) + TOKEN_TTL_SEC;
   // Dev/testing escape hatch: a static token via env.
   const staticToken = process.env.DOMBOT_MCP_TOKEN;
   if (staticToken && token === staticToken) {
     return { token, clientId: 'static', scopes: [], expiresAt };
   }
-  // The stdio shim (`DomBot --mcp-stdio`) authenticates with a per-install
-  // token from userData — same user, same machine, so no approval prompt.
-  const stdioToken = getStdioToken();
-  if (stdioToken && token === stdioToken) {
+  // The key stays in the owner-only file; only one-use request proofs cross TCP.
+  // Never accept the old per-install bearer credential from a copied config.
+  if (await verifyStdio(token, request)) {
     return {
       token,
       clientId: 'stdio',
@@ -56,16 +65,8 @@ export async function startMcpServer(): Promise<McpInfo> {
   const host = '127.0.0.1';
   const port = Number(process.env.DOMBOT_MCP_PORT) || 4123;
   const mcpUrl = new URL('/mcp', `http://${host}:${port}`);
-
-  const hono = new Hono();
-  hono.route(
-    '/',
-    createMcpRoutes({
-      version: app.getVersion(),
-      verifyStaticToken,
-      autoApprove: process.env.DOMBOT_MCP_AUTOAPPROVE === '1',
-    }),
-  );
+  const config = { url: mcpUrl.href, token: randomBytes(32).toString('hex') };
+  const hono = createDesktopMcpApp(config, app.getVersion());
 
   await new Promise<void>((resolve, reject) => {
     // Loopback only — never expose registrar control beyond this machine.
@@ -76,8 +77,14 @@ export async function startMcpServer(): Promise<McpInfo> {
     httpServer = server;
   });
 
-  // Tell stdio shims where we are (and mint their token on first run).
-  writeStdioConfig(mcpUrl.href);
+  // Rotate on every listener start; a captured proof from a stopped app cannot
+  // be replayed after the real app starts. Fail closed if publication fails.
+  try {
+    writeStdioConfig(config.url, config.token);
+  } catch (error) {
+    await stopMcpServer();
+    throw error;
+  }
 
   const stdio = stdioCommand();
   info = {
@@ -87,6 +94,35 @@ export async function startMcpServer(): Promise<McpInfo> {
     stdioArgs: stdio.args,
   };
   return info;
+}
+
+export function createDesktopMcpApp(
+  config: { url: string; token: string },
+  version: string,
+): Hono {
+  const verifyStdio = createStdioVerifier(config);
+
+  const hono = new Hono();
+  hono.use('/mcp', async (c, next) => {
+    await next();
+    const proof = (c.req.header('authorization') ?? '').replace(
+      /^Bearer /i,
+      '',
+    );
+    if (isStdioProof(proof))
+      c.res = await signStdioResponse(proof, c.res, config.token);
+  });
+  hono.route(
+    '/',
+    createMcpRoutes({
+      version,
+      verifyStaticToken: (token, request) =>
+        verifyStaticToken(token, request, verifyStdio),
+      autoApprove: process.env.DOMBOT_MCP_AUTOAPPROVE === '1',
+    }),
+  );
+
+  return hono;
 }
 
 /** Stops the server. Requests are stateless, so there's nothing else to tear down. */
