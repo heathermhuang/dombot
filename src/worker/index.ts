@@ -28,7 +28,10 @@ import {
   clearSessionCookie,
   createSession,
   isAuthenticated,
+  readCookie,
+  revokeSession,
   sameOrigin,
+  SESSION_COOKIE,
   sessionCookie,
   type AuthConfig,
 } from './auth';
@@ -158,7 +161,7 @@ app.use('*', async (c, next) => {
 });
 
 // ── hydrate → handle → flush, serialized, for handlers that have state ─────
-// Applied per route, *after* the checks that need no store (session cookie,
+// Applied per route, *after* the checks that need no portfolio store (session cookie,
 // origin, auth mode), so an unauthenticated request never costs a full
 // decrypt of D1 or a turn on the lock. Under the lock a bulk step can't be
 // re-hydrated out from under by a poll, and a burst of logins counts every
@@ -223,7 +226,7 @@ app.get('/auth/status', async (c) => {
   const auth = c.get('auth');
   return c.json({
     mode: auth.mode,
-    authenticated: await isAuthenticated(auth, c.req.raw),
+    authenticated: await isAuthenticated(auth, c.req.raw, c.env.DB),
     version: APP_VERSION,
   });
 });
@@ -269,7 +272,16 @@ app.post(
   },
 );
 
-app.post('/auth/logout', (c) => {
+app.post('/auth/logout', async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+  const auth = c.get('auth');
+  if (auth.mode === 'password') {
+    await revokeSession(
+      c.env.DB,
+      auth.sessionKey!,
+      readCookie(c.req.header('cookie'), SESSION_COOKIE),
+    );
+  }
   c.header('Set-Cookie', clearSessionCookie(secure(c)));
   return c.json({ ok: true });
 });
@@ -281,9 +293,9 @@ app.route('/publishing', createPublicationRoutes(stateful));
 app.post(
   '/api/:method',
   async (c, next) => {
-    // Gate first — the session check needs only the derived key — so an
+    // Gate first — session checks read no private portfolio documents — so an
     // unauthenticated call never hydrates.
-    if (!(await isAuthenticated(c.get('auth'), c.req.raw))) {
+    if (!(await isAuthenticated(c.get('auth'), c.req.raw, c.env.DB))) {
       return c.json({ error: 'Not signed in' }, 401);
     }
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);

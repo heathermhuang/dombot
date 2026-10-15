@@ -3,6 +3,7 @@ import { verifyGatewayRequest } from '../shared/gateway-proof';
 import {
   deriveSessionKey,
   fromBase64Url,
+  sha256,
   timingSafeEqualStrings,
   toBase64Url,
 } from './keys';
@@ -19,7 +20,7 @@ import {
 //                      Password Protection, a reverse proxy) — explicit opt-in,
 //                      the app runs with no login of its own
 //
-// No auth state lives in the database except login-attempt backoff.
+// Password-mode logout revocations and login-attempt backoff live in D1.
 
 export type AuthMode =
   'password' | 'cloudflare-access' | 'external' | 'gateway';
@@ -112,17 +113,27 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 interface SessionClaims {
   iat: number;
   exp: number;
+  jti?: string;
 }
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+
+// Identity follows the signed claims, not the textual signature encoding:
+// base64 padding/aliases must not provide a second spelling of a revoked cookie.
+const sessionFingerprint = async (token: string) =>
+  toBase64Url(await sha256(token.slice(0, token.indexOf('.'))));
 
 /** Mints a signed session token: base64url(claims).base64url(hmac). */
 export async function createSession(
   key: CryptoKey,
   now = Date.now(),
 ): Promise<string> {
-  const claims: SessionClaims = { iat: now, exp: now + SESSION_TTL_MS };
+  const claims: SessionClaims = {
+    iat: now,
+    exp: now + SESSION_TTL_MS,
+    jti: crypto.randomUUID(),
+  };
   const body = toBase64Url(enc.encode(JSON.stringify(claims)));
   const sig = new Uint8Array(
     await crypto.subtle.sign('HMAC', key, enc.encode(body)),
@@ -155,10 +166,37 @@ export async function verifySession(
   if (!ok) return false;
   try {
     const claims = JSON.parse(dec.decode(fromBase64Url(body))) as SessionClaims;
-    return typeof claims.exp === 'number' && claims.exp > now;
+    return (
+      typeof claims.exp === 'number' &&
+      Number.isFinite(claims.exp) &&
+      claims.exp > now
+    );
   } catch {
     return false;
   }
+}
+
+/** Persist before acknowledging logout. Also accepts previously issued cookies. */
+export async function revokeSession(
+  db: D1Database,
+  key: CryptoKey,
+  token: string | undefined,
+  now = Date.now(),
+): Promise<void> {
+  if (!token || !(await verifySession(key, token, now))) return;
+  const claims = JSON.parse(
+    dec.decode(fromBase64Url(token.split('.')[0])),
+  ) as SessionClaims;
+  await db
+    .prepare('DELETE FROM session_revocations WHERE expires_at <= ?1')
+    .bind(now)
+    .run();
+  await db
+    .prepare(
+      'INSERT INTO session_revocations (token_hash, expires_at) VALUES (?1, ?2) ON CONFLICT(token_hash) DO NOTHING',
+    )
+    .bind(await sessionFingerprint(token), claims.exp)
+    .run();
 }
 
 export function sessionCookie(token: string, secure: boolean): string {
@@ -231,6 +269,7 @@ export async function verifyAccessJwt(
 export async function isAuthenticated(
   config: AuthConfig,
   request: Request,
+  db?: D1Database,
 ): Promise<boolean> {
   switch (config.mode) {
     case 'gateway':
@@ -243,11 +282,22 @@ export async function isAuthenticated(
           )
         )?.owner,
       );
-    case 'password':
-      return verifySession(
-        config.sessionKey!,
-        readCookie(request.headers.get('cookie') ?? undefined, SESSION_COOKIE),
+    case 'password': {
+      const token = readCookie(
+        request.headers.get('cookie') ?? undefined,
+        SESSION_COOKIE,
       );
+      if (!db || !token || !(await verifySession(config.sessionKey!, token)))
+        return false;
+      // Never cache this result: a different runtime can revoke the cookie.
+      const revoked = await db
+        .prepare(
+          'SELECT token_hash FROM session_revocations WHERE token_hash = ?1 AND expires_at > ?2',
+        )
+        .bind(await sessionFingerprint(token), Date.now())
+        .first();
+      return !revoked;
+    }
     case 'cloudflare-access':
       return verifyAccessJwt(
         config,
