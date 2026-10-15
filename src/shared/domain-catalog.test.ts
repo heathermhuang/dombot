@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { privateListing, emptyDraft } from './publication';
+import { domainKey } from './account-key';
+import { importedRows } from './imported-domains';
 import type { Domain, RegistrarMeta } from './ipc';
 import {
   buildDomainCatalog,
@@ -44,6 +46,91 @@ const filters = {
   nameserver: '',
 };
 describe('one domain catalog with exact registrar targets', () => {
+  it('shows imported names privately without making registrar hints actionable', () => {
+    const imported = importedRows(
+      {
+        'new.example': {
+          addedAt: 1,
+          updatedAt: 1,
+          registrar: 'dynadot',
+          expirationDate: '2030-01-01',
+          autoRenew: true,
+        },
+      },
+      [],
+    );
+    const draft = withInventory(emptyDraft(), imported);
+    expect(draft.listings).toEqual([privateListing('new.example')]);
+    const legacyAccount = [
+      { name: 'dynadot', configured: true, enabled: true },
+    ] as RegistrarMeta[];
+    const entry = buildDomainCatalog(
+      draft.listings,
+      imported,
+      legacyAccount,
+    ).get('new.example')!;
+    expect(entry.records).toHaveLength(1);
+    expect(entry.records[0].expirationDate).toEqual(
+      new Date('2030-01-01T00:00:00Z'),
+    );
+    expect(entry.target).toBeNull();
+    expect(entry.reason).toMatch(/Imported record/);
+  });
+  it('lets a synced record replace the imported hint without duplicate rows', () => {
+    const synced = [record('existing.example')];
+    const inventory = [
+      ...synced,
+      ...importedRows(
+        { 'existing.example': { addedAt: 1, updatedAt: 1, registrar: null } },
+        synced,
+      ),
+    ];
+    const draft = withInventory(emptyDraft(), inventory);
+    expect(inventory).toHaveLength(1);
+    expect(
+      buildDomainCatalog(draft.listings, inventory, accounts).get(
+        'existing.example',
+      )?.target,
+    ).toEqual(synced[0]);
+  });
+  it('sorts imported display metadata without granting registrar authority', () => {
+    const inventory = importedRows(
+      {
+        'later.example': {
+          addedAt: 1,
+          updatedAt: 1,
+          registrar: null,
+          expirationDate: '2030-01-01',
+        },
+        'soon.example': {
+          addedAt: 1,
+          updatedAt: 1,
+          registrar: null,
+          expirationDate: '2027-01-01',
+        },
+      },
+      [],
+    );
+    const listings = withInventory(emptyDraft(), inventory).listings;
+    const catalog = buildDomainCatalog(listings, inventory, accounts);
+    const pricing = Object.fromEntries(
+      inventory.map((item, index) => [
+        domainKey(item),
+        { renewal: index ? 10 : 20 },
+      ]),
+    );
+    expect(
+      sortManagementRows(listings, catalog, {}, 'expiry').map((i) => i.domain),
+    ).toEqual(['soon.example', 'later.example']);
+    expect(
+      sortManagementRows(listings, catalog, pricing, 'renewal-asc').map(
+        (i) => i.domain,
+      ),
+    ).toEqual(['soon.example', 'later.example']);
+    expect(
+      selectedRegistrarTargets(catalog, new Set(listings.map((i) => i.domain))),
+    ).toEqual({ targets: [], blocked: 2 });
+  });
   it('adds newly synced names privately without overwriting editorial selections', () => {
     const listing = {
       ...privateListing('existing.example'),

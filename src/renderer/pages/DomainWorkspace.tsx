@@ -12,6 +12,7 @@ import {
   sortManagementRows,
 } from '../../shared/domain-catalog';
 import { domainKey } from '../../shared/account-key';
+import { importedRows } from '../../shared/imported-domains';
 import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
 import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
 import LegacyDomains from './Domains';
@@ -99,7 +100,15 @@ export default function DomainWorkspace({
     error,
     errorKind,
   } = usePortfolioEditor();
-  const inventory = useAppStore((s) => s.portfolio);
+  const syncedInventory = useAppStore((s) => s.portfolio);
+  const importedInventory = useAppStore((s) => s.importedDomains);
+  const inventory = useMemo(
+    () => [
+      ...syncedInventory,
+      ...importedRows(importedInventory, syncedInventory),
+    ],
+    [syncedInventory, importedInventory],
+  );
   const enriched = useAppStore((s) => s.enriched);
   const pricing = useAppStore((s) => s.pricing);
   const accounts = useAppStore((s) => s.registrars);
@@ -500,6 +509,38 @@ export default function DomainWorkspace({
     setPage(1);
     clearSelection();
   };
+  function collectionFilter() {
+    return (
+      <select
+        aria-label="Filter collection"
+        value={collection}
+        onChange={(e) => filterChange(() => setCollection(e.target.value))}
+      >
+        <option value="">All collections</option>
+        {collections.map((name) => (
+          <option key={name}>{name}</option>
+        ))}
+      </select>
+    );
+  }
+  function ownershipFilterControl() {
+    return (
+      <select
+        aria-label="Filter ownership"
+        value={ownershipFilter}
+        onChange={(e) =>
+          filterChange(() =>
+            setOwnershipFilter(e.target.value as OwnershipFilter),
+          )
+        }
+      >
+        <option value="all">Ownership: all</option>
+        <option value="owned">Verified for publication</option>
+        <option value="attention">Needs review</option>
+        <option value="blocking">Blocks publishing</option>
+      </select>
+    );
+  }
   const navigateView = (
     next: 'domains' | 'settings' | 'preview' | 'review',
   ) => {
@@ -1225,32 +1266,12 @@ export default function DomainWorkspace({
                   onChange={(e) => filterChange(() => setQuery(e.target.value))}
                 />
               </div>
-              <select
-                aria-label="Filter collection"
-                value={collection}
-                onChange={(e) =>
-                  filterChange(() => setCollection(e.target.value))
-                }
-              >
-                <option value="">All collections</option>
-                {collections.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-              <select
-                aria-label="Filter ownership"
-                value={ownershipFilter}
-                onChange={(e) =>
-                  filterChange(() =>
-                    setOwnershipFilter(e.target.value as OwnershipFilter),
-                  )
-                }
-              >
-                <option value="all">Ownership: all</option>
-                <option value="owned">Verified for publication</option>
-                <option value="attention">Needs review</option>
-                <option value="blocking">Blocks publishing</option>
-              </select>
+              <span className="domain-desktop-filter">
+                {collectionFilter()}
+              </span>
+              <span className="domain-desktop-filter">
+                {ownershipFilterControl()}
+              </span>
               <select
                 aria-label="Sort domains"
                 className="pf-sort"
@@ -1268,21 +1289,31 @@ export default function DomainWorkspace({
             </div>
             <details className="domain-more-filters">
               <summary>
-                Registrar filters
+                More filters
                 {[
+                  list.collection,
+                  list.ownership === 'all' ? '' : list.ownership,
                   list.account,
                   list.tld,
                   list.expiry,
                   list.folder,
                   list.nameserver,
                 ].filter(Boolean).length
-                  ? ` · ${[list.account, list.tld, list.expiry, list.folder, list.nameserver].filter(Boolean).length} active`
+                  ? ` · ${[list.collection, list.ownership === 'all' ? '' : list.ownership, list.account, list.tld, list.expiry, list.folder, list.nameserver].filter(Boolean).length} active`
                   : ''}
               </summary>
               <div>
                 <button className="pf-text-button" onClick={resetFilters}>
                   Reset all filters
                 </button>
+                <label className="domain-mobile-filter">
+                  Collection
+                  {collectionFilter()}
+                </label>
+                <label className="domain-mobile-filter">
+                  Ownership
+                  {ownershipFilterControl()}
+                </label>
                 <label>
                   Account
                   <select

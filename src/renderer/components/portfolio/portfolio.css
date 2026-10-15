@@ -1358,3 +1358,26 @@
     padding-block: 5px;
   }
 }
+
+/* Keep primary search/sort in view on phones. The same controlled filters
+   remain available in the existing disclosure; desktop keeps its toolbar. */
+.domain-desktop-filter {
+  display: contents;
+}
+.domain-more-filters .domain-mobile-filter {
+  display: none;
+}
+@media (max-width: 640px) {
+  .domain-desktop-filter {
+    display: none;
+  }
+  .domain-more-filters .domain-mobile-filter {
+    display: grid;
+  }
+  .pf-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
+  }
+  .pf-search {
+    grid-column: auto;
+  }
+}

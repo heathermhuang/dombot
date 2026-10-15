@@ -4,6 +4,8 @@ import { accountForm, accountSecurity } from './views';
 describe('managed account help and identity', () => {
   it('provides an actionable recovery contact at login and signup', () => {
     for (const kind of ['login', 'join'] as const)
+      expect(accountForm(kind)).toContain('href="/recover"');
+    for (const kind of ['login', 'join'] as const)
       expect(accountForm(kind)).toContain(
         'mailto:domains@domains.domains?subject=Workspace%20account%20recovery',
       );

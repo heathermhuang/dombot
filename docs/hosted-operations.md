@@ -80,3 +80,28 @@ fleet provisioning, billing and per-operation registrar spend approval are separ
 features, not implied by a successful release or sync. Hostname cutover additionally
 requires verified DNS/TLS, mail-record preservation and fresh OAuth resource pairing on
 the new hostname.
+
+## Restoring exports with large encrypted documents
+
+A SQL export can contain a sealed cache/publication value larger than D1's SQL-text
+limit. A plain SQL-file import can therefore fail even though the live value is valid.
+Use the bounded restore tool with a dedicated database named
+`domains-staging-restore-<drill-name>` and a private config binding that database as `DB`:
+
+```sh
+node scripts/hosted-backup.mjs --config <private-restore-config.json> --file <protected-tenant-export.sql> --receipt <protected-restore-receipt.json>
+```
+
+The tool parses the export in an isolated local SQLite memory database, disables
+extension loading/filesystem attachment, and sends values as bound parameters with
+bounded statement/parameter counts. It verifies target identity and exact table data.
+It refuses any target row outside the selected backup and never deletes target data.
+An uncertain result can be reconciled with the same source/target/receipt: matching
+rows are retained, missing rows are inserted, and each completed table is checkpointed.
+No credentials or document values are printed. Python 3 is required for local parsing.
+
+After restoring the data, configure only the private drill Worker with the matching
+backup encryption root, keep cron disabled, verify the authenticated inventory and
+publication, then disable its routing and restore its original test bindings/keys.
+Do not point this tool at a live customer database. Retain the backup, key and receipt
+in protected operator storage.

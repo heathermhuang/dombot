@@ -70,16 +70,29 @@ export function buildDomainCatalog(
             ? 'No connected registrar record'
             : scoped.length > 1
               ? 'Multiple accounts · choose an account filter'
-              : record?.deleted
-                ? 'Deleted registrar record'
-                : !account?.configured || !account.enabled
-                  ? 'Registrar account unavailable'
-                  : null;
+              : record?.source === 'imported'
+                ? 'Imported record · connect and sync its registrar before changing domain settings'
+                : record?.deleted
+                  ? 'Deleted registrar record'
+                  : !account?.configured || !account.enabled
+                    ? 'Registrar account unavailable'
+                    : null;
       return [
         listing.domain,
         { listing, records, target: reason ? null : record, reason },
       ];
     }),
+  );
+}
+/** Display metadata never grants authority to change registrar settings. */
+export function catalogDisplayRecord(
+  entry: CatalogEntry | undefined,
+): Domain | null {
+  return (
+    entry?.target ??
+    (entry?.records.length === 1 && entry.records[0].source === 'imported'
+      ? entry.records[0]
+      : null)
   );
 }
 export function selectedRegistrarTargets(
@@ -172,7 +185,7 @@ export function sortManagementRows<T extends PortfolioListing>(
   const renewal = sort === 'renewal' || sort === 'renewal-asc';
   if (!renewal && sort !== 'expiry' && sort !== 'expiry-desc') return rows;
   const value = (row: T) => {
-    const target = catalog.get(row.domain)?.target;
+    const target = catalogDisplayRecord(catalog.get(row.domain));
     if (!target) return null;
     if (renewal) return pricing[domainKey(target)]?.renewal ?? null;
     return target.expirationDate

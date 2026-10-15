@@ -7,7 +7,10 @@ import { ownershipByDomain } from '../../../shared/ownership';
 import { isOpenAlert, resolvedIds } from '../../../shared/sync-diff';
 import type { Domain, DomainOp } from '../../../shared/ipc';
 import type { CatalogEntry } from '../../../shared/domain-catalog';
-import { selectedRegistrarTargets } from '../../../shared/domain-catalog';
+import {
+  selectedRegistrarTargets,
+  catalogDisplayRecord,
+} from '../../../shared/domain-catalog';
 import { useAppStore } from '../../store/app';
 import {
   AutoRenewSwitch,
@@ -227,7 +230,7 @@ export function useRegistrarManagement({
     </details>
   );
   const cells = (entry: CatalogEntry | undefined) => {
-    const d = entry?.target;
+    const d = catalogDisplayRecord(entry);
     if (!d)
       return (
         <>
@@ -238,13 +241,18 @@ export function useRegistrarManagement({
         </>
       );
     const key = domainKey(d);
+    const imported = d.source === 'imported';
     return (
       <Fragment key={key}>
         <td data-label="Registrar / account">
           <span className="pf-registrar-name">
-            {portfolioRegistrarLabels[d.registrar] ?? d.registrar}
+            {d.importedRegistrarLabel ||
+              portfolioRegistrarLabels[d.registrar] ||
+              d.registrar ||
+              'Imported'}
           </span>
-          {d.accountLabel && d.accountLabel !== 'Default' && (
+          {imported && <small className="pf-hint block">Added by you</small>}
+          {!imported && d.accountLabel && d.accountLabel !== 'Default' && (
             <small className="pf-hint block">{d.accountLabel}</small>
           )}
         </td>
@@ -270,7 +278,11 @@ export function useRegistrarManagement({
           {date(d.expirationDate)}
         </td>
         <td className="pf-manage-status" data-label="Status">
-          <LifecycleBadge status={d.status} showStatus />
+          {imported ? (
+            'Imported'
+          ) : (
+            <LifecycleBadge status={d.status} showStatus />
+          )}
         </td>
         <td data-label="Renewal" data-mobile-secondary>
           <RenewalCell
@@ -280,32 +292,46 @@ export function useRegistrarManagement({
         </td>
         <td data-label="Auto renew">
           <span className="pf-auto-renew">
-            <AutoRenewSwitch domain={d} />
-            <span>{d.autoRenew ? 'On' : 'Off'}</span>
+            {!imported && <AutoRenewSwitch domain={d} />}
+            <span>
+              {imported && d.autoRenewUnknown
+                ? '—'
+                : d.autoRenew
+                  ? 'On'
+                  : 'Off'}
+            </span>
           </span>
         </td>
         <td data-label="Privacy" data-mobile-secondary>
-          <FlagToggle
-            domain={d}
-            kind="privacy"
-            on={EyeOff}
-            off={Eye}
-            onLabel="privacy on"
-            offLabel="privacy off"
-          />
+          {imported ? (
+            '—'
+          ) : (
+            <FlagToggle
+              domain={d}
+              kind="privacy"
+              on={EyeOff}
+              off={Eye}
+              onLabel="privacy on"
+              offLabel="privacy off"
+            />
+          )}
         </td>
         <td data-label="Lock" data-mobile-secondary>
-          <FlagToggle
-            domain={d}
-            kind="lock"
-            on={Lock}
-            off={LockOpen}
-            onLabel="locked"
-            offLabel="unlocked"
-          />
+          {imported ? (
+            '—'
+          ) : (
+            <FlagToggle
+              domain={d}
+              kind="lock"
+              on={Lock}
+              off={LockOpen}
+              onLabel="locked"
+              offLabel="unlocked"
+            />
+          )}
         </td>
         <td data-label="Nameservers" data-mobile-secondary>
-          <NameserversCell domain={d} />
+          {imported ? '—' : <NameserversCell domain={d} />}
         </td>
         <td data-label="Registrar actions" data-mobile-secondary>
           <RowActionsMenu
