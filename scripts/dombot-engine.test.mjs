@@ -14,6 +14,7 @@ async function fixture(run) {
   try {
     for (const item of [
       'src',
+      'site',
       'data',
       'migrations',
       'scripts',
@@ -41,7 +42,7 @@ async function fixture(run) {
         [path.join(root, 'scripts/dombot-engine.mjs'), 'verify'],
         { cwd: dir, encoding: 'utf8', timeout: 10_000 },
       );
-    await run(installed, verify);
+    await run(installed, verify, dir);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -57,6 +58,22 @@ describe('pinned engine admission', () => {
       const result = verify();
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain('Worker integrity mismatch');
+    }));
+  it('rejects changed source SVG bytes used by the renderer', async () =>
+    fixture(async (_installed, verify, dir) => {
+      await fs.unlink(path.join(dir, 'site'));
+      await fs.cp(
+        path.join(root, 'site/src/assets/logos'),
+        path.join(dir, 'site/src/assets/logos'),
+        { recursive: true },
+      );
+      await fs.appendFile(
+        path.join(dir, 'site/src/assets/logos/dynadot.svg'),
+        '\n<!-- changed source asset -->\n',
+      );
+      const result = verify();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('Engine source changed');
     }));
   it('rejects package exports redirecting imports to an unchecked module', async () =>
     fixture(async (installed, verify) => {
