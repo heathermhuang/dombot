@@ -41,7 +41,10 @@ export interface McpRouteOptions {
    * Bearer tokens a host accepts without the approval flow (the desktop's
    * stdio shim, a dev token from the environment). Checked before the store.
    */
-  verifyStaticToken?: (token: string) => AuthInfo | null;
+  verifyStaticToken?: (
+    token: string,
+    request: Request,
+  ) => AuthInfo | null | Promise<AuthInfo | null>;
   /** Dev/testing: skip the human step and redirect straight back. */
   autoApprove?: boolean;
 }
@@ -385,7 +388,8 @@ async function bearer(
     return fail("Invalid Authorization header format, expected 'Bearer TOKEN'");
   }
   const info =
-    options.verifyStaticToken?.(token) ?? (await verifyAccessToken(token));
+    (await options.verifyStaticToken?.(token, c.req.raw)) ??
+    (await verifyAccessToken(token));
   if (!info) return fail('Invalid or expired token');
   if (
     options.enforceScopes &&

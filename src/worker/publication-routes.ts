@@ -27,7 +27,7 @@ export function createPublicationRoutes(
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     c.header('X-Robots-Tag', 'noindex, nofollow');
-    if (!(await isAuthenticated(c.get('auth'), c.req.raw)))
+    if (!(await isAuthenticated(c.get('auth'), c.req.raw, c.env.DB)))
       return c.json({ error: 'Not signed in' }, 401);
     if (c.req.method !== 'GET' && !sameOrigin(c.req.raw))
       return c.json({ error: 'Bad origin' }, 403);

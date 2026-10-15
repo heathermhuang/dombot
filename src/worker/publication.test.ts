@@ -81,6 +81,11 @@ beforeAll(async () => {
   );
   db = await mf.getD1Database('DB');
   await db.exec(
+    readFileSync('migrations/0003_session_revocations.sql', 'utf8')
+      .replace(/^--.*$/gm, '')
+      .replace(/\n/g, ' '),
+  );
+  await db.exec(
     readFileSync(
       new URL('../../migrations/0002_publication.sql', import.meta.url),
       'utf8',

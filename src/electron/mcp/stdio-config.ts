@@ -12,7 +12,7 @@ import { app } from 'electron';
 export interface StdioConfig {
   /** The MCP endpoint, e.g. http://127.0.0.1:4123/mcp */
   url: string;
-  /** Bearer token the server accepts from the shim (see oauth.ts). */
+  /** Per-listener signing key. Kept off the wire; the field name is legacy. */
   token: string;
 }
 
@@ -24,8 +24,6 @@ export function stdioConfigPath(): string {
 function configFile(): string {
   return stdioConfigPath();
 }
-
-let cached: StdioConfig | null = null;
 
 /** The current config, or null if the app has never started its MCP server. */
 export function readStdioConfig(): StdioConfig | null {
@@ -42,23 +40,19 @@ export function readStdioConfig(): StdioConfig | null {
 }
 
 /**
- * Records the server URL for shims. The token is minted once per install and
- * then kept stable, so a shim that started before an app restart keeps working.
+ * Publish the current listener key atomically, replacing any older credential.
+ * Shims read the new key when they reconnect after an app restart.
  */
-export function writeStdioConfig(url: string): StdioConfig {
-  const token = readStdioConfig()?.token ?? randomBytes(32).toString('hex');
-  cached = { url, token };
-  try {
-    fs.writeFileSync(configFile(), JSON.stringify(cached, null, 2), {
-      mode: 0o600,
-    });
-  } catch (err) {
-    console.error('[mcp] failed to write stdio config', err);
-  }
-  return cached;
-}
-
-/** The shim token the server should accept, if one has been issued. */
-export function getStdioToken(): string | null {
-  return (cached ?? readStdioConfig())?.token ?? null;
+export function writeStdioConfig(
+  url: string,
+  token = randomBytes(32).toString('hex'),
+): StdioConfig {
+  const config = { url, token };
+  const tmp = `${configFile()}.${randomBytes(8).toString('hex')}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2), {
+    mode: 0o600,
+    flag: 'wx',
+  });
+  fs.renameSync(tmp, configFile());
+  return config;
 }
