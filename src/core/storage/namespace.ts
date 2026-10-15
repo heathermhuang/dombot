@@ -178,7 +178,15 @@ export class Namespace<T> {
 
 /** Loads every namespace any service has declared. Hosts call this once
  *  after `configureStore`, before handling requests. Safe to call again. */
-export async function hydrateStores(): Promise<void> {
+export async function hydrateStores(only?: ReadonlySet<string>): Promise<void> {
+  if (only) {
+    // Public OAuth/discovery requests need no registrar or portfolio data.
+    for (const ns of registry) {
+      if (only.has(ns.name)) await ns.load();
+      else ns.reset();
+    }
+    return;
+  }
   if (store.loadAll) {
     // One round trip for everything (the web host does this per request).
     const all = await store.loadAll();

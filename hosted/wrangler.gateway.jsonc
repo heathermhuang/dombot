@@ -21,5 +21,9 @@
   ],
   "vars": { "WORKSPACES": "[]" },
   "triggers": { "crons": ["17 * * * *"] },
-  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+  },
 }

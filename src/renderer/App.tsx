@@ -184,6 +184,11 @@ export default function App() {
               Dom<span className="text-brand">Bot</span>
             </span>
           </button>
+          {webAuthMode() === 'gateway' && (
+            <span className="ml-2 truncate text-xs font-medium text-muted-foreground">
+              domains.domains
+            </span>
+          )}
         </div>
         {/* Desktop: the tab strip. On phones it collapses into the hamburger
             menu on the right (MobileNav). */}

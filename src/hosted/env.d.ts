@@ -3,4 +3,5 @@ interface HostedEnv {
   PUBLIC_PORTFOLIO_PATH?: string;
   AUTH_PEPPER: string;
   GATEWAY_KEYS: string;
+  EXTRA_GATEWAY_KEYS?: string;
 }

@@ -95,19 +95,21 @@ beforeAll(async () => {
             WORKSPACE_0: 'tenant0',
             WORKSPACE_1: 'tenant1',
             WORKSPACE_2: 'tenant2',
+            WORKSPACE_9: 'tenant2',
           },
           bindings: {
             AUTH_PEPPER: 'test-only-authentication-pepper-'.repeat(3),
             WORKSPACES: JSON.stringify(
               ids.map((id, i) => ({
                 id,
-                binding: `WORKSPACE_${i}`,
+                binding: i === 2 ? 'WORKSPACE_9' : `WORKSPACE_${i}`,
                 label: `Workspace ${i}`,
               })),
             ),
             GATEWAY_KEYS: JSON.stringify(
-              Object.fromEntries(ids.map((id, i) => [id, keys[i]])),
+              Object.fromEntries(ids.slice(0, 2).map((id, i) => [id, keys[i]])),
             ),
+            EXTRA_GATEWAY_KEYS: JSON.stringify({ [ids[2]]: keys[2] }),
           },
         },
         ...ids.map((id, i) => ({
@@ -117,6 +119,12 @@ beforeAll(async () => {
           compatibilityDate: '2026-09-09',
           compatibilityFlags: ['nodejs_compat'],
           d1Databases: { DB: `tenant-db-${i}` },
+          durableObjects: {
+            WORKSPACE_COORDINATOR: {
+              className: 'WorkspaceCoordinator',
+              useSQLite: true,
+            },
+          },
           serviceBindings: {
             ASSETS: () =>
               new Response('<html><body>Private workspace</body></html>', {
@@ -142,6 +150,7 @@ beforeAll(async () => {
       .replace(/^--.*$/gm, '')
       .replace(/\n/g, ' ');
   await control.exec(sql('hosted/migrations/0001_control.sql'));
+  await control.exec(sql('hosted/migrations/0002_password_recovery.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
     await db.exec(sql('migrations/0001_docs.sql'));
@@ -348,6 +357,13 @@ describe('real gateway and isolated Worker instances', () => {
   });
   it('runs workspace-specific MCP approval and refuses token reuse in another workspace', async () => {
     tokens = [];
+    const clientIds: string[] = [];
+    const approvalRevision = async (i: number) => {
+      const body = (await (await api(i, 'getRevisions')).json()) as {
+        result: { approvals: number };
+      };
+      return body.result.approvals;
+    };
     for (let i = 0; i < 2; i++) {
       expect(
         (await api(i, 'updateSettings', [{ mcpEnabled: true }])).status,
@@ -366,6 +382,7 @@ describe('real gateway and isolated Worker instances', () => {
         token_endpoint_auth_method: 'none',
       });
       const client = (await registration.json()) as { client_id: string };
+      clientIds.push(client.client_id);
       const verifier = 'a'.repeat(64);
       const digest = await crypto.subtle.digest(
         'SHA-256',
@@ -381,7 +398,9 @@ describe('real gateway and isolated Worker instances', () => {
         scope: 'portfolio:read',
         resource: `http://localhost${root}/mcp`,
       });
+      const beforeAuthorize = await approvalRevision(i);
       expect((await request(root + '/authorize?' + params)).status).toBe(200);
+      expect(await approvalRevision(i)).toBeGreaterThan(beforeAuthorize);
       const pending = (await (await api(i, 'listPendingApprovals')).json()) as {
         result: { id: string; scopes: string[] }[];
       };
@@ -390,6 +409,7 @@ describe('real gateway and isolated Worker instances', () => {
       const status = (await (
         await request(root + '/oauth/status?id=' + pending.result[0].id)
       ).json()) as { redirect: string };
+      const beforeExchange = await approvalRevision(i);
       const token = await request(root + '/token', 'POST', {
         grant_type: 'authorization_code',
         client_id: client.client_id,
@@ -398,6 +418,7 @@ describe('real gateway and isolated Worker instances', () => {
         redirect_uri: 'http://127.0.0.1:3456/callback',
       });
       expect(token.status, await token.clone().text()).toBe(200);
+      expect(await approvalRevision(i)).toBeGreaterThan(beforeExchange);
       tokens.push(
         ((await token.json()) as { access_token: string }).access_token,
       );
@@ -434,7 +455,74 @@ describe('real gateway and isolated Worker instances', () => {
       })
     ).json();
     expect(JSON.stringify(denied)).toMatch(/not found|Unknown tool/i);
+    const beforeRevoke = await approvalRevision(1);
+    expect(
+      (
+        await request(`/w/${ids[1]}/revoke`, 'POST', {
+          client_id: clientIds[1],
+          token: tokens[1],
+        })
+      ).status,
+    ).toBe(200);
+    expect(await approvalRevision(1)).toBeGreaterThan(beforeRevoke);
+    expect((await mcp(1, tokens[1], 'tools/list')).status).toBe(401);
   });
+  it('consumes operator recovery once, rejects expired/cross-origin proof, and revokes existing sessions', async () => {
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const code = 'c'.repeat(64);
+    const form = (password: string, origin = 'http://localhost') =>
+      gateway.fetch(
+        new Request('http://localhost/recover', {
+          method: 'POST',
+          headers: {
+            Origin: origin,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ code, password, confirm: password }),
+          redirect: 'manual',
+        }),
+      );
+    const seed = async (expires: number) =>
+      control
+        .prepare(
+          "INSERT INTO password_resets(token_hash,user_id,expires_at,operator_case) SELECT ?1,id,?2,'controlled-test' FROM users WHERE email=?3 ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,expires_at=excluded.expires_at,consumed_at=NULL,consumption_id=NULL",
+        )
+        .bind(await tokenHash(code), expires, emails[2])
+        .run();
+    await seed(Date.now() - 1);
+    expect((await form('replacement-recovery-password')).status).toBe(400);
+    await seed(Date.now() + 900_000);
+    expect(
+      (await form('replacement-recovery-password', 'https://evil.example'))
+        .status,
+    ).toBe(403);
+    expect((await api(2, 'getFolders')).status).toBe(200);
+    const responses = await Promise.all([
+      form('replacement-recovery-password'),
+      form('replacement-recovery-password'),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 400]);
+    expect((await form('replacement-recovery-password')).status).toBe(400);
+    expect((await api(2, 'getFolders')).status).toBe(401);
+    expect((await api(1, 'getFolders')).status).toBe(200);
+    const login = async (pass: string) =>
+      gateway.fetch(
+        new Request('http://localhost/session/login', {
+          method: 'POST',
+          headers: {
+            Origin: 'http://localhost',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ email: emails[2], password: pass }),
+          redirect: 'manual',
+        }),
+      );
+    expect((await login(password)).status).toBe(401);
+    expect((await login('replacement-recovery-password')).status).toBe(303);
+    const recoveryPage = await request('/recover?code=' + code);
+    expect(recoveryPage.headers.get('Referrer-Policy')).toBe('same-origin');
+  });
+
   it('requires the current password and revokes all browser sessions on change', async () => {
     const form = (
       path: string,

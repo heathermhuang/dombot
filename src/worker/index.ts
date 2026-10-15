@@ -104,10 +104,14 @@ async function bootOnce(env: Env): Promise<Boot> {
 }
 
 /** Fresh view of the store for this request. */
-async function hydrate(): Promise<void> {
-  await hydrateStores();
+async function hydrate(oauthOnly = false): Promise<void> {
+  // OAuth emits approval revisions in meta so existing browser tabs can
+  // discover a new pairing request without reloading.
+  await hydrateStores(
+    oauthOnly ? new Set(['settings', 'mcp', 'meta']) : undefined,
+  );
   // Idempotent and a no-op once done; its writes flush with the request's.
-  await migrateLegacyProxies();
+  if (!oauthOnly) await migrateLegacyProxies();
   resetBulkMemory();
 }
 
@@ -164,7 +168,14 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
   next,
 ) => {
   const work = withRequestLock(async () => {
-    await hydrate();
+    const oauthOnly =
+      c.req.path !== '/mcp' &&
+      MCP_PUBLIC_PATHS.some((path) =>
+        path.endsWith('*')
+          ? c.req.path.startsWith(path.slice(0, -1))
+          : path === c.req.path,
+      );
+    await hydrate(oauthOnly);
     await next();
     try {
       await flushWrites();

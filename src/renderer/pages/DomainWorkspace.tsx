@@ -137,6 +137,16 @@ export default function DomainWorkspace({
         : 'settings';
   const list = useDomainList();
   const { mode, scope, query, collection, sort, page, picked } = list;
+  const hasActiveFilters =
+    [
+      list.query,
+      list.collection,
+      list.account,
+      list.tld,
+      list.expiry,
+      list.folder,
+      list.nameserver,
+    ].some(Boolean) || list.ownership !== 'all';
   const ownershipFilter = list.ownership;
   const setPage = list.setPage,
     setPicked = list.setPicked;
@@ -1180,7 +1190,9 @@ export default function DomainWorkspace({
                     ×
                   </button>
                 ))}
-              <button onClick={resetFilters}>Clear filters</button>
+              {hasActiveFilters && (
+                <button onClick={resetFilters}>Clear filters</button>
+              )}
             </div>
             {scope === 'private' && (
               <label className="pf-add-intent">

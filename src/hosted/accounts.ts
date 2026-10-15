@@ -6,6 +6,9 @@ export interface SessionUser {
   workspace_id: string;
   label: string;
 }
+export interface VerifiedUser extends SessionUser {
+  credentialHash: string;
+}
 export class AccountError extends Error {}
 export class Accounts {
   constructor(
@@ -17,7 +20,7 @@ export class Accounts {
     email: string,
     password: string,
     code: string,
-  ): Promise<SessionUser> {
+  ): Promise<VerifiedUser> {
     const hash = await tokenHash(code);
     const invite = await this.db
       .prepare(
@@ -53,9 +56,11 @@ export class Accounts {
         'Could not claim this invitation. It may already be in use.',
       );
     }
-    return (await this.user(id))!;
+    const user = await this.user(id);
+    if (!user) throw new AccountError('Workspace is unavailable');
+    return { ...user, credentialHash: encoded };
   }
-  async login(email: string, password: string): Promise<SessionUser | null> {
+  async login(email: string, password: string): Promise<VerifiedUser | null> {
     const row = await this.db
       .prepare(
         'SELECT u.id,u.password_hash FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.email=?1 AND w.enabled=1',
@@ -66,7 +71,8 @@ export class Accounts {
     const record =
       row?.password_hash ?? `scrypt-v1:${'0'.repeat(64)}:${'0'.repeat(128)}`;
     const valid = await verifyPassword(password, record, this.pepper);
-    return valid && row ? this.user(row.id) : null;
+    const user = valid && row ? await this.user(row.id) : null;
+    return user && row ? { ...user, credentialHash: row.password_hash } : null;
   }
   async user(id: string): Promise<SessionUser | null> {
     return this.db
@@ -76,15 +82,20 @@ export class Accounts {
       .bind(id)
       .first<SessionUser>();
   }
-  async newSession(user: SessionUser): Promise<string> {
+  async newSession(user: VerifiedUser): Promise<string | null> {
     const token = opaqueToken();
-    await this.db
+    const result = await this.db
       .prepare(
-        'INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?1,?2,?3)',
+        'INSERT INTO sessions(token_hash,user_id,expires_at) SELECT ?1,u.id,?3 FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.id=?2 AND u.password_hash=?4 AND w.enabled=1 RETURNING user_id',
       )
-      .bind(await tokenHash(token), user.id, Date.now() + 7 * 86400_000)
-      .run();
-    return token;
+      .bind(
+        await tokenHash(token),
+        user.id,
+        Date.now() + 7 * 86400_000,
+        user.credentialHash,
+      )
+      .all();
+    return result.results.length === 1 ? token : null;
   }
   async session(token: string | undefined): Promise<SessionUser | null> {
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
@@ -117,13 +128,61 @@ export class Accounts {
     oldPassword: string,
     nextPassword: string,
   ): Promise<boolean> {
-    if (!(await this.login(user.email, oldPassword))) return false;
-    await this.db.batch([
+    const verified = await this.login(user.email, oldPassword);
+    if (!verified) return false;
+    const encoded = await passwordHash(nextPassword, this.pepper);
+    const results = await this.db.batch([
       this.db
-        .prepare('UPDATE users SET password_hash=?1 WHERE id=?2')
-        .bind(await passwordHash(nextPassword, this.pepper), user.id),
-      this.db.prepare('DELETE FROM sessions WHERE user_id=?1').bind(user.id),
+        .prepare(
+          'UPDATE users SET password_hash=?1 WHERE id=?2 AND password_hash=?3 AND workspace_id IN (SELECT id FROM workspaces WHERE enabled=1) RETURNING id',
+        )
+        .bind(encoded, user.id, verified.credentialHash),
+      this.db
+        .prepare(
+          'DELETE FROM sessions WHERE user_id=?1 AND EXISTS(SELECT 1 FROM users WHERE id=?1 AND password_hash=?2)',
+        )
+        .bind(user.id, encoded),
+      this.db
+        .prepare(
+          'DELETE FROM password_resets WHERE user_id=?1 AND EXISTS(SELECT 1 FROM users WHERE id=?1 AND password_hash=?2)',
+        )
+        .bind(user.id, encoded),
     ]);
-    return true;
+    return results[0].results.length === 1;
+  }
+
+  /** Operator-issued proof is consumed atomically with password/session changes. */
+  async recoverPassword(code: string, nextPassword: string): Promise<boolean> {
+    if (!/^[a-f0-9]{64}$/.test(code)) return false;
+    const hash = await tokenHash(code);
+    const now = Date.now();
+    const eligible = await this.db
+      .prepare(
+        'SELECT r.user_id FROM password_resets r JOIN users u ON u.id=r.user_id JOIN workspaces w ON w.id=u.workspace_id WHERE r.token_hash=?1 AND r.expires_at>?2 AND r.consumed_at IS NULL AND w.enabled=1',
+      )
+      .bind(hash, now)
+      .first();
+    if (!eligible) return false;
+    const encoded = await passwordHash(nextPassword, this.pepper);
+    const consumption = opaqueToken();
+    const committedAt = Date.now();
+    const result = await this.db.batch([
+      this.db
+        .prepare(
+          'UPDATE password_resets SET consumed_at=?1,consumption_id=?2 WHERE token_hash=?3 AND consumed_at IS NULL AND expires_at>?1 AND user_id IN (SELECT u.id FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE w.enabled=1) RETURNING user_id',
+        )
+        .bind(committedAt, consumption, hash),
+      this.db
+        .prepare(
+          'UPDATE users SET password_hash=?1 WHERE id IN (SELECT user_id FROM password_resets WHERE consumption_id=?2)',
+        )
+        .bind(encoded, consumption),
+      this.db
+        .prepare(
+          'DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM password_resets WHERE consumption_id=?1)',
+        )
+        .bind(consumption),
+    ]);
+    return result[0].results.length === 1;
   }
 }

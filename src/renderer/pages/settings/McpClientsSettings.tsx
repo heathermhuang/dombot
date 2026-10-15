@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { SettingsCard } from './SettingsCard';
-import { isDemo, isLocalWeb, isWeb, webAuthMode } from '@/lib/platform';
+import { hasExternalMcpGate, isDemo, isWeb } from '@/lib/platform';
 import { useAppStore } from '../../store/app';
 
 export default function McpClientsSettings() {
@@ -57,8 +57,8 @@ export default function McpClientsSettings() {
   // has no honest state to show (it would read "Disabled", then flip).
   const loading = settings === null || info === null;
   const web = isWeb();
-  // A local dev server with no login has no gate for MCP clients to hit.
-  const gated = web && webAuthMode() !== 'password' && !isLocalWeb();
+  // The hosted gateway exposes MCP and OAuth paths without an upstream gate.
+  const gated = hasExternalMcpGate();
 
   return (
     <div className="flex flex-col gap-6">

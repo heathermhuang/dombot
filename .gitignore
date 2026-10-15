@@ -123,3 +123,6 @@ wrangler.local.jsonc
 
 # Local browser QA state
 .gstack/
+
+# Immutable DomBot engine dependency consumed by the SaaS adapter
+!vendor/domains-domains-dombot-engine-*.tgz

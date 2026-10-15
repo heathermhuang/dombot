@@ -120,6 +120,7 @@ export default function Renewals() {
     portfolioLoadedAt,
     portfolioRegistrarLabels,
     pricing,
+    renewalPricing,
     setManualPrice,
   } = useAppStore();
 
@@ -267,6 +268,15 @@ export default function Renewals() {
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
       <PageHeader loading={pricingLoading} summary={summary} />
       {accountFilter}
+      <p className="text-sm text-muted-foreground">
+        Estimates use saved prices, which may include older quotes and TLD rates
+        that miss premium renewals.
+        {summary.base + summary.tld > 0 &&
+          ` ${summary.base + summary.tld} use a base or TLD rate.`}{' '}
+        Confirm current prices with your registrar before spending.
+        {!!renewalPricing?.failed &&
+          ` Across this workspace, ${renewalPricing.failed} price updates failed; last saved estimates remain visible.`}
+      </p>
 
       {/* Totals */}
       <div className="grid gap-4 sm:grid-cols-3">

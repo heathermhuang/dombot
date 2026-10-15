@@ -89,9 +89,11 @@ export function getSettings(): AppSettings {
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const prev = getSettings();
   const next = normalize({ ...prev, ...patch });
-  for (const [key, value] of Object.entries(next)) {
-    void store.set(key, value);
-  }
+  // Persist only the requested fields. An unrelated setting must never
+  // restore an older security toggle read by another host/request.
+  for (const key of Object.keys(patch) as (keyof AppSettings)[])
+    if (Object.prototype.hasOwnProperty.call(next, key))
+      void store.set(key, next[key]);
   notifySettingsChanged(next, prev);
   return next;
 }

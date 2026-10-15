@@ -66,10 +66,13 @@ describe('settings', () => {
     expect(await store.list('settings')).toEqual({
       autoSyncIntervalMinutes: 30,
       recentNameservers: [['a', 'b'], ['c']],
+      updateChecks: true,
+    });
+    await hydrateStores();
+    expect(getSettings()).toMatchObject({
       mcpEnabled: false,
       preferredCurrency: 'USD',
       numberFormat: 'us',
-      updateChecks: true,
     });
   });
 });

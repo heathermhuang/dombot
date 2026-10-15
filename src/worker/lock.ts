@@ -10,9 +10,10 @@
 // requests that touch state costs nothing noticeable and makes the
 // hydrate → handle → flush cycle atomic within the isolate.
 //
-// Asset requests never take the lock (they touch no state). Other isolates
-// still run in parallel; per-request hydration keeps them consistent with
-// what's durable, which is the same guarantee as before.
+// Asset requests never take the lock (they touch no state). This lock alone
+// cannot serialize other isolates. The hosted SaaS routes all stateful work
+// and cron runs through one WorkspaceCoordinator per workspace; rehydration
+// alone does not prevent cross-isolate read/modify/write races.
 
 let tail: Promise<void> = Promise.resolve();
 let depth = 0;
