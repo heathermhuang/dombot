@@ -38,6 +38,8 @@ jobs:
           npm rebuild esbuild
       - name: Typecheck
         run: npm run typecheck
+      - name: Verify pinned DomBot engine
+        run: npm run engine:verify
       - name: Lint
         run: npm run lint
       - name: Unit tests
@@ -62,6 +64,8 @@ jobs:
           npm rebuild esbuild
       - name: Build the web renderer
         run: npm run web:build
+      - name: Verify pinned DomBot engine
+        run: npm run engine:verify
       - name: Bundle hosted gateway
         run: npx wrangler deploy --config hosted/wrangler.gateway.jsonc --dry-run --outdir dist/gateway
       - name: Bundle hosted tenant

@@ -13,6 +13,14 @@ Each workspace is a separate Worker deployment with its own D1 database,
 Workers have `workers_dev: false`, `preview_urls: false`, and no public routes.
 The gateway reaches them through explicit service bindings.
 
+Tenant front ends route both requests and cron through one `WorkspaceCoordinator`
+Durable Object, named by the immutable workspace ID. DomBot's request lock and
+module-level stores live inside that runtime. A per-isolate lock plus D1 hydration
+alone cannot prevent two runtimes from overwriting the same document snapshot.
+The coordinator keeps persistent documents in the existing encrypted D1.
+Every tenant config needs the `WORKSPACE_COORDINATOR` binding and
+`workspace-coordinator-v1` SQLite class migration; missing configuration fails closed.
+
 The gateway stores customer identities, password hashes, invitations and hashed
 sessions in a separate control database. It never accepts a caller-selected
 binding name, database ID or encryption key. An authenticated session resolves
@@ -33,8 +41,8 @@ they are not a claim of an independent security audit.
 
 ## Accounts and provisioning
 
-The staging pool contains three independently provisioned slots: founder and two
-pilot workspaces. The operator creates an expiring invitation tied to an email
+The initial pool contains three independently provisioned slots: founder and two
+pilot workspaces. The bounded registry supports up to 32 operator-provisioned slots. The operator creates an expiring invitation tied to an email
 and reserved workspace. Signup consumes the invitation and creates the account
 atomically; unique database constraints prevent duplicate claims. There is no
 open signup without an invitation, automated email delivery or social login.
@@ -128,6 +136,15 @@ CSRF, owner reads, foreign API denial, encryption separation, direct-ingress and
 forged-proof rejection, workspace-specific OAuth approval, cross-workspace bearer
 rejection, scope-filtered tools and session revocation. Publishing and backup
 negative tests remain in the preceding milestone.
+
+`src/hosted/workspace-concurrency.test.ts` additionally reproduces lost updates
+through two uncoordinated runtimes, then verifies two independent front ends
+preserve concurrent settings/folder changes through one coordinator. Public OAuth
+hydrates only settings, MCP state and approval revision metadata; unauthenticated
+MCP requests are rejected before full portfolio/credential hydration.
+
+The [operator runbook](hosted-operations.md) covers capacity, invitation/recovery
+issuance, reconciliation, backups and staged release verification.
 
 Repeat the same essential tests on staging with two controlled pilot accounts,
 then exercise browser login and the real founder portfolio. Keep public signup

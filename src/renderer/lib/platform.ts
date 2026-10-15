@@ -48,6 +48,16 @@ export function isLocalWeb(): boolean {
   );
 }
 
+/** Only an external identity gate needs operator-configured MCP exclusions.
+ * The managed gateway already routes bearer/OAuth traffic independently. */
+export function hasExternalMcpGate(): boolean {
+  return (
+    isWeb() &&
+    !isLocalWeb() &&
+    (authMode === 'cloudflare-access' || authMode === 'external')
+  );
+}
+
 /** Ends the web session (password mode) and returns to the login screen. */
 export async function signOut(): Promise<void> {
   await fetch(hostPath('/auth/logout'), {

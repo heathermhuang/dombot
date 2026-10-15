@@ -26,6 +26,28 @@ export function accountForm(
 ): string {
   return page(
     kind === 'join' ? 'Create your workspace account' : 'Welcome back',
-    `<form action="/session/${kind}" method="post"><span class="eyebrow">Private workspace</span><h1>${kind === 'join' ? 'Make it yours.' : 'Welcome back.'}</h1><p>${kind === 'join' ? 'Use the email address on your invitation. Your reserved workspace starts private.' : 'Sign in to your domain portfolio.'}</p>${error ? `<p role="alert" class="error">${e(error)}</p>` : ''}<input type="hidden" name="next" value="${e(next)}">${kind === 'join' ? `<input type="hidden" name="code" value="${e(code)}">` : ''}<label>Email<input type="email" name="email" autocomplete="email" required maxlength="254"></label><label>Password<input type="password" name="password" autocomplete="${kind === 'join' ? 'new-password' : 'current-password'}" required minlength="12" maxlength="256"></label><button type="submit">${kind === 'join' ? 'Create account & open workspace' : 'Sign in'}</button><p class="note">Invite-only early access. Account recovery is handled by the operator during this pilot.</p></form>`,
+    `<form action="/session/${kind}" method="post"><span class="eyebrow">Private workspace</span><h1>${kind === 'join' ? 'Make it yours.' : 'Welcome back.'}</h1><p>${kind === 'join' ? 'Use the email address on your invitation. Your reserved workspace starts private.' : 'Sign in to your domain portfolio.'}</p>${error ? `<p role="alert" class="error">${e(error)}</p>` : ''}<input type="hidden" name="next" value="${e(next)}">${kind === 'join' ? `<input type="hidden" name="code" value="${e(code)}">` : ''}<label>Email<input type="email" name="email" autocomplete="email" required maxlength="254"></label><label>Password<input type="password" name="password" autocomplete="${kind === 'join' ? 'new-password' : 'current-password'}" required minlength="12" maxlength="256"></label><button type="submit">${kind === 'join' ? 'Create account & open workspace' : 'Sign in'}</button><p class="note">Invite-only early access. Need access help? <a href="mailto:domains@domains.domains?subject=Workspace%20account%20recovery">Contact support for account recovery</a>. Recovery is operator-assisted during this pilot. Never email your password, API keys, or backup.</p></form>`,
+  );
+}
+
+export function accountSecurity(user: {
+  email: string;
+  label: string;
+}): string {
+  return page(
+    'Account security',
+    `<form action="/account/password" method="post"><h1>Account security</h1><p>Signed in as <strong>${e(user.email)}</strong><br>Workspace: <strong>${e(user.label)}</strong></p><p>Changing your password signs out every browser session. Manage paired agents separately in your workspace’s MCP settings.</p><label>Current password<input name="oldPassword" type="password" autocomplete="current-password" required maxlength="256"></label><label>New password<input name="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><button type="submit">Change password</button><p><a href="/app">Back to workspace</a></p><p class="note"><a href="mailto:domains@domains.domains?subject=Workspace%20account%20recovery">Contact support for account recovery</a>. Never email your password, API keys, or backup.</p></form>`,
+  );
+}
+
+export function recoveryForm(code: string, error = ''): string {
+  if (!/^[a-f0-9]{64}$/.test(code))
+    return page(
+      'Account recovery',
+      `<h1>Recover your account.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>Contact support from your established contact channel. After verifying your identity, the operator will issue a recovery link that expires in 15 minutes. A link can be used once.</p><p><a class="button" href="mailto:domains@domains.domains?subject=Workspace%20account%20recovery">Contact support</a></p><p>Never send your password, API keys, or backup.</p><p><a href="/login">Back to sign in</a></p>`,
+    );
+  return page(
+    'Set a new password',
+    `<form action="/recover" method="post"><h1>Set a new password.</h1><p>This link can be used once. Updating your password signs out every browser session. Paired agents are managed separately in MCP settings.</p><input type="hidden" name="code" value="${e(code)}"><label>New password<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><label>Confirm new password<input name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><button type="submit">Update password</button></form>`,
   );
 }

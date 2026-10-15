@@ -59,8 +59,22 @@ for (const [i, w] of saved.workspaces.entries()) {
     compatibility_flags: ['nodejs_compat'],
     workers_dev: false,
     preview_urls: false,
+    durable_objects: {
+      bindings: [
+        { name: 'WORKSPACE_COORDINATOR', class_name: 'WorkspaceCoordinator' },
+      ],
+    },
+    migrations: [
+      {
+        tag: 'workspace-coordinator-v1',
+        new_sqlite_classes: ['WorkspaceCoordinator'],
+      },
+    ],
     assets: {
-      directory: path.join(root, 'dist/web'),
+      directory: path.join(
+        root,
+        'node_modules/@domains-domains/dombot-engine/web',
+      ),
       binding: 'ASSETS',
       not_found_handling: 'single-page-application',
       run_worker_first: true,

@@ -2,19 +2,16 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { Accounts } from './accounts';
-import { accountForm, home, page } from './views';
+import {
+  accountForm,
+  accountSecurity,
+  home,
+  page,
+  recoveryForm,
+} from './views';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { canonicalRedirect, portfolioAlias } from './launch';
-
-const workspaceSchema = z
-  .array(
-    z.object({
-      id: z.string().uuid(),
-      binding: z.enum(['WORKSPACE_0', 'WORKSPACE_1', 'WORKSPACE_2']),
-      label: z.string(),
-    }),
-  )
-  .max(3);
+import { gatewayKey, workspaceSchema, workspaceService } from './workspaces';
 type GatewayVariables = { user: Awaited<ReturnType<Accounts['session']>> };
 type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
@@ -114,6 +111,50 @@ app.get('/login', (c) =>
 app.get('/join', (c) =>
   c.html(accountForm('join', '', c.req.query('code') ?? '')),
 );
+app.get('/recover', (c) => {
+  return c.html(recoveryForm(c.req.query('code') ?? ''));
+});
+app.post('/recover', bodyLimit({ maxSize: 16_384 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+  const accounts = account(c.env);
+  if (
+    !(await accounts.rateLimit(
+      `recovery:${c.req.header('cf-connecting-ip') ?? 'local'}`,
+      12,
+    ))
+  )
+    return c.text('Too many attempts. Try again later.', 429);
+  const form = z
+    .object({
+      code: z.string().regex(/^[a-f0-9]{64}$/),
+      password: z.string().min(12).max(256),
+      confirm: z.string(),
+    })
+    .safeParse(await c.req.parseBody());
+  if (!form.success || form.data.password !== form.data.confirm)
+    return c.html(
+      recoveryForm(
+        '',
+        'Use matching passwords of at least 12 characters. Open your recovery link again to retry.',
+      ),
+      400,
+    );
+  if (!(await accounts.recoverPassword(form.data.code, form.data.password)))
+    return c.html(
+      recoveryForm(
+        '',
+        'This recovery link is invalid, expired, or already used. Contact support for a new link.',
+      ),
+      400,
+    );
+  c.header('Set-Cookie', sessionCookie(c.req.url, ''));
+  return c.html(
+    page(
+      'Password updated',
+      '<h1>Password updated.</h1><p>Every browser session has been signed out. Sign in with your new password. Paired agents are managed separately in MCP settings.</p><p><a class="button" href="/login">Sign in</a></p>',
+    ),
+  );
+});
 app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
   const accounts = account(c.env);
@@ -176,10 +217,16 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
       accountForm('login', 'Email or password was not recognized.'),
       401,
     );
-  c.header(
-    'Set-Cookie',
-    sessionCookie(c.req.url, await accounts.newSession(user)),
-  );
+  const token = await accounts.newSession(user);
+  if (!token)
+    return c.html(
+      accountForm(
+        'login',
+        'Your credentials changed during sign-in. Please sign in again.',
+      ),
+      401,
+    );
+  c.header('Set-Cookie', sessionCookie(c.req.url, token));
   return c.redirect(safeNext(parsed.data.next), 303);
 });
 app.get('/app', async (c) => {
@@ -202,12 +249,7 @@ app.get('/session', async (c) => {
 app.get('/account', async (c) => {
   const user = await account(c.env).session(readSession(c.req.raw));
   if (!user) return c.redirect('/login', 303);
-  return c.html(
-    page(
-      'Account security',
-      `<form action="/account/password" method="post"><h1>Account security</h1><p>Changing your password signs out every browser session. Manage paired agents separately in your workspace’s MCP settings.</p><label>Current password<input name="oldPassword" type="password" autocomplete="current-password" required maxlength="256"></label><label>New password<input name="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><button type="submit">Change password</button><p><a href="/app">Back to workspace</a></p></form>`,
-    ),
-  );
+  return c.html(accountSecurity(user));
 });
 app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
@@ -265,6 +307,18 @@ app.all('/w/:workspace/*', async (c) => {
   const base = `/w/${id}`;
   const path = url.pathname.slice(base.length) || '/';
   const publicRequest = mcpPath(path) || /^\/p\/[a-z0-9-]+$/.test(path);
+  // Polls have their own allowance, separate from registration/issuance.
+  // Bound public metadata/status traffic before it can enter the tenant.
+  if (
+    (path === '/oauth/status' ||
+      path === '/revoke' ||
+      path.startsWith('/.well-known/')) &&
+    !(await account(c.env).rateLimit(
+      `public-oauth:${id}:${path}:${c.req.header('cf-connecting-ip') ?? 'local'}`,
+      path === '/oauth/status' ? 900 : 60,
+    ))
+  )
+    return c.json({ error: 'Too many authorization requests' }, 429);
   if (
     ['/register', '/authorize', '/token'].includes(path) &&
     !(await account(c.env).rateLimit(
@@ -313,14 +367,13 @@ app.all('/w/:workspace/*', async (c) => {
     body: ['GET', 'HEAD'].includes(c.req.method) ? undefined : c.req.raw.body,
     redirect: 'manual',
   });
-  const keys = z
-    .record(z.string().min(32))
-    .parse(JSON.parse(c.env.GATEWAY_KEYS));
   request.headers.set(
     PROOF_HEADER,
-    await signGatewayRequest(keys[id], id, owner, request),
+    await signGatewayRequest(gatewayKey(c.env, id), id, owner, request),
   );
-  const response = await c.env[configured.binding].fetch(request);
+  const response = await workspaceService(c.env, configured.binding).fetch(
+    request,
+  );
   const resultHeaders = new Headers(response.headers);
   resultHeaders.delete('set-cookie');
   const location = resultHeaders.get('location');
@@ -355,6 +408,9 @@ export default {
       ),
       env.CONTROL_DB.prepare(
         'DELETE FROM rate_limits WHERE expires_at<?1',
+      ).bind(Date.now()),
+      env.CONTROL_DB.prepare(
+        'DELETE FROM password_resets WHERE expires_at<?1',
       ).bind(Date.now()),
     ]);
   },
