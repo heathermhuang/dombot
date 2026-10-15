@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, decodeJwt } from 'jose';
 
 export const PROOF_HEADER = 'x-dombot-gateway-proof';
 const encoder = new TextEncoder();
@@ -32,6 +32,7 @@ export async function verifyGatewayRequest(
   secret: string,
   workspace: string,
   request: Request,
+  rejected?: (reason: string) => void,
 ): Promise<{ owner: string | null } | null> {
   if (!secret || secret.length < 32 || !workspace) return null;
   const token = request.headers.get(PROOF_HEADER);
@@ -47,7 +48,27 @@ export async function verifyGatewayRequest(
     if (payload.owner !== null && typeof payload.owner !== 'string')
       return null;
     return { owner: payload.owner as string | null };
-  } catch {
+  } catch (error) {
+    let reason = 'invalid';
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'ERR_JWT_EXPIRED') reason = 'expired';
+      if (error.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED')
+        reason = 'signature';
+      if (error.code === 'ERR_JWT_CLAIM_VALIDATION_FAILED') {
+        reason = 'claims';
+        try {
+          const issuedAt = decodeJwt(token).iat;
+          if (
+            typeof issuedAt === 'number' &&
+            issuedAt > Math.floor(Date.now() / 1000)
+          )
+            reason = 'issued_in_future';
+        } catch {
+          /* No untrusted claims or tokens enter diagnostics. */
+        }
+      }
+    }
+    rejected?.(reason);
     return null;
   }
 }

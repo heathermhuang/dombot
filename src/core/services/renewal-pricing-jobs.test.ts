@@ -138,6 +138,10 @@ describe('hosted renewal pricing', () => {
       )?.data.renewalQuote.renewal,
     ).toBe(60);
     expect(getCachedPortfolio()?.errors).toEqual([]);
+    await flushWrites();
+    expect(await raw.get('renewal-pricing-jobs', 'dynadot')).toMatchObject({
+      failures: { 'first.ai': { code: 'Error', at: expect.any(Number) } },
+    });
   });
 
   it('drops work for a disabled account without contacting the provider', async () => {
