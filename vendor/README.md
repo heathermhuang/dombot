@@ -1,3 +1,23 @@
+# Current hosted registrar dependency
+
+The hosted engine pins `@aoxborrow/registrar-client@0.9.2-hosted.1` from the local
+archive. This is a reviewed MIT-licensed fork of the registry's 0.9.2 release,
+not an upstream-published version. `registrar-client-0.9.2-hosted.1.json` records
+upstream integrity, patch and archive hashes. Source and unchanged public types
+are included; `HOSTED-PATCH.md` in the archive records the ESM/CJS build commands.
+
+The patch requests Dynadot's required two-year `.ai` price-only renewal quote,
+normalizes its fee to an annual estimate, and preserves transient/rate-limit
+errors so the hosted job respects cooldowns. Paid register/renew operations are
+unchanged. `src/core/services/dynadot-pricing.test.ts` exercises the installed
+provider's actual request shape and proves price_check=1 remains present.
+The engine source archive includes this dependency, provenance and patch so its
+standalone build lock remains usable.
+
+## Historical 0.5.0 artifact
+
+The following record describes a retained earlier release, not the current dependency.
+
 # Registrar dependency for the self-hosted release
 
 This deployment includes the same Name.com adapter as our desktop build,

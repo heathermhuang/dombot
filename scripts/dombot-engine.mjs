@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const root = process.cwd();
 const name = '@domains-domains/dombot-engine';
-const version = '1.5.0-hosted.2';
+const version = '1.5.0-hosted.3';
 const upstream = {
   repository: 'https://github.com/aoxborrow/dombot',
   revision: 'feef729a1758c1ff667ce3b78d03a13ec3d6573b',
@@ -27,6 +27,9 @@ const sourceFiles = [
   'index.html',
   'vite.web.config.mts',
   'scripts/dombot-engine.mjs',
+  'vendor/aoxborrow-registrar-client-0.9.2-hosted.1.tgz',
+  'vendor/registrar-client-renewal-quotes.patch',
+  'vendor/registrar-client-0.9.2-hosted.1.json',
 ];
 async function walk(directory) {
   const result = [];

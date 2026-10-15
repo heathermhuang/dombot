@@ -7,18 +7,25 @@ import { verifyGatewayRequest } from '../shared/gateway-proof';
  * the same runtime before its hydrate -> mutate -> flush request lock. */
 export class WorkspaceCoordinator extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
+    let rejected = 'invalid';
     if (
       !(await verifyGatewayRequest(
         this.env.DOMBOT_GATEWAY_SECRET ?? '',
         this.env.DOMBOT_WORKSPACE_ID ?? '',
         request,
+        (reason) => {
+          rejected = reason;
+        },
       ))
     ) {
       return Response.json(
         { error: 'Trusted gateway request required' },
         {
           status: 403,
-          headers: { 'Cache-Control': 'no-store' },
+          headers: {
+            'Cache-Control': 'no-store',
+            'X-DomBot-Proof-Failure': rejected,
+          },
         },
       );
     }

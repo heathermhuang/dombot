@@ -158,6 +158,7 @@ interface RenewalPricingJob {
   syncedAt: number;
   pending: string[];
   failed: number;
+  failures?: Record<string, { code: string; at: number }>;
   notBefore?: number;
   attempts?: number;
 }
@@ -268,10 +269,18 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
         return;
       }
       if (quote?.renewal != null) writeRenewalQuote(id, domain, quote);
+      const failures = { ...job.failures };
+      if (quote?.renewal == null)
+        failures[domain] = {
+          code: failure instanceof Error ? failure.name : 'quote_unavailable',
+          at: Date.now(),
+        };
+      else delete failures[domain];
       await renewalJobs.set(id, {
         ...job,
         pending: job.pending.slice(1),
         failed: job.failed + (quote?.renewal == null ? 1 : 0),
+        failures,
         notBefore: 0,
         attempts: 0,
       });
