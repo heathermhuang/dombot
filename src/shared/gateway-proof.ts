@@ -43,6 +43,10 @@ export async function verifyGatewayRequest(
       issuer: 'domains-gateway',
       audience: workspace,
       maxTokenAge: '35s',
+      // Gateway and coordinator run on separate Cloudflare hosts. A small
+      // clock offset must not reject a correctly signed request as future-issued.
+      // exp still bounds its lifetime to 30 + 5 seconds.
+      clockTolerance: 5,
     });
     if (payload.request !== (await fingerprint(request))) return null;
     if (payload.owner !== null && typeof payload.owner !== 'string')

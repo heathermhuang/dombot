@@ -269,8 +269,9 @@ export default function Renewals() {
       <PageHeader loading={pricingLoading} summary={summary} />
       {accountFilter}
       <p className="text-sm text-muted-foreground">
-        Estimates use saved prices, which may include older quotes and TLD rates
-        that miss premium renewals.
+        Annual estimates spread multi-year quotes across their required term.
+        Saved prices may include older quotes and TLD rates that miss premium
+        renewals.
         {summary.base + summary.tld > 0 &&
           ` ${summary.base + summary.tld} use a base or TLD rate.`}{' '}
         Confirm current prices with your registrar before spending.
