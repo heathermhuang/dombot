@@ -15,9 +15,18 @@ import {
   updateSettings,
 } from '../services/settings';
 import { createFolder, getFolders } from '../services/folders';
-import { setStoredCredentials } from '../services/credentials';
-import { getRegistrarClient } from '../services/registrars';
+import {
+  getStoredCredentials,
+  setStoredCredentials,
+} from '../services/credentials';
+import {
+  getRegistrarClient,
+  getRegistrarMetadata,
+} from '../services/registrars';
+import { listAccounts } from '../services/accounts';
+import { EncryptedDocStore, aesGcmCipher } from './encrypted';
 import { sealBundle } from '../../shared/bundle-seal';
+import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
 import { bumpRevision, getRevisions } from '../revision';
 import { onCoreEvent } from '../events';
 
@@ -39,21 +48,73 @@ async function seed() {
 }
 
 describe('buildBundle', () => {
-  it('captures every namespace except auth and meta', async () => {
+  it('captures every namespace except local ones (meta)', async () => {
     await seed();
     const b = buildBundle(APP);
     expect(b.format).toBe(BUNDLE_FORMAT);
     expect(b.app).toEqual(APP);
     expect(Object.keys(b.namespaces).sort()).toEqual(
-      expect.arrayContaining(['credentials', 'folders', 'settings']),
+      expect.arrayContaining(['registrar-credentials', 'folders', 'settings']),
     );
     expect(b.namespaces.meta).toBeUndefined();
     expect(b.namespaces.auth).toBeUndefined();
-    expect(b.namespaces.credentials.godaddy).toEqual({ apiToken: 'k' });
+    expect(b.version).toBe(8);
+    expect(b.namespaces['registrar-credentials'].godaddy).toEqual({
+      apiToken: 'k',
+    });
   });
 });
 
 describe('export → import', () => {
+  it('imports a desktop Name.com account into encrypted web storage without losing its identity or credentials', async () => {
+    const accountId = '11111111-2222-4333-8444-555555555555';
+    const account = { id: accountId, registrar: 'namecom', label: 'Personal' };
+    const credentials = { username: 'test-user', apiToken: 'test-token' };
+    const desktopBundle = {
+      format: BUNDLE_FORMAT,
+      version: 2,
+      exportedAt: '2026-09-09T00:00:00.000Z',
+      app: { version: '1.2.0-namecom.1', platform: 'darwin' },
+      namespaces: {
+        'registrar-accounts': { [accountId]: account },
+        credentials: { [accountId]: credentials },
+      },
+    };
+    const disk = new MemoryDocStore();
+    configureStore(
+      new EncryptedDocStore(
+        disk,
+        await aesGcmCipher(crypto.getRandomValues(new Uint8Array(32))),
+      ),
+    );
+    await hydrateStores();
+
+    await importBundle(JSON.stringify(desktopBundle));
+    await flushWrites();
+    await hydrateStores();
+
+    expect(listAccounts()).toContainEqual(account);
+    expect(getStoredCredentials(accountId)).toEqual(credentials);
+    expect(getRegistrarMetadata()).toContainEqual(
+      expect.objectContaining({
+        name: 'namecom',
+        accountId,
+        configured: true,
+      }),
+    );
+    expect(await disk.get('registrar-credentials', accountId)).toMatchObject({
+      __sealed: 1,
+    });
+    expect(
+      JSON.stringify(await disk.list('registrar-credentials')),
+    ).not.toContain('test-token');
+    expect(
+      buildBundle({ ...APP, platform: 'web' }).namespaces['registrar-accounts'][
+        accountId
+      ],
+    ).toEqual(account);
+  });
+
   it('round-trips in the clear and replaces the store', async () => {
     await seed();
     const text = exportBundle(APP);
@@ -123,7 +184,7 @@ describe('export → import', () => {
     ).toThrow(/Malformed/);
   });
 
-  it('empties namespaces the file leaves out (nothing survives but auth/meta)', async () => {
+  it('empties namespaces the file leaves out (nothing survives but meta)', async () => {
     await seed();
     const text = JSON.stringify({
       format: BUNDLE_FORMAT,
@@ -135,7 +196,7 @@ describe('export → import', () => {
     await importBundle(text);
     await flushWrites();
     expect(getFolders().folders).toEqual([]);
-    expect(await store.list('credentials')).toEqual({});
+    expect(await store.list('registrar-credentials')).toEqual({});
     expect(await store.list('folders')).toEqual({});
     expect(getSettings().mcpEnabled).toBe(true);
     // Revision counters (meta) are still there.
@@ -155,5 +216,126 @@ describe('export → import', () => {
     await flushWrites();
     expect(await store.list('future-thing')).toEqual({});
     expect(getSettings().mcpEnabled).toBe(true);
+  });
+
+  it('upgrades a v3 file: old names, account-scoped folders and prices', async () => {
+    const text = JSON.stringify({
+      format: BUNDLE_FORMAT,
+      version: 3,
+      exportedAt: 'x',
+      app: APP,
+      namespaces: {
+        credentials: { godaddy: { apiToken: 'k' } },
+        'cache-portfolio': { godaddy: { fetchedAt: 1, data: { domains: [] } } },
+        'tld-rates': { 'godaddy:com': 8.99 },
+        'pricing-overrides': {
+          'godaddy:Münich.de': 40,
+          'acct-2:xn--mnich-kva.de': 99,
+        },
+        folders: {
+          folders: [{ id: 'f1', name: 'Keep', description: '', color: 'red' }],
+          assignments: { 'godaddy:a.com': 'f1', 'godaddy:b.com': '__hidden__' },
+        },
+      },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await importBundle(text);
+    warn.mockRestore();
+    await flushWrites();
+    expect(await store.list('registrar-credentials')).toEqual({
+      godaddy: { apiToken: 'k' },
+    });
+    expect(Object.keys(await store.list('registrar-domains'))).toEqual([
+      'godaddy',
+    ]);
+    expect(await store.list('registrar-tld-rates')).toEqual({
+      'godaddy:com': 8.99,
+    });
+    // Keyed by name; the second account's entry for the same name is dropped.
+    expect(await store.list('domain-prices')).toEqual({
+      'xn--mnich-kva.de': { amount: '40.00', currency: 'USD' },
+    });
+    expect(getFolders()).toEqual({
+      folders: [{ id: 'f1', name: 'Keep', description: '', color: 'red' }],
+      assignments: { 'a.com': 'f1', 'b.com': HIDDEN_FOLDER_ID },
+    });
+    for (const old of ['credentials', 'cache-portfolio', 'pricing-overrides'])
+      expect(await store.list(old)).toEqual({});
+  });
+
+  it('imports a v4 file (no history yet) and refuses one newer than v8', async () => {
+    await seed();
+    const v4 = { ...buildBundle(APP), version: 4 };
+    await importBundle(JSON.stringify(v4));
+    expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
+    expect(buildBundle(APP).version).toBe(8);
+    expect(() => parseBundle(JSON.stringify({ ...v4, version: 9 }))).toThrow(
+      /newer DomBot/,
+    );
+  });
+
+  it('keeps valid BIN prices from a file and drops the rest', async () => {
+    const bundle = {
+      ...buildBundle(APP),
+      namespaces: {
+        ...buildBundle(APP).namespaces,
+        'domain-list-prices': {
+          'a.com': { amount: '2500', currency: 'usd', updatedAt: 1 },
+          'b.com': { amount: '-5', currency: 'USD', updatedAt: 1 },
+          'Not A Name': { amount: '10', currency: 'USD', updatedAt: 1 },
+          'c.com': {
+            amount: '100.00',
+            minOffer: '500.00',
+            currency: 'USD',
+            updatedAt: 1,
+          },
+        },
+      },
+    };
+    await importBundle(JSON.stringify(bundle));
+    await flushWrites();
+    expect(await store.list('domain-list-prices')).toEqual({
+      'a.com': { amount: '2500', currency: 'USD', updatedAt: 1 },
+    });
+  });
+
+  it("moves a v4 file's Archive folder assignments to Hidden", async () => {
+    const v4 = {
+      ...buildBundle(APP),
+      version: 4,
+      namespaces: {
+        ...buildBundle(APP).namespaces,
+        'domain-folders': { 'a.com': '__archive__', 'b.com': 'f1' },
+      },
+    };
+    await importBundle(JSON.stringify(v4));
+    await flushWrites();
+    expect(await store.list('domain-folders')).toEqual({
+      'a.com': HIDDEN_FOLDER_ID,
+      'b.com': 'f1',
+    });
+  });
+
+  it('reads a v8 file from before the rename: manual-domains', async () => {
+    const entry = {
+      registrar: null,
+      registrarLabel: 'Epik',
+      createdDate: null,
+      expirationDate: null,
+      autoRenew: null,
+      addedAt: 1,
+      updatedAt: null,
+    };
+    const v8 = {
+      ...buildBundle(APP),
+      namespaces: {
+        ...buildBundle(APP).namespaces,
+        'manual-domains': { 'a.com': entry },
+      },
+    };
+    await importBundle(JSON.stringify(v8));
+    await flushWrites();
+    expect(await store.list('imported-domains')).toEqual({ 'a.com': entry });
+    expect(await store.list('manual-domains')).toEqual({});
   });
 });

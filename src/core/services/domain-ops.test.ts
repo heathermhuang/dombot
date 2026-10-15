@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AbortError,
   NotImplementedError,
+  OutcomeUnknownError,
   RateLimitError,
   type OperationResult,
 } from '@aoxborrow/registrar-client';
 import type { DomainOp, DomainTarget } from '../../shared/ipc';
+import type { ConfirmedRenewal } from './domain-history';
 
 // ── Mock the registrar boundary and the window broadcast ─────────────────────
 // applyDomainOp only touches these two modules; mocking them keeps Electron and
@@ -23,6 +25,9 @@ const getDomainForwarding = vi.fn();
 const setDomainForwarding = vi.fn();
 const getEmailForwarding = vi.fn();
 const setEmailForwarding = vi.fn();
+const getCachedPortfolio = vi.fn<() => { domains: unknown[] } | null>();
+const getDomainDetail = vi.fn();
+const patchCachedDomain = vi.fn();
 const getRegistrarClient = vi.fn((name: string) => {
   void name;
   return {
@@ -35,6 +40,11 @@ const getRegistrarClient = vi.fn((name: string) => {
 });
 
 vi.mock('./registrars', () => ({
+  resolveDomainAccount: (registrar: string, _domain: string, id?: string) => ({
+    registrar,
+    id: id ?? registrar,
+    label: 'Default',
+  }),
   getRegistrarFeatures: (name: string) => getRegistrarFeatures(name),
   getRegistrarClient: (name: string) => getRegistrarClient(name),
   setAutoRenewCached: (...a: unknown[]) => setAutoRenewCached(...a),
@@ -42,11 +52,19 @@ vi.mock('./registrars', () => ({
   setLockCached: (...a: unknown[]) => setLockCached(...a),
   setNameserversCached: (...a: unknown[]) => setNameserversCached(...a),
   renewDomainCached: (...a: unknown[]) => renewDomainCached(...a),
+  getCachedPortfolio: () => getCachedPortfolio(),
+  getDomainDetail: (...a: unknown[]) => getDomainDetail(...a),
+  patchCachedDomain: (...a: unknown[]) => patchCachedDomain(...a),
 }));
 
 const broadcastPortfolioChanged = vi.fn();
 vi.mock('../events', () => ({
   broadcastPortfolioChanged: () => broadcastPortfolioChanged(),
+}));
+
+const recordRenewals = vi.fn();
+vi.mock('./domain-history', () => ({
+  recordRenewals: (...a: unknown[]) => recordRenewals(...a),
 }));
 
 // Imported after the mocks are registered.
@@ -61,6 +79,7 @@ const ALL_FEATURES = [
 ];
 const target: DomainTarget = {
   registrar: 'dynadot',
+  accountId: 'dynadot',
   domainName: 'example.com',
 };
 
@@ -81,6 +100,28 @@ beforeEach(() => {
 });
 
 describe('applyDomainOp — up-front capability gate', () => {
+  it('blocks 101domain auto-renew before reaching the registrar', async () => {
+    const r = await applyDomainOp(
+      { registrar: '101domain', domainName: 'example.com' },
+      { kind: 'autoRenew', enabled: true },
+    );
+    expect(r.status).toBe('unsupported');
+    expect(setAutoRenewCached).not.toHaveBeenCalled();
+  });
+  it('keeps active nameservers unchanged when the registry accepted a pending change', async () => {
+    setNameserversCached.mockResolvedValue({
+      success: true,
+      pending: true,
+      message: 'Pending registry processing',
+    });
+    const r = await applyDomainOp(
+      { registrar: '101domain', domainName: 'example.com' },
+      { kind: 'nameservers', nameservers: ['ns1.new.net', 'ns2.new.net'] },
+    );
+    expect(r.status).toBe('ok');
+    expect(r.message).toContain('Pending');
+    expect(r.patch).toBeUndefined();
+  });
   it('returns unsupported and makes no network call when the registrar lacks the feature', async () => {
     getRegistrarFeatures.mockReturnValue([]); // no getAuthCode
     const r = await applyDomainOp(target, { kind: 'authCode' });
@@ -114,6 +155,7 @@ describe('applyDomainOp — happy paths and patches', () => {
       'example.com',
       true,
       { signal: undefined },
+      'dynadot',
     );
     expect(broadcastPortfolioChanged).toHaveBeenCalledTimes(1);
   });
@@ -227,7 +269,7 @@ describe('applyDomainOp — thrown error classification', () => {
 });
 
 describe('applyDomainOp — renew', () => {
-  it('passes retries:0 and returns the patch from renewDomainCached', async () => {
+  it('leaves retrying to registrar-client and returns the patch from renewDomainCached', async () => {
     const patch = { expirationDate: new Date('2027-01-01') };
     renewDomainCached.mockResolvedValue({ result: ok('Renewed'), patch });
     const r = await applyDomainOp(target, { kind: 'renew', years: 2 });
@@ -238,11 +280,45 @@ describe('applyDomainOp — renew', () => {
       'dynadot',
       'example.com',
       2,
-      {
-        signal: undefined,
-        retries: 0,
-      },
+      { signal: undefined },
+      'dynadot',
     );
+    expect(recordRenewals).toHaveBeenCalledWith([
+      {
+        domainName: 'example.com',
+        accountId: 'dynadot',
+        years: 2,
+        charge: null,
+      },
+    ]);
+  });
+
+  it('records what the registrar charged, when it says', async () => {
+    renewDomainCached.mockResolvedValue({
+      result: { ...ok('Renewed'), charge: { amount: 12.5, currency: 'usd' } },
+      patch: {},
+    });
+    await applyDomainOp(target, { kind: 'renew', years: 1 });
+    expect(recordRenewals.mock.calls[0][0][0]).toMatchObject({
+      charge: { amount: '12.50', currency: 'USD' },
+    });
+  });
+
+  it('ignores a malformed charge rather than storing a guess', async () => {
+    renewDomainCached.mockResolvedValue({
+      result: { ...ok('Renewed'), charge: { amount: '-3', currency: 'USD' } },
+      patch: {},
+    });
+    await applyDomainOp(target, { kind: 'renew', years: 1 });
+    expect(recordRenewals.mock.calls[0][0][0].charge).toBeNull();
+  });
+
+  it('collects renewals for the bulk runner instead of recording each', async () => {
+    renewDomainCached.mockResolvedValue({ result: ok('Renewed'), patch: {} });
+    const renewals: ConfirmedRenewal[] = [];
+    await applyDomainOp(target, { kind: 'renew', years: 1 }, { renewals });
+    expect(renewals).toHaveLength(1);
+    expect(recordRenewals).not.toHaveBeenCalled();
   });
 
   it('soft-fails without applying the patch', async () => {
@@ -254,6 +330,7 @@ describe('applyDomainOp — renew', () => {
     expect(r.status).toBe('failed');
     expect(r.message).toBe('Payment declined');
     expect(r.patch).toBeUndefined();
+    expect(recordRenewals).not.toHaveBeenCalled();
   });
 });
 
@@ -339,5 +416,155 @@ describe('applyDomainOp — authCode never persists', () => {
     ]) {
       expect(writer).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe('applyDomainOp — a write whose outcome is unknown', () => {
+  // registrar-client never re-sends such a write. Providers report it either by
+  // throwing OutcomeUnknownError or by flagging the OperationResult.
+  const folded: OperationResult = {
+    success: false,
+    outcome: 'unknown',
+    message: 'may or may not have been applied',
+  };
+  const thrown = () =>
+    new OutcomeUnknownError('may or may not have been applied', {
+      feature: 'setAutoRenew',
+    });
+
+  beforeEach(() => {
+    getCachedPortfolio.mockReturnValue({
+      domains: [
+        {
+          registrar: 'dynadot',
+          accountId: 'dynadot',
+          domainName: 'example.com',
+          expirationDate: new Date('2026-01-01'),
+        },
+      ],
+    });
+  });
+
+  it.each([
+    ['a flagged result', () => setAutoRenewCached.mockResolvedValue(folded)],
+    ['a thrown error', () => setAutoRenewCached.mockRejectedValue(thrown())],
+  ])(
+    're-reads the domain and reports success when the change is there (%s)',
+    async (_how, arrange) => {
+      arrange();
+      getDomainDetail.mockResolvedValue({ autoRenew: true });
+      const r = await applyDomainOp(target, {
+        kind: 'autoRenew',
+        enabled: true,
+      });
+      expect(r.status).toBe('ok');
+      expect(r.patch).toEqual({ autoRenew: true });
+      expect(r.message).toMatch(/confirmed by re-reading/);
+      expect(getDomainDetail).toHaveBeenCalledWith(
+        'dynadot',
+        'example.com',
+        true,
+        'dynadot',
+      );
+      expect(patchCachedDomain).toHaveBeenCalledWith(
+        'dynadot',
+        'example.com',
+        { autoRenew: true },
+        'dynadot',
+      );
+      expect(broadcastPortfolioChanged).toHaveBeenCalledOnce();
+      expect(setAutoRenewCached).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('reports a harmless-to-repeat change that did not land as failed and safe to retry', async () => {
+    setLockCached.mockResolvedValue(folded);
+    getDomainDetail.mockResolvedValue({ locked: false });
+    const r = await applyDomainOp(target, { kind: 'lock', locked: true });
+    expect(r.status).toBe('failed');
+    expect(r.message).toMatch(/safe to try again/);
+    expect(patchCachedDomain).not.toHaveBeenCalled();
+    expect(broadcastPortfolioChanged).not.toHaveBeenCalled();
+  });
+
+  it('compares nameservers as a set, ignoring case, order and a trailing dot', async () => {
+    setNameserversCached.mockRejectedValue(thrown());
+    getDomainDetail.mockResolvedValue({
+      nameservers: ['NS2.Example.net.', 'ns1.example.net'],
+    });
+    const r = await applyDomainOp(target, {
+      kind: 'nameservers',
+      nameservers: ['ns1.example.net', 'ns2.example.net'],
+    });
+    expect(r.status).toBe('ok');
+  });
+
+  it('confirms a renewal only when the expiry date moved', async () => {
+    renewDomainCached.mockResolvedValue({ result: folded, patch: {} });
+    getDomainDetail.mockResolvedValue({
+      expirationDate: new Date('2027-01-01'),
+      status: 'active',
+    });
+    const r = await applyDomainOp(target, { kind: 'renew', years: 1 });
+    expect(r.status).toBe('ok');
+    expect(r.patch).toEqual({
+      expirationDate: new Date('2027-01-01'),
+      status: 'active',
+    });
+  });
+
+  it('never calls an unmoved renewal safe to retry: it may still be processing', async () => {
+    renewDomainCached.mockRejectedValue(thrown());
+    getDomainDetail.mockResolvedValue({
+      expirationDate: new Date('2026-01-01'),
+    });
+    const r = await applyDomainOp(target, { kind: 'renew', years: 1 });
+    expect(r.status).toBe('unknown');
+    expect(r.message).toMatch(/before renewing again/);
+    expect(r.message).not.toMatch(/safe/i);
+    expect(renewDomainCached).toHaveBeenCalledOnce();
+    // Unknown writes nothing: sync records it once the expiry moves.
+    expect(recordRenewals).not.toHaveBeenCalled();
+  });
+
+  it('stays unknown when the domain cannot be re-read or the field is missing', async () => {
+    setPrivacyCached.mockResolvedValue(folded);
+    getDomainDetail.mockRejectedValue(new Error('offline'));
+    expect(
+      (await applyDomainOp(target, { kind: 'privacy', enabled: true })).status,
+    ).toBe('unknown');
+    getDomainDetail.mockResolvedValue({});
+    expect(
+      (await applyDomainOp(target, { kind: 'privacy', enabled: true })).status,
+    ).toBe('unknown');
+    getDomainDetail.mockResolvedValue(null);
+    const r = await applyDomainOp(target, { kind: 'privacy', enabled: true });
+    expect(r.status).toBe('unknown');
+    expect(r.message).toMatch(/Check the domain before trying again/);
+  });
+
+  it('does not re-read for forwarding, which has no cached field to check', async () => {
+    getDomainForwarding.mockResolvedValue([]);
+    setDomainForwarding.mockResolvedValue(folded);
+    const r = await applyDomainOp(target, {
+      kind: 'urlForwarding',
+      forwards: [{ host: '@', url: 'https://example.org', type: 'permanent' }],
+    } as DomainOp);
+    expect(r.status).toBe('unknown');
+    expect(getDomainDetail).not.toHaveBeenCalled();
+  });
+
+  it('treats a lost auth-code request as safe to repeat', async () => {
+    getAuthCode.mockRejectedValue(thrown());
+    const r = await applyDomainOp(target, { kind: 'authCode' });
+    expect(r.status).toBe('failed');
+    expect(r.message).toMatch(/safe to try again/);
+  });
+
+  it('leaves an ordinary failure alone', async () => {
+    setAutoRenewCached.mockResolvedValue(fail('Domain is locked'));
+    const r = await applyDomainOp(target, { kind: 'autoRenew', enabled: true });
+    expect(r).toMatchObject({ status: 'failed', message: 'Domain is locked' });
+    expect(getDomainDetail).not.toHaveBeenCalled();
   });
 });

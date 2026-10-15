@@ -1,0 +1,305 @@
+import { describe, expect, it } from 'vitest';
+import { privateListing, emptyDraft } from './publication';
+import { domainKey } from './account-key';
+import { importedRows } from './imported-domains';
+import type { Domain, RegistrarMeta } from './ipc';
+import {
+  buildDomainCatalog,
+  withInventory,
+  selectedRegistrarTargets,
+  matchesRegistrarFilters,
+  sortManagementRows,
+} from './domain-catalog';
+const record = (
+  name: string,
+  accountId = 'a',
+  patch: Partial<Domain> = {},
+): Domain => ({
+  domainName: name,
+  accountId,
+  accountLabel: accountId,
+  registrar: 'dynadot',
+  source: 'registrar',
+  status: 'active',
+  createdDate: null,
+  expirationDate: new Date('2030-01-01'),
+  renewalDate: null,
+  nameservers: [],
+  locked: true,
+  privacy: true,
+  autoRenew: true,
+  deleted: false,
+  syncedAt: new Date(),
+  ...patch,
+});
+const accounts = ['a', 'b'].map((accountId) => ({
+  name: 'dynadot',
+  accountId,
+  configured: true,
+  enabled: true,
+})) as RegistrarMeta[];
+const filters = {
+  account: '',
+  tld: '',
+  expiry: '',
+  folder: '',
+  nameserver: '',
+};
+describe('one domain catalog with exact registrar targets', () => {
+  it('shows imported names privately without making registrar hints actionable', () => {
+    const imported = importedRows(
+      {
+        'new.example': {
+          addedAt: 1,
+          updatedAt: 1,
+          registrar: 'dynadot',
+          expirationDate: '2030-01-01',
+          autoRenew: true,
+        },
+      },
+      [],
+    );
+    const draft = withInventory(emptyDraft(), imported);
+    expect(draft.listings).toEqual([privateListing('new.example')]);
+    const legacyAccount = [
+      { name: 'dynadot', configured: true, enabled: true },
+    ] as RegistrarMeta[];
+    const entry = buildDomainCatalog(
+      draft.listings,
+      imported,
+      legacyAccount,
+    ).get('new.example')!;
+    expect(entry.records).toHaveLength(1);
+    expect(entry.records[0].expirationDate).toEqual(
+      new Date('2030-01-01T00:00:00Z'),
+    );
+    expect(entry.target).toBeNull();
+    expect(entry.reason).toMatch(/Imported record/);
+  });
+  it('lets a synced record replace the imported hint without duplicate rows', () => {
+    const synced = [record('existing.example')];
+    const inventory = [
+      ...synced,
+      ...importedRows(
+        { 'existing.example': { addedAt: 1, updatedAt: 1, registrar: null } },
+        synced,
+      ),
+    ];
+    const draft = withInventory(emptyDraft(), inventory);
+    expect(inventory).toHaveLength(1);
+    expect(
+      buildDomainCatalog(draft.listings, inventory, accounts).get(
+        'existing.example',
+      )?.target,
+    ).toEqual(synced[0]);
+  });
+  it('sorts imported display metadata without granting registrar authority', () => {
+    const inventory = importedRows(
+      {
+        'later.example': {
+          addedAt: 1,
+          updatedAt: 1,
+          registrar: null,
+          expirationDate: '2030-01-01',
+        },
+        'soon.example': {
+          addedAt: 1,
+          updatedAt: 1,
+          registrar: null,
+          expirationDate: '2027-01-01',
+        },
+      },
+      [],
+    );
+    const listings = withInventory(emptyDraft(), inventory).listings;
+    const catalog = buildDomainCatalog(listings, inventory, accounts);
+    const pricing = Object.fromEntries(
+      inventory.map((item, index) => [
+        domainKey(item),
+        { renewal: index ? 10 : 20 },
+      ]),
+    );
+    expect(
+      sortManagementRows(listings, catalog, {}, 'expiry').map((i) => i.domain),
+    ).toEqual(['soon.example', 'later.example']);
+    expect(
+      sortManagementRows(listings, catalog, pricing, 'renewal-asc').map(
+        (i) => i.domain,
+      ),
+    ).toEqual(['soon.example', 'later.example']);
+    expect(
+      selectedRegistrarTargets(catalog, new Set(listings.map((i) => i.domain))),
+    ).toEqual({ targets: [], blocked: 2 });
+  });
+  it('adds newly synced names privately without overwriting editorial selections', () => {
+    const listing = {
+      ...privateListing('existing.example'),
+      visibility: 'inquiry' as const,
+      description: 'keep',
+    };
+    const draft = { ...emptyDraft(), listings: [listing] };
+    const result = withInventory(draft, [
+      record('existing.example'),
+      record('NEW.EXAMPLE'),
+    ]);
+    expect(result.listings[0]).toEqual(listing);
+    expect(result.listings[1]).toEqual(privateListing('new.example'));
+    expect(JSON.stringify(result)).not.toContain('accountId');
+    expect(draft.listings).toHaveLength(1);
+  });
+  it('has one catalog entry per name and requires an explicit account to resolve duplicates', () => {
+    const listing = privateListing('shared.example'),
+      a = record('shared.example', 'a'),
+      b = record('shared.example', 'b');
+    const all = buildDomainCatalog([listing], [a, b], accounts);
+    expect(all.size).toBe(1);
+    expect(all.get(listing.domain)?.target).toBeNull();
+    expect(
+      buildDomainCatalog([listing], [a, b], accounts, 'b').get(listing.domain)
+        ?.target,
+    ).toBe(b);
+  });
+  it('never exposes a registrar target for history, unmatched, deleted, or unavailable accounts', () => {
+    const listings = [
+      { ...privateListing('past.example'), visibility: 'historical' as const },
+      privateListing('missing.example'),
+      privateListing('deleted.example'),
+      privateListing('disabled.example'),
+    ];
+    const rows = [
+      record('past.example'),
+      record('deleted.example', 'a', { deleted: true }),
+      record('disabled.example', 'b'),
+    ];
+    const metadata = accounts.map((a) =>
+      a.accountId === 'b' ? { ...a, enabled: false } : a,
+    );
+    for (const entry of buildDomainCatalog(listings, rows, metadata).values())
+      expect(entry.target).toBeNull();
+  });
+  it('fails closed for the entire mixed registrar selection rather than silently acting on a subset', () => {
+    const listings = [
+      privateListing('owned.example'),
+      privateListing('unmatched.example'),
+    ];
+    const catalog = buildDomainCatalog(
+      listings,
+      [record('owned.example')],
+      accounts,
+    );
+    expect(
+      selectedRegistrarTargets(
+        catalog,
+        new Set(['owned.example', 'unmatched.example']),
+      ),
+    ).toEqual({ targets: [], blocked: 1 });
+    expect(
+      selectedRegistrarTargets(catalog, new Set(['owned.example'])).targets[0]
+        .accountId,
+    ).toBe('a');
+  });
+  it('keeps account-specific expiry and DNS filters while sharing folders by domain name', () => {
+    const name = 'shared.example';
+    const a = record(name, 'a', {
+        expirationDate: new Date('2030-01-01'),
+        nameservers: ['a.example'],
+      }),
+      b = record(name, 'b', {
+        expirationDate: new Date('2026-09-20'),
+        nameservers: ['b.example'],
+      });
+    const entry = buildDomainCatalog(
+      [privateListing(name)],
+      [a, b],
+      accounts,
+      'a',
+    ).get(name)!;
+    const now = Date.parse('2026-09-10');
+    const folders = { 'shared.example': 'one' };
+    for (const account of ['a', 'b']) {
+      expect(
+        matchesRegistrarFilters(
+          entry,
+          { ...filters, account, folder: 'one' },
+          folders,
+          new Set(['one', 'two']),
+          'hidden',
+          now,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      matchesRegistrarFilters(
+        entry,
+        { ...filters, account: 'a', expiry: '30' },
+        folders,
+        new Set(['one', 'two']),
+        'hidden',
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      matchesRegistrarFilters(
+        entry,
+        { ...filters, account: 'a', folder: 'two' },
+        folders,
+        new Set(['one', 'two']),
+        'hidden',
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      matchesRegistrarFilters(
+        entry,
+        { ...filters, account: 'a', nameserver: 'b.example' },
+        folders,
+        new Set(['one', 'two']),
+        'hidden',
+        now,
+      ),
+    ).toBe(false);
+  });
+  it('keeps unknown dates and renewal prices last and uses the exact account key', () => {
+    const listings = ['later.example', 'soon.example', 'unknown.example'].map(
+      privateListing,
+    );
+    const catalog = buildDomainCatalog(
+      listings,
+      [
+        record('later.example'),
+        record('soon.example', 'b', { expirationDate: new Date('2027-01-01') }),
+      ],
+      accounts,
+    );
+    expect(
+      sortManagementRows(listings, catalog, {}, 'expiry').map((i) => i.domain),
+    ).toEqual(['soon.example', 'later.example', 'unknown.example']);
+    expect(
+      sortManagementRows(
+        listings,
+        catalog,
+        {
+          'b:soon.example': { renewal: 100 },
+          'a:later.example': { renewal: 5 },
+        },
+        'renewal',
+      ).map((i) => i.domain),
+    ).toEqual(['soon.example', 'later.example', 'unknown.example']);
+    expect(
+      sortManagementRows(listings, catalog, {}, 'expiry-desc').map(
+        (i) => i.domain,
+      ),
+    ).toEqual(['later.example', 'soon.example', 'unknown.example']);
+    expect(
+      sortManagementRows(
+        listings,
+        catalog,
+        {
+          'b:soon.example': { renewal: 100 },
+          'a:later.example': { renewal: 5 },
+        },
+        'renewal-asc',
+      ).map((i) => i.domain),
+    ).toEqual(['later.example', 'soon.example', 'unknown.example']);
+  });
+});

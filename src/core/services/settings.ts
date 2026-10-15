@@ -1,4 +1,10 @@
 import type { AppSettings } from '../../shared/ipc';
+import {
+  DEFAULT_CURRENCY,
+  DEFAULT_NUMBER_FORMAT,
+  isIsoCurrency,
+  isNumberFormatId,
+} from '../../shared/money';
 import { Namespace } from '../storage/namespace';
 
 // User-adjustable settings, one storage key per setting in the `settings`
@@ -9,6 +15,9 @@ const DEFAULTS: AppSettings = {
   autoSyncIntervalMinutes: 24 * 60, // 24 hours
   recentNameservers: [],
   mcpEnabled: false,
+  preferredCurrency: DEFAULT_CURRENCY,
+  numberFormat: DEFAULT_NUMBER_FORMAT,
+  updateChecks: true,
 };
 
 /** How many recent nameserver sets to keep. */
@@ -40,6 +49,16 @@ function normalize(raw: Partial<AppSettings>): AppSettings {
       typeof raw.mcpEnabled === 'boolean'
         ? raw.mcpEnabled
         : DEFAULTS.mcpEnabled,
+    preferredCurrency: isIsoCurrency(raw.preferredCurrency)
+      ? raw.preferredCurrency.trim().toUpperCase()
+      : DEFAULTS.preferredCurrency,
+    numberFormat: isNumberFormatId(raw.numberFormat)
+      ? raw.numberFormat
+      : DEFAULTS.numberFormat,
+    updateChecks:
+      typeof raw.updateChecks === 'boolean'
+        ? raw.updateChecks
+        : DEFAULTS.updateChecks,
   };
 }
 
@@ -70,9 +89,11 @@ export function getSettings(): AppSettings {
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const prev = getSettings();
   const next = normalize({ ...prev, ...patch });
-  for (const [key, value] of Object.entries(next)) {
-    void store.set(key, value);
-  }
+  // Persist only the requested fields. An unrelated setting must never
+  // restore an older security toggle read by another host/request.
+  for (const key of Object.keys(patch) as (keyof AppSettings)[])
+    if (Object.prototype.hasOwnProperty.call(next, key))
+      void store.set(key, next[key]);
   notifySettingsChanged(next, prev);
   return next;
 }

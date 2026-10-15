@@ -14,7 +14,7 @@ import {
   updateFolder,
 } from './folders';
 import { isRegistrarEnabled, setRegistrarEnabled } from './registrar-state';
-import { resolvePricing, setManualPrice } from './pricing';
+import { resolvePricing, setManualPrice, setTldRate } from './pricing';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import {
   clearAll,
@@ -42,9 +42,14 @@ describe('settings', () => {
       autoSyncIntervalMinutes: 1440,
       recentNameservers: [],
       mcpEnabled: false,
+      preferredCurrency: 'USD',
+      numberFormat: 'us',
+      updateChecks: true,
     });
     updateSettings({ autoSyncIntervalMinutes: -5 });
     expect(getSettings().autoSyncIntervalMinutes).toBe(1440);
+    updateSettings({ updateChecks: 'yes' as unknown as boolean });
+    expect(getSettings().updateChecks).toBe(true);
     updateSettings({
       autoSyncIntervalMinutes: 30.7,
       recentNameservers: [['a', 'b'], [], ['c']],
@@ -53,12 +58,21 @@ describe('settings', () => {
       autoSyncIntervalMinutes: 30,
       recentNameservers: [['a', 'b'], ['c']],
       mcpEnabled: false,
+      preferredCurrency: 'USD',
+      numberFormat: 'us',
+      updateChecks: true,
     });
     await flushWrites();
     expect(await store.list('settings')).toEqual({
       autoSyncIntervalMinutes: 30,
       recentNameservers: [['a', 'b'], ['c']],
+      updateChecks: true,
+    });
+    await hydrateStores();
+    expect(getSettings()).toMatchObject({
       mcpEnabled: false,
+      preferredCurrency: 'USD',
+      numberFormat: 'us',
     });
   });
 });
@@ -67,14 +81,17 @@ describe('folders', () => {
   it('creates, updates, assigns, and deletes with cascading unassign', async () => {
     const f = createFolder({ name: 'Keep', description: '', color: 'red' });
     updateFolder(f.id, { name: 'Keepers' });
-    assignFolder('dynadot:a.com', f.id);
-    assignFolder('dynadot:b.com', 'not-a-folder'); // treated as unassign
+    assignFolder('A.com', f.id);
+    assignFolder('b.com', 'not-a-folder'); // treated as unassign
     expect(getFolders()).toEqual({
       folders: [{ ...f, name: 'Keepers' }],
-      assignments: { 'dynadot:a.com': f.id },
+      assignments: { 'a.com': f.id },
     });
     await flushWrites();
-    expect(await store.list('folders')).toEqual(getFolders());
+    expect(await store.list('folders')).toEqual({
+      folders: [{ ...f, name: 'Keepers' }],
+    });
+    expect(await store.list('domain-folders')).toEqual({ 'a.com': f.id });
 
     deleteFolder(f.id);
     expect(getFolders()).toEqual({ folders: [], assignments: {} });
@@ -87,25 +104,25 @@ describe('registrar-state', () => {
     setRegistrarEnabled('gandi', false);
     expect(isRegistrarEnabled('gandi')).toBe(false);
     await flushWrites();
-    expect(await store.get('registrar-state', 'disabled')).toEqual(['gandi']);
+    expect(await store.get('registrars', 'disabled')).toEqual(['gandi']);
     setRegistrarEnabled('gandi', true);
     await flushWrites();
-    expect(await store.get('registrar-state', 'disabled')).toEqual([]);
+    expect(await store.get('registrars', 'disabled')).toEqual([]);
   });
 });
 
 describe('pricing overrides', () => {
   it('manual price wins, and clears with null', async () => {
-    setManualPrice('dynadot', 'a.com', 12.5);
+    setManualPrice('a.com', { amount: '12.50', currency: 'USD' });
     expect(resolvePricing('dynadot', 'a.com')).toMatchObject({
       renewal: 12.5,
       source: 'manual',
     });
     await flushWrites();
-    expect(await store.list('pricing-overrides')).toEqual({
-      'dynadot:a.com': 12.5,
+    expect(await store.list('domain-prices')).toEqual({
+      'a.com': { amount: '12.50', currency: 'USD' },
     });
-    setManualPrice('dynadot', 'a.com', null);
+    setManualPrice('a.com', null);
     expect(resolvePricing('dynadot', 'a.com').source).not.toBe('manual');
   });
 });
@@ -114,10 +131,12 @@ describe('credentials', () => {
   it('trims, drops blanks, clears on all-empty, and awaits the write', async () => {
     await setStoredCredentials('dynadot', { apiKey: ' k ', extra: '  ' });
     expect(getStoredCredentials('dynadot')).toEqual({ apiKey: 'k' });
-    expect(await store.get('credentials', 'dynadot')).toEqual({ apiKey: 'k' });
+    expect(await store.get('registrar-credentials', 'dynadot')).toEqual({
+      apiKey: 'k',
+    });
     await setStoredCredentials('dynadot', { apiKey: '' });
     expect(getStoredCredentials('dynadot')).toEqual({});
-    expect(await store.get('credentials', 'dynadot')).toBeNull();
+    expect(await store.get('registrar-credentials', 'dynadot')).toBeNull();
   });
 });
 
@@ -133,12 +152,21 @@ describe('cache', () => {
       data: { n: 2 },
       fetchedAt: e.fetchedAt,
     });
+    setTldRate('godaddy', 'com', 8.99);
+    setManualPrice('a.com', { amount: '5.00', currency: 'USD' });
     await flushWrites();
-    expect(await store.list('cache-portfolio')).toEqual(readAll('portfolio'));
+    expect(await store.list('registrar-domains')).toEqual(readAll('portfolio'));
     clearAll();
+    // Every namespace flagged `cache` goes, TLD rates included; your own
+    // prices stay.
+    await flushWrites();
+    expect(await store.list('registrar-tld-rates')).toEqual({});
+    expect(await store.list('domain-prices')).toEqual({
+      'a.com': { amount: '5.00', currency: 'USD' },
+    });
     expect(readEntry('portfolio', 'dynadot')).toBeNull();
     await flushWrites();
-    expect(await store.list('cache-portfolio')).toEqual({});
+    expect(await store.list('registrar-domains')).toEqual({});
   });
 });
 

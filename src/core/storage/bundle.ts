@@ -1,3 +1,4 @@
+import { validateAccountRecords } from '../services/accounts';
 import {
   broadcastApprovalsChanged,
   broadcastPortfolioChanged,
@@ -6,10 +7,33 @@ import { restartAutoSync } from '../services/auto-sync';
 import { resetRegistrarClients } from '../services/registrars';
 import { getSettings, notifySettingsChanged } from '../services/settings';
 import { exportNamespaces, importNamespaces } from './namespace';
+import { parseNamecheapProxy } from '../../shared/namecheap-proxy';
+import { PROXIES_NAMESPACE, parseProxy } from '../../shared/proxy';
+import { migrateLegacyProxies } from '../services/proxies';
+import { sanitizeBundleDiagnostics } from './sanitize-diagnostics';
+import {
+  LEGACY_IMPORTED_NAMESPACE,
+  hiddenFolderAssignments,
+  upgradeLegacyNamespaces,
+} from './migrations';
+import {
+  EVENTS_NAMESPACE,
+  NOTES_NAMESPACE,
+  cleanEntries,
+  cleanEvent,
+  cleanNote,
+} from '../services/domain-events';
+import { CREDENTIALS_NAMESPACE, RENEWAL_PRICES_NAMESPACE } from './names';
+import { LIST_PRICES_NAMESPACE, cleanListPrice } from '../services/list-prices';
+import { cleanRenewalPrice } from '../services/pricing';
+import {
+  IMPORTED_DOMAINS_NAMESPACE,
+  cleanImportedDomain,
+} from '../services/imported-domains';
 
 // A portable copy of everything DomBot stores — registrar keys, portfolio
-// cache, folders, manual prices, settings, MCP pairings, bulk-job history —
-// as one JSON document. It's the backup story for a self-hosted instance
+// cache, folders, manual prices, TLD rates, settings, MCP pairings, bulk-job
+// history — as one JSON document. It's the backup story for a self-hosted instance
 // (whose data is unreadable without its root secret), the way to move from
 // the desktop app to a web instance without re-entering keys, and what the
 // secret-rotation script round-trips through.
@@ -20,14 +44,25 @@ import { exportNamespaces, importNamespaces } from './namespace';
 // a Worker's CPU budget. This module only ever sees plain bundles.
 
 export const BUNDLE_FORMAT = 'dombot-data';
-export const BUNDLE_VERSION = 1;
-
-/** Host-specific or transient namespaces that never travel. */
-const NEVER_EXPORTED: ReadonlySet<string> = new Set(['auth', 'meta']);
+// v3 adds the `proxies` namespace and `proxyId` on accounts. Older builds would
+// silently drop both and then connect directly, so they must refuse the file.
+// v4 renames namespaces and keys folders and prices by domain name
+// (docs/storage-model.md); v1–v3 files are upgraded on import. Namespaces
+// flagged `local` (meta, …) never travel.
+// v5 adds the domain history (`domain-events`, `domain-notes`,
+// `registrar-last-sync`). A v4 build would skip those namespaces and silently
+// drop the history, so it must refuse the file. Rule: any release that adds a non-cache namespace bumps
+// this version.
+// v6 adds `domain-list-prices` (docs/domain-import-export.md).
+// v7 stores manual renewal prices with a currency (`domain-prices` values
+// become `{ amount, currency }`); an older build would read them as no price.
+// v8 adds `imported-domains` (`manual-domains` in builds from main before
+// the rename, which import maps across).
+export const BUNDLE_VERSION = 8;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
-  version: typeof BUNDLE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -43,7 +78,7 @@ export function buildBundle(app: DataBundle['app']): DataBundle {
     version: BUNDLE_VERSION,
     exportedAt: new Date().toISOString(),
     app,
-    namespaces: exportNamespaces(NEVER_EXPORTED),
+    namespaces: exportNamespaces(),
   };
 }
 
@@ -69,7 +104,7 @@ export function parseBundle(text: string): DataBundle {
   if (!head || head.format !== BUNDLE_FORMAT) {
     throw new BundleError('Not a DomBot data file.');
   }
-  if (head.version !== BUNDLE_VERSION) {
+  if (![1, 2, 3, 4, 5, 6, 7, BUNDLE_VERSION].includes(head.version as number)) {
     throw new BundleError(
       `This file was made by a newer DomBot (format v${String(head.version)}). Update and try again.`,
     );
@@ -87,6 +122,133 @@ export function parseBundle(text: string): DataBundle {
       throw new BundleError(`Malformed namespace "${ns}" in this file.`);
     }
   }
+  // Files before v4 use the old names and account-scoped keys; bring them up
+  // to date first so every check below sees one layout. (v4 has the current
+  // names and simply has no history yet.)
+  if ((head.version as number) < 4) {
+    head.namespaces = upgradeLegacyNamespaces(head.namespaces);
+  }
+  // v4's Archive folder is v5's Hidden folder (migration 2).
+  const folderAssignments = head.namespaces['domain-folders'];
+  if ((head.version as number) < 5 && folderAssignments) {
+    head.namespaces['domain-folders'] =
+      hiddenFolderAssignments(folderAssignments);
+  }
+  // A v8 file from main before the rename has `manual-domains` (migration 4).
+  const legacyImported = head.namespaces[LEGACY_IMPORTED_NAMESPACE];
+  if (legacyImported) {
+    delete head.namespaces[LEGACY_IMPORTED_NAMESPACE];
+    head.namespaces[IMPORTED_DOMAINS_NAMESPACE] = {
+      ...legacyImported,
+      ...head.namespaces[IMPORTED_DOMAINS_NAMESPACE],
+    };
+  }
+  head.version = BUNDLE_VERSION;
+  try {
+    validateAccountRecords(head.namespaces['registrar-accounts'] ?? {});
+  } catch (err) {
+    throw new BundleError(err instanceof Error ? err.message : String(err));
+  }
+  // Events and notes are user data the screens read directly, so re-check
+  // every record the way the services would have written it; a record that
+  // doesn't hold is dropped (and logged) rather than failing the import.
+  const events = head.namespaces[EVENTS_NAMESPACE];
+  if (events)
+    head.namespaces[EVENTS_NAMESPACE] = cleanEntries(
+      EVENTS_NAMESPACE,
+      events,
+      cleanEvent,
+    );
+  const notes = head.namespaces[NOTES_NAMESPACE];
+  if (notes)
+    head.namespaces[NOTES_NAMESPACE] = cleanEntries(
+      NOTES_NAMESPACE,
+      notes,
+      cleanNote,
+    );
+  // Manual renewal prices: a file before v7 has USD numbers, which become
+  // USD amounts here (as migration 3 does for the store).
+  const renewals = head.namespaces[RENEWAL_PRICES_NAMESPACE];
+  if (renewals)
+    head.namespaces[RENEWAL_PRICES_NAMESPACE] = cleanEntries(
+      RENEWAL_PRICES_NAMESPACE,
+      renewals,
+      cleanRenewalPrice,
+    );
+  const imported = head.namespaces[IMPORTED_DOMAINS_NAMESPACE];
+  if (imported)
+    head.namespaces[IMPORTED_DOMAINS_NAMESPACE] = cleanEntries(
+      IMPORTED_DOMAINS_NAMESPACE,
+      imported,
+      cleanImportedDomain,
+    );
+  const listPrices = head.namespaces[LIST_PRICES_NAMESPACE];
+  if (listPrices)
+    head.namespaces[LIST_PRICES_NAMESPACE] = cleanEntries(
+      LIST_PRICES_NAMESPACE,
+      listPrices,
+      cleanListPrice,
+    );
+  // Validate every proxy profile, and every account's pointer to one, so an
+  // import can't smuggle in a private/reserved-IP or otherwise malformed proxy
+  // or leave an account pointing at nothing.
+  const profiles = (head.namespaces[PROXIES_NAMESPACE] ?? {}) as Record<
+    string,
+    { id?: unknown; url?: unknown; egressIp?: unknown } | null
+  >;
+  for (const [id, profile] of Object.entries(profiles)) {
+    try {
+      if (!profile || typeof profile !== 'object' || profile.id !== id)
+        throw new Error('Malformed proxy settings.');
+      if (!parseProxy(profile)) throw new Error('Incomplete proxy settings.');
+    } catch (error) {
+      throw new BundleError(
+        error instanceof Error ? error.message : 'Invalid proxy settings.',
+      );
+    }
+  }
+  for (const record of Object.values(
+    (head.namespaces['registrar-accounts'] ?? {}) as Record<
+      string,
+      { proxyId?: string; removed?: boolean } | null
+    >,
+  )) {
+    if (record?.proxyId && !record.removed && !profiles[record.proxyId])
+      throw new BundleError(
+        'An account in this file uses a proxy the file does not contain.',
+      );
+  }
+  // Older bundles kept a Namecheap account's proxy in its credentials — the
+  // legacy default key plus any UUID-keyed accounts. Validate those too; they
+  // are lifted into a profile after import.
+  const accountRecords = (head.namespaces['registrar-accounts'] ??
+    {}) as Record<string, { registrar?: unknown } | null>;
+  const namecheapIds = new Set<string>(['namecheap']);
+  for (const [id, record] of Object.entries(accountRecords))
+    if (
+      record &&
+      typeof record === 'object' &&
+      record.registrar === 'namecheap'
+    )
+      namecheapIds.add(id);
+  const credentials = (head.namespaces[CREDENTIALS_NAMESPACE] ?? {}) as Record<
+    string,
+    unknown
+  >;
+  for (const id of namecheapIds) {
+    const bag = credentials[id];
+    if (bag && typeof bag === 'object') {
+      try {
+        parseNamecheapProxy(bag as Record<string, unknown>);
+      } catch (error) {
+        throw new BundleError(
+          error instanceof Error
+            ? error.message
+            : 'Invalid Namecheap proxy settings.',
+        );
+      }
+    }
+  }
   return head as DataBundle;
 }
 
@@ -98,8 +260,10 @@ export async function importBundle(
   text: string,
 ): Promise<{ namespaces: number; entries: number }> {
   const bundle = parseBundle(text);
+  sanitizeBundleDiagnostics(bundle.namespaces);
   const prevSettings = getSettings();
-  const result = importNamespaces(bundle.namespaces, NEVER_EXPORTED);
+  const result = importNamespaces(bundle.namespaces);
+  await migrateLegacyProxies();
   // Everyone holding a derived view refreshes: the registrar clients built
   // from the old credentials, the UI (portfolio, pairings), the host's
   // settings listeners (the MCP server toggle), the sync timer.

@@ -1,187 +1,225 @@
-# MCP tools — scope-based structure
+# MCP tools
 
-Plan for restructuring the MCP tool surface in [`src/core/mcp/tools.ts`](../src/core/mcp/tools.ts)
-so that every tool's **scope is obvious** (portfolio / registrar / domain), the
-naming is consistent, and the full capability of
-`@aoxborrow/registrar-client` is exposed. Writes are **not** gated behind extra
-per-call approval — the connection-level OAuth approval is the gate.
+DomBot's MCP server exposes the portfolio and every registrar operation it
+supports as tools. They're registered by `registerTools` in
+[`src/core/mcp/tools.ts`](../src/core/mcp/tools.ts) and call the same services
+as the app, so a write from an agent patches the cache and updates an open
+Domains table the same way a row control does. How to connect a client is in
+the [README](../README.md#connecting-an-ai-agent) and in the app under
+Settings → MCP.
 
-## Goals
+Writes aren't gated behind a per-call approval: approving the client's
+connection in DomBot is the gate. Money ops (register, transfer, renew) say so
+in their descriptions.
 
-1. **Scope is legible.** A caller can tell at a glance whether a tool acts on the
-   whole portfolio, one registrar, or one domain.
-2. **Consistent names** under scope prefixes, so the tool list self-groups.
-3. **Explicit, predictable scope** — a tool's required params say exactly what it
-   acts on; no hidden state, no cache-dependent routing.
-4. **Cover the surface** — every `RegistrarClient` method gets a tool (money ops
-   and forwarding included), plus dombot's own renewal-price estimate.
+## Scope and parameters
 
-## Scope model
+The name prefix says what a tool acts on:
 
-Scope is defined by the **required parameter signature**, and encoded in the name
-prefix:
+- **`portfolio_*`** and **`registrar_list`**: the whole portfolio, no scope
+  params.
+- **`registrar_*`**: one registrar account. `registrar` is required (a
+  registrar id such as `dynadot`).
+- **`domain_*`**: one domain you own. `domain` is required; `registrar` is
+  optional.
+- **`folder_*`**: DomBot's own folders. A folder is named by its name or id
+  (case-insensitive); `Hidden` is the built-in folder. No registrar calls.
 
-| Scope                   | Required params        | Name prefix                    | Meaning                                                              |
-| ----------------------- | ---------------------- | ------------------------------ | -------------------------------------------------------------------- |
-| **Portfolio / account** | _(none)_               | `portfolio_`, `registrar_list` | Global or cross-registrar aggregate                                  |
-| **Registrar**           | `registrar`            | `registrar_`                   | A provider, or a domain not yet owned there (register / transfer-in) |
-| **Domain**              | `registrar` + `domain` | `domain_`                      | One domain you own                                                   |
+**Resolving the registrar.** On `domain_*` tools, an omitted `registrar` is
+looked up in the cached portfolio, since you own the domain. A name the cache
+doesn't have fails with a message to pass `registrar` or run `portfolio_sync`;
+a name the cache lists under two registrars (a stale transfer) fails asking
+for `registrar`. An imported name fails saying no connected account reports
+it. Pass it to skip the lookup or for a name not synced yet.
 
-Naming pattern: **`<scope>_<resource>_<action>`**, dropping `<resource>` when the
-scope already is the resource. `snake_case` throughout.
+**Choosing an account.** Every `registrar_*` and `domain_*` tool takes an
+optional `accountId` (from `registrar_list`); labels aren't accepted. With
+`accountId` alone, the registrar comes from that account. Without it, a domain
+tool uses the one enabled, configured account whose cache holds the name, and
+a registrar tool uses the registrar's only configured account. When that's
+ambiguous, or the chosen account is disabled, has no credentials, or doesn't
+hold the domain in the cache, the call fails before reaching the registrar.
+See [multi-account.md](multi-account.md#mcp).
 
-## The `registrar` parameter
+**Cache.** Reads marked "cached" serve the local cache when it's fresh and
+take `refresh` to fetch live and write the result through.
 
-`registrar` is **always required** on both registrar-level and domain-level
-tools, and **never resolved** from state. The scope reads straight off the
-signature — each tier just adds a parameter:
+## Portfolio
 
-- portfolio → `()`
-- registrar → `(registrar, …)`
-- domain → `(registrar, domain, …)`
+- **`registrar_list`** — every registrar id, plus each account's `accountId`,
+  `registrar`, `label`, `configured`, `enabled`, `proxy` (whether it routes
+  through the fixed IP proxy) and `sync` state. Also the `configured` and
+  `active` registrar ids. No secrets. Start here.
+- **`portfolio_query`** — list, search and filter the cached portfolio across
+  every account, plus the names you imported. Filters: `ownership` (`owned`,
+  the default, `archive` or `all`, as the Domains page's Owned / Archive
+  switch), `accountId`, `registrar`, `source` (`registrar` or `imported`),
+  `tld`, `folder` (a name, an id, or `Hidden`), `nameContains`,
+  `nameserverContains`, `autoRenew`, `locked`, `privacy`, `status`,
+  `expiresBefore`, `expiresAfter`, `expiringWithinDays`. Plus `sort` (also
+  by `renewalPrice`, compared as numbers whatever the currency), `order`,
+  `limit` and `offset`. No registrar calls. Returns
+  `{ total, fetchedAt, stale, registrars, errors, rows }`.
+  - Each row carries `ownership`, `archiveLabel` (`sold`, `dropped`,
+    `archived`, or `removed` for a removal you haven't labeled), `hidden`, and
+    `inAccount`.
+  - Hidden names count as owned: they're still yours and still renew.
+  - Each row also carries what DomBot keeps for the name: `paid` (date,
+    amount, currency, and `kind`: registered or purchased), `sold`, `notes`,
+    `askingPrice` (`amount`, `minOffer`, `floor`, `currency`) and
+    `renewalPrice` (DomBot's yearly estimate with its `source`, as
+    `domain_renewal_price`). Each is `null` when there's nothing on record.
+  - An imported name has `source: 'imported'`, no `accountId`, `inAccount:
+false`, and `registrarLabel` when you typed a registrar DomBot doesn't
+    know. Its `autoRenew` is what you told DomBot, or `null`.
+  - An Archive name can still be in an account (a sale in escrow). One no
+    account reports has `inAccount: false`, its last known registrar, and
+    `null` for the settings an account reports. The `domain_*` tools can't act
+    on it.
+- **`portfolio_alerts`** — what needs you, as the bell shows it: failed
+  syncs (`sync-error`), names that left an account (`departure`, high
+  priority) and names that arrived (`arrival`, low). Most severe first, then
+  newest. `kind?`, `limit?`, `offset?`. Returns `{ total, counts, alerts }`;
+  each alert's `eventId` is what `resolves` and `portfolio_alert_dismiss`
+  take.
+- **`portfolio_alert_dismiss`** — `alertIds[]`, `dismissed?` (default
+  `true`; `false` brings them back). Dismisses without recording anything.
+  Returns the ids still open.
+- **`portfolio_sync`** — re-sync every active account and return a
+  per-account summary (counts, last sync, errors).
 
-**Why required, not resolved.** We considered making domain-level tools take only
-`domain` and resolving the registrar from the cached portfolio. It fails in
-exactly the case that matters: someone connects after not opening the app for a
-while and wants to manage a domain that isn't in the (stale) portfolio cache. A
-resolver would have nothing to match against — refreshing the whole portfolio on
-every miss is slow and still misses freshly-registered names or domains at a
-registrar without saved credentials, and routing a _write_ through a best-effort
-cache lookup is fragile. Requiring `registrar` makes that case trivial (the
-caller names the registrar and it just works) with no hidden state.
+## Folders
 
-The caller isn't burdened: when a domain came from `portfolio_list`, its
-`registrar` is right there in that response (`Domain.registrar`); when it's a new
-domain, the user knows where they registered it.
+The same folders as Settings → Folders and the Domains table's folder column,
+in the same store, so a change shows up in an open window right away. Folder
+names are kept unique (case-insensitive), and none may be called `Hidden`.
 
-## Tool catalog
+- **`folder_list`** — every folder's `id`, `name`, `description`, `color`,
+  `builtIn` and `domainCount`, ending with the built-in Hidden folder
+  (`__hidden__`).
+- **`folder_create`** — `name`, `description?`, `color?` (one of the app's
+  palette keys; default `blue`). Returns the new folder.
+- **`folder_rename`** — `folder`, `name`. Returns `{ id, name, previousName }`.
+  Hidden can't be renamed.
+- **`folder_delete`** — `folder`. Its domains go back to no folder; nothing is
+  deleted at a registrar. Returns `{ id, name, deleted, unassigned }`. Hidden
+  can't be deleted.
+- **`domain_set_folder`** — `domain`, `folder` (a name, an id, `Hidden`, or
+  `null` for no folder). A domain is in at most one folder, so this replaces
+  any current one. The domain must be in your portfolio, owned or Archive.
+  Returns `{ domain, folder, previous }`.
 
-Backing calls go through the shared `services/` layer (same core the UI IPC uses),
-which wraps `RegistrarClient`. `R.method` = `RegistrarClient` method.
+## History, money, notes and ownership
 
-### Portfolio / account
+DomBot's own data about a name, read and written through the same services as
+the app. No registrar calls. Each takes `domain`, which must be in your
+portfolio: synced, imported, or with history.
 
-| Tool             | Backing                              | Params     | Annotations | Status                          |
-| ---------------- | ------------------------------------ | ---------- | ----------- | ------------------------------- |
-| `registrar_list` | `getConfiguredRegistrars` + metadata | —          | readOnly    | **rename** of `list_registrars` |
-| `portfolio_list` | `listPortfolio`                      | `refresh?` | readOnly    | **rename** of `list_portfolio`  |
+- **`domain_history`** — every event for the name, oldest first, with its
+  note and current `ownership` / `archiveLabel`. Each event has its `source`;
+  sync alerts (`added`, `removed`) also have `alert` (`open`, `dismissed` or
+  `resolved`) and `resolvedBy`.
+- **`domain_purchase_set`** — `date?`, `amount?`, `currency?`, `kind?`
+  (`registered` or `purchased`), `resolves?`. Edits the latest purchase;
+  with `resolves` (an open `added` alert) it records the purchase that
+  answers it. Leaving out both `date` and `amount` deletes the purchase.
+  Returns `{ domain, paid, sold }`.
+- **`domain_sale_set`** — `date?`, `amount?`, `currency?`, `resolves?`.
+  Records a sale (dated today by default) when none is on record or
+  `resolves` names a new alert, otherwise edits the latest; the name moves to
+  Archive as Sold. Undo it with `domain_ownership_set` `owned`. Returns
+  `{ domain, paid, sold, ownership, archiveLabel }`.
 
-### Registrar-level (`registrar` required)
+- **`domain_note_set`** — `notes`, replacing the note; `""` deletes it.
+  Returns `{ domain, notes }`.
+- **`domain_asking_price_set`** — `amount?` (BIN), `minOffer?`, `floor?`,
+  `currency?`. Replaces the asking price: what's left out is cleared, and all
+  three left out removes it. `currency` is required unless clearing. Returns
+  `{ domain, askingPrice }`.
+- **`domain_renewal_price_set`** — `amount` (`null` clears it), `currency?`
+  (default `USD`). Your yearly price, which `domain_renewal_price` then
+  reports with source `manual`. Returns `{ domain, renewalPrice }`.
+- **`domain_ownership_set`** — `ownership`: `dropped` or `archived` moves the
+  name to Archive; `owned` undoes your Sold, Dropped or Archived mark (Move
+  back to Owned). `date?` defaults to today. A name in Archive only because
+  sync saw it leave can't be moved back. `resolves?` answers an open
+  `removed` alert. Returns `{ domain, ownership, archiveLabel }`.
 
-| Tool                           | Backing               | Params                          | Annotations                                   | Status                             |
-| ------------------------------ | --------------------- | ------------------------------- | --------------------------------------------- | ---------------------------------- |
-| `registrar_test`               | `R.testConnection`    | `registrar`                     | readOnly                                      | **new**                            |
-| `registrar_domains`            | `R.listDomains`       | `registrar`                     | readOnly                                      | **rename** of `list_domains`       |
-| `registrar_check_availability` | `R.checkAvailability` | `registrar`, `domains[]`        | readOnly                                      | **rename** of `check_availability` |
-| `registrar_pricing`            | `R.getPricing`        | `registrar`, `tld`              | readOnly                                      | **new**                            |
-| `registrar_register_domain`    | `R.registerDomain`    | `registrar`, `domain`, `input`¹ | write · not idempotent (creates, costs money) | **new**                            |
-| `registrar_transfer_domain`    | `R.transferIn`        | `registrar`, `domain`, `input`² | write · not idempotent (costs money)          | **new**                            |
+Purchases, sales and marks an agent records have `source: 'agent'`, shown as **Agent** in Activity, so
+you can tell what an agent did from what you did. Otherwise an agent's mark
+behaves like yours: your next mark replaces it, and Move back to Owned undoes
+it.
 
-¹ `RegisterDomainInput`: `contacts` (ContactSet, registrant required), `years?`,
-`nameservers?`, `privacy?`, `autoRenew?`, `consent?`.
-² `TransferDomainInput`: `authCode` (required), `years?`, `contacts?`, `consent?`,
-`privacy?`, `autoRenew?`.
+## Registrar
 
-### Domain-level (`registrar` + `domain` required)
+- **`registrar_test`** — test an account's credentials.
+- **`registrar_domains`** — list every domain in the account, live.
+- **`registrar_sync`** — re-sync one account into the cache.
+- **`registrar_set_enabled`** — `enabled`: turn an account on or off, as the
+  app does. A disabled account keeps its credentials but doesn't sync, and its
+  names leave `portfolio_query`; enabling syncs it. Adding, removing and
+  credentials stay in the app.
+- **`registrar_check_availability`** — `domains[]`: whether each can be
+  registered.
+- **`registrar_pricing`** — `tld` (or a domain): the registrar's live
+  registration, renewal and transfer prices.
+- **`registrar_register_domain`** — `domain`, `input` (`contacts` with a
+  registrant, `years?`, `nameservers?`, `privacy?`, `autoRenew?`,
+  `consent?`). Costs money.
+- **`registrar_transfer_domain`** — `domain`, `input` (`authCode`, `years?`,
+  `contacts?`, `privacy?`, `autoRenew?`, `consent?`). Costs money.
 
-| Tool                     | Backing                         | Params                                 | Annotations                          | Status                          |
-| ------------------------ | ------------------------------- | -------------------------------------- | ------------------------------------ | ------------------------------- |
-| `domain_get`             | `R.getDomain`                   | `registrar`, `domain`                  | readOnly                             | **new**                         |
-| `domain_renew`           | `R.renewDomain`                 | `registrar`, `domain`, `years?`        | write · not idempotent (costs money) | **new**                         |
-| `domain_set_autorenew`   | `R.setAutoRenew`                | `registrar`, `domain`, `enabled`       | write · idempotent                   | **rename** of `set_auto_renew`  |
-| `domain_set_lock`        | `R.lockDomain` / `unlockDomain` | `registrar`, `domain`, `locked`        | write · idempotent                   | **rename** of `set_lock`        |
-| `domain_set_privacy`     | `R.setPrivacy`                  | `registrar`, `domain`, `enabled`       | write · idempotent                   | **new**                         |
-| `domain_nameservers_get` | `R.getNameservers`              | `registrar`, `domain`                  | readOnly                             | **rename** of `get_nameservers` |
-| `domain_nameservers_set` | `R.updateNameservers`           | `registrar`, `domain`, `nameservers[]` | write · destructive · idempotent     | **rename** of `set_nameservers` |
-| `domain_dns_get`         | `R.getDnsRecords`               | `registrar`, `domain`                  | readOnly                             | **rename** of `get_dns_records` |
-| `domain_dns_set`         | `R.setDnsRecords`               | `registrar`, `domain`, `records[]`³    | write · destructive · idempotent     | **new**                         |
-| `domain_contacts_get`    | `R.getContacts`                 | `registrar`, `domain`                  | readOnly                             | **new**                         |
-| `domain_contacts_set`    | `R.updateContacts`              | `registrar`, `domain`, `contacts`⁴     | write · idempotent                   | **new**                         |
+## Domain
 
-³ `DnsRecord[]`: `{ type, name, value, ttl?, priority?, weight?, port? }`. `_set`
-replaces the full record set — mirror the client's replace semantics in the
-description.
-⁴ `ContactSet`: `{ registrant?, admin?, tech?, billing? }`, each a `Contact`.
+All take `domain`, optional `registrar` and optional `accountId`, except
+`domain_set_folder`.
 
-### Domain-level, dombot-specific
+Reads:
 
-| Tool                   | Backing                                   | Params                | Annotations | Status  |
-| ---------------------- | ----------------------------------------- | --------------------- | ----------- | ------- |
-| `domain_renewal_price` | `services/pricing.ts` → `getRenewalPrice` | `registrar`, `domain` | readOnly    | **new** |
+- **`domain_get`** — the full record: status, dates, auto-renew, lock,
+  privacy, nameservers. Cached; `refresh?`.
+- **`domain_nameservers_get`** — nameservers, from the registrar or the
+  public registry. Cached; `refresh?`.
+- **`domain_contacts_get`** — registrant, admin, tech and billing contacts.
+- **`domain_dns_get`** — DNS records at the registrar.
+- **`domain_dnssec_get`** — whether DNSSEC is on, and its DS records.
+- **`domain_email_forwarding_get`** — email forwarding rules.
+- **`domain_url_forwarding_get`** — URL forwarding rules, including read-only
+  `masked` ones.
+- **`domain_auth_code_get`** — the EPP/auth code. A secret.
+- **`domain_renewal_price`** — DomBot's estimated annual renewal price and
+  where it came from: your manual price, a per-name quote, the account's TLD
+  rate, or the base database. Not the registrar's live quote (that's
+  `registrar_pricing`).
 
-Dombot-specific estimate (manual override → per-name registrar quote where
-supported → base per-TLD database), **not** a registrar call. Distinct from
-`registrar_pricing` (live registrar pricing).
+Writes:
 
-### Domain-level forwarding
+- **`domain_set_autorenew`** — `enabled`.
+- **`domain_set_lock`** — `locked`.
+- **`domain_set_privacy`** — `enabled`.
+- **`domain_nameservers_set`** — `nameservers[]`.
+- **`domain_dns_set`** — `records[]` (`type`, `name`, `value`, `ttl?`,
+  `priority?`, `weight?`, `port?`). Replaces the whole set.
+- **`domain_contacts_set`** — `contacts` (any of the four roles).
+- **`domain_email_forwarding_set`** — `forwards[]` (`alias`, `forwardTo`).
+  Replaces the whole set; an empty array clears it.
+- **`domain_url_forwarding_set`** — `forwards[]` (`host`, `url`, `type`:
+  `temporary` or `permanent`). Replaces the whole set; an empty array clears
+  it.
+- **`domain_renew`** — `years?` (default 1). Costs money.
+- **`domain_set_folder`** — see [Folders](#folders). Local only, so it takes
+  no `registrar` or `accountId`.
 
-Email and URL forwarding are **two unrelated features**, so they get **four
-separate tools** — not one shared `domain_forwarding_*`. "Domain forwarding" is
-registrar jargon for URL redirects, and sitting it next to email forwarding
-invites confusion; name each tool for what it actually does.
+Auto-renew, lock, privacy, nameservers, forwarding and renew run through the
+same dispatcher as the Domains table ([domain-editing.md](domain-editing.md)),
+so they're gated by what the registrar supports and return `{ accountId,
+registrar, success, status, message }`. `status` is `ok`, `failed`,
+`unsupported`, `skipped`, `rate-limited`, `cancelled`, or `unknown` when a
+write's outcome couldn't be confirmed; the message says whether it's safe to
+try again. `domain_dns_set` and `domain_contacts_set` return the registrar's
+`{ success, message }`. `domain_auth_code_get` goes through the dispatcher too
+and returns `{ domain, authCode }`, or fails with the reason.
 
-| Tool                          | Backing                 | Params                               | Annotations                      | Status  |
-| ----------------------------- | ----------------------- | ------------------------------------ | -------------------------------- | ------- |
-| `domain_email_forwarding_get` | `R.getEmailForwarding`  | `registrar`, `domain`                | readOnly                         | **new** |
-| `domain_email_forwarding_set` | `R.setEmailForwarding`  | `registrar`, `domain`, `forwards[]`¹ | write · destructive · idempotent | **new** |
-| `domain_url_forwarding_get`   | `R.getDomainForwarding` | `registrar`, `domain`                | readOnly                         | **new** |
-| `domain_url_forwarding_set`   | `R.setDomainForwarding` | `registrar`, `domain`, `forwards[]`² | write · destructive · idempotent | **new** |
-
-¹ `EmailForward[]`: `{ alias, forwardTo }` — alias-style email redirects
-(`hello@example.com` → a destination address).
-² `DomainForward[]`: `{ host, url, type }` — HTTP redirects (`@` / `www` → a
-URL). The `masked` `type` is **read-only**: `getDomainForwarding` reports it but
-`domain_url_forwarding_set` only accepts `temporary`/`permanent` (its schema
-omits `masked`).
-
-Each `_set` is a **full replace** — any rule omitted is removed, an empty array
-clears all forwarding.
-
-**Support is per-registrar.** These are extended features on the client facade;
-a provider that doesn't declare the capability rejects with `NotImplementedError`
-(surfaced as the tool's error), so each tool notes it isn't supported everywhere.
-The facade passthroughs landed in the sibling repo
-([registrar-client#40](https://github.com/aoxborrow/registrar-client/pull/40)).
-
-## Conventions
-
-- **snake_case**, scope-prefixed. Grouped in the list by prefix for discovery.
-- **Read / write always split** — never a `mode` flag — so annotations stay honest:
-  reads → `readOnlyHint`; full-replacement writes (`_set`, nameservers, dns) →
-  `destructiveHint + idempotentHint`; `register` / `renew` / `transfer` → neither
-  (they create / cost money).
-- **Binary state folded into one tool** (`set_lock(locked)`, `set_autorenew(enabled)`,
-  `set_privacy(enabled)`) rather than separate enable/disable.
-- **Consistent params:** `registrar` and `domain` mean the same thing everywhere;
-  their presence in the schema signals the scope.
-- **Descriptions state scope** ("Across all configured registrars…", "At one
-  registrar…", "For a single domain…") and note replace-semantics where relevant.
-- **Output** stays the pretty-printed-JSON `json()` helper already in `tools.ts`.
-
-## Non-goals / notes
-
-- No per-call approval or extra auth on writes (per decision) — money-moving tools
-  are ordinary write tools with accurate annotations and clear descriptions.
-- Renaming the existing 9 tools is a breaking change to tool names, acceptable
-  this early; agents rediscover tools each session.
-- The landing page's MCP bullet list will be reconciled separately once these land
-  (it currently over-promises: pricing, DNS-set, contacts, forwarding,
-  register/renew/transfer).
-
-## Implementation phases
-
-1. ✅ **Rename.** Rename the 9 existing tools to the scheme (`registrar` stays
-   required where it already is). No behavior change.
-2. ✅ **New reads.** `registrar_test`, `registrar_pricing`, `domain_get`,
-   `domain_contacts_get`.
-3. ✅ **New non-money writes.** `domain_dns_set`, `domain_contacts_set`,
-   `domain_set_privacy`.
-4. ✅ **Money writes.** `registrar_register_domain`, `registrar_transfer_domain`,
-   `domain_renew`.
-5. ✅ **Renewal price.** `domain_renewal_price` via `services/pricing.ts`.
-6. ✅ **Forwarding.** Four tools — `domain_email_forwarding_get` / `_set` and
-   `domain_url_forwarding_get` / `_set` — landed alongside the `RegistrarClient`
-   facade methods in the sibling repo
-   ([registrar-client#40](https://github.com/aoxborrow/registrar-client/pull/40)).
-
-Each phase: `npm run typecheck` clean, commit, push to the PR.
+Not every registrar supports every tool; an unsupported call fails with the
+reason. The support matrix is in
+[domain-editing.md](domain-editing.md#what-each-registrar-supports).

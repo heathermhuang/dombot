@@ -45,6 +45,7 @@ interface StoredClient extends OAuthClientInformationFull {
 }
 
 interface StoredAuthCode {
+  resource?: string;
   clientId: string;
   codeChallenge: string;
   redirectUri: string;
@@ -54,6 +55,7 @@ interface StoredAuthCode {
 
 /** A token record — keyed by the token's hash, never the token itself. */
 export interface StoredToken {
+  resource?: string;
   clientId: string;
   clientName: string;
   scopes: string[];
@@ -255,6 +257,9 @@ export function listPendingApprovals(): McpPendingApproval[] {
       redirectUri: p.params.redirectUri,
       code: p.displayCode,
       createdAt: p.createdAt,
+      ...(p.params.resource
+        ? { scopes: p.params.scopes, resource: p.params.resource }
+        : {}),
     }));
 }
 
@@ -288,6 +293,7 @@ export function resolvePending(id: string, approve: boolean): string | null {
       codeChallenge: p.params.codeChallenge,
       redirectUri: p.params.redirectUri,
       scopes: p.params.scopes,
+      resource: p.params.resource,
       expiresAt: Date.now() + CODE_TTL_MS,
     };
     void store.set(CODE + code, rec);
@@ -346,13 +352,27 @@ export async function exchangeAuthorizationCode(
       'code_verifier does not match the challenge',
     );
   }
-  void store.delete(CODE + code);
+  // PKCE verification yields; consume in the backing store, not stale memory.
+  const consumed = (await store.take(CODE + code)) as
+    StoredAuthCode | undefined;
+  if (
+    !consumed ||
+    consumed.clientId !== rec.clientId ||
+    consumed.codeChallenge !== rec.codeChallenge ||
+    consumed.expiresAt < Date.now()
+  ) {
+    throw new OAuthGrantError(
+      'invalid_grant',
+      'Invalid or expired authorization code',
+    );
+  }
 
   const accessToken = randomHex(32);
   const token: StoredToken = {
     clientId: client.client_id,
     clientName: client.client_name ?? client.client_id,
     scopes: rec.scopes,
+    resource: rec.resource,
     pairedAt: Date.now(),
     expiresAt: nowSec() + TOKEN_TTL_SEC,
   };
@@ -382,6 +402,7 @@ export async function verifyAccessToken(
     scopes: rec.scopes,
     expiresAt: rec.expiresAt,
     extra: { clientName: rec.clientName, pairedAt: rec.pairedAt },
+    ...(rec.resource ? { resource: new URL(rec.resource) } : {}),
   };
 }
 

@@ -3,7 +3,7 @@ import type { RegistrarName } from '@aoxborrow/registrar-client';
 
 import { MemoryDocStore } from '../storage/doc-store';
 
-// Overrides live in the `pricing-overrides` namespace; back it with a fresh
+// Overrides live in the `domain-prices` namespace; back it with a fresh
 // in-memory store per test so they start empty, and let tests seed them via
 // setManualPrice.
 
@@ -34,6 +34,10 @@ beforeEach(async () => {
 const reg = (name: string) => name as RegistrarName;
 
 describe('usesPerNameQuote', () => {
+  it('fetches Name.com quotes for both legacy and premium-capable TLDs', () => {
+    expect(pricing.usesPerNameQuote(reg('namecom'), 'com')).toBe(true);
+    expect(pricing.usesPerNameQuote(reg('namecom'), 'io')).toBe(true);
+  });
   it('is true for gandi/dynadot on a premium-capable TLD', () => {
     expect(pricing.usesPerNameQuote(reg('gandi'), 'io')).toBe(true);
     expect(pricing.usesPerNameQuote(reg('dynadot'), 'DEV')).toBe(true); // case-insensitive
@@ -84,32 +88,71 @@ describe('resolvePricing precedence', () => {
 
   it('a manual override beats both quote and base', () => {
     getBaseRenewal.mockReturnValue(9.99);
-    pricing.setManualPrice(reg('dynadot'), 'example.com', 25);
+    pricing.setManualPrice('example.com', { amount: '25.00', currency: 'USD' });
     const p = pricing.resolvePricing(reg('dynadot'), 'example.com', {
       renewal: 42,
       currency: 'USD',
     });
     expect(p).toMatchObject({ renewal: 25, source: 'manual' });
   });
+
+  it('a user TLD rate beats the base rate', () => {
+    getBaseRenewal.mockReturnValue(22.99);
+    pricing.setTldRate(reg('godaddy'), 'com', 8.99);
+    const p = pricing.resolvePricing(reg('godaddy'), 'Example.COM');
+    expect(p).toMatchObject({ renewal: 8.99, source: 'tld', currency: 'USD' });
+  });
+
+  it('a synced quote beats a user TLD rate', () => {
+    getBaseRenewal.mockReturnValue(9.99);
+    pricing.setTldRate(reg('gandi'), 'io', 30);
+    const p = pricing.resolvePricing(reg('gandi'), 'example.io', {
+      renewal: 42,
+      currency: 'EUR',
+    });
+    expect(p).toMatchObject({ renewal: 42, source: 'api', currency: 'EUR' });
+  });
+
+  it('a manual override beats a user TLD rate', () => {
+    pricing.setTldRate(reg('godaddy'), 'com', 8.99);
+    pricing.setManualPrice('premium.com', {
+      amount: '199.00',
+      currency: 'USD',
+    });
+    expect(pricing.resolvePricing(reg('godaddy'), 'cheap.com')).toMatchObject({
+      renewal: 8.99,
+      source: 'tld',
+    });
+    expect(pricing.resolvePricing(reg('godaddy'), 'premium.com')).toMatchObject(
+      { renewal: 199, source: 'manual' },
+    );
+  });
+
+  it('a TLD rate is registrar-specific', () => {
+    pricing.setTldRate(reg('godaddy'), 'com', 8.99);
+    getBaseRenewal.mockImplementation((r) => (r === 'dynadot' ? 10.5 : null));
+    expect(pricing.resolvePricing(reg('godaddy'), 'a.com').source).toBe('tld');
+    expect(pricing.resolvePricing(reg('dynadot'), 'a.com').source).toBe('base');
+  });
 });
 
 describe('setManualPrice', () => {
   it('sets then clears an override (null deletes the key)', () => {
     getBaseRenewal.mockReturnValue(9.99);
-    pricing.setManualPrice(reg('dynadot'), 'example.com', 25);
+    pricing.setManualPrice('example.com', { amount: '25.00', currency: 'USD' });
     expect(pricing.resolvePricing(reg('dynadot'), 'example.com').source).toBe(
       'manual',
     );
 
-    pricing.setManualPrice(reg('dynadot'), 'example.com', null);
+    pricing.setManualPrice('example.com', null);
     expect(pricing.resolvePricing(reg('dynadot'), 'example.com').source).toBe(
       'base',
     );
   });
 
-  it('treats NaN as a clear', () => {
-    pricing.setManualPrice(reg('dynadot'), 'example.com', 25);
-    pricing.setManualPrice(reg('dynadot'), 'example.com', Number.NaN);
+  it('treats a zero amount as a clear', () => {
+    pricing.setManualPrice('example.com', { amount: '25.00', currency: 'USD' });
+    pricing.setManualPrice('example.com', { amount: '0', currency: 'USD' });
     getBaseRenewal.mockReturnValue(null);
     expect(pricing.resolvePricing(reg('dynadot'), 'example.com').source).toBe(
       'unavailable',
@@ -117,10 +160,84 @@ describe('setManualPrice', () => {
   });
 
   it('persists overrides to the store', async () => {
-    pricing.setManualPrice(reg('dynadot'), 'example.com', 25);
+    pricing.setManualPrice('example.com', { amount: '25.00', currency: 'USD' });
     await storage.flushWrites();
-    expect(await store.list('pricing-overrides')).toEqual({
-      'dynadot:example.com': 25,
+    expect(await store.list('domain-prices')).toEqual({
+      'example.com': { amount: '25.00', currency: 'USD' },
     });
+  });
+
+  it('keeps a manual price in its own currency', () => {
+    pricing.setManualPrice('example.com', { amount: '1500', currency: 'jpy' });
+    expect(pricing.resolvePricing(reg('dynadot'), 'example.com')).toMatchObject(
+      { renewal: 1500, currency: 'JPY', source: 'manual' },
+    );
+    expect(() =>
+      pricing.setManualPrice('example.com', { amount: '9.5', currency: 'JPY' }),
+    ).toThrow('JPY uses no decimal places.');
+    expect(() =>
+      pricing.setManualPrice('example.com', { amount: '9', currency: 'XYZ' }),
+    ).toThrow('Unknown currency XYZ.');
+  });
+
+  it('still reads a price stored as a USD number', async () => {
+    await store.put('domain-prices', 'old.com', 12.5);
+    await storage.hydrateStores();
+    expect(pricing.resolvePricing(reg('dynadot'), 'old.com')).toMatchObject({
+      renewal: 12.5,
+      currency: 'USD',
+      source: 'manual',
+    });
+  });
+
+  it('keys by name, so the override follows the domain to another account', () => {
+    pricing.setManualPrice('Münich.DE', { amount: '40.00', currency: 'USD' });
+    expect(
+      pricing.resolvePricing(
+        reg('dynadot'),
+        'xn--mnich-kva.de',
+        undefined,
+        'acct-1',
+      ),
+    ).toMatchObject({ renewal: 40, source: 'manual' });
+    expect(
+      pricing.resolvePricing(reg('godaddy'), 'münich.de', undefined, 'acct-2'),
+    ).toMatchObject({ renewal: 40, source: 'manual' });
+  });
+});
+
+describe('setTldRate', () => {
+  it('normalizes the TLD and persists the rate', async () => {
+    pricing.setTldRate(reg('godaddy'), '.COM', 8.99);
+    pricing.setTldRate(reg('dynadot'), 'IO', 32);
+    await storage.flushWrites();
+    expect(await store.list('registrar-tld-rates')).toEqual({
+      'godaddy:com': 8.99,
+      'dynadot:io': 32,
+    });
+  });
+
+  it('clears with null', () => {
+    getBaseRenewal.mockReturnValue(22.99);
+    pricing.setTldRate(reg('godaddy'), 'com', 8.99);
+    expect(pricing.resolvePricing(reg('godaddy'), 'a.com').source).toBe('tld');
+    pricing.setTldRate(reg('godaddy'), 'com', null);
+    expect(pricing.resolvePricing(reg('godaddy'), 'a.com').source).toBe('base');
+  });
+
+  it('keys a shopper rate by account and falls back to registrar', () => {
+    getBaseRenewal.mockReturnValue(22.99);
+    pricing.setTldRate(reg('godaddy'), 'com', 8.99, 'acct-1');
+    pricing.setTldRate(reg('godaddy'), 'com', 10.99);
+    expect(
+      pricing.resolvePricing(reg('godaddy'), 'a.com', undefined, 'acct-1'),
+    ).toMatchObject({ renewal: 8.99, source: 'tld' });
+    expect(pricing.resolvePricing(reg('godaddy'), 'a.com')).toMatchObject({
+      renewal: 10.99,
+      source: 'tld',
+    });
+    expect(
+      pricing.resolvePricing(reg('godaddy'), 'a.com', undefined, 'acct-2'),
+    ).toMatchObject({ renewal: 10.99, source: 'tld' });
   });
 });

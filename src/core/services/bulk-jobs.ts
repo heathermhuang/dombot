@@ -1,3 +1,4 @@
+import { resolveDomainAccount } from './registrars';
 import type {
   BulkJob,
   BulkStep,
@@ -15,6 +16,7 @@ import {
 } from '../events';
 import { Namespace } from '../storage/namespace';
 import { applyDomainOp } from './domain-ops';
+import { recordRenewals, type ConfirmedRenewal } from './domain-history';
 
 // The bulk-job runner: one `DomainOp` over many targets, respecting each
 // registrar's rate limits (one lane per registrar, with a concurrency and a
@@ -44,6 +46,7 @@ const DEFAULT_POLICY: LanePolicy = { lanes: 2, spacingMs: 500 };
 // Starting points from the library's registrar notes (docs/registrars/*.md);
 // tune against real accounts.
 const LANE_POLICY: Partial<Record<RegistrarName, LanePolicy>> = {
+  '101domain': { lanes: 1, spacingMs: 1000 }, // per-account RPS/RPH quotas
   dynadot: { lanes: 1, spacingMs: 1000 }, // Regular tier: 1 thread / 60 req-min
   porkbun: { lanes: 1, spacingMs: 1000 },
   namebright: { lanes: 1, spacingMs: 1000 }, // ~30 req / 30 s
@@ -75,6 +78,7 @@ const STATUSES: DomainOpStatus[] = [
   'skipped',
   'rate-limited',
   'cancelled',
+  'unknown',
 ];
 
 /** The persisted job: the public snapshot plus the runner's own state. */
@@ -94,7 +98,9 @@ interface StoredJob extends BulkJob {
 }
 
 const sameTarget = (a: DomainTarget, b: DomainTarget): boolean =>
-  a.registrar === b.registrar && a.domainName === b.domainName;
+  a.registrar === b.registrar &&
+  (a.accountId ?? a.registrar) === (b.accountId ?? b.registrar) &&
+  a.domainName === b.domainName;
 
 const JOB_KEY = 'job';
 const store = new Namespace<StoredJob>('bulk-jobs');
@@ -115,7 +121,23 @@ export function setBulkAutoDrive(enabled: boolean): void {
 function loadJob(): StoredJob | null {
   if (!job) {
     const stored = store.get(JOB_KEY);
-    job = stored ? { ...stored, inFlight: stored.inFlight ?? [] } : null;
+    // Pre-account jobs were queued under the provider's legacy default account.
+    // Pin those targets to that ID; never infer a newly-added account on resume.
+    const migratedTarget = (target: DomainTarget): DomainTarget => ({
+      ...target,
+      accountId: target.accountId ?? target.registrar,
+    });
+    job = stored
+      ? {
+          ...stored,
+          pending: stored.pending.map(migratedTarget),
+          inFlight: (stored.inFlight ?? []).map(migratedTarget),
+          results: stored.results.map((r) => ({
+            ...r,
+            target: migratedTarget(r.target),
+          })),
+        }
+      : null;
   }
   return job;
 }
@@ -169,6 +191,10 @@ export function isBulkRunning(): boolean {
 export function startBulk(targets: DomainTarget[], op: DomainOp): BulkJob {
   if (isBulkRunning()) throw new Error('A bulk job is already running.');
   if (targets.length === 0) throw new Error('No domains selected.');
+  targets = targets.map((t) => ({
+    ...t,
+    accountId: resolveDomainAccount(t.registrar, t.domainName, t.accountId).id,
+  }));
 
   job = {
     id: crypto.randomUUID(),
@@ -206,7 +232,8 @@ export function cancelBulk(jobId?: string): void {
 function record(j: StoredJob, result: DomainOpResult): void {
   j.inFlight = j.inFlight.filter((t) => !sameTarget(t, result.target));
   j.results.push(result);
-  j.counts[result.status] += 1;
+  // `?? 0`: a job persisted by an older build has no slot for newer statuses.
+  j.counts[result.status] = (j.counts[result.status] ?? 0) + 1;
   persist();
   broadcastBulkProgress({
     jobId: j.id,
@@ -323,6 +350,8 @@ async function runStep(j: StoredJob): Promise<BulkStep> {
 
   const controller = new AbortController();
   stepController = controller;
+  // Confirmed renewals in this slice, recorded together (one write).
+  const renewals: ConfirmedRenewal[] = [];
   try {
     await Promise.all(
       slice.map(async (target) => {
@@ -331,6 +360,7 @@ async function runStep(j: StoredJob): Promise<BulkStep> {
           : await applyDomainOp(target, j.op, {
               signal: controller.signal,
               silent: true,
+              renewals,
             });
         if (result.status === 'rate-limited') {
           j.notBefore[target.registrar] = Date.now() + RATE_LIMIT_PAUSE_MS;
@@ -340,6 +370,11 @@ async function runStep(j: StoredJob): Promise<BulkStep> {
     );
   } finally {
     stepController = null;
+    try {
+      recordRenewals(renewals);
+    } catch (err) {
+      console.error('[domain-history] recording renewals failed', err);
+    }
   }
 
   if (j.cancelRequested) {

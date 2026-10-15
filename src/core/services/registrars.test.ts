@@ -1,3 +1,5 @@
+import { configureStore, hydrateStores } from '../storage/namespace';
+import { MemoryDocStore } from '../storage/doc-store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Boundary mocks ───────────────────────────────────────────────────────────
@@ -56,15 +58,20 @@ const clientMethods = {
   registerDomain: vi.fn(),
   getDomain: vi.fn(),
   getNameservers: vi.fn(),
+  getPricing: vi.fn(),
+  checkAvailability: vi.fn(),
 };
 const listPortfolio = vi.fn();
-vi.mock('@aoxborrow/registrar-client', () => {
+vi.mock('@aoxborrow/registrar-client', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@aoxborrow/registrar-client')>();
   class RegistrarClient {
     constructor() {
       Object.assign(this, clientMethods);
     }
   }
   return {
+    ...actual,
     RegistrarClient,
     createRegistrar: vi.fn(() => ({})),
     listPortfolio: (...a: unknown[]) => listPortfolio(...a),
@@ -81,6 +88,16 @@ vi.mock('@aoxborrow/registrar-client', () => {
       },
       cloudflare: {
         displayName: 'Cloudflare',
+        features: [],
+        configFields: [{ name: 'apiKey', required: true }],
+      },
+      godaddy: {
+        displayName: 'GoDaddy',
+        features: [],
+        configFields: [{ name: 'apiToken', required: true }],
+      },
+      namecheap: {
+        displayName: 'Namecheap',
         features: [],
         configFields: [{ name: 'apiKey', required: true }],
       },
@@ -102,10 +119,14 @@ vi.mock('./registrar-state', () => ({
   },
 }));
 
+const setTldRate = vi.fn();
+const resolvePricing = vi.fn();
 vi.mock('./pricing', () => ({
   usesPerNameQuote: () => false,
   tldOf: (d: string) => d.slice(d.indexOf('.') + 1),
-  resolvePricing: vi.fn(),
+  normalizeTld: (t: string) => t.trim().replace(/^\.+/, '').toLowerCase(),
+  setTldRate: (...a: unknown[]) => setTldRate(...a),
+  resolvePricing: (...a: unknown[]) => resolvePricing(...a),
 }));
 
 const resolveNs = vi.fn<(d: string) => Promise<string[]>>();
@@ -113,12 +134,16 @@ vi.mock('../dns', () => ({
   resolveNameservers: (d: string) => resolveNs(d),
 }));
 
+import { NotImplementedError } from '@aoxborrow/registrar-client';
 import {
   findRegistrarsForDomain,
+  getRegistrationQuote,
   getCachedPortfolio,
+  getRegistrarMetadata,
   getDomainDetail,
   getMergedPortfolio,
   getPortfolio,
+  getRenewalPriceLive,
   registerDomainCached,
   renewDomainCached,
   setAutoRenewCached,
@@ -163,7 +188,9 @@ function seedSlice(
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  configureStore(new MemoryDocStore());
+  await hydrateStores();
   vi.clearAllMocks();
   store.portfolio = {};
   store.detail = {};
@@ -233,6 +260,7 @@ describe('getCachedPortfolio / assemblePortfolio', () => {
     expect(p.registrars.sort()).toEqual(['dynadot', 'porkbun']);
     expect(p.fetchedAt).toBe(2000);
     expect(p.registrarLabels.dynadot).toBe('Dynadot');
+    expect(p.domains.every((d) => d.source === 'registrar')).toBe(true);
   });
 
   it('records an error-only registrar in errors but not in registrars', () => {
@@ -247,7 +275,43 @@ describe('getCachedPortfolio / assemblePortfolio', () => {
     seedSlice('porkbun', [], { lastSyncedAt: null, lastError: 'boom' });
     const p = getCachedPortfolio()!;
     expect(p.registrars).toEqual(['dynadot']);
-    expect(p.errors).toEqual([{ registrar: 'porkbun', message: 'boom' }]);
+    expect(p.errors).toEqual([
+      {
+        registrar: 'porkbun',
+        accountId: 'porkbun',
+        accountLabel: 'Default',
+        message: 'boom',
+      },
+    ]);
+  });
+
+  it('does not expose credentials or upstream HTML from previously cached sync errors', () => {
+    seedSlice('dynadot', [], {
+      lastSyncedAt: null,
+      lastError:
+        "Request to 'https://api.example.test/xml.response?ApiKey=test-secret&ApiUser=private-user' failed with 500 Internal Server Error: <!DOCTYPE html><html>test-secret</html>",
+    });
+    const messages = [
+      getCachedPortfolio()!.errors[0].message,
+      getRegistrarMetadata().find((a) => a.accountId === 'dynadot')!.sync
+        .lastError,
+    ];
+    for (const message of messages) {
+      expect(message).toContain('500');
+      expect(message).not.toMatch(
+        /test-secret|private-user|ApiKey|DOCTYPE|<html>/,
+      );
+    }
+  });
+
+  it('hides cached rows that have no domain name', () => {
+    seedSlice('dynadot', [
+      domain({ domainName: 'a.com', registrar: 'dynadot' }),
+      domain({ domainName: '', registrar: 'dynadot' }),
+      domain({ domainName: '  ', registrar: 'dynadot' }),
+    ]);
+    const p = getCachedPortfolio()!;
+    expect(p.domains.map((d) => d.domainName)).toEqual(['a.com']);
   });
 });
 
@@ -307,6 +371,22 @@ describe('syncRegistrarInto — last-good on error (via getPortfolio)', () => {
     ).toBeNull();
   });
 
+  it('drops listed rows that have no domain name', async () => {
+    enabled.porkbun = false;
+    listPortfolio.mockResolvedValue({
+      domains: [
+        domain({ domainName: 'named.com', registrar: 'dynadot' }),
+        domain({ domainName: '', registrar: 'dynadot' }),
+      ],
+      errors: [],
+    });
+
+    const p = await getPortfolio(true);
+    expect(p.domains.map((d) => d.domainName)).toEqual(['named.com']);
+    const slice = store.portfolio.dynadot.data as { domains: Domain[] };
+    expect(slice.domains.map((d) => d.domainName)).toEqual(['named.com']);
+  });
+
   it('keeps last-good domains and lastSyncedAt when the list reports an error', async () => {
     seedSlice(
       'dynadot',
@@ -331,7 +411,12 @@ describe('syncRegistrarInto — last-good on error (via getPortfolio)', () => {
     expect(slice.lastSyncedAt).toBe(4242);
     expect(slice.lastError).toBe('rate limited');
     expect(p.errors).toEqual([
-      { registrar: 'dynadot', message: 'rate limited' },
+      {
+        registrar: 'dynadot',
+        accountId: 'dynadot',
+        accountLabel: 'Default',
+        message: 'rate limited',
+      },
     ]);
   });
 
@@ -354,7 +439,7 @@ describe('syncRegistrarInto — last-good on error (via getPortfolio)', () => {
   });
 });
 
-describe('syncRegistrar — drops the slice when unconfigured/disabled', () => {
+describe('syncRegistrar — cache lifecycle', () => {
   it('clears a registrar that is no longer configured', async () => {
     seedSlice('cloudflare', [
       domain({ domainName: 'c.com', registrar: 'cloudflare' }),
@@ -362,6 +447,410 @@ describe('syncRegistrar — drops the slice when unconfigured/disabled', () => {
     // cloudflare has no stored credentials → not configured.
     await syncRegistrar('cloudflare');
     expect(store.portfolio.cloudflare).toBeUndefined();
+  });
+
+  it('keeps a configured-but-disabled account’s cached slice', async () => {
+    seedSlice('dynadot', [
+      domain({ domainName: 'a.com', registrar: 'dynadot' }),
+    ]);
+    // Disabling keeps credentials and cache; syncing a disabled account must
+    // not fetch and must not wipe the last-good slice.
+    enabled.dynadot = false;
+    await syncRegistrar('dynadot');
+    expect(listPortfolio).not.toHaveBeenCalled();
+    expect(store.portfolio.dynadot).toBeDefined();
+  });
+});
+
+describe('GoDaddy shopper renewal quotes on sync', () => {
+  const gd = (domainName: string) =>
+    domain({ domainName, registrar: 'godaddy' });
+  const quotedNames = () =>
+    clientMethods.getPricing.mock.calls.map(([name]) => name as string);
+
+  beforeEach(() => {
+    // GoDaddy alone, so the quote calls below belong to this account.
+    delete storedCredentials.dynadot;
+    delete storedCredentials.porkbun;
+    storedCredentials.godaddy = { apiToken: 'pat' };
+  });
+
+  it('prices each TLD off a dummy name and quotes premiums per name', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [gd('404cosgrove.com'), gd('cheap.io'), gd('fancy.io')],
+      errors: [],
+    });
+    clientMethods.checkAvailability.mockResolvedValue([
+      { domainName: 'cheap.io', available: false, premium: false },
+      { domainName: 'fancy.io', available: false, premium: true },
+    ]);
+    clientMethods.getPricing.mockImplementation(async (name: string) => {
+      // A name you already own comes back with no prices at all — quoting one
+      // is what left every .com on the bundled list rate.
+      if (name === '404cosgrove.com') return { tld: 'com', currency: 'USD' };
+      if (name === 'fancy.io')
+        return { tld: 'io', currency: 'USD', renewal: 199 };
+      return name.endsWith('.com')
+        ? { tld: 'com', currency: 'USD', registration: 11.99, renewal: 8.99 }
+        : { tld: 'io', currency: 'USD', registration: 44, renewal: 44 };
+    });
+
+    await getPortfolio(true);
+
+    expect(setTldRate.mock.calls).toEqual([
+      ['godaddy', 'com', 8.99, 'godaddy'],
+      ['godaddy', 'io', 44, 'godaddy'],
+    ]);
+    // One .com quote, and it was a dummy rather than the owned name.
+    expect(quotedNames()).not.toContain('404cosgrove.com');
+    expect(quotedNames().filter((n) => n.endsWith('.com'))).toHaveLength(1);
+    expect(store.detail['godaddy:fancy.io'].data).toMatchObject({
+      renewalQuote: { renewal: 199, currency: 'USD' },
+    });
+    // Standard names ride the TLD rate; nothing per-name is stored for them.
+    expect(store.detail['godaddy:cheap.io']).toBeUndefined();
+  });
+
+  it('reads a register-only quote as the renewal rate', async () => {
+    listPortfolio.mockResolvedValue({ domains: [gd('a.com')], errors: [] });
+    // v3 omits renewalPrice when it matches the register price.
+    clientMethods.getPricing.mockResolvedValue({
+      tld: 'com',
+      currency: 'USD',
+      registration: 21.99,
+    });
+
+    await getPortfolio(true);
+
+    expect(setTldRate.mock.calls).toEqual([
+      ['godaddy', 'com', 21.99, 'godaddy'],
+    ]);
+    // .com carries no premium names, so no availability check is needed.
+    expect(clientMethods.checkAvailability).not.toHaveBeenCalled();
+  });
+
+  it('leaves a TLD unpriced when the quote carries no prices at all', async () => {
+    listPortfolio.mockResolvedValue({ domains: [gd('a.com')], errors: [] });
+    clientMethods.getPricing.mockResolvedValue({ tld: 'com', currency: 'USD' });
+
+    await getPortfolio(true);
+
+    expect(setTldRate).not.toHaveBeenCalled();
+    // Two dummies plus the owned name before giving up on the TLD.
+    expect(quotedNames()).toHaveLength(3);
+    expect(quotedNames().at(-1)).toBe('a.com');
+  });
+
+  it('falls back to the owned name when the dummy quotes fail', async () => {
+    listPortfolio.mockResolvedValue({ domains: [gd('a.com')], errors: [] });
+    clientMethods.getPricing.mockImplementation(async (name: string) => {
+      if (name === 'a.com')
+        return { tld: 'com', currency: 'USD', renewal: 9.5 };
+      throw new Error('rate limited');
+    });
+
+    await getPortfolio(true);
+
+    expect(setTldRate.mock.calls).toEqual([['godaddy', 'com', 9.5, 'godaddy']]);
+    expect(quotedNames().at(-1)).toBe('a.com');
+  });
+
+  it('stores no per-name quote when a premium name comes back priceless', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [gd('cheap.io'), gd('fancy.io')],
+      errors: [],
+    });
+    clientMethods.checkAvailability.mockResolvedValue([
+      { domainName: 'cheap.io', available: false, premium: false },
+      { domainName: 'fancy.io', available: false, premium: true },
+    ]);
+    clientMethods.getPricing.mockImplementation(async (name: string) =>
+      // The known gap: an owned premium name reports no prices, so it has to
+      // ride the TLD rate rather than pin an empty entry over it.
+      name === 'fancy.io'
+        ? { tld: 'io', currency: 'USD' }
+        : { tld: 'io', currency: 'USD', renewal: 44 },
+    );
+
+    await getPortfolio(true);
+
+    expect(setTldRate.mock.calls).toEqual([['godaddy', 'io', 44, 'godaddy']]);
+    expect(store.detail['godaddy:fancy.io']).toBeUndefined();
+  });
+
+  it('still samples one name per TLD when the availability check fails', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [gd('cheap.io'), gd('fancy.io')],
+      errors: [],
+    });
+    clientMethods.checkAvailability.mockRejectedValue(new Error('429'));
+    clientMethods.getPricing.mockResolvedValue({
+      tld: 'io',
+      currency: 'USD',
+      renewal: 44,
+    });
+
+    await getPortfolio(true);
+
+    // Unknown flags mean no per-name premium quotes, but the TLD still prices.
+    expect(setTldRate.mock.calls).toEqual([['godaddy', 'io', 44, 'godaddy']]);
+    expect(store.detail['godaddy:fancy.io']).toBeUndefined();
+  });
+});
+
+describe('Namecheap account TLD rates on sync', () => {
+  const nc = (domainName: string) =>
+    domain({ domainName, registrar: 'namecheap' });
+  const tldOfName = (name: string) => name.slice(name.indexOf('.') + 1);
+  const pricedTlds = () =>
+    clientMethods.getPricing.mock.calls.map(([name]) =>
+      tldOfName(name as string),
+    );
+
+  beforeEach(() => {
+    delete storedCredentials.dynadot;
+    delete storedCredentials.porkbun;
+    storedCredentials.namecheap = { apiKey: 'k' };
+    clientMethods.checkAvailability.mockResolvedValue([]);
+  });
+
+  it('stores the account renewal price once per distinct TLD', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [nc('a.com'), nc('b.com'), nc('c.io')],
+      errors: [],
+    });
+    clientMethods.getPricing.mockImplementation(async (name: string) => {
+      const tld = tldOfName(name);
+      return tld === 'com'
+        ? { tld, currency: 'USD', registration: 11.28, renewal: 13.98 }
+        : { tld, currency: 'USD', registration: 34.98, renewal: 52.98 };
+    });
+
+    await getPortfolio(true);
+
+    expect(pricedTlds()).toEqual(['com', 'io']);
+    expect(setTldRate.mock.calls).toEqual([
+      ['namecheap', 'com', 13.98, 'namecheap'],
+      ['namecheap', 'io', 52.98, 'namecheap'],
+    ]);
+    // A TLD rate only — nothing per-name lands in the detail cache.
+    expect(store.detail).toEqual({});
+  });
+
+  it('prices a multi-part TLD as a whole', async () => {
+    listPortfolio.mockResolvedValue({ domains: [nc('a.br.com')], errors: [] });
+    clientMethods.getPricing.mockResolvedValue({
+      tld: 'br.com',
+      currency: 'USD',
+      renewal: 44.98,
+    });
+
+    await getPortfolio(true);
+
+    // The client keeps what follows the first dot, so this is quoted as br.com.
+    expect(clientMethods.getPricing).toHaveBeenCalledWith('example.br.com');
+    expect(setTldRate.mock.calls).toEqual([
+      ['namecheap', 'br.com', 44.98, 'namecheap'],
+    ]);
+  });
+
+  it('keeps the existing rate for a TLD that comes back unpriced', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [nc('a.com'), nc('b.io'), nc('c.eu')],
+      errors: [],
+    });
+    clientMethods.getPricing.mockImplementation(async (name: string) => {
+      const tld = tldOfName(name);
+      if (tld === 'com') return { tld, currency: 'USD' };
+      if (tld === 'io') return { tld, currency: 'EUR', renewal: 40 };
+      return { tld, currency: 'USD', renewal: 8.98 };
+    });
+
+    await getPortfolio(true);
+
+    expect(setTldRate.mock.calls).toEqual([
+      ['namecheap', 'eu', 8.98, 'namecheap'],
+    ]);
+  });
+
+  it('stops pricing after the first failed call', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [nc('a.com'), nc('b.io'), nc('c.eu')],
+      errors: [],
+    });
+    clientMethods.getPricing.mockImplementation(async (name: string) => {
+      const tld = tldOfName(name);
+      if (tld === 'io') throw new Error('Too many requests');
+      return { tld, currency: 'USD', renewal: 13.98 };
+    });
+
+    await getPortfolio(true);
+
+    expect(pricedTlds()).toEqual(['com', 'io']);
+    expect(setTldRate.mock.calls).toEqual([
+      ['namecheap', 'com', 13.98, 'namecheap'],
+    ]);
+  });
+});
+
+describe('Namecheap premium renewal quotes on sync', () => {
+  const nc = (domainName: string) =>
+    domain({ domainName, registrar: 'namecheap' });
+  const checkedNames = () =>
+    clientMethods.checkAvailability.mock.calls.flatMap(
+      ([names]) => names as string[],
+    );
+
+  beforeEach(() => {
+    delete storedCredentials.dynadot;
+    delete storedCredentials.porkbun;
+    storedCredentials.namecheap = { apiKey: 'k' };
+    clientMethods.getPricing.mockResolvedValue({
+      tld: 'io',
+      currency: 'USD',
+      renewal: 52.98,
+    });
+  });
+
+  it('stores the premium renewal price for premium names only', async () => {
+    listPortfolio.mockResolvedValue({
+      domains: [nc('plain.com'), nc('cheap.io'), nc('fancy.io')],
+      errors: [],
+    });
+    clientMethods.checkAvailability.mockResolvedValue([
+      { domainName: 'cheap.io', available: false, premium: false },
+      {
+        domainName: 'fancy.io',
+        available: false,
+        premium: true,
+        price: 1500,
+        renewalPrice: 1200,
+      },
+    ]);
+
+    await getPortfolio(true);
+
+    // .com carries no premium names, so only the .io names are checked.
+    expect(checkedNames()).toEqual(['cheap.io', 'fancy.io']);
+    expect(store.detail['namecheap:fancy.io'].data).toEqual({
+      renewalQuote: { renewal: 1200, currency: 'USD' },
+      renewalQuoteFetchedAt: expect.any(Number),
+    });
+    expect(store.detail['namecheap:cheap.io']).toBeUndefined();
+  });
+
+  it('checks 50 names per call', async () => {
+    const names = Array.from({ length: 51 }, (_, i) => `n${i}.io`);
+    listPortfolio.mockResolvedValue({ domains: names.map(nc), errors: [] });
+
+    await getPortfolio(true);
+
+    expect(
+      clientMethods.checkAvailability.mock.calls.map(([n]) => n.length),
+    ).toEqual([50, 1]);
+  });
+
+  it('drops a stored premium quote once the name checks as standard', async () => {
+    listPortfolio.mockResolvedValue({ domains: [nc('was.io')], errors: [] });
+    store.detail['namecheap:was.io'] = {
+      data: {
+        autoRenew: true,
+        renewalQuote: { renewal: 900, currency: 'USD' },
+      },
+      fetchedAt: 123,
+    };
+    clientMethods.checkAvailability.mockResolvedValue([
+      { domainName: 'was.io', available: false, premium: false },
+    ]);
+
+    await getPortfolio(true);
+
+    // The detail stays, with its age, minus the quote.
+    expect(store.detail['namecheap:was.io']).toEqual({
+      data: { autoRenew: true },
+      fetchedAt: 123,
+    });
+  });
+
+  it('keeps a stored quote when the check omits the premium flag', async () => {
+    listPortfolio.mockResolvedValue({ domains: [nc('fancy.io')], errors: [] });
+    const quote = { renewalQuote: { renewal: 1200, currency: 'USD' } };
+    store.detail['namecheap:fancy.io'] = { data: quote, fetchedAt: 1 };
+    clientMethods.checkAvailability.mockResolvedValue([
+      { domainName: 'fancy.io', available: false },
+    ]);
+
+    await getPortfolio(true);
+
+    expect(store.detail['namecheap:fancy.io'].data).toEqual(quote);
+  });
+
+  it('keeps stored quotes when the check fails', async () => {
+    listPortfolio.mockResolvedValue({ domains: [nc('fancy.io')], errors: [] });
+    const quote = { renewalQuote: { renewal: 1200, currency: 'USD' } };
+    store.detail['namecheap:fancy.io'] = { data: quote, fetchedAt: 1 };
+    clientMethods.checkAvailability.mockRejectedValue(new Error('rate limit'));
+
+    await getPortfolio(true);
+
+    expect(store.detail['namecheap:fancy.io'].data).toEqual(quote);
+  });
+
+  it('skips the premium check when the TLD pass fails', async () => {
+    listPortfolio.mockResolvedValue({ domains: [nc('fancy.io')], errors: [] });
+    clientMethods.getPricing.mockRejectedValue(new Error('rate limit'));
+
+    await getPortfolio(true);
+
+    expect(clientMethods.checkAvailability).not.toHaveBeenCalled();
+  });
+
+  it('serves the stored premium quote to a live price lookup', async () => {
+    seedSlice('namecheap', [nc('fancy.io')]);
+    const quote = { renewal: 1200, currency: 'USD' };
+    store.detail['namecheap:fancy.io'] = {
+      data: { renewalQuote: quote },
+      fetchedAt: 1,
+    };
+    resolvePricing.mockReturnValue({ domain: 'fancy.io', source: 'api' });
+
+    await getRenewalPriceLive('namecheap', 'fancy.io');
+
+    expect(resolvePricing).toHaveBeenCalledWith(
+      'namecheap',
+      'fancy.io',
+      quote,
+      'namecheap',
+    );
+    expect(clientMethods.getPricing).not.toHaveBeenCalled();
+  });
+});
+
+describe('getRegistrationQuote', () => {
+  it('returns no fee when the registrar has no pricing API', async () => {
+    clientMethods.getPricing.mockRejectedValue(
+      new NotImplementedError('spaceship: getPricing is not available'),
+    );
+    await expect(
+      getRegistrationQuote('dynadot', 'backyard.green'),
+    ).resolves.toEqual({
+      amount: null,
+      currency: 'USD',
+    });
+  });
+
+  it('returns the registration fee when the registrar quotes one', async () => {
+    clientMethods.getPricing.mockResolvedValue({
+      tld: 'green',
+      currency: 'USD',
+      registration: 4.5,
+    });
+    await expect(
+      getRegistrationQuote('dynadot', 'backyard.green'),
+    ).resolves.toEqual({
+      amount: '4.50',
+      currency: 'USD',
+    });
   });
 });
 
@@ -414,6 +903,34 @@ const sliceDomain = (name = 'dynadot') =>
   (store.portfolio[name].data as { domains: Domain[] }).domains[0];
 
 describe('setLockCached / setPrivacyCached / setNameserversCached', () => {
+  it('does not replace active nameservers in either cache for an accepted pending change', async () => {
+    const current = ['ns1.old.net', 'ns2.old.net'];
+    seedSlice('dynadot', [
+      domain({
+        domainName: 'a.com',
+        registrar: 'dynadot',
+        nameservers: current,
+      }),
+    ]);
+    store.detail['dynadot:a.com'] = {
+      data: { nameservers: current },
+      fetchedAt: 111,
+    };
+    clientMethods.updateNameservers.mockResolvedValue({
+      success: true,
+      pending: true,
+      message: 'Pending registry processing',
+    });
+    const result = await setNameserversCached('dynadot', 'a.com', [
+      'ns1.new.net',
+      'ns2.new.net',
+    ]);
+    expect(result).toMatchObject({ success: true, pending: true });
+    expect(sliceDomain().nameservers).toEqual(current);
+    expect(
+      (store.detail['dynadot:a.com'].data as Partial<Domain>).nameservers,
+    ).toEqual(current);
+  });
   beforeEach(() =>
     seedSlice('dynadot', [
       domain({ domainName: 'a.com', registrar: 'dynadot' }),
@@ -560,7 +1077,12 @@ describe('getDomainDetail — nameserver resolution', () => {
       fetchedAt: Date.now(),
     };
     const detail = await getDomainDetail('dynadot', 'a.com');
-    expect(detail).toEqual({ nameservers: ['cached.ns'] });
+    expect(detail).toEqual({
+      nameservers: ['cached.ns'],
+      registrar: 'dynadot',
+      accountId: 'dynadot',
+      accountLabel: 'Default',
+    });
     expect(clientMethods.getDomain).not.toHaveBeenCalled();
   });
 

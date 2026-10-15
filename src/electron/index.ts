@@ -3,7 +3,10 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc';
 import { forwardCoreEventsToWindows } from './events';
+import { setAppMenu } from './menu';
 import { initStorage } from './storage';
+import { configureProxyTransport } from '../core/services/proxy-transport';
+import { desktopProxyFetch } from './proxy-transport';
 import { startMcpServer, stopMcpServer } from './mcp/server';
 import { hasPairedClients } from '../core/mcp/oauth';
 import { setAppIdentity } from '../core/app-info';
@@ -98,7 +101,9 @@ function isAllowedNavigation(target: string): boolean {
   return target.startsWith('file://');
 }
 
-const createWindow = () => {
+/** Opens the app window, optionally at a hash route (e.g. the app menu's
+ *  Settings… when no window is open). */
+const createWindow = (route?: string) => {
   const mainWindow = new BrowserWindow({
     width: 1240,
     height: 760,
@@ -107,7 +112,7 @@ const createWindow = () => {
     minWidth: 1040,
     minHeight: 560,
     // Paint the window with the app's dark background from the first frame so
-    // there's no white flash before the renderer loads. The UI is forced to
+    // there's no white flash before the renderer loads. The UI defaults to
     // dark (see renderer theme-provider), and this matches its `--background`
     // (oklch(0.145 0 0)). Also defer showing until the content is ready.
     backgroundColor: '#0a0a0a',
@@ -153,10 +158,15 @@ const createWindow = () => {
 
   // Load the Vite dev server in development, or the built index.html in prod.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    mainWindow.loadURL(
+      route
+        ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}#${route}`
+        : MAIN_WINDOW_VITE_DEV_SERVER_URL,
+    );
   } else {
     mainWindow.loadFile(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      route ? { hash: route } : undefined,
     );
   }
 };
@@ -180,12 +190,14 @@ function runApp(): void {
     // every namespace must be hydrated before an IPC handler or the MCP server
     // can touch one. Also runs the one-time legacy-credentials migration.
     await initStorage();
+    configureProxyTransport(desktopProxyFetch);
     // Bulk jobs: the desktop drives them in-process, and a job left running
     // by a crash/quit is closed out (never silently resumed — renew is money).
     setBulkAutoDrive(true);
     abandonInterruptedBulk();
     forwardCoreEventsToWindows();
     registerIpcHandlers();
+    setAppMenu(createWindow);
     createWindow();
 
     // The MCP server runs only when the setting says so (Settings → MCP).

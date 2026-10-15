@@ -1,8 +1,17 @@
+import {
+  clearLoginAttempts,
+  loginSource,
+  reserveLoginAttempt,
+} from './login-rate-limit';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { ApiValidationError, invoke, type ApiMethodName } from '../core/api';
 import { MCP_PUBLIC_PATHS, createMcpRoutes } from '../core/mcp/routes';
 import { setAppIdentity } from '../core/app-info';
 import { syncAll } from '../core/services/auto-sync';
+import {
+  configureIncrementalRenewalPricing,
+  stepRenewalPricing,
+} from '../core/services/registrars';
 import { resetBulkMemory } from '../core/services/bulk-jobs';
 import { getSettings } from '../core/services/settings';
 import { BundleError } from '../core/storage/bundle';
@@ -19,9 +28,6 @@ import {
   clearSessionCookie,
   createSession,
   isAuthenticated,
-  loginLockRemaining,
-  recordLoginFailure,
-  recordLoginSuccess,
   sameOrigin,
   sessionCookie,
   type AuthConfig,
@@ -29,6 +35,14 @@ import {
 import { deriveEncryptionKey, parseRootSecret } from './keys';
 import { withRequestLock } from './lock';
 import { D1DocStore } from './storage/d1-doc-store';
+import { runMigrations } from '../core/storage/migrations';
+import { configureProxyTransport } from '../core/services/proxy-transport';
+import { migrateLegacyProxies } from '../core/services/proxies';
+import { workerProxyFetch } from './proxy-transport';
+import { createPublicPortfolioRoutes } from './public-portfolio';
+import { createPublicationRoutes } from './publication-routes';
+import { PublicationStore } from './publication-store';
+import { publicationBackupMethods } from './publication-backup';
 
 // The Cloudflare Worker host: the same core (services, API table, storage
 // façade) as the desktop app behind an HTTP transport. See
@@ -46,7 +60,7 @@ interface Boot {
   auth: AuthConfig;
 }
 
-let boot: Promise<Boot> | null = null;
+let boot: Boot | null = null;
 let bootFor = '';
 
 /** The env values boot depends on. If they change under a live isolate
@@ -55,6 +69,8 @@ let bootFor = '';
 function bootFingerprint(env: Env): string {
   return [
     env.DOMBOT_SECRET,
+    env.DOMBOT_GATEWAY_SECRET,
+    env.DOMBOT_WORKSPACE_ID,
     env.DOMBOT_PASSWORD,
     env.DOMBOT_AUTH,
     env.CF_ACCESS_TEAM_DOMAIN,
@@ -62,37 +78,74 @@ function bootFingerprint(env: Env): string {
   ].join('\u0000');
 }
 
-function bootOnce(env: Env): Promise<Boot> {
+/** Called under the request lock. Cache only completed initialization: an
+ * in-flight migration belongs to its incoming Worker request. */
+async function bootOnce(env: Env): Promise<Boot> {
   const fp = bootFingerprint(env);
   if (boot && bootFor === fp) return boot;
-  bootFor = fp;
-  boot = (async () => {
+  boot = null;
+  const initialized = await (async () => {
     setAppIdentity({ version: APP_VERSION, platform: 'web' });
     const root = parseRootSecret(env.DOMBOT_SECRET);
     const cipher = await aesGcmCipher(await deriveEncryptionKey(root));
-    configureStore(new EncryptedDocStore(new D1DocStore(env.DB), cipher));
+    const raw = new D1DocStore(env.DB);
+    const store = new EncryptedDocStore(raw, cipher);
+    configureStore(store);
+    // Once per isolate, before any request hydrates. Renames copy raw rows,
+    // so values move still sealed.
+    await runMigrations(raw, store);
+    configureProxyTransport(workerProxyFetch);
+    configureIncrementalRenewalPricing(true);
     return { auth: await buildAuthConfig(env, root) };
-  })().catch((err) => {
-    boot = null; // let the next request retry (e.g. secret set after deploy)
-    throw err;
-  });
+  })();
+  bootFor = fp;
+  boot = initialized;
   return boot;
 }
 
 /** Fresh view of the store for this request. */
-async function hydrate(): Promise<void> {
-  await hydrateStores();
+async function hydrate(oauthOnly = false): Promise<void> {
+  // OAuth emits approval revisions in meta so existing browser tabs can
+  // discover a new pairing request without reloading.
+  await hydrateStores(
+    oauthOnly ? new Set(['settings', 'mcp', 'meta']) : undefined,
+  );
+  // Idempotent and a no-op once done; its writes flush with the request's.
+  if (!oauthOnly) await migrateLegacyProxies();
   resetBulkMemory();
 }
 
 type Vars = { auth: AuthConfig };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
+function retainRequestWork(c: Context, work: Promise<unknown>): void {
+  let context: Pick<ExecutionContext, 'waitUntil'>;
+  try {
+    context = c.executionCtx;
+  } catch {
+    // The same Hono app is exercised without a Worker context in Node tests.
+    // Those callers still await the foreground work.
+    return;
+  }
+  context.waitUntil(work.catch(() => {}));
+}
+
+// Anonymous access is limited to the published projection. Never hydrate the
+// private store or decrypt credentials to serve these pages.
+app.route('/', createPublicPortfolioRoutes());
+
 // ── boot on every request ───────────────────────────────────────────────────
 app.use('*', async (c, next) => {
   let b: Boot;
   try {
-    b = await bootOnce(c.env);
+    if (boot && bootFor === bootFingerprint(c.env)) b = boot;
+    else {
+      const initialize = withRequestLock(() => bootOnce(c.env));
+      // A client disconnect must not discard initialization while another
+      // request is waiting for its coordination gate to be released.
+      retainRequestWork(c, initialize);
+      b = await initialize;
+    }
   } catch (err) {
     // Misconfigured instance: say exactly what's missing, to the operator
     // only (this page is reachable before any auth exists).
@@ -113,9 +166,16 @@ app.use('*', async (c, next) => {
 const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
   c,
   next,
-) =>
-  withRequestLock(async () => {
-    await hydrate();
+) => {
+  const work = withRequestLock(async () => {
+    const oauthOnly =
+      c.req.path !== '/mcp' &&
+      MCP_PUBLIC_PATHS.some((path) =>
+        path.endsWith('*')
+          ? c.req.path.startsWith(path.slice(0, -1))
+          : path === c.req.path,
+      );
+    await hydrate(oauthOnly);
     await next();
     try {
       await flushWrites();
@@ -127,6 +187,11 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
       c.res = c.json({ error: `Could not save changes: ${message}` }, 500);
     }
   });
+  // Finish the already-authorized work and release the queue even when the
+  // browser aborts a timed-out read. Keep failures on the foreground promise.
+  retainRequestWork(c, work);
+  return work;
+};
 // The MCP surface is bearer-authenticated by its own routes, and the gate
 // (Settings → MCP) and OAuth state live in the store, so those paths hydrate
 // before their handlers run.
@@ -172,14 +237,13 @@ app.post(
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
     await next();
   },
-  stateful, // the attempts counter lives in the store
   async (c) => {
     const auth = c.get('auth');
-    // Requests are serialized per isolate, so a burst of guesses counts every
-    // failure; across isolates the counter is last-write-wins (see
-    // docs/self-hosting.md for the rate-limit rule that closes that gap).
-    const wait = loginLockRemaining();
+    const source = await loginSource(c.req.raw, auth.sessionKey!);
+    if (!source) return c.json({ error: 'Cannot identify login source' }, 503);
+    const wait = await reserveLoginAttempt(c.env.DB, source);
     if (wait > 0) {
+      c.header('Retry-After', String(Math.ceil(wait / 1000)));
       return c.json(
         {
           error: `Too many attempts. Try again in ${Math.ceil(wait / 1000)}s.`,
@@ -194,10 +258,9 @@ app.post(
       typeof body.password !== 'string' ||
       !(await checkPassword(auth, body.password))
     ) {
-      recordLoginFailure();
       return c.json({ error: 'Wrong password' }, 401);
     }
-    recordLoginSuccess();
+    await clearLoginAttempts(c.env.DB, source);
     c.header(
       'Set-Cookie',
       sessionCookie(await createSession(auth.sessionKey!), secure(c)),
@@ -213,6 +276,8 @@ app.post('/auth/logout', (c) => {
 
 // ── the API: one route over the method table ────────────────────────────────
 
+app.route('/publishing', createPublicationRoutes(stateful));
+
 app.post(
   '/api/:method',
   async (c, next) => {
@@ -227,7 +292,7 @@ app.post(
   stateful,
   async (c) => {
     const name = c.req.param('method') as ApiMethodName;
-    const entry = Object.prototype.hasOwnProperty.call(webApi, name)
+    let entry = Object.prototype.hasOwnProperty.call(webApi, name)
       ? webApi[name]
       : undefined;
     if (!entry) return c.json({ error: `Unknown method ${name}` }, 404);
@@ -237,6 +302,14 @@ app.post(
     } | null;
     const args = Array.isArray(body?.args) ? (body!.args as unknown[]) : [];
     try {
+      if (name === 'exportData' || name === 'importData') {
+        const cipher = await aesGcmCipher(
+          await deriveEncryptionKey(parseRootSecret(c.env.DOMBOT_SECRET)),
+        );
+        entry = publicationBackupMethods(
+          new PublicationStore(c.env.DB, cipher),
+        )[name];
+      }
       const result = await invoke(name, entry, args);
       return c.json({ result: result === undefined ? null : result });
     } catch (err) {
@@ -257,7 +330,15 @@ app.all('/api/*', (c) => c.json({ error: 'Method not allowed' }, 405));
 // its own, so it sits outside the session gate above; it answers 404 until
 // the user turns it on in Settings → MCP. Behind Cloudflare Access these
 // paths must be excluded from the Access policy (docs/self-hosting.md).
-app.route('/', createMcpRoutes({ version: APP_VERSION }));
+for (const path of MCP_PUBLIC_PATHS) {
+  app.all(path, (c) =>
+    createMcpRoutes({
+      version: APP_VERSION,
+      basePath: c.env.DOMBOT_PUBLIC_BASE_PATH,
+      enforceScopes: c.env.DOMBOT_AUTH === 'gateway',
+    }).fetch(c.req.raw),
+  );
+}
 
 // ── the SPA ─────────────────────────────────────────────────────────────────
 // Everything else is the renderer, served from the assets binding. In
@@ -282,8 +363,8 @@ export default {
   // Hourly cron (wrangler.jsonc). syncAll() runs only when the cache is older
   // than the configured interval, so the setting decides the real cadence.
   async scheduled(_controller, env) {
-    await bootOnce(env);
     await withRequestLock(async () => {
+      await bootOnce(env);
       await hydrate();
       const minutes = getSettings().autoSyncIntervalMinutes;
       if (minutes <= 0) {
@@ -291,6 +372,7 @@ export default {
         return;
       }
       const ran = await syncAll(minutes * 60_000);
+      await stepRenewalPricing();
       console.log(
         ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
       );

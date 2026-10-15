@@ -1,3 +1,4 @@
+import { domainKey } from '../../../shared/account-key';
 import { useState } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import type { Domain, DomainOp } from '../../../shared/ipc';
@@ -32,7 +33,7 @@ const EDITOR_NOTE: Record<string, string> = {
 export function NameserversCell({ domain }: { domain: Domain }) {
   const applyDomainOp = useAppStore((s) => s.applyDomainOp);
   const rememberNameservers = useAppStore((s) => s.rememberNameservers);
-  const key = `${domain.registrar}:${domain.domainName}`;
+  const key = domainKey(domain);
   const pending = useAppStore((s) => s.mutating[key] ?? false);
   const [open, setOpen] = useState(false);
 
@@ -59,8 +60,10 @@ export function NameserversCell({ domain }: { domain: Domain }) {
             `${domain.nameservers.join('\n')}${empty ? '' : '\n\n'}Click to edit`
           }
           className={cn(
-            'group inline-flex max-w-[280px] cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent',
-            reason !== null && 'opacity-60',
+            // -my-1 cancels the button's own py-1 so it never sets the row
+            // height; -ml-1.5 (compact) likewise pulls the content back over
+            // px-1.5 so it lines up with the column header, which has no button.
+            'group -my-1 inline-flex max-w-[280px] cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent compact:-ml-1.5',
           )}
         >
           {pending ? (
@@ -68,7 +71,7 @@ export function NameserversCell({ domain }: { domain: Domain }) {
           ) : empty ? (
             <span className="text-muted-foreground/50">—</span>
           ) : (
-            <span className="inline-flex min-w-0 items-baseline gap-1.5 font-mono text-[13px] text-foreground/70">
+            <span className="inline-flex min-w-0 items-baseline gap-1.5 font-mono text-[13px] text-foreground/70 compact:text-[11px]">
               <span className="truncate">{domain.nameservers[0]}</span>
               {domain.nameservers.length > 1 && (
                 <span className="opacity-60">

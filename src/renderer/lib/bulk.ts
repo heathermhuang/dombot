@@ -114,9 +114,11 @@ export const STATUS_LABEL: Record<DomainOpStatus, string> = {
   skipped: 'Skipped',
   'rate-limited': 'Rate limited',
   cancelled: 'Cancelled',
+  unknown: 'Unconfirmed',
 };
 
-/** Statuses worth a retry. */
+/** Statuses worth a retry. Not `unknown`: that one may have been applied, so
+ * the user checks the domain before deciding. */
 export function isRetryable(status: DomainOpStatus): boolean {
   return (
     status === 'failed' || status === 'rate-limited' || status === 'cancelled'
@@ -130,12 +132,13 @@ function csvField(value: string): string {
 /** The results report: one row per target with its status and message. */
 export function resultsToCsv(job: BulkJob): string {
   const withCodes = hasAuthCodes(job);
-  const header = ['Domain', 'Registrar', 'Status', 'Message'];
+  const header = ['Domain', 'Registrar', 'Account ID', 'Status', 'Message'];
   if (withCodes) header.push('Auth code');
   const rows = job.results.map((r) => {
     const row = [
       r.target.domainName,
       r.target.registrar,
+      r.target.accountId ?? r.target.registrar,
       STATUS_LABEL[r.status],
       r.message,
     ];

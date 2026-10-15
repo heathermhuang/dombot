@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { Namespace } from '../core/storage/namespace';
+import { verifyGatewayRequest } from '../shared/gateway-proof';
 import {
   deriveSessionKey,
   fromBase64Url,
@@ -21,9 +21,12 @@ import {
 //
 // No auth state lives in the database except login-attempt backoff.
 
-export type AuthMode = 'password' | 'cloudflare-access' | 'external';
+export type AuthMode =
+  'password' | 'cloudflare-access' | 'external' | 'gateway';
 
 export interface AuthConfig {
+  gatewaySecret?: string;
+  workspaceId?: string;
   mode: AuthMode;
   /** password mode */
   password?: string;
@@ -36,7 +39,12 @@ export interface AuthConfig {
 export function parseAuthMode(value: string | undefined): AuthMode {
   if (value === undefined || value === '' || value === 'password')
     return 'password';
-  if (value === 'cloudflare-access' || value === 'external') return value;
+  if (
+    value === 'cloudflare-access' ||
+    value === 'external' ||
+    value === 'gateway'
+  )
+    return value;
   throw new Error(
     `DOMBOT_AUTH must be "password", "cloudflare-access", or "external" (got "${value}")`,
   );
@@ -46,6 +54,8 @@ export function parseAuthMode(value: string | undefined): AuthMode {
  *  whose prerequisites are missing — better than an unlocked instance. */
 export async function buildAuthConfig(
   env: {
+    DOMBOT_GATEWAY_SECRET?: string;
+    DOMBOT_WORKSPACE_ID?: string;
     DOMBOT_AUTH?: string;
     DOMBOT_PASSWORD?: string;
     CF_ACCESS_TEAM_DOMAIN?: string;
@@ -54,6 +64,19 @@ export async function buildAuthConfig(
   root: Uint8Array,
 ): Promise<AuthConfig> {
   const mode = parseAuthMode(env.DOMBOT_AUTH);
+  if (mode === 'gateway') {
+    if (
+      !env.DOMBOT_GATEWAY_SECRET ||
+      env.DOMBOT_GATEWAY_SECRET.length < 32 ||
+      !env.DOMBOT_WORKSPACE_ID
+    )
+      throw new Error('Gateway workspace identity and key are required.');
+    return {
+      mode,
+      gatewaySecret: env.DOMBOT_GATEWAY_SECRET,
+      workspaceId: env.DOMBOT_WORKSPACE_ID,
+    };
+  }
   if (mode === 'password') {
     if (!env.DOMBOT_PASSWORD) {
       throw new Error(
@@ -165,36 +188,6 @@ export function readCookie(
   return undefined;
 }
 
-// ── password mode: login attempts ───────────────────────────────────────────
-// Single user, so a crude exponential backoff on failed attempts is enough:
-// after the 3rd failure each further attempt must wait 2^(n-3) seconds, capped
-// at an hour. Stored in the `auth` namespace so it survives isolate churn.
-
-const attempts = new Namespace<{ failures: number; lockedUntil: number }>(
-  'auth',
-);
-const ATTEMPTS_KEY = 'attempts';
-const FREE_FAILURES = 3;
-const MAX_LOCK_MS = 60 * 60 * 1000;
-
-/** Milliseconds until another attempt is allowed (0 = now). */
-export function loginLockRemaining(now = Date.now()): number {
-  const a = attempts.get(ATTEMPTS_KEY);
-  return a ? Math.max(0, a.lockedUntil - now) : 0;
-}
-
-export function recordLoginFailure(now = Date.now()): void {
-  const a = attempts.get(ATTEMPTS_KEY) ?? { failures: 0, lockedUntil: 0 };
-  const failures = a.failures + 1;
-  const over = failures - FREE_FAILURES;
-  const lockMs = over > 0 ? Math.min(2 ** (over - 1) * 1000, MAX_LOCK_MS) : 0;
-  void attempts.set(ATTEMPTS_KEY, { failures, lockedUntil: now + lockMs });
-}
-
-export function recordLoginSuccess(): void {
-  void attempts.delete(ATTEMPTS_KEY);
-}
-
 /** Checks a submitted password against the configured one, constant-time. */
 export function checkPassword(
   config: AuthConfig,
@@ -240,6 +233,16 @@ export async function isAuthenticated(
   request: Request,
 ): Promise<boolean> {
   switch (config.mode) {
+    case 'gateway':
+      return Boolean(
+        (
+          await verifyGatewayRequest(
+            config.gatewaySecret!,
+            config.workspaceId!,
+            request,
+          )
+        )?.owner,
+      );
     case 'password':
       return verifySession(
         config.sessionKey!,
@@ -262,7 +265,7 @@ export function sameOrigin(request: Request): boolean {
     request.headers.get('origin') ?? request.headers.get('referer');
   if (!origin) return false;
   try {
-    return new URL(origin).host === new URL(request.url).host;
+    return new URL(origin).origin === new URL(request.url).origin;
   } catch {
     return false;
   }

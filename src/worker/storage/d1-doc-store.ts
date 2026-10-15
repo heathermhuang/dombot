@@ -11,6 +11,13 @@ interface Row {
   value: string;
 }
 
+const UPSERT =
+  'INSERT INTO docs (ns, key, value, updated_at) VALUES (?1, ?2, ?3, ?4) ' +
+  'ON CONFLICT (ns, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at';
+
+/** Statements per `db.batch` call in `putMany`. */
+const PUT_BATCH_SIZE = 100;
+
 export class D1DocStore implements DocStore {
   constructor(private readonly db: D1Database) {}
 
@@ -24,12 +31,26 @@ export class D1DocStore implements DocStore {
 
   async put(ns: string, key: string, value: unknown): Promise<void> {
     await this.db
-      .prepare(
-        'INSERT INTO docs (ns, key, value, updated_at) VALUES (?1, ?2, ?3, ?4) ' +
-          'ON CONFLICT (ns, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
-      )
+      .prepare(UPSERT)
       .bind(ns, key, JSON.stringify(value), Date.now())
       .run();
+  }
+
+  /** Upserts in `db.batch` chunks: each batch is one subrequest and one
+   *  transaction, so a 10,000-row import stays far under the Worker's
+   *  per-request subrequest limit (1,000 on Free). */
+  async putMany(ns: string, entries: [string, unknown][]): Promise<void> {
+    const stmt = this.db.prepare(UPSERT);
+    const now = Date.now();
+    for (let i = 0; i < entries.length; i += PUT_BATCH_SIZE) {
+      await this.db.batch(
+        entries
+          .slice(i, i + PUT_BATCH_SIZE)
+          .map(([key, value]) =>
+            stmt.bind(ns, key, JSON.stringify(value), now),
+          ),
+      );
+    }
   }
 
   async delete(ns: string, key: string): Promise<void> {
@@ -47,6 +68,15 @@ export class D1DocStore implements DocStore {
     const out: Record<string, unknown> = {};
     for (const r of results) out[r.key] = JSON.parse(r.value) as unknown;
     return out;
+  }
+
+  async take(ns: string, key: string): Promise<unknown | null> {
+    // A single SQLite statement consumes the grant across Worker isolates.
+    const row = await this.db
+      .prepare('DELETE FROM docs WHERE ns = ?1 AND key = ?2 RETURNING value')
+      .bind(ns, key)
+      .first<{ value: string }>();
+    return row ? (JSON.parse(row.value) as unknown) : null;
   }
 
   async clear(ns: string): Promise<void> {

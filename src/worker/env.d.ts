@@ -2,6 +2,9 @@
 // plain vars present in wrangler.jsonc, so the rest is declared here. All
 // optional: boot fails with a clear message when a required one is missing.
 interface Env {
+  DOMBOT_GATEWAY_SECRET?: string;
+  DOMBOT_WORKSPACE_ID?: string;
+  DOMBOT_PUBLIC_BASE_PATH?: string;
   /** Root key: 32 random bytes, base64. Set via `npm run web:secrets`. */
   DOMBOT_SECRET?: string;
   /** Login password (password auth mode). Set via `npm run web:secrets`. */

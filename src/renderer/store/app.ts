@@ -1,5 +1,11 @@
+import { domainKey } from '../../shared/account-key';
+import { toAscii } from '../../shared/domain-name';
 import { create } from 'zustand';
 import type {
+  ImportedDomain,
+  ImportedDomainFields,
+  ListPrice,
+  ListPriceInput,
   AppInfo,
   AppSettings,
   BulkJob,
@@ -7,7 +13,13 @@ import type {
   Domain,
   DomainOp,
   DomainOpResult,
+  DomainPurchase,
   DomainTarget,
+  DomainEvent,
+  OwnershipItem,
+  PurchaseInput,
+  RegistrationLookup,
+  SaleInput,
   Folder,
   FolderInput,
   FolderPatch,
@@ -16,11 +28,9 @@ import type {
   RegistrarMeta,
   RegistrarName,
   RegistrarSync,
+  RenewalPriceInput,
   RenewalPricing,
 } from '../../shared/ipc';
-
-/** Stable per-domain key across registrars. */
-const domainKey = (d: Domain): string => `${d.registrar}:${d.domainName}`;
 
 /** Hard ceiling on any sync — if the main-process fetch hangs (a registrar API
  * that never responds), reject so the "Syncing…" state can't stick forever. */
@@ -57,16 +67,13 @@ let detailAllInFlight = false;
 interface AppState {
   appInfo: AppInfo | null;
   mcpInfo: McpInfo | null;
-  domains: Domain[];
-  domainsLoading: boolean;
-  domainsError: string | null;
   loadAppInfo: () => Promise<void>;
   loadMcpInfo: () => Promise<void>;
-  loadDynadotDomains: () => Promise<void>;
 
   // Aggregated portfolio across every configured registrar.
   portfolio: Domain[];
   portfolioErrors: PortfolioErrorInfo[];
+  renewalPricing: { remaining: number; failed: number } | null;
   portfolioRegistrars: string[];
   /** Map of registrar id → nicely capitalized display name. */
   portfolioRegistrarLabels: Record<string, string>;
@@ -91,11 +98,18 @@ interface AppState {
   loadRegistrars: () => Promise<void>;
   /** Sync one registrar's domains (e.g. after saving its credentials), merge the
    * result into the portfolio, refresh `registrars`, and return its sync state. */
-  syncRegistrar: (name: RegistrarName) => Promise<RegistrarSync>;
-  /** Enable/disable a registrar (keeps its credentials). Disabling drops its
-   * cached data and stops syncs; enabling re-syncs it. Updates the portfolio,
+  syncRegistrar: (
+    name: RegistrarName,
+    accountId?: string,
+  ) => Promise<RegistrarSync>;
+  /** Enable/disable an account (keeps credentials and cached data). Disabling hides its
+   * domains and stops syncs; enabling re-syncs it. Updates the portfolio,
    * pricing, and registrar metadata to match. */
-  setRegistrarEnabled: (name: RegistrarName, enabled: boolean) => Promise<void>;
+  setRegistrarEnabled: (
+    name: RegistrarName,
+    enabled: boolean,
+    accountId?: string,
+  ) => Promise<void>;
   /** Restore portfolio + detail + pricing from the on-disk cache
    * with no network calls. Call once on app launch. */
   hydrateFromCache: () => Promise<void>;
@@ -144,16 +158,15 @@ interface AppState {
 
   // Annual renewal pricing, keyed by `${registrar}:${domainName}`. Backs the
   // Renewals dashboard and the Domains renewal column. Computed in main from
-  // local data (base rates + Sync-captured quotes + manual overrides); it arrives
-  // with the launch snapshot and is refreshed after each Sync — there's no
-  // separate pricing fetch or refresh.
+  // local data (base rates + TLD rates + Sync-captured quotes + manual
+  // overrides); it arrives with the launch snapshot and is refreshed after
+  // each Sync — there's no separate pricing fetch or refresh.
   pricing: Record<string, RenewalPricing>;
   /** Re-read the whole-portfolio pricing map from main (local, no network). */
   loadPricing: () => Promise<void>;
   setManualPrice: (
-    registrar: string,
     domain: string,
-    price: number | null,
+    price: RenewalPriceInput | null,
   ) => Promise<void>;
 
   // User-defined folders for organizing domains, plus the domain→folder map
@@ -168,7 +181,7 @@ interface AppState {
   /** Delete a folder; also drops any local assignments pointing at it. */
   deleteFolder: (id: string) => Promise<void>;
   /** Assign a domain to a folder, or unassign it with a null folderId. */
-  assignFolder: (domainKey: string, folderId: string | null) => Promise<void>;
+  assignFolder: (domainName: string, folderId: string | null) => Promise<void>;
 
   // User-adjustable app settings (e.g. the background-sync interval). `null`
   // until first loaded.
@@ -182,6 +195,69 @@ interface AppState {
   rememberNameservers: (nameservers: string[]) => Promise<void>;
   /** Turn the embedded MCP server on or off; applied live in main. */
   setMcpEnabled: (enabled: boolean) => Promise<void>;
+  /** Turn the daily check for a newer release on or off. */
+  setUpdateChecks: (enabled: boolean) => Promise<void>;
+  /** Save the preferred currency and the on-screen number format. */
+  saveMoneySettings: (
+    patch: Pick<AppSettings, 'preferredCurrency' | 'numberFormat'>,
+  ) => Promise<void>;
+
+  /** Purchase records keyed by normalized domain name. */
+  purchases: Record<string, DomainPurchase>;
+  loadPurchases: () => Promise<void>;
+  savePurchase: (input: PurchaseInput) => Promise<void>;
+  saveSale: (input: SaleInput) => Promise<void>;
+  saveNotes: (domainName: string, notes: string) => Promise<void>;
+
+  /**
+   * Names you own that no connected account reports, keyed by normalized
+   * domain name. Reloaded with the event log, since a sync can take one over.
+   */
+  importedDomains: Record<string, ImportedDomain>;
+  loadImportedDomains: () => Promise<void>;
+  saveImportedDomain: (
+    domainName: string,
+    fields: ImportedDomainFields,
+  ) => Promise<void>;
+
+  /** Asking prices keyed by normalized domain name. */
+  listPrices: Record<string, ListPrice>;
+  loadListPrices: () => Promise<void>;
+  /** Set or clear (all amounts blank) asking prices in one write. */
+  saveListPrices: (inputs: ListPriceInput[]) => Promise<void>;
+
+  /**
+   * Public registration for names on History, keyed by domain name; null for
+   * a name that couldn't be looked up.
+   */
+  registrationLookups: Record<string, RegistrationLookup | null>;
+  loadRegistrationLookups: (domainNames: string[]) => Promise<void>;
+
+  /**
+   * The domain event log: purchases, sales, and what sync saw. Ownership
+   * (Owned / Archive) and the alerts are derived from it (shared/ownership.ts,
+   * shared/sync-diff.ts).
+   */
+  domainEvents: DomainEvent[];
+  loadDomainEvents: () => Promise<void>;
+  /**
+   * Mark names Dropped or Archived on `date` (blank: today). Each `resolves`
+   * closes the alert it answers.
+   */
+  setDispositions: (
+    items: OwnershipItem[],
+    type: 'dropped' | 'archived',
+    date?: string | null,
+  ) => Promise<void>;
+  /** Mark names Sold with no price, dated `date` (blank: today). */
+  markSold: (items: OwnershipItem[], date?: string | null) => Promise<void>;
+  /** "Move back to Owned": undo Sold, Dropped, or Archived. */
+  restoreOwned: (domainNames: string[]) => Promise<void>;
+  setAlertsDismissed: (ids: string[], dismissed: boolean) => Promise<void>;
+  /** Undo one of your own events. */
+  deleteUserEvent: (id: string) => Promise<void>;
+  /** Delete everything DomBot holds about each name. */
+  deleteDomains: (domainNames: string[]) => Promise<void>;
 
   // Row selection for bulk actions, keyed `${registrar}:${domainName}`. Lives
   // here (not in the page) so it survives tab switches; pruned when the
@@ -208,9 +284,6 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   appInfo: null,
   mcpInfo: null,
-  domains: [],
-  domainsLoading: false,
-  domainsError: null,
   loadAppInfo: async () => {
     const appInfo = await window.api.getAppInfo();
     set({ appInfo });
@@ -219,21 +292,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const mcpInfo = await window.api.getMcpInfo();
     set({ mcpInfo });
   },
-  loadDynadotDomains: async () => {
-    set({ domainsLoading: true, domainsError: null });
-    try {
-      const domains = await window.api.listDynadotDomains();
-      set({ domains, domainsLoading: false });
-    } catch (err) {
-      set({
-        domainsLoading: false,
-        domainsError: err instanceof Error ? err.message : String(err),
-      });
-    }
-  },
 
   portfolio: [],
   portfolioErrors: [],
+  renewalPricing: null,
   portfolioRegistrars: [],
   portfolioRegistrarLabels: {},
   portfolioLoading: false,
@@ -247,8 +309,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ registrars: await window.api.getRegistrarMetadata() });
   },
 
-  syncRegistrar: async (name) => {
-    const result = await withSyncTimeout(window.api.syncRegistrar(name));
+  syncRegistrar: async (name, accountId) => {
+    const prefix = `${accountId ?? name}:`;
+    set((state) => ({
+      enriched: Object.fromEntries(
+        Object.entries(state.enriched).filter(
+          ([key]) => !key.startsWith(prefix),
+        ),
+      ),
+    }));
+    const result = await withSyncTimeout(
+      window.api.syncRegistrar(name, accountId),
+    );
     // Merge the updated aggregate into the portfolio without disturbing other
     // registrars' lazily-loaded detail/pricing (those maps stay keyed by
     // registrar:domain and remain valid). A full "Sync domains" is what clears
@@ -256,31 +328,44 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       portfolio: result.domains,
       portfolioErrors: result.errors,
+      renewalPricing: result.renewalPricing ?? null,
       portfolioRegistrars: result.registrars,
       portfolioRegistrarLabels: result.registrarLabels,
       portfolioLoadedAt: result.fetchedAt ?? Date.now(),
       portfolioSource: state.portfolioSource ?? 'live',
+      refreshTick: state.refreshTick + 1,
     }));
     // Refresh sync statuses (this registrar's lastSyncedAt/lastError) for the
     // Settings cards and the status-bar pill, and the pricing map so this
     // registrar's just-synced renewal prices show (local, no network).
     await get().loadRegistrars();
     await get().loadPricing();
-    const meta = get().registrars?.find((r) => r.name === name);
+    await get().loadDomainEvents();
+    await get().loadFolders();
+    const meta = get().registrars?.find(
+      (r) => r.name === name && (!accountId || r.accountId === accountId),
+    );
     return (
-      meta?.sync ?? { lastSyncedAt: null, lastError: null, domainCount: 0 }
+      meta?.sync ?? {
+        lastSyncedAt: null,
+        lastError: null,
+        lastErrorAt: null,
+        domainCount: 0,
+        trackedSince: null,
+      }
     );
   },
 
-  setRegistrarEnabled: async (name, enabled) => {
-    // Main flips the flag, then either re-syncs (enable) or drops the registrar's
+  setRegistrarEnabled: async (name, enabled, accountId) => {
+    // Main flips the flag, then either re-syncs (enable) or hides the account's
     // cached data (disable), and returns the reassembled portfolio.
     const result = await withSyncTimeout(
-      window.api.setRegistrarEnabled(name, enabled),
+      window.api.setRegistrarEnabled(name, enabled, accountId),
     );
     set((state) => ({
       portfolio: result.domains,
       portfolioErrors: result.errors,
+      renewalPricing: result.renewalPricing ?? null,
       portfolioRegistrars: result.registrars,
       portfolioRegistrarLabels: result.registrarLabels,
       portfolioLoadedAt:
@@ -291,13 +376,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     // status bar, and re-read pricing for the updated portfolio.
     await get().loadRegistrars();
     await get().loadPricing();
+    await get().loadDomainEvents();
+    await get().loadFolders();
   },
 
   hydrateFromCache: async () => {
     // Only hydrate before any live load — never clobber fresher data.
     if (get().portfolioSource !== null || get().portfolioLoading) return;
     const snapshot = await window.api.hydrateFromCache();
-    if (!snapshot.portfolio) return;
+    if (!snapshot.portfolio) {
+      // No registrar data, but imported names still have prices.
+      if (get().portfolioSource === null) set({ pricing: snapshot.pricing });
+      return;
+    }
     // Don't overwrite a live load that landed while this was awaiting.
     if (get().portfolioSource !== null) return;
 
@@ -312,6 +403,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       portfolio: portfolio.domains,
       portfolioErrors: portfolio.errors,
+      renewalPricing: portfolio.renewalPricing ?? null,
       portfolioRegistrars: portfolio.registrars,
       portfolioRegistrarLabels: portfolio.registrarLabels,
       portfolioLoadedAt: portfolio.fetchedAt,
@@ -322,12 +414,35 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   applyPortfolioCacheUpdate: async () => {
+    // DomBot's own data isn't cache: an MCP tool can change history, folders,
+    // notes, prices, imported names (read with the events) or an account's
+    // enabled state before the portfolio has ever loaded, so re-read it all
+    // unconditionally. Each is a local read, no network.
+    const local = Promise.all([
+      get().loadDomainEvents(),
+      get().loadFolders(),
+      get().loadPurchases(),
+      get().loadListPrices(),
+      get().loadPricing(),
+      get().loadRegistrars(),
+    ]).then(() => undefined);
     // Before the first load there's nothing in view to overlay; the launch
     // hydrate path covers a fresh start.
-    if (get().portfolioSource === null) return;
+    if (get().portfolioSource === null) return local;
     const snapshot = await window.api.hydrateFromCache();
     const portfolio = snapshot.portfolio;
-    if (!portfolio) return;
+    if (!portfolio) {
+      set({
+        portfolio: [],
+        portfolioErrors: [],
+        renewalPricing: null,
+        portfolioRegistrars: [],
+        enriched: {},
+        // Imported names keep their prices without registrar data.
+        pricing: snapshot.pricing,
+      });
+      return local;
+    }
     set((state) => {
       // Overlay the freshly-cached summary + detail onto any existing enriched
       // entry so a patched field (auto-renew, lock, privacy, nameservers, …)
@@ -344,12 +459,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         portfolio: portfolio.domains,
         portfolioErrors: portfolio.errors,
+        renewalPricing: portfolio.renewalPricing ?? null,
         portfolioRegistrars: portfolio.registrars,
         portfolioRegistrarLabels: portfolio.registrarLabels,
         portfolioLoadedAt: portfolio.fetchedAt,
         enriched,
       };
     });
+    await local;
   },
 
   clearAllCaches: async () => {
@@ -360,6 +477,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       portfolio: [],
       portfolioErrors: [],
+      renewalPricing: null,
       portfolioRegistrars: [],
       portfolioRegistrarLabels: {},
       portfolioLoadedAt: null,
@@ -371,6 +489,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       detailAllLoading: false,
       selected: new Set(),
     });
+    // Imported names aren't cache: re-read their prices.
+    await get().loadPricing();
   },
 
   loadPortfolio: async () => {
@@ -385,6 +505,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({
         portfolio: result.domains,
         portfolioErrors: result.errors,
+        renewalPricing: result.renewalPricing ?? null,
         portfolioRegistrars: result.registrars,
         portfolioRegistrarLabels: result.registrarLabels,
         portfolioLoading: false,
@@ -402,6 +523,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // prices are computed locally in main (no network).
       void get().loadRegistrars();
       void get().loadPricing();
+      void get().loadDomainEvents();
+      void get().loadFolders();
     } catch (err) {
       set({
         portfolioLoading: false,
@@ -414,7 +537,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   enriching: {},
   mutating: {},
   applyDomainOp: async (target, op, optimistic) => {
-    const key = `${target.registrar}:${target.domainName}`;
+    const key = domainKey(target);
     const state = get();
     // Base to merge onto: the already-enriched full domain if present, else the
     // portfolio summary. Absent (a domain not in view) → no row to update, but
@@ -459,6 +582,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   enrichVisible: async (domains, force = false) => {
     const todo = domains.filter((d) => {
       const key = domainKey(d);
+      // A name that already left the registrar, or one you added by hand, has
+      // no registrar to ask.
+      if (d.departed || d.source === 'imported') return false;
+      // Nor does a row without a name (core drops these; belt and braces).
+      if (!d.domainName) return false;
       // A forced refresh re-fetches on-screen rows regardless of prior state,
       // skipping only ones already in flight.
       if (force) return !enrichInFlight.has(key);
@@ -501,6 +629,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             d.registrar as RegistrarName,
             d.domainName,
             force,
+            d.accountId,
           );
           if (detail) {
             // detail is a partial — merge it over the list summary.
@@ -546,8 +675,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const pricing = await window.api.getPortfolioPricing();
     set({ pricing });
   },
-  setManualPrice: async (registrar, domain, price) => {
-    await window.api.setManualPrice(registrar as RegistrarName, domain, price);
+  setManualPrice: async (domain, price) => {
+    await window.api.setManualPrice(domain, price);
     // The override changes one domain's price; re-read the whole map (local, no
     // network) so the dashboard totals and the row both reflect it.
     await get().loadPricing();
@@ -584,12 +713,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     });
   },
-  assignFolder: async (domainKey, folderId) => {
-    await window.api.assignFolder(domainKey, folderId);
+  assignFolder: async (domainName, folderId) => {
+    await window.api.assignFolder(domainName, folderId);
+    const key = toAscii(domainName);
     set((state) => {
       const folderAssignments = { ...state.folderAssignments };
-      if (folderId === null) delete folderAssignments[domainKey];
-      else folderAssignments[domainKey] = folderId;
+      if (folderId === null) delete folderAssignments[key];
+      else folderAssignments[key] = folderId;
       return { folderAssignments };
     });
   },
@@ -601,6 +731,128 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAutoSyncInterval: async (minutes) => {
     const settings = await window.api.updateSettings({
       autoSyncIntervalMinutes: minutes,
+    });
+    set({ settings });
+  },
+  saveMoneySettings: async (patch) => {
+    const settings = await window.api.updateSettings(patch);
+    set({ settings });
+  },
+  purchases: {},
+  loadPurchases: async () => {
+    set({ purchases: await window.api.getPurchases() });
+  },
+  savePurchase: async (input) => {
+    const saved = await window.api.setPurchase(input);
+    void get().loadDomainEvents();
+    const key = toAscii(input.domainName);
+    set((state) => {
+      const purchases = { ...state.purchases };
+      if (saved) purchases[key] = saved;
+      else delete purchases[key];
+      return { purchases };
+    });
+  },
+  saveNotes: async (domainName, notes) => {
+    const saved = await window.api.setNotes(domainName, notes);
+    const key = toAscii(domainName);
+    set((state) => {
+      const purchases = { ...state.purchases };
+      if (saved) purchases[key] = saved;
+      else delete purchases[key];
+      return { purchases };
+    });
+  },
+  saveSale: async (input) => {
+    const saved = await window.api.setSale(input);
+    void get().loadDomainEvents();
+    const key = toAscii(input.domainName);
+    set((state) => {
+      const purchases = { ...state.purchases };
+      if (saved) purchases[key] = saved;
+      else delete purchases[key];
+      return { purchases };
+    });
+  },
+  importedDomains: {},
+  loadImportedDomains: async () => {
+    set({ importedDomains: await window.api.getImportedDomains() });
+  },
+  saveImportedDomain: async (domainName, fields) => {
+    set({
+      importedDomains: await window.api.updateImportedDomain(
+        domainName,
+        fields,
+      ),
+    });
+    void get().loadPricing();
+  },
+  listPrices: {},
+  loadListPrices: async () => {
+    set({ listPrices: await window.api.getListPrices() });
+  },
+  saveListPrices: async (inputs) => {
+    set({ listPrices: await window.api.setListPrices(inputs) });
+  },
+  registrationLookups: {},
+  loadRegistrationLookups: async (domainNames) => {
+    if (domainNames.length === 0) return;
+    const found = await window.api
+      .lookupRegistrations(domainNames)
+      .catch(() => ({}) as Record<string, RegistrationLookup>);
+    set((state) => {
+      const next = { ...state.registrationLookups, ...found };
+      // A name left out couldn't be looked up, so Archive stops waiting on it.
+      // An earlier answer for it stands.
+      for (const name of domainNames) {
+        const key = toAscii(name);
+        if (next[key] === undefined) next[key] = null;
+      }
+      return { registrationLookups: next };
+    });
+  },
+  domainEvents: [],
+  loadDomainEvents: async () => {
+    // A sync that writes events may also have taken imported names over.
+    const [domainEvents, importedDomains] = await Promise.all([
+      window.api.getDomainEvents(),
+      window.api.getImportedDomains(),
+    ]);
+    set({ domainEvents, importedDomains });
+  },
+  setDispositions: async (items, type, date) => {
+    set({
+      domainEvents: await window.api.setDispositions(items, type, date),
+    });
+  },
+  markSold: async (items, date) => {
+    set({ domainEvents: await window.api.markSold(items, date) });
+    await get().loadPurchases();
+  },
+  restoreOwned: async (domainNames) => {
+    set({ domainEvents: await window.api.restoreOwned(domainNames) });
+    await get().loadPurchases();
+  },
+  setAlertsDismissed: async (ids, dismissed) => {
+    set({ domainEvents: await window.api.setAlertsDismissed(ids, dismissed) });
+  },
+  deleteUserEvent: async (id) => {
+    set({ domainEvents: await window.api.deleteUserEvent(id) });
+    await get().loadPurchases();
+  },
+  deleteDomains: async (domainNames) => {
+    set({ domainEvents: await window.api.deleteDomains(domainNames) });
+    await Promise.all([
+      get().loadPurchases(),
+      get().loadFolders(),
+      get().loadPricing(),
+      get().loadListPrices(),
+      get().loadImportedDomains(),
+    ]);
+  },
+  setUpdateChecks: async (enabled) => {
+    const settings = await window.api.updateSettings({
+      updateChecks: enabled,
     });
     set({ settings });
   },
@@ -635,8 +887,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const job = await window.api.startBulk(targets, op);
     set((state) => {
       const mutating = { ...state.mutating };
-      for (const t of targets)
-        mutating[`${t.registrar}:${t.domainName}`] = true;
+      for (const t of targets) mutating[domainKey(t)] = true;
       return { bulk: job, mutating };
     });
     return job;
@@ -651,9 +902,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Rows a still-running job hasn't reached yet read as mutating.
       if (!job || job.status !== 'running') return { bulk: job };
       const mutating = { ...state.mutating };
-      const done = new Set(
-        job.results.map((r) => `${r.target.registrar}:${r.target.domainName}`),
-      );
+      const done = new Set(job.results.map((r) => domainKey(r.target)));
       for (const d of state.portfolio) {
         const key = domainKey(d);
         if (!done.has(key)) mutating[key] = true;
@@ -663,7 +912,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   applyBulkProgress: ({ jobId, result }) =>
     set((state) => {
-      const key = `${result.target.registrar}:${result.target.domainName}`;
+      const key = domainKey(result.target);
       const mutating = { ...state.mutating };
       delete mutating[key];
       const next: Partial<AppState> = { mutating };
@@ -694,7 +943,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Anything still marked from this job (cancelled before it ran) clears.
       const mutating = { ...state.mutating };
       for (const r of job.results) {
-        delete mutating[`${r.target.registrar}:${r.target.domainName}`];
+        delete mutating[domainKey(r.target)];
       }
       return { bulk: job, mutating };
     }),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryDocStore, type DocStore } from './doc-store';
 import {
   Namespace,
@@ -17,6 +17,23 @@ describe('Namespace over a DocStore', () => {
   it('throws when read before hydration', () => {
     const ns = new Namespace<number>('t-unhydrated');
     expect(() => ns.get('a')).toThrow(/hydrateStores/);
+  });
+
+  it('loads only OAuth namespaces and forgets earlier private snapshots', async () => {
+    const privateData = new Namespace<string>('t-private');
+    const oauth = new Namespace<string>('t-oauth');
+    await store.put('t-private', 'secret', 'credential');
+    await store.put('t-oauth', 'pending', 'approval');
+    await hydrateStores();
+    const loadAll = vi.spyOn(store, 'loadAll');
+    const list = vi.spyOn(store, 'list');
+    await hydrateStores(new Set(['t-oauth']));
+    expect(loadAll).not.toHaveBeenCalled();
+    expect(list.mock.calls).toEqual([['t-oauth']]);
+    expect(oauth.get('pending')).toBe('approval');
+    expect(() => privateData.get('secret')).toThrow(/hydrateStores/);
+    await hydrateStores();
+    expect(privateData.get('secret')).toBe('credential');
   });
 
   it('round-trips values through the store', async () => {
@@ -59,10 +76,14 @@ describe('Namespace over a DocStore', () => {
     const puts: string[] = [];
     const flaky: DocStore = {
       ...new MemoryDocStore(),
+      async take() {
+        return null;
+      },
       async put(_ns, key) {
         if (key === 'bad') throw new Error('disk full');
         puts.push(key);
       },
+      async putMany() {},
       async delete() {},
       async clear() {},
       async get() {

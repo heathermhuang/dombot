@@ -1,0 +1,16 @@
+{
+  "name": "@domains-domains/dombot-engine",
+  "version": "1.5.0-hosted.2",
+  "upstream": {
+    "repository": "https://github.com/aoxborrow/dombot",
+    "revision": "feef729a1758c1ff667ce3b78d03a13ec3d6573b",
+    "version": "1.5.0"
+  },
+  "archive": "vendor/domains-domains-dombot-engine-1.5.0-hosted.2.tgz",
+  "sourceSha256": "4553007779bb9269c35f356b12399eef88aad88a8ca79699ce66fc2b5be68a3d",
+  "packageSha256": "f82271ed0c05afef8ed971af94ea3e77c5a3b0e142d8ff39e0840cc4b432e59c",
+  "typesSha256": "b3bcdca836ce1c4d135397a031293718c4d86e99ecf9e96791e441b9b89b1b80",
+  "manifestSha256": "02ca190d1cf9d5fa8308f08304b25567662d4e5e066b340ea71363080649d2df",
+  "sha256": "2352563b6623b1c46c21ba26e973518ab15dde98445ba8c882df800a7b738442",
+  "integrity": "sha512-ImddC8t5a/xxM7rCmi/TMKp9mmJku14KnhW+LqeQZUOdCll4Z6h8h2evuGL7/Hi4Rv88eu20ZCDRFuCpiRh8NA=="
+}

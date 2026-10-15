@@ -3,14 +3,30 @@
 // the app renders. Kept tiny and synchronous so any component can branch on
 // it without a store round trip.
 
-export type AuthMode = 'password' | 'cloudflare-access' | 'external';
+export type AuthMode =
+  'password' | 'cloudflare-access' | 'external' | 'gateway';
 
 let web = false;
+let demo = false;
 let authMode: AuthMode | null = null;
 
 export function markWeb(mode: AuthMode): void {
   web = true;
   authMode = mode;
+}
+
+/** The demo build: a browser host (downloads, no stdio) with a few controls
+ *  disabled. Reports the plain web mode so every page keeps its normal copy;
+ *  the footer and the disabled controls branch on isDemo(). */
+export function markDemo(): void {
+  web = true;
+  demo = true;
+  authMode = 'password';
+}
+
+/** True only in the demo build. */
+export function isDemo(): boolean {
+  return demo;
 }
 
 /** True in the self-hosted browser build; false in Electron. */
@@ -23,8 +39,42 @@ export function webAuthMode(): AuthMode | null {
   return authMode;
 }
 
+/** True when the web build is served from this machine (`npm run web:dev`),
+ *  where "external" auth just means no login, not a real gate in front. */
+export function isLocalWeb(): boolean {
+  return (
+    isWeb() &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  );
+}
+
+/** Only an external identity gate needs operator-configured MCP exclusions.
+ * The managed gateway already routes bearer/OAuth traffic independently. */
+export function hasExternalMcpGate(): boolean {
+  return (
+    isWeb() &&
+    !isLocalWeb() &&
+    (authMode === 'cloudflare-access' || authMode === 'external')
+  );
+}
+
 /** Ends the web session (password mode) and returns to the login screen. */
 export async function signOut(): Promise<void> {
-  await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
-  window.location.reload();
+  await fetch(hostPath('/auth/logout'), {
+    method: 'POST',
+    credentials: 'same-origin',
+  });
+  if (webAuthMode() === 'gateway') window.location.assign('/login');
+  else window.location.reload();
+}
+
+export function hostPath(path: string): string {
+  const prefix =
+    window.location.pathname.match(/^\/w\/[a-f0-9-]{36}(?=\/)/)?.[0] ?? '';
+  return path.startsWith('/') ? prefix + path : path;
+}
+
+/** Publication endpoints exist only on the hosted app, not the local demo. */
+export function supportsPublishing(): boolean {
+  return web && !demo;
 }

@@ -1,0 +1,143 @@
+import { describe, expect, it } from 'vitest';
+import { parseNamecheapProxy } from './namecheap-proxy';
+import { isProxyHost, isPublicIpv4, parseProxy, proxySecrets } from './proxy';
+
+const values = {
+  username: 'account',
+  apiKey: 'api-secret',
+  clientIp: '9.9.9.9',
+  proxyUrl: 'https://proxy-user:proxy-secret@8.8.8.8:8080',
+  proxyIp: '8.8.4.4',
+};
+
+describe('proxy validation', () => {
+  it('is optional, and reads the same through the legacy credential-bag reader', () => {
+    expect(parseProxy({})).toBeNull();
+    expect(parseProxy({ url: ' ', egressIp: '' })).toBeNull();
+    expect(parseNamecheapProxy({})).toBeNull();
+    expect(parseNamecheapProxy(values)).toEqual(
+      parseProxy({ url: values.proxyUrl, egressIp: values.proxyIp }),
+    );
+    expect(() => parseProxy({ url: 5 })).toThrow(/text/);
+  });
+  it('lists every form of the secrets in a proxy URL for redaction', () => {
+    expect(proxySecrets(undefined)).toEqual([]);
+    const secrets = proxySecrets(
+      'https://us%40er:p%2Fw@proxy.example.com:8080/',
+    );
+    expect(secrets).toEqual(
+      expect.arrayContaining([
+        'https://us%40er:p%2Fw@proxy.example.com:8080/',
+        'us%40er',
+        'us@er',
+        'p%2Fw',
+        'p/w',
+      ]),
+    );
+    expect(proxySecrets('http://proxy.example.com:8080/')).toEqual([
+      'http://proxy.example.com:8080/',
+    ]);
+  });
+  it('normalizes a proxy independently of its outgoing IP', () => {
+    expect(parseNamecheapProxy(values)).toEqual({
+      url: values.proxyUrl + '/',
+      ip: '8.8.4.4',
+    });
+    expect(
+      parseNamecheapProxy({
+        proxyUrl: 'http://8.8.8.8:8080',
+        proxyIp: '8.8.4.4',
+      }),
+    ).not.toBeNull();
+  });
+  it.each([
+    'http://8.8.8.8:8080',
+    'http://proxy-user:proxy-secret@8.8.8.8:8080',
+    'https://proxy-user:proxy-secret@8.8.8.8:8080',
+    'http://proxy.example.com:8080',
+    'http://proxy-user:proxy-secret@proxy.example.com:8080',
+    'https://proxy-user:proxy-secret@proxy.example.com:8080',
+    'https://gw.eu-1.proxy-provider.net:443',
+    'http://PROXY.Example.COM:8080',
+  ])(
+    'accepts hostnames or public IPv4, with or without credentials: %s',
+    (proxyUrl) => {
+      const parsed = parseNamecheapProxy({ ...values, proxyUrl });
+      expect(parsed?.url).toBe(new URL(proxyUrl).href);
+      expect(parsed?.ip).toBe('8.8.4.4');
+    },
+  );
+  it.each([
+    ['proxy.example.com', true],
+    ['proxy.example.com.', true],
+    ['8.8.8.8', true],
+    ['localhost', false],
+    ['localhost.', false],
+    ['proxy', false],
+    ['-bad.example.com', false],
+    ['bad-.example.com', false],
+    ['under_score.example.com', false],
+    ['10.0.0.1', false],
+    ['::1', false],
+    ['a'.repeat(64) + '.example.com', false],
+  ])('classifies proxy host %s', (host, ok) => {
+    expect(isProxyHost(host)).toBe(ok);
+  });
+  it.each([
+    '127.0.0.1',
+    '10.0.0.1',
+    '172.16.0.1',
+    '192.168.0.1',
+    '169.254.169.254',
+    '100.64.0.1',
+    '0.0.0.0',
+    '255.255.255.255',
+    '224.0.0.1',
+    '198.18.0.1',
+    '198.51.100.1',
+    '203.0.113.1',
+    '192.0.2.1',
+    '256.1.1.1',
+    '1.2.3',
+    '1.02.3.4',
+  ])('rejects non-public/malformed IP %s', (ip) => {
+    expect(isPublicIpv4(ip)).toBe(false);
+    expect(() => parseNamecheapProxy({ ...values, proxyIp: ip })).toThrow();
+  });
+  it.each([
+    'http://localhost:8080',
+    'http://proxy:8080',
+    'http://2130706433:8080',
+    'http://0x7f000001:8080',
+    'http://[::1]:8080',
+    'https://[2001:db8::1]:8080',
+    'socks5://8.8.8.8:8080',
+    'ftp://proxy.example.com:8080',
+    'http://8.8.8.8/path',
+    'https://proxy.example.com/path',
+    'http://8.8.8.8?secret=x',
+    'http://8.8.8.8#x',
+    'http://8.8.8.8:0',
+    'http://user@8.8.8.8:8080',
+    'http://u:bad%0d%0a@8.8.8.8:8080',
+  ])(
+    'rejects unsupported proxy URL without echoing credentials',
+    (proxyUrl) => {
+      try {
+        parseNamecheapProxy({ ...values, proxyUrl });
+        throw new Error('accepted');
+      } catch (error) {
+        expect((error as Error).message).not.toMatch(
+          /accepted|proxy-secret|bad%0d|secret=x/,
+        );
+      }
+    },
+  );
+  it('rejects half a configuration', () => {
+    expect(() => parseProxy({ url: values.proxyUrl })).toThrow(/both/);
+    expect(() => parseProxy({ egressIp: values.proxyIp })).toThrow(/both/);
+    expect(() => parseNamecheapProxy({ proxyUrl: values.proxyUrl })).toThrow(
+      /both/,
+    );
+  });
+});

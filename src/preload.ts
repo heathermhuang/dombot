@@ -15,6 +15,11 @@ import {
 const api: DombotApi = {
   ping: () => ipcRenderer.invoke(IpcChannels.ping),
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.getAppInfo),
+  getReleaseFeed: (force) =>
+    ipcRenderer.invoke(IpcChannels.getReleaseFeed, force),
+  getUpdaterState: () => ipcRenderer.invoke(IpcChannels.getUpdaterState),
+  downloadUpdate: () => ipcRenderer.invoke(IpcChannels.downloadUpdate),
+  installUpdate: () => ipcRenderer.invoke(IpcChannels.installUpdate),
   openExternal: (url) => ipcRenderer.invoke(IpcChannels.openExternal, url),
   saveTextFile: (content, suggestedName) =>
     ipcRenderer.invoke(IpcChannels.saveTextFile, content, suggestedName),
@@ -24,17 +29,19 @@ const api: DombotApi = {
   clearAllCaches: () => ipcRenderer.invoke(IpcChannels.clearAllCaches),
   getPortfolioPricing: () =>
     ipcRenderer.invoke(IpcChannels.getPortfolioPricing),
-  setManualPrice: (registrar, domain, price) =>
-    ipcRenderer.invoke(IpcChannels.setManualPrice, registrar, domain, price),
+  stepRenewalPricing: () => ipcRenderer.invoke(IpcChannels.stepRenewalPricing),
+  getManualPrices: () => ipcRenderer.invoke(IpcChannels.getManualPrices),
+  setManualPrice: (domain, price) =>
+    ipcRenderer.invoke(IpcChannels.setManualPrice, domain, price),
 
   // Registrars
-  listDynadotDomains: () => ipcRenderer.invoke(IpcChannels.listDynadotDomains),
-  getDomainDetail: (registrar, domainName, refresh) =>
+  getDomainDetail: (registrar, domainName, refresh, accountId) =>
     ipcRenderer.invoke(
       IpcChannels.getDomainDetail,
       registrar,
       domainName,
       refresh,
+      accountId,
     ),
   applyDomainOp: (target, op) =>
     ipcRenderer.invoke(IpcChannels.applyDomainOp, target, op),
@@ -59,15 +66,40 @@ const api: DombotApi = {
   },
   listPortfolio: (refresh) =>
     ipcRenderer.invoke(IpcChannels.listPortfolio, refresh),
-  syncRegistrar: (name) => ipcRenderer.invoke(IpcChannels.syncRegistrar, name),
+  syncRegistrar: (name, accountId) =>
+    ipcRenderer.invoke(IpcChannels.syncRegistrar, name, accountId),
+  getRegistrarCatalog: () =>
+    ipcRenderer.invoke(IpcChannels.getRegistrarCatalog),
+  connectRegistrarAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.connectRegistrarAccount, ...args),
+  createRegistrarAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.createRegistrarAccount, ...args),
+  renameRegistrarAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.renameRegistrarAccount, ...args),
+  removeRegistrarAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.removeRegistrarAccount, ...args),
+  testRegistrarAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.testRegistrarAccount, ...args),
   getRegistrarMetadata: () =>
     ipcRenderer.invoke(IpcChannels.getRegistrarMetadata),
-  getRegistrarCredentials: (name) =>
-    ipcRenderer.invoke(IpcChannels.getRegistrarCredentials, name),
-  saveRegistrarCredentials: (name, creds) =>
-    ipcRenderer.invoke(IpcChannels.saveRegistrarCredentials, name, creds),
-  setRegistrarEnabled: (name, enabled) =>
-    ipcRenderer.invoke(IpcChannels.setRegistrarEnabled, name, enabled),
+  getRegistrarCredentials: (name, accountId) =>
+    ipcRenderer.invoke(IpcChannels.getRegistrarCredentials, name, accountId),
+  saveRegistrarCredentials: (...args) =>
+    ipcRenderer.invoke(IpcChannels.saveRegistrarCredentials, ...args),
+  getProxySettings: () => ipcRenderer.invoke(IpcChannels.getProxySettings),
+  saveProxySettings: (proxy) =>
+    ipcRenderer.invoke(IpcChannels.saveProxySettings, proxy),
+  removeProxySettings: () =>
+    ipcRenderer.invoke(IpcChannels.removeProxySettings),
+  testProxySettings: (proxy) =>
+    ipcRenderer.invoke(IpcChannels.testProxySettings, proxy),
+  setRegistrarEnabled: (name, enabled, accountId) =>
+    ipcRenderer.invoke(
+      IpcChannels.setRegistrarEnabled,
+      name,
+      enabled,
+      accountId,
+    ),
 
   // MCP server
   getMcpInfo: () => ipcRenderer.invoke(IpcChannels.getMcpInfo),
@@ -90,6 +122,17 @@ const api: DombotApi = {
     return () =>
       ipcRenderer.removeListener(IpcEvents.portfolioChanged, listener);
   },
+  onSyncRequested: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on(IpcEvents.syncRequested, listener);
+    return () => ipcRenderer.removeListener(IpcEvents.syncRequested, listener);
+  },
+  onNavigateRequested: (callback) => {
+    const listener = (_e: unknown, route: string) => callback(route);
+    ipcRenderer.on(IpcEvents.navigateRequested, listener);
+    return () =>
+      ipcRenderer.removeListener(IpcEvents.navigateRequested, listener);
+  },
 
   // Folders
   getFolders: () => ipcRenderer.invoke(IpcChannels.getFolders),
@@ -97,13 +140,49 @@ const api: DombotApi = {
   updateFolder: (id, patch) =>
     ipcRenderer.invoke(IpcChannels.updateFolder, id, patch),
   deleteFolder: (id) => ipcRenderer.invoke(IpcChannels.deleteFolder, id),
-  assignFolder: (domainKey, folderId) =>
-    ipcRenderer.invoke(IpcChannels.assignFolder, domainKey, folderId),
+  assignFolder: (domainName, folderId) =>
+    ipcRenderer.invoke(IpcChannels.assignFolder, domainName, folderId),
 
   // Settings
   getSettings: () => ipcRenderer.invoke(IpcChannels.getSettings),
   updateSettings: (patch) =>
     ipcRenderer.invoke(IpcChannels.updateSettings, patch),
+  getPurchases: () => ipcRenderer.invoke(IpcChannels.getPurchases),
+  setPurchase: (input) => ipcRenderer.invoke(IpcChannels.setPurchase, input),
+  setSale: (input) => ipcRenderer.invoke(IpcChannels.setSale, input),
+  setNotes: (domainName, notes) =>
+    ipcRenderer.invoke(IpcChannels.setNotes, domainName, notes),
+  previewDomainImport: (rows) =>
+    ipcRenderer.invoke(IpcChannels.previewDomainImport, rows),
+  importDomains: (rows, options) =>
+    ipcRenderer.invoke(IpcChannels.importDomains, rows, options),
+  getImportedDomains: () => ipcRenderer.invoke(IpcChannels.getImportedDomains),
+  updateImportedDomain: (domainName, fields) =>
+    ipcRenderer.invoke(IpcChannels.updateImportedDomain, domainName, fields),
+  getListPrices: () => ipcRenderer.invoke(IpcChannels.getListPrices),
+  setListPrices: (inputs) =>
+    ipcRenderer.invoke(IpcChannels.setListPrices, inputs),
+  getDomainEvents: () => ipcRenderer.invoke(IpcChannels.getDomainEvents),
+  setDispositions: (items, type, date) =>
+    ipcRenderer.invoke(IpcChannels.setDispositions, items, type, date),
+  markSold: (items, date) =>
+    ipcRenderer.invoke(IpcChannels.markSold, items, date),
+  restoreOwned: (domainNames) =>
+    ipcRenderer.invoke(IpcChannels.restoreOwned, domainNames),
+  setAlertsDismissed: (ids, dismissed) =>
+    ipcRenderer.invoke(IpcChannels.setAlertsDismissed, ids, dismissed),
+  deleteUserEvent: (id) => ipcRenderer.invoke(IpcChannels.deleteUserEvent, id),
+  deleteDomains: (domainNames) =>
+    ipcRenderer.invoke(IpcChannels.deleteDomains, domainNames),
+  lookupRegistrations: (domainNames) =>
+    ipcRenderer.invoke(IpcChannels.lookupRegistrations, domainNames),
+  getRegistrationQuote: (registrar, domainName, accountId) =>
+    ipcRenderer.invoke(
+      IpcChannels.getRegistrationQuote,
+      registrar,
+      domainName,
+      accountId,
+    ),
 
   // Events (polling)
   getRevisions: () => ipcRenderer.invoke(IpcChannels.getRevisions),

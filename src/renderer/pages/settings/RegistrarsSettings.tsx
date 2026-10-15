@@ -1,17 +1,42 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, CircleX, ExternalLink, RefreshCw } from 'lucide-react';
+import { accountCards } from '../../lib/registrar-accounts';
+import {
+  accountSuffix,
+  accountTitle,
+  isAutoLabel,
+} from '../../../shared/account-label';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  ChevronDown,
+  CircleX,
+  Copy,
+  Ellipsis,
+  ExternalLink,
+  Pencil,
+  Plus,
+  Power,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import type {
   CredentialValues,
+  ProxySettings,
+  RegistrarAccount,
+  RegistrarDefinition,
   RegistrarMeta,
-  RegistrarName,
 } from '../../../shared/ipc';
 import {
   REGISTRAR_HELP,
   type HelpLink as HelpLinkData,
 } from '../../../shared/registrar-help';
 import { cn } from '@/lib/utils';
+import { RegistrarLogo } from '../../components/RegistrarLogo';
 import { useAppStore } from '../../store/app';
+import { Link } from 'react-router-dom';
+import { isDemo, isWeb } from '../../lib/platform';
 import { timeAgo } from '../../lib/time';
+import { useSyncState } from '../../lib/sync-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -22,12 +47,15 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import {
   Select,
   SelectContent,
@@ -36,163 +64,603 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SettingsField } from './SettingsCard';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+
+/** Until when a card's expand toggle is ignored. A click outside an open
+ * actions menu just closes the menu; without this, that same click would land
+ * on a card header right after and expand it. */
+let ignoreToggleUntil = 0;
+
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+const idOf = (account: RegistrarMeta) => account.accountId ?? account.name;
+const plural = (n: number) => `${n} domain${n === 1 ? '' : 's'}`;
 
 export default function RegistrarsSettings() {
   const registrars = useAppStore((s) => s.registrars);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
+  const syncRegistrar = useAppStore((s) => s.syncRegistrar);
+  const [catalog, setCatalog] = useState<RegistrarDefinition[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // The one unsaved account being added. It lives only here: nothing is
+  // persisted until its connection test passes. `key` remounts the form when
+  // the same registrar is picked again after a cancel.
+  const [draft, setDraft] = useState<{
+    provider: RegistrarDefinition;
+    key: number;
+  } | null>(null);
+  // Accounts whose first sync this page started (a new card has no state yet).
+  const [syncingIds, setSyncingIds] = useState<ReadonlySet<string>>(new Set());
+  // The one configured proxy (Settings → Proxy), if any; accounts only opt in.
+  const [proxy, setProxy] = useState<ProxySettings['proxy']>(null);
 
   // Shared store metadata is the source of truth (so the status bar and Domains
   // agree); load it once and let store actions (save/sync) keep it fresh.
   useEffect(() => {
-    void loadRegistrars();
+    void Promise.all([
+      loadRegistrars(),
+      window.api.getRegistrarCatalog(),
+      window.api.getProxySettings(),
+    ])
+      .then(([, definitions, proxySettings]) => {
+        setCatalog(definitions);
+        setProxy(proxySettings.proxy);
+      })
+      .catch((err) => setLoadError(errorMessage(err)));
   }, [loadRegistrars]);
 
-  const sorted = useMemo(
+  const sortedCatalog = useMemo(
     () =>
-      (registrars ?? [])
+      catalog
         .slice()
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [registrars],
+    [catalog],
   );
+  // Accounts whose last sync failed float to the top, where their errors
+  // can't be missed; the rest keep their order.
+  const cards = useMemo(() => {
+    const all = accountCards(sortedCatalog, registrars ?? []);
+    const failed = ({ account }: (typeof all)[number]) =>
+      account.configured && account.enabled && account.sync.lastError != null;
+    return [...all.filter(failed), ...all.filter((c) => !failed(c))];
+  }, [sortedCatalog, registrars]);
+  const loaded = registrars !== null && catalog.length > 0;
+
+  const startDraft = (provider: RegistrarDefinition) =>
+    setDraft({ provider, key: Date.now() });
+
+  const added = (provider: RegistrarDefinition, account: RegistrarAccount) => {
+    setDraft(null);
+    const mark = (on: boolean) =>
+      setSyncingIds((ids) => {
+        const next = new Set(ids);
+        if (on) next.add(account.id);
+        else next.delete(account.id);
+        return next;
+      });
+    mark(true);
+    void (async () => {
+      await loadRegistrars();
+      const result = await syncRegistrar(provider.name, account.id);
+      if (result.lastError)
+        toast.error(`${provider.displayName} account added, but sync failed`, {
+          description: result.lastError,
+        });
+      else
+        toast.success(
+          `${provider.displayName} account added · ${plural(result.domainCount)} synced`,
+        );
+    })()
+      .catch((err) =>
+        toast.error(`${provider.displayName} account added`, {
+          description: `Could not refresh: ${errorMessage(err)}`,
+        }),
+      )
+      .finally(() => mark(false));
+  };
+
+  const enabledCount = cards.filter((c) => c.account.enabled).length;
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-bold">Registrars</h2>
+        <h2 className="text-2xl font-bold">Registrars</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Store API credentials for each registrar. They&apos;re encrypted at
-          rest and used by both the app and the MCP server. Saving syncs that
-          registrar&apos;s domains automatically.
+          Store API credentials for each registrar account. They&apos;re
+          encrypted at rest and used by both the app and the MCP server. Saving
+          syncs that account&apos;s domains automatically.
         </p>
       </div>
 
       <div className="flex flex-col gap-3">
-        {sorted.map((r) => (
-          <RegistrarCard key={r.name} meta={r} />
+        {/* Above the cards: Sync all on the left (it acts on the cards
+            below), the page's main action on the right. */}
+        {loaded && cards.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {enabledCount > 1 && <SyncAllButton />}
+            <div className="ml-auto">
+              <AddAccountMenu
+                catalog={sortedCatalog}
+                disabled={draft !== null}
+                onPick={startDraft}
+              />
+            </div>
+          </div>
+        )}
+        {loadError && (
+          <p role="alert" className="text-sm text-destructive">
+            {loadError}
+          </p>
+        )}
+        {draft && (
+          <DraftAccountCard
+            key={draft.key}
+            provider={draft.provider}
+            proxy={proxy}
+            onAdded={(account) => added(draft.provider, account)}
+            onCancel={() => setDraft(null)}
+          />
+        )}
+        {cards.map(({ provider, account, hasSiblings }) => (
+          <AccountCard
+            key={idOf(account)}
+            provider={provider}
+            account={account}
+            hasSiblings={hasSiblings}
+            proxy={proxy}
+            firstSync={syncingIds.has(idOf(account))}
+          />
         ))}
+        {loaded && cards.length === 0 && !draft && (
+          <EmptyRegistrars catalog={sortedCatalog} onPick={startDraft} />
+        )}
       </div>
     </div>
   );
 }
 
-function RegistrarCard({ meta }: { meta: RegistrarMeta }) {
+/**
+ * Syncs every enabled account at once, like the status bar's Sync. Each card
+ * shows Syncing… while it runs, and a toast sums up the result.
+ */
+function SyncAllButton() {
+  const { sync, syncing, disabled, title } = useSyncState();
+  return (
+    <Button variant="outline" onClick={sync} disabled={disabled} title={title}>
+      <RefreshCw className={cn(syncing && 'animate-spin')} />
+      {syncing ? 'Syncing…' : 'Sync all'}
+      {/* Room for the full label beside Add from sm up. */}
+      {!syncing && <span className="-ml-1 hidden sm:inline">registrars</span>}
+    </Button>
+  );
+}
+
+/** The single way to add an account, for a registrar's first and its fifth. */
+function AddAccountMenu({
+  catalog,
+  disabled,
+  onPick,
+}: {
+  catalog: RegistrarDefinition[];
+  disabled: boolean;
+  onPick: (provider: RegistrarDefinition) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          disabled={disabled}
+          title={
+            disabled ? 'Finish or cancel the new account first' : undefined
+          }
+        >
+          <Plus />
+          Add registrar account
+          <ChevronDown className="opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-56">
+        {catalog.map((provider) => (
+          <DropdownMenuItem
+            key={provider.name}
+            onSelect={() => onPick(provider)}
+          >
+            <RegistrarLogo
+              name={provider.name}
+              label={provider.displayName}
+              className="size-5"
+            />
+            {provider.displayName}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Nothing connected yet: show what's supported, each one click from a form. */
+function EmptyRegistrars({
+  catalog,
+  onPick,
+}: {
+  catalog: RegistrarDefinition[];
+  onPick: (provider: RegistrarDefinition) => void;
+}) {
+  return (
+    <Card className="gap-4 rounded-md px-5 py-5">
+      <div>
+        <h3 className="font-medium">Connect your first registrar</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Choose where your domains are registered. You can add more accounts,
+          including several at the same registrar, at any time.
+        </p>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2">
+        {catalog.map((provider) => (
+          <Button
+            key={provider.name}
+            variant="outline"
+            className="h-auto justify-start gap-2.5 px-3 py-2.5"
+            onClick={() => onPick(provider)}
+          >
+            <RegistrarLogo name={provider.name} label={provider.displayName} />
+            {provider.displayName}
+          </Button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** One saved account: its identity, status, credentials and controls. */
+function AccountCard({
+  provider,
+  account,
+  hasSiblings,
+  proxy,
+  firstSync,
+}: {
+  provider: RegistrarDefinition;
+  account: RegistrarMeta;
+  /** The registrar has other accounts, so an unnamed one shows its number. */
+  hasSiblings: boolean;
+  proxy: ProxySettings['proxy'];
+  firstSync: boolean;
+}) {
   const syncRegistrar = useAppStore((s) => s.syncRegistrar);
   const setRegistrarEnabled = useAppStore((s) => s.setRegistrarEnabled);
+  const loadRegistrars = useAppStore((s) => s.loadRegistrars);
+  const refreshCache = useAppStore((s) => s.applyPortfolioCacheUpdate);
+  const id = idOf(account);
+  const currentLabel = account.accountLabel ?? '';
   const [values, setValues] = useState<CredentialValues>({});
+  const [original, setOriginal] = useState<CredentialValues>({});
+  // The account name being edited in its dialog; null = dialog closed.
+  const [nickname, setNickname] = useState<string | null>(null);
+  // The dialog an actions-menu item asked for. It opens once the menu has
+  // closed, so the closing menu doesn't pull focus back to its button.
+  const dialogFromMenu = useRef<'rename' | 'remove' | null>(null);
+  // Whether the actions menu is open (not just still fading out).
+  const menuOpen = useRef(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nicknameError, setNicknameError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingHere, setSyncing] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // The remove confirmation dialog is open.
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const usesProxy = Boolean(account.proxy);
+  const [proxyEnabled, setProxyEnabled] = useState(usesProxy);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // A Sync all (or the automatic sync) covers every enabled account.
+  const syncingAll = useAppStore((s) => s.portfolioLoading) && account.enabled;
+  const syncing = syncingHere || firstSync || syncingAll;
+  const syncFailed =
+    account.configured &&
+    account.enabled &&
+    !syncing &&
+    account.sync.lastError != null;
 
   useEffect(() => {
-    if (open) {
-      void window.api.getRegistrarCredentials(meta.name).then(setValues);
-    }
-  }, [open, meta.name]);
+    if (!open) return;
+    let current = true;
+    setError(null);
+    setLoading(true);
+    window.api
+      .getRegistrarCredentials(provider.name, id)
+      .then((creds) => {
+        if (!current) return;
+        setValues(creds);
+        setOriginal(creds);
+        setProxyEnabled(usesProxy);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (current) setError(errorMessage(err));
+      });
+    return () => {
+      current = false;
+    };
+  }, [open, id, provider.name, usesProxy]);
 
-  // Sync this registrar's domains. `syncRegistrar` updates the shared store
-  // (portfolio + metadata), so this card's header status, the status bar, and
-  // the Domains page all reflect the result on their own.
   const runSync = async () => {
     setSyncing(true);
+    setError(null);
     try {
-      await syncRegistrar(meta.name);
+      await syncRegistrar(provider.name, id);
+    } catch (err) {
+      setError(errorMessage(err));
+      setOpen(true);
     } finally {
       setSyncing(false);
     }
   };
 
-  // Save credentials, then immediately sync so the domains appear without a
-  // separate step (and against the values just entered, not stale saved ones).
   const save = async () => {
+    if (loading) return;
     setSaving(true);
+    setError(null);
     try {
-      await window.api.saveRegistrarCredentials(meta.name, values);
-      await runSync();
+      const clean = Object.fromEntries(
+        Object.entries(values)
+          .map(([k, v]) => [k, v.trim()])
+          .filter(([, v]) => v),
+      ) as CredentialValues;
+      // Switching the route counts as a change: the account is re-synced over
+      // the connection it will use from now on.
+      const changed =
+        proxyEnabled !== usesProxy ||
+        Object.keys({ ...original, ...clean }).some(
+          (k) => original[k] !== clean[k],
+        );
+      if (changed)
+        await window.api.saveRegistrarCredentials(
+          provider.name,
+          clean,
+          id,
+          proxyEnabled,
+        );
+      setOriginal(clean);
+      setValues(clean);
+      if (changed) await syncRegistrar(provider.name, id);
+      else {
+        await loadRegistrars();
+        await refreshCache();
+      }
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
-  // Enable/disable this registrar. Disabling keeps its credentials but drops its
-  // cached data and stops syncs; enabling re-syncs it. The store updates the
-  // portfolio, pricing, and metadata, so every surface reflects it.
+  // Saves on its own, apart from the credentials form. Blank removes the
+  // nickname, and the account goes back to its number.
+  const saveNickname = async () => {
+    if (nickname === null || renaming) return;
+    const next = nickname.trim();
+    const current = isAutoLabel(currentLabel) ? '' : currentLabel;
+    if (next === current) {
+      setNicknameError(null);
+      return setNickname(null);
+    }
+    setRenaming(true);
+    setNicknameError(null);
+    try {
+      await window.api.renameRegistrarAccount(id, next);
+      await loadRegistrars();
+      await refreshCache();
+      setNickname(null);
+    } catch (err) {
+      // Keep the dialog open with what was typed so it can be corrected.
+      setNicknameError(errorMessage(err));
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const toggleEnabled = async (next: boolean) => {
     setToggling(true);
+    setError(null);
     try {
-      await setRegistrarEnabled(meta.name, next);
+      await setRegistrarEnabled(provider.name, next, id);
+    } catch (err) {
+      setError(errorMessage(err));
+      setOpen(true);
     } finally {
       setToggling(false);
     }
   };
 
-  const busy = saving || syncing || toggling;
-  const { configured, enabled, sync } = meta;
-  const help = REGISTRAR_HELP[meta.name];
+  const remove = async () => {
+    setSaving(true);
+    setRemoveError(null);
+    try {
+      await window.api.removeRegistrarAccount(id);
+      await loadRegistrars();
+      await refreshCache();
+    } catch (err) {
+      // On success the card unmounts; only a failure leaves state to reset.
+      setRemoveError(errorMessage(err));
+      setSaving(false);
+    }
+  };
+
+  // An action in flight. The actions menu and the remove confirmation wait
+  // only on these: none of them need the credentials the open card loads, so
+  // a slow or failed load mustn't lock them.
+  const acting = saving || syncing || toggling;
+  const busy = acting || loading;
+  // The demo is fully interactive over its browser-local data — edit keys,
+  // Save, toggle, rename, even Remove (Reset demo brings it all back), since
+  // the fake registrar always connects. `locked` stays only on the fixed-IP
+  // proxy toggle, the one control with no effect in the demo (no real proxy).
+  const locked = busy || isDemo();
+  const { configured, enabled, sync } = account;
+  const hasCredentials = Object.values(values).some((v) => v.trim());
+  // A Namecheap proxy supplies the outgoing ClientIp, so it isn't required in the
+  // form when the proxy is on (the URL/IP live in the proxy section below).
+  const proxySuppliesIp = provider.name === 'namecheap' && proxyEnabled;
+  const missingRequired =
+    hasCredentials &&
+    provider.configFields.some(
+      (f) =>
+        f.required &&
+        !values[f.name]?.trim() &&
+        !(proxySuppliesIp && f.name === 'clientIp'),
+    );
+  const title = accountTitle(provider.displayName, currentLabel, hasSiblings);
+  const suffix = accountSuffix(currentLabel, hasSiblings);
+  const hasNickname = !isAutoLabel(currentLabel);
 
   return (
-    <Card className="gap-0 overflow-hidden rounded-md py-0">
-      <Collapsible open={open} onOpenChange={setOpen}>
-        {/* Header row: the name + sync status expand the card; the Sync button
-            sits outside the triggers so it works even while collapsed. */}
-        <div className="flex items-center gap-3 px-5 py-[13px]">
-          {/* Enable/disable toggle, kept to the far left and outside the expand
-              triggers so it reads as a row-level on/off (not a sync switch) and
-              isn't hit when expanding the card. Always shown so every logo lines
-              up; read-only (off) until the registrar has credentials. */}
-          <div className="flex w-9 shrink-0 justify-center">
-            <Switch
-              checked={configured && enabled}
-              onCheckedChange={(v) => void toggleEnabled(v)}
-              disabled={busy || !configured}
-              aria-label={
-                configured
-                  ? `${enabled ? 'Disable' : 'Enable'} ${meta.displayName}`
-                  : `${meta.displayName} — add credentials to enable`
-              }
-              title={
-                !configured
-                  ? 'Add credentials to enable this registrar'
-                  : enabled
-                    ? 'Disable this registrar (keeps credentials, drops its data)'
-                    : 'Enable and sync this registrar'
-              }
-            />
-          </div>
-          <CollapsibleTrigger className="flex flex-1 items-center gap-[18px] text-left">
+    <Card className="@container gap-0 overflow-hidden rounded-md py-0">
+      <Collapsible
+        open={open}
+        onOpenChange={(next) => {
+          if (Date.now() < ignoreToggleUntil) return;
+          setOpen(next);
+        }}
+      >
+        {/* Header: name · status · actions menu · chevron. The name and status
+            expand the card. On a narrow card (a phone, or an iPad-width window
+            with the settings sidebar) the status wraps onto its own line under
+            the name. A wide card keeps everything on one compact row that's
+            easy to scan. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-[13px] pr-5 pl-[15px] @min-[600px]:flex-nowrap">
+          <CollapsibleTrigger className="flex min-w-0 items-center gap-2.5 text-left">
             <span
               className={cn(
-                'flex items-center gap-2.5 font-medium',
-                // Dim the name for a configured-but-disabled registrar so the
+                'flex min-w-0 items-center gap-2.5 font-medium',
+                // Dim the name for a configured-but-disabled account so the
                 // off state reads at a glance.
                 configured && !enabled && 'opacity-50',
               )}
             >
-              <RegistrarLogo name={meta.name} label={meta.displayName} />
-              {meta.displayName}
+              <RegistrarLogo
+                name={provider.name}
+                label={provider.displayName}
+                className="size-[22px]"
+              />
+              <span className="truncate">{provider.displayName}</span>
+              {suffix && (
+                <span className="-ml-1 flex min-w-0 items-center gap-1.5 font-normal text-muted-foreground">
+                  {/* The bullet is its own item so the gap is equal on both
+                      sides, whatever the font's space width. */}
+                  {suffix.startsWith(' · ') && <span aria-hidden>·</span>}
+                  <span className="truncate">
+                    {suffix.replace(/^ (· )?/, '')}
+                  </span>
+                </span>
+              )}
             </span>
-            <SyncStatus meta={meta} syncing={syncing} />
           </CollapsibleTrigger>
-          {/* Sync only makes sense for an enabled registrar. */}
-          {configured && enabled && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void runSync()}
-              disabled={busy}
-              title="Sync this registrar’s domains now"
-              // Absorb the button's height into the row's vertical padding so a
-              // configured row (which shows this button) stays the same slim
-              // height as an unconfigured one, rather than growing to fit it.
-              className="-my-1 text-muted-foreground hover:text-foreground"
+          {/* Sync status: fills the row on a wide card; on a narrow one, its
+              own line indented under the name. The domain count is a link, so
+              it sits beside the status trigger rather than inside it; the
+              trailing trigger keeps the rest of the row clickable. */}
+          <div className="order-last flex min-w-0 basis-full flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[32px] @min-[600px]:order-none @min-[600px]:grow @min-[600px]:basis-0 @min-[600px]:pl-0">
+            <CollapsibleTrigger
+              tabIndex={-1}
+              aria-hidden
+              className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left"
             >
-              <RefreshCw className={cn(syncing && 'animate-spin')} />
-              {syncing ? 'Syncing…' : 'Sync'}
-            </Button>
-          )}
+              <SyncStatus meta={account} syncing={syncing} />
+            </CollapsibleTrigger>
+            <DomainCountLink meta={account} syncing={syncing} />
+            <CollapsibleTrigger
+              tabIndex={-1}
+              aria-hidden
+              className="min-w-0 flex-1 self-stretch"
+            />
+          </div>
+
+          <DropdownMenu
+            onOpenChange={(next) => {
+              menuOpen.current = next;
+            }}
+          >
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="-my-1 ml-auto size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label={`Actions for ${title}`}
+                title="Account actions"
+              >
+                <Ellipsis />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="min-w-48"
+              onPointerDownOutside={() => {
+                // Only a click that closes the menu. After picking an item the
+                // menu is already closed while it fades out, and a click then
+                // should act normally.
+                if (menuOpen.current) ignoreToggleUntil = Date.now() + 500;
+              }}
+              onCloseAutoFocus={(e) => {
+                const dialog = dialogFromMenu.current;
+                if (!dialog) return;
+                dialogFromMenu.current = null;
+                e.preventDefault();
+                if (dialog === 'rename')
+                  setNickname(hasNickname ? currentLabel : '');
+                else setRemoving(true);
+              }}
+            >
+              {/* Sync only makes sense for an enabled account. */}
+              {configured && enabled && (
+                <DropdownMenuItem
+                  disabled={acting}
+                  onSelect={() => void runSync()}
+                >
+                  <RefreshCw />
+                  Sync now
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                disabled={acting}
+                onSelect={() => {
+                  dialogFromMenu.current = 'rename';
+                }}
+              >
+                <Pencil />
+                Edit account name…
+              </DropdownMenuItem>
+              {/* Turning an account off keeps its credentials and cached
+                  data; on again syncs it. Needs credentials first. */}
+              {configured && (
+                <DropdownMenuItem
+                  disabled={acting}
+                  onSelect={() => void toggleEnabled(!enabled)}
+                >
+                  <Power />
+                  {enabled ? 'Disable account' : 'Enable account'}
+                </DropdownMenuItem>
+              )}
+              {configured && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={acting}
+                onSelect={() => {
+                  dialogFromMenu.current = 'remove';
+                }}
+              >
+                <Trash2 />
+                Remove account…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <CollapsibleTrigger
             className="shrink-0"
-            aria-label={open ? 'Collapse' : 'Expand'}
+            aria-label={open ? `Collapse ${title}` : `Expand ${title}`}
           >
             <ChevronDown
               className={cn(
@@ -203,95 +671,515 @@ function RegistrarCard({ meta }: { meta: RegistrarMeta }) {
           </CollapsibleTrigger>
         </div>
 
+        {/* The last sync's error, open or collapsed: this card is where the
+            banner, the status bar, and the bell send you. */}
+        {syncFailed && (
+          <div
+            role="alert"
+            className="mx-5 mt-0.5 mb-[18px] flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+          >
+            <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <span className="min-w-0 break-words">{sync.lastError}</span>
+          </div>
+        )}
+
         <CollapsibleContent className="border-t px-5 py-4">
-          {/* Where the credentials come from, with real links to the pages
-              (opened in the system browser via the window-open handler). */}
-          <div className="mb-4 flex flex-col gap-2">
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              {help.summary}
+          {loading && !error && (
+            <p role="status" className="mb-3 text-sm text-muted-foreground">
+              Loading credentials…
             </p>
-            {help.links.length > 0 && (
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {help.links.map((link) => (
-                  <HelpLink key={link.url} link={link} />
-                ))}
-              </div>
-            )}
-          </div>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <RegistrarHelp provider={provider} />
+            <FieldGroup className="gap-4">
+              <CredentialFields
+                provider={provider}
+                idPrefix={id}
+                values={values}
+                disabled={busy}
+                onChange={(name, value) =>
+                  setValues((current) => ({ ...current, [name]: value }))
+                }
+                hideFields={proxySuppliesIp ? new Set(['clientIp']) : undefined}
+              />
+            </FieldGroup>
 
-          <FieldGroup className="gap-4">
-            {meta.configFields.map((field) => {
-              const id = `${meta.name}-${field.name}`;
-              const fieldHelp = help.fields[field.name];
-              return (
-                <Field key={field.name} className="gap-1.5">
-                  <FieldLabel htmlFor={id}>
-                    {field.label}
-                    {field.required && (
-                      <span className="text-destructive"> *</span>
-                    )}
-                  </FieldLabel>
-                  {/* Only fields that need disambiguating carry a description;
-                      it sits under the label, ahead of the input. */}
-                  {fieldHelp && (
-                    <FieldDescription className="text-[13px]">
-                      {fieldHelp}
-                    </FieldDescription>
-                  )}
-                  {field.type === 'select' ? (
-                    <Select
-                      value={values[field.name] ?? ''}
-                      onValueChange={(v) =>
-                        setValues((prev) => ({ ...prev, [field.name]: v }))
-                      }
-                    >
-                      <SelectTrigger id={id} className="w-full">
-                        <SelectValue placeholder="Select…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {field.options?.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      id={id}
-                      value={values[field.name] ?? ''}
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="font-mono"
-                      onChange={(e) =>
-                        setValues((prev) => ({
-                          ...prev,
-                          [field.name]: e.target.value,
-                        }))
-                      }
-                    />
-                  )}
-                </Field>
-              );
-            })}
-          </FieldGroup>
+            <ProxyToggle
+              id={`${id}-proxy`}
+              provider={provider}
+              proxy={
+                account.proxy && account.proxyEgressIp
+                  ? { egressIp: account.proxyEgressIp }
+                  : proxy
+              }
+              enabled={proxyEnabled}
+              disabled={locked}
+              onChange={setProxyEnabled}
+            />
 
-          <div className="mt-4 flex items-center gap-3">
-            <Button onClick={() => void save()} disabled={busy}>
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-            {configured && !syncing && sync.lastError && (
-              <span className="ml-auto flex items-center gap-1.5 text-sm text-destructive">
-                <CircleX className="size-4" />
-                {sync.lastError}
-              </span>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Button
+                type="submit"
+                // Save works in the demo too — it's all browser-local, and the
+                // fake registrar always connects, so editing keys + Save just
+                // re-syncs the same sample domains (no error path).
+                disabled={busy || missingRequired || !hasCredentials}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+            {error && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {error}
+              </p>
             )}
-          </div>
+          </form>
         </CollapsibleContent>
       </Collapsible>
+      {removing && (
+        <ConfirmDialog
+          title={`Remove ${title}?`}
+          description={`DomBot forgets this account's credentials and cached domains. The domains stay at ${provider.displayName}, and you can add the account again later.`}
+          actionLabel="Remove account"
+          busyLabel="Removing…"
+          busy={saving}
+          destructive
+          onConfirm={() => void remove()}
+          onClose={() => {
+            setRemoveError(null);
+            setRemoving(false);
+          }}
+        >
+          {removeError && (
+            <p role="alert" className="text-sm text-destructive">
+              {removeError}
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+      {nickname !== null && (
+        <ConfirmDialog
+          title="Edit account name"
+          description={`Add an account name to tell your ${provider.displayName} accounts apart, like Personal or Client work. Leave it blank to remove it.`}
+          actionLabel="Save"
+          busyLabel="Saving…"
+          busy={renaming}
+          onConfirm={() => void saveNickname()}
+          onClose={() => {
+            setNicknameError(null);
+            setNickname(null);
+          }}
+        >
+          <Field>
+            <FieldLabel htmlFor={`${id}-account-name`}>Account name</FieldLabel>
+            <Input
+              id={`${id}-account-name`}
+              autoFocus
+              // Select the current name, so typing replaces it.
+              onFocus={(e) => e.currentTarget.select()}
+              value={nickname}
+              disabled={renaming}
+              maxLength={100}
+              autoComplete="off"
+              placeholder="e.g. Personal, Client work"
+              aria-invalid={nicknameError ? true : undefined}
+              onChange={(e) => {
+                setNickname(e.target.value);
+                setNicknameError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void saveNickname();
+                }
+              }}
+            />
+            {nicknameError && (
+              <p role="alert" className="text-sm text-destructive">
+                {nicknameError}
+              </p>
+            )}
+          </Field>
+        </ConfirmDialog>
+      )}
     </Card>
+  );
+}
+
+/** An account being added. It is its own card and shares no state with a saved
+ * one, so opening, typing, failing or cancelling it can't disturb them. Nothing
+ * is persisted until the connection test passes. */
+function DraftAccountCard({
+  provider,
+  proxy,
+  onAdded,
+  onCancel,
+}: {
+  provider: RegistrarDefinition;
+  proxy: ProxySettings['proxy'];
+  onAdded: (account: RegistrarAccount) => void;
+  onCancel: () => void;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.scrollIntoView({ block: 'nearest' });
+    heading.current?.focus({ preventScroll: true });
+  }, []);
+  const [values, setValues] = useState<CredentialValues>({});
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Optional. It only lives here until the account is saved.
+  const [nickname, setNickname] = useState('');
+  // With the Namecheap proxy on, its outgoing IP supplies the required ClientIp,
+  // so the direct field isn't needed; the proxy URL/IP are required instead.
+  const proxySuppliesIp = provider.name === 'namecheap' && proxyEnabled;
+  const ready =
+    Object.values(values).some((value) => value.trim()) &&
+    provider.configFields.every(
+      (field) =>
+        !field.required ||
+        values[field.name]?.trim() ||
+        (proxySuppliesIp && field.name === 'clientIp'),
+    );
+
+  const save = async () => {
+    if (!ready || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const account = await window.api.connectRegistrarAccount(
+        provider.name,
+        values,
+        // Without a nickname the account takes the next number.
+        nickname.trim() || undefined,
+        proxyEnabled,
+      );
+      onAdded(account);
+    } catch (err) {
+      setError(errorMessage(err));
+      setSaving(false);
+    }
+  };
+
+  const idPrefix = `${provider.name}-new`;
+  return (
+    <Card className="gap-0 overflow-hidden rounded-md border-primary/40 py-0">
+      <div className="flex items-center gap-2.5 py-[13px] pr-5 pl-[15px]">
+        <RegistrarLogo
+          name={provider.name}
+          label={provider.displayName}
+          className="size-[22px]"
+        />
+        <h3
+          ref={heading}
+          tabIndex={-1}
+          className="scroll-mt-24 font-medium outline-none"
+        >
+          New {provider.displayName} account
+        </h3>
+      </div>
+      <form
+        aria-label={`New ${provider.displayName} account`}
+        className="border-t px-5 py-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <RegistrarHelp provider={provider} />
+        <FieldGroup className="gap-4">
+          <CredentialFields
+            provider={provider}
+            idPrefix={idPrefix}
+            values={values}
+            disabled={saving}
+            onChange={(name, value) =>
+              setValues((current) => ({ ...current, [name]: value }))
+            }
+            hideFields={proxySuppliesIp ? new Set(['clientIp']) : undefined}
+          />
+          <SettingsField
+            htmlFor={`${idPrefix}-account-name`}
+            label="Account name"
+            description="Optional. Tells accounts at the same registrar apart."
+          >
+            <Input
+              id={`${idPrefix}-account-name`}
+              value={nickname}
+              disabled={saving}
+              maxLength={100}
+              autoComplete="off"
+              placeholder="e.g. Personal, Client work"
+              onChange={(e) => setNickname(e.target.value)}
+            />
+          </SettingsField>
+        </FieldGroup>
+        <ProxyToggle
+          id={`${idPrefix}-proxy`}
+          provider={provider}
+          proxy={proxy}
+          enabled={proxyEnabled}
+          disabled={saving}
+          onChange={setProxyEnabled}
+        />
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <div className="mt-5 flex items-center gap-3">
+          <Button type="submit" disabled={!ready || saving}>
+            {saving ? 'Testing connection…' : 'Add account'}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={saving}
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/** Where the credentials come from, with real links to the pages (opened in
+ * the system browser via the window-open handler). */
+function RegistrarHelp({ provider }: { provider: RegistrarDefinition }) {
+  const help = REGISTRAR_HELP[provider.name];
+  return (
+    <div className="mb-4 flex flex-col gap-2">
+      <p className="text-[13px] leading-relaxed text-muted-foreground">
+        <HelpText text={help.summary} />
+      </p>
+      {isWeb() && help.hostedNotice && (
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          {help.hostedNotice}
+        </p>
+      )}
+      {help.links.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {help.links.map((link) => (
+            <HelpLink key={link.url} link={link} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Routes one account through the proxy set up on the Proxy tab. The
+ * proxy itself is never edited here; an account only opts in or out. */
+function ProxyToggle({
+  id,
+  provider,
+  proxy,
+  enabled,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  provider: RegistrarDefinition;
+  proxy: Pick<NonNullable<ProxySettings['proxy']>, 'egressIp'> | null;
+  enabled: boolean;
+  disabled: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const proxyLink = (
+    <Link to="/settings?tab=proxy" className="underline underline-offset-4">
+      configured proxy
+    </Link>
+  );
+
+  const copyEgressIp = async () => {
+    if (!proxy) return;
+    try {
+      await navigator.clipboard.writeText(proxy.egressIp);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable: the address is still selectable by hand.
+    }
+  };
+
+  return (
+    <div className="mt-5 border-t pt-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Switch
+          id={id}
+          checked={enabled}
+          onCheckedChange={onChange}
+          // Always allow switching it off; switching it on needs a proxy.
+          disabled={disabled || (!proxy && !enabled)}
+        />
+        <FieldLabel htmlFor={id}>Use fixed IP proxy</FieldLabel>
+        {proxy && enabled && (
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded border border-border/60 bg-muted/30 py-0.5 pr-0.5 pl-2">
+            <input
+              readOnly
+              value={proxy.egressIp}
+              size={Math.max(proxy.egressIp.length, 7)}
+              aria-label="Outgoing IP address"
+              onFocus={(e) => e.currentTarget.select()}
+              // It sits inside the credentials form; Enter here must not submit.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.preventDefault();
+              }}
+              className="bg-transparent font-mono text-xs text-foreground outline-none"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => void copyEgressIp()}
+              aria-label="Copy outgoing IP address"
+              className={cn(
+                'size-5 shrink-0 text-muted-foreground hover:text-foreground',
+                copied && 'text-brand hover:text-brand',
+              )}
+            >
+              {copied ? (
+                <Check className="size-3" />
+              ) : (
+                <Copy className="size-3" />
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+        {!proxy ? (
+          <>
+            Set up a{' '}
+            <Link
+              to="/settings?tab=proxy"
+              className="underline underline-offset-4"
+            >
+              proxy
+            </Link>{' '}
+            to use this.
+          </>
+        ) : enabled ? (
+          <>
+            This account&apos;s requests go through your proxy, so{' '}
+            {provider.displayName} sees them arrive from a fixed address.
+            Whitelist this IP address in the {provider.displayName} API
+            settings.
+          </>
+        ) : (
+          <>Send this account&apos;s requests through your {proxyLink}.</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function CredentialFields({
+  provider,
+  idPrefix,
+  values,
+  disabled,
+  onChange,
+  hideFields,
+}: {
+  provider: RegistrarDefinition;
+  idPrefix: string;
+  values: CredentialValues;
+  disabled: boolean;
+  onChange: (name: string, value: string) => void;
+  hideFields?: ReadonlySet<string>;
+}) {
+  const help = REGISTRAR_HELP[provider.name];
+  return (
+    <>
+      {provider.configFields.map((field) => {
+        if (hideFields?.has(field.name)) return null;
+        const id = `${idPrefix}-${field.name}`;
+        const fieldHelp = help.fields[field.name];
+        return (
+          <SettingsField
+            key={field.name}
+            htmlFor={id}
+            label={
+              <>
+                {field.label}
+                {field.required && <span className="text-destructive"> *</span>}
+              </>
+            }
+            // Only fields that need disambiguating carry a description; it
+            // sits under the label, ahead of the input.
+            description={fieldHelp && <HelpText text={fieldHelp} />}
+          >
+            {field.type === 'select' ? (
+              <Select
+                disabled={disabled}
+                value={values[field.name] ?? ''}
+                onValueChange={(value) => onChange(field.name, value)}
+              >
+                <SelectTrigger id={id} className="w-full">
+                  <SelectValue placeholder="Select…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {field.options?.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            ) : field.type === 'password' ? (
+              <PasswordInput
+                id={id}
+                value={values[field.name] ?? ''}
+                disabled={disabled}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+                onChange={(e) => onChange(field.name, e.target.value)}
+              />
+            ) : (
+              <Input
+                id={id}
+                value={values[field.name] ?? ''}
+                type="text"
+                disabled={disabled}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+                onChange={(e) => onChange(field.name, e.target.value)}
+              />
+            )}
+          </SettingsField>
+        );
+      })}
+    </>
+  );
+}
+
+/** Help copy with its `backticked` keywords set as code. */
+function HelpText({ text }: { text: string }) {
+  return text.split('`').map((part, i) =>
+    i % 2 === 1 ? (
+      <code
+        key={i}
+        className="rounded bg-muted px-1 py-px font-mono text-[0.92em] text-foreground"
+      >
+        {part}
+      </code>
+    ) : (
+      part
+    ),
   );
 }
 
@@ -306,7 +1194,7 @@ function HelpLink({ link }: { link: HelpLinkData }) {
       href={link.url}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
+      className="inline-flex items-center gap-1 text-[13px] font-medium text-brand underline-offset-4 hover:underline"
     >
       {link.label}
       <ExternalLink className="size-3 shrink-0" aria-hidden />
@@ -314,75 +1202,13 @@ function HelpLink({ link }: { link: HelpLinkData }) {
   );
 }
 
-// Brand SVGs live with the marketing site (site/src/assets/logos); share that
-// one folder so adding a registrar is just dropping in `<name>.svg` — the glob
-// picks it up here, no import to edit. Keyed by filename, which matches the
-// RegistrarName (e.g. godaddy.svg → "godaddy").
-const LOGO_RAW = import.meta.glob('../../../../site/src/assets/logos/*.svg', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-const LOGOS: Record<string, string> = Object.fromEntries(
-  Object.entries(LOGO_RAW).map(([path, svg]) => [
-    path
-      .split('/')
-      .pop()!
-      .replace(/\.svg$/, ''),
-    svg,
-  ]),
-);
-
-/**
- * Strip the brand fills so the logo renders as a flat monochrome mark that
- * inherits `currentColor` — letting a `text-*` class tint it a uniform grey.
- * Drops width/height too so the size comes from CSS.
- */
-function monochrome(svg: string): string {
-  return (
-    svg
-      // Drop the XML prolog and comments some exports carry (e.g. dynadot).
-      .replace(/<\?xml[\s\S]*?\?>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      // Drop <style> blocks (e.g. dynadot colors its paths via a `.st0` class).
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/\s(?:width|height|fill)="[^"]*"/g, '')
-      // Neutralize any inline `fill:#…` left in style attributes.
-      .replace(/fill:\s*#[0-9a-fA-F]{3,8}/g, 'fill:currentColor')
-      .replace('<svg', '<svg fill="currentColor"')
-      .trim()
-  );
-}
-
-/**
- * The registrar's logo, shown as a small grey mark before the name. Reuses the
- * marketing site's brand SVGs, flattened to `currentColor` for a uniform tint.
- */
-function RegistrarLogo({
-  name,
-  label,
-}: {
-  name: RegistrarName;
-  label: string;
-}) {
-  const svg = LOGOS[name];
-  if (!svg) return null;
-  return (
-    <span
-      role="img"
-      aria-label={`${label} logo`}
-      className="inline-flex size-[27px] shrink-0 items-center justify-center text-muted-foreground/70 [&>svg]:size-full"
-      dangerouslySetInnerHTML={{ __html: monochrome(svg) }}
-    />
-  );
-}
-
 /**
  * The registrar's sync state, shown in the card header:
- *  - not configured → "Not set" badge
+ *  - not configured → "Needs credentials" badge
  *  - configured but disabled → "Disabled" badge
  *  - configured + last sync ok → green "Last synced <ago> · N domains"
- *  - configured + last sync errored → amber "Sync failed" (error in tooltip)
+ *  - configured + last sync errored → red "Sync failed" (the error is shown
+ *    under the card header)
  *  - configured + never synced → amber "Not synced yet"
  *  - a sync in flight → muted "Syncing…"
  */
@@ -394,12 +1220,17 @@ function SyncStatus({
   syncing: boolean;
 }) {
   if (syncing) {
-    return <span className="text-sm text-muted-foreground">Syncing…</span>;
+    return (
+      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <RefreshCw className="size-3.5 shrink-0 animate-spin" />
+        Syncing…
+      </span>
+    );
   }
   if (!meta.configured) {
     return (
       <Badge variant="outline" className="text-muted-foreground">
-        Not set
+        Needs credentials
       </Badge>
     );
   }
@@ -411,12 +1242,12 @@ function SyncStatus({
     );
   }
 
-  const { lastSyncedAt, lastError, domainCount } = meta.sync;
+  const { lastSyncedAt, lastError } = meta.sync;
   if (lastError) {
     return (
-      <span className="flex items-center gap-1.5" title={lastError}>
-        <span className="size-2 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" />
-        <span className="text-[13px] font-medium text-amber-600 dark:text-amber-400">
+      <span className="flex items-center gap-1.5">
+        <CircleX className="size-3.5 shrink-0 text-destructive" />
+        <span className="text-[13px] font-medium text-destructive">
           Sync failed
         </span>
       </span>
@@ -435,14 +1266,44 @@ function SyncStatus({
     );
   }
   return (
-    <span className="flex items-center gap-1.5">
-      <span className="size-2 shrink-0 rounded-full bg-[#31613b] dark:bg-[#7ac28d]" />
-      <span className="text-[13px] font-medium text-[#31613b] dark:text-[#7ac28d]">
+    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 max-sm:w-full">
+      <span className="size-2 shrink-0 rounded-full bg-brand" />
+      <span className="whitespace-nowrap text-[13px] font-medium text-brand">
         Last synced {timeAgo(lastSyncedAt)}
       </span>
-      <span className="text-xs text-muted-foreground">
-        · {domainCount} domain{domainCount === 1 ? '' : 's'}
-      </span>
+    </span>
+  );
+}
+
+/**
+ * "· N domains" after a successful sync, linking to Domains filtered to just
+ * this account (Domains opens with every other filter cleared).
+ */
+function DomainCountLink({
+  meta,
+  syncing,
+}: {
+  meta: RegistrarMeta;
+  syncing: boolean;
+}) {
+  const { lastSyncedAt, lastError, domainCount } = meta.sync;
+  if (
+    syncing ||
+    !meta.configured ||
+    !meta.enabled ||
+    lastError ||
+    lastSyncedAt == null
+  )
+    return null;
+  return (
+    <span className="whitespace-nowrap text-xs text-muted-foreground">
+      ·{' '}
+      <Link
+        to={`/?${new URLSearchParams({ account: idOf(meta) })}`}
+        className="underline-offset-4 hover:text-foreground hover:underline"
+      >
+        {plural(domainCount)}
+      </Link>
     </span>
   );
 }

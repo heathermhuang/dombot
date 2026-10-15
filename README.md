@@ -13,7 +13,9 @@ local-first: your data and API keys stay on your machine.
 
 **Download** for macOS, Windows, or Linux from
 [**dombot.ai**](https://dombot.ai) or the
-[Releases](https://github.com/aoxborrow/dombot/releases) page.
+[Releases](https://github.com/aoxborrow/dombot/releases) page, or
+**[try the live demo](https://demo.dombot.ai/)**: the full app in your
+browser on an invented portfolio, no install and no account.
 
 <a href="site/public/dombot-domains.png"><img src="site/public/dombot-domains.png" alt="DomBot's Domains screen — every domain across all your registrars in one sortable, filterable table" width="720"></a>
 
@@ -51,6 +53,11 @@ encrypted on your device via your OS keychain (Electron `safeStorage`) and are
 never sent anywhere but the registrar's own API. See [SECURITY.md](SECURITY.md)
 for the full trust model and how to verify it yourself.
 
+After saving a registrar’s first account, use **Add another account** inside its
+card to connect more. An account selector appears only for registrars with multiple
+accounts; single-account registrars keep the original flow. See
+[multiple registrar accounts](docs/multi-account.md) for migration and MCP selection.
+
 ## Connecting an AI agent
 
 DomBot runs a local [MCP](https://modelcontextprotocol.io) server, bound to
@@ -85,21 +92,41 @@ into `claude_desktop_config.json`; it looks like:
 No approval prompt is needed for this route — it runs as you, on your machine —
 and if DomBot isn't open when the client starts, it launches automatically.
 
+## Staying up to date
+
+Once a week DomBot reads the list of releases at
+[dombot.ai/releases.json](https://dombot.ai/releases.json). When there's a newer
+version, a green notification appears in the bell; dismiss it and it stays
+quiet until the next release. Nothing about you or your portfolio is sent, and
+you can turn the check off, or check by hand, in **Settings → About**.
+
+On macOS and Windows, **Update to …** in Settings → About downloads the new
+version and **Restart to update** switches to it. Nothing downloads until you
+click. Linux packages, and copies run from somewhere other than an installed
+location, get a download link instead. Self-hosted instances link to
+[how to update your setup](docs/self-hosting.md).
+
 ## Self-hosting in the browser
 
 The same app runs as a private web app on your own Cloudflare account — a
 Worker plus one D1 database, encrypted under a key only you hold, with the MCP
 server reachable at `https://<your-host>/mcp`.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/aoxborrow/dombot)
+The recommended setup is to fork this repository and connect your fork in the
+Cloudflare dashboard; updating is then GitHub's **Sync fork** button. The
+Deploy button is faster to start, but updates are trickier, so it isn't
+recommended. Both, plus the CLI and putting it behind Cloudflare Access, are in
+[docs/self-hosting.md](docs/self-hosting.md).
 
-The button forks the repo, creates the database, and asks for the two secrets
-(the deploy page tells you how to generate them). Then open the URL and sign
-in. Prefer the CLI, want to redeploy from GitHub Actions, or need to put it
-behind Cloudflare Access? See [docs/self-hosting.md](docs/self-hosting.md).
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/aoxborrow/dombot)
 
 Moving from the desktop app: **Settings → Sync → Export data**, then import
 the file on your instance.
+
+The web build also supports an optional **Public portfolio**: reconcile a curated
+collection against connected accounts, edit privately, and publish selected
+names at `/p/<handle>`. No inventory is public by default. See
+[publishing and its privacy boundary](docs/public-portfolio.md).
 
 ---
 
@@ -109,7 +136,7 @@ DomBot is a cross-platform desktop app built with Electron Forge, React 19,
 TypeScript (strict), and Vite, styled with Tailwind CSS v4 and Zustand for
 state. Registrar API support comes from
 [`@aoxborrow/registrar-client`](https://github.com/aoxborrow/registrar-client);
-agents connect through an embedded MCP server. Contributions welcome — clone
+agents connect through an embedded MCP server. Contributions welcome — use Node.js 22.13 or newer, clone
 the repo, `npm install`, and `npm start` to run the app with hot reload.
 
 ## Scripts
@@ -152,7 +179,7 @@ third _adapter_ over the same `services/` core the UI uses — see
   `DOMBOT_MCP_ENABLED=0` to disable, `DOMBOT_MCP_AUTOAPPROVE=1` to skip the
   approval prompt (dev/testing), `DOMBOT_MCP_TOKEN` for a static bearer token
   escape hatch (dev/testing). See
-  [`src/electron/mcp/oauth.ts`](src/electron/mcp/oauth.ts).
+  [`src/core/mcp/oauth.ts`](src/core/mcp/oauth.ts).
 - **stdio shim.** `DomBot --mcp-stdio` runs the same binary headless as a
   stdin/stdout bridge to the HTTP server, for clients that can't dial a URL
   (Claude Desktop). It authenticates with a per-install token the app writes to
@@ -168,17 +195,37 @@ third _adapter_ over the same `services/` core the UI uses — see
   so it knows who holds it), so an agent can act on a name without first looking
   up its registrar. Pass `registrar` to skip the lookup, or to act on a name not
   yet in the cache; if the cache can't resolve it, the tool says so and points
-  at `portfolio_sync`.
+  at `portfolio_sync`, or says the name is in Archive.
   - _Portfolio:_ `registrar_list`, `portfolio_query`, and `portfolio_sync`.
     `portfolio_query` is the primary way to read the portfolio: list, search,
-    filter, sort, and page the cached portfolio (by registrar, TLD, folder,
-    name, nameserver, auto-renew/lock/privacy, status, and expiry), returning
-    only the fields an agent needs plus sync health (`total`, `stale`, and
-    per-registrar `errors`). With no filters it returns everything (paged), so
-    it doubles as a plain list. It's a pure cache read (no registrar calls);
+    filter, sort, and page the cached portfolio and your imported names (by
+    registrar, source, TLD, folder, name, nameserver, auto-renew/lock/privacy,
+    status, and expiry), returning only the fields an agent needs (including
+    what you paid, sold for, noted, and are asking, and the estimated renewal
+    price) plus sync health (`total`, `stale`, and
+    per-registrar `errors`). Like the Domains page it covers the names you own
+    by default; `ownership` switches to Archive (sold, dropped, archived, or
+    gone from your accounts) or both, and each row says which, and whether
+    it's Hidden. With no filters it returns every name you own (paged), so it
+    doubles as a plain list. It's a pure cache read (no registrar calls);
     `portfolio_sync` runs the live cross-registrar pass that refreshes the
     cache, returning a per-registrar summary. An agent syncs once (or when
     `portfolio_query` reports `stale`/empty), then reads cheaply.
+  - _Folders:_ `folder_list` (with domain counts, including the built-in
+    Hidden folder), `folder_create`, `folder_rename`, `folder_delete` (its
+    domains go back to no folder), and `domain_set_folder` (by folder name or
+    id, or `null` to clear). They write the same folder store as the app, so
+    an open window updates live.
+  - _History and review:_ `domain_history` (every event for a name, with
+    alert status), `portfolio_alerts` (what the bell shows) and
+    `portfolio_alert_dismiss`.
+  - _Money, notes and ownership:_ `domain_purchase_set`, `domain_sale_set`,
+    `domain_note_set`, `domain_asking_price_set`, `domain_renewal_price_set`
+    (your own yearly price, overriding the estimate), and
+    `domain_ownership_set` (Dropped, Archived, or back to Owned). Each can
+    answer an open alert with `resolves` where it fits. DomBot-local, no
+    registrar calls; history they write is marked **Agent** in Activity.
+  - _Registrar accounts:_ `registrar_set_enabled`.
   - _Registrar reads:_ `registrar_test`, `registrar_domains`, `registrar_sync`
     (targeted single-registrar refresh of the cache),
     `registrar_check_availability`, `registrar_pricing`.
@@ -222,3 +269,10 @@ Any paid data feeds are a separate, optional add-on service with their own terms
 — the app itself is and stays free. The registrar logic in
 [`@aoxborrow/registrar-client`](https://github.com/aoxborrow/registrar-client)
 is a separate project under the MIT license.
+
+## Hosted staging edition
+
+An invite-only hosted gateway and isolated per-customer Worker deployments are
+available in this branch. See [hosted staging](docs/hosted-staging.md) for
+provisioning, authentication, MCP scopes, migration, and the tested isolation
+boundary. This is a staging foundation, not public signup or a security audit.

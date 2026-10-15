@@ -24,6 +24,7 @@ function domain(partial: Partial<Domain> & { domainName: string }): Domain {
     nameservers: [],
     syncedAt: new Date(0),
     deleted: false,
+    source: 'registrar',
     ...partial,
   };
 }
@@ -35,7 +36,13 @@ const meta = (name: RegistrarMeta['name'], features: string[] = []) =>
     supportsSandbox: false,
     configured: true,
     enabled: true,
-    sync: { lastSyncedAt: null, lastError: null, domainCount: 0 },
+    sync: {
+      lastSyncedAt: null,
+      lastError: null,
+      lastErrorAt: null,
+      domainCount: 0,
+      trackedSince: null,
+    },
     configFields: [],
     features,
   }) satisfies RegistrarMeta;
@@ -120,15 +127,16 @@ describe('resultsToCsv', () => {
         skipped: 0,
         'rate-limited': 0,
         cancelled: 0,
+        unknown: 0,
       },
       startedAt: 0,
       finishedAt: 1,
     };
     expect(resultsToCsv(job)).toBe(
       [
-        'Domain,Registrar,Status,Message',
-        'a.com,dynadot,Done,Locked',
-        'b.com,gandi,Failed,"Bad, ""quoted"", reason"',
+        'Domain,Registrar,Account ID,Status,Message',
+        'a.com,dynadot,dynadot,Done,Locked',
+        'b.com,gandi,gandi,Failed,"Bad, ""quoted"", reason"',
       ].join('\r\n'),
     );
   });

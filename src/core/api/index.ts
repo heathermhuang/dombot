@@ -15,14 +15,44 @@ import {
   getFolders,
   updateFolder,
 } from '../services/folders';
-import { setManualPrice } from '../services/pricing';
+import { getManualPrices, setManualPrice } from '../services/pricing';
 import {
+  getPurchases,
+  setNotes,
+  setPurchase,
+  markSold,
+  setSale,
+} from '../services/purchases';
+import {
+  deleteDomains,
+  deleteUserEvent,
+  restoreOwned,
+  setAlertsDismissed,
+  setDispositions,
+} from '../services/domain-history';
+import { listEvents } from '../services/domain-events';
+import { getReleaseFeed } from '../services/releases';
+import { getListPrices, setListPrices } from '../services/list-prices';
+import { importDomains, planImport } from '../services/domain-import';
+import {
+  getImportedDomains,
+  updateImportedDomain,
+} from '../services/imported-domains';
+import { lookupRegistrations } from '../services/registration-lookup';
+import {
+  getRenewalPricingStatus,
+  stepRenewalPricing,
+  getRegistrarCatalog,
+  connectRegistrarAccount,
+  removeRegistrarAccount,
+  resolveDomainAccount,
   getCachedDetail,
   getCachedPortfolio,
   getConfiguredRegistrars,
   getDomainDetail,
   getPortfolio,
   getPortfolioPricing,
+  getRegistrationQuote,
   getRegistrarClient,
   getRegistrarCredentialValues,
   getRegistrarFeatures,
@@ -31,6 +61,12 @@ import {
   setRegistrarEnabledCached,
   syncRegistrar,
 } from '../services/registrars';
+import {
+  getProxySettings,
+  removeProxyProfile,
+  saveProxyProfile,
+  testProxy,
+} from '../services/proxies';
 import { getSettings, updateSettings } from '../services/settings';
 import { restartAutoSync } from '../services/auto-sync';
 import { getRevisions, trackRevisions } from '../revision';
@@ -44,6 +80,7 @@ import {
   revokeMcpClient,
 } from '../mcp/oauth';
 import * as s from './schemas';
+import { createAccount, renameAccount } from '../services/accounts';
 
 // The API method table: one entry per request/response method of `DombotApi`,
 // each with a zod schema for its arguments and the handler. Hosts generate
@@ -115,7 +152,17 @@ export async function invoke<K extends ApiMethodName>(
     rawArgs.length < arity
       ? [...rawArgs, ...new Array<undefined>(arity - rawArgs.length)]
       : rawArgs;
-  const parsed = entry.args.safeParse(padded);
+  // JSON preserves omitted middle arguments as null; restore only optional
+  // slots whose schema rejects null, keeping meaningful/required nulls intact.
+  const restored = padded.map((value, index) => {
+    const schema = entry.args.items[index];
+    return value === null &&
+      schema?.isOptional() &&
+      !schema.safeParse(null).success
+      ? undefined
+      : value;
+  });
+  const parsed = entry.args.safeParse(restored);
   if (!parsed.success) throw new ApiValidationError(name, parsed.error.issues);
   return entry.handler(...(parsed.data as Args<K>));
 }
@@ -128,10 +175,22 @@ function requireFeature(target: DomainTarget, feature: string, what: string) {
 }
 
 const none = z.tuple([]);
+// Shape only; the service validates scheme, host and address ranges.
+const proxyInput = z.object({
+  url: z.string().max(2048),
+  egressIp: z.string().max(64),
+});
 
 export type CoreMethodName = Exclude<
   ApiMethodName,
-  'ping' | 'getAppInfo' | 'openExternal' | 'saveTextFile' | 'getMcpInfo'
+  | 'ping'
+  | 'getAppInfo'
+  | 'openExternal'
+  | 'saveTextFile'
+  | 'getMcpInfo'
+  | 'getUpdaterState'
+  | 'downloadUpdate'
+  | 'installUpdate'
 >;
 
 export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
@@ -146,7 +205,8 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     // registrars. Drop it and hydrate nothing.
     if (getConfiguredRegistrars().length === 0) {
       clearAll();
-      return { portfolio: null, detail: {}, pricing: {} };
+      // Imported names aren't registrar data: their pricing stays.
+      return { portfolio: null, detail: {}, pricing: getPortfolioPricing() };
     }
     return {
       portfolio: getCachedPortfolio(),
@@ -157,6 +217,11 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
   clearAllCaches: method(none, async () => {
     clearAll();
   }),
+
+  // ── Updates ───────────────────────────────────────────────────────────────
+  getReleaseFeed: method(z.tuple([z.boolean()]), async (force) =>
+    getReleaseFeed(force),
+  ),
 
   // ── Data bundle (backup / move / secret rotation) ──────────────────────────
   // Plain text both ways; the client seals/opens with the passphrase
@@ -171,42 +236,84 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
 
   // ── Pricing ───────────────────────────────────────────────────────────────
   getPortfolioPricing: method(none, async () => getPortfolioPricing()),
+  getManualPrices: method(none, async () => getManualPrices()),
   setManualPrice: method(
-    z.tuple([s.registrarName, s.domainName, z.number().nullable()]),
-    async (registrar, domain, price) => {
-      setManualPrice(registrar, domain, price);
+    z.tuple([s.domainName, s.renewalPriceInput.nullable()]),
+    async (domain, price) => {
+      setManualPrice(domain, price);
     },
   ),
 
   // ── Registrars ────────────────────────────────────────────────────────────
-  listDynadotDomains: method(none, async () =>
-    getRegistrarClient('dynadot').listDomains(),
-  ),
   listPortfolio: method(
     z.tuple([z.boolean().optional()]),
     async (refresh = true) => getPortfolio(refresh),
   ),
-  syncRegistrar: method(z.tuple([s.registrarName]), async (name) =>
-    syncRegistrar(name),
+  syncRegistrar: method(
+    z.tuple([s.registrarName, s.accountId]),
+    async (name, accountId) => syncRegistrar(name, accountId),
   ),
   getDomainDetail: method(
-    z.tuple([s.registrarName, s.domainName, z.boolean().optional()]),
-    async (name, domainName, refresh = false) =>
-      getDomainDetail(name, domainName, refresh),
+    z.tuple([
+      s.registrarName,
+      s.domainName,
+      z.boolean().optional(),
+      s.accountId,
+    ]),
+    async (name, domainName, refresh = false, accountId) =>
+      getDomainDetail(name, domainName, refresh, accountId),
+  ),
+  getRegistrarCatalog: method(none, getRegistrarCatalog),
+  connectRegistrarAccount: method(
+    z.tuple([
+      s.registrarName,
+      s.credentialValues,
+      z.string().trim().max(100).optional(),
+      z.boolean().optional(),
+    ]),
+    connectRegistrarAccount,
+  ),
+  createRegistrarAccount: method(
+    z.tuple([s.registrarName, z.string().trim().min(1).max(100)]),
+    createAccount,
+  ),
+  renameRegistrarAccount: method(
+    // A blank nickname removes it; the account goes back to its number.
+    z.tuple([z.string(), z.string().trim().max(100)]),
+    renameAccount,
+  ),
+  removeRegistrarAccount: method(z.tuple([z.string()]), removeRegistrarAccount),
+  testRegistrarAccount: method(
+    z.tuple([s.registrarName, s.accountId]),
+    async (name, accountId) =>
+      getRegistrarClient(name, accountId).testConnection(),
   ),
   getRegistrarMetadata: method(none, async () => getRegistrarMetadata()),
-  getRegistrarCredentials: method(z.tuple([s.registrarName]), async (name) =>
-    getRegistrarCredentialValues(name),
+  getRegistrarCredentials: method(
+    z.tuple([s.registrarName, s.accountId]),
+    async (name, accountId) => getRegistrarCredentialValues(name, accountId),
   ),
   saveRegistrarCredentials: method(
-    z.tuple([s.registrarName, s.credentialValues]),
-    async (name, creds) => {
-      await saveRegistrarCredentials(name, creds);
+    z.tuple([
+      s.registrarName,
+      s.credentialValues,
+      s.accountId,
+      z.boolean().optional(),
+    ]),
+    async (name, creds, accountId, useProxy) => {
+      await saveRegistrarCredentials(name, creds, accountId, useProxy);
     },
   ),
+  getProxySettings: method(none, async () => getProxySettings()),
+  saveProxySettings: method(z.tuple([proxyInput]), async (proxy) => {
+    await saveProxyProfile(proxy);
+  }),
+  removeProxySettings: method(none, async () => removeProxyProfile()),
+  testProxySettings: method(z.tuple([proxyInput]), testProxy),
   setRegistrarEnabled: method(
-    z.tuple([s.registrarName, z.boolean()]),
-    async (name, enabled) => setRegistrarEnabledCached(name, enabled),
+    z.tuple([s.registrarName, z.boolean(), s.accountId]),
+    async (name, enabled, accountId) =>
+      setRegistrarEnabledCached(name, enabled, accountId),
   ),
 
   // ── Domain operations ─────────────────────────────────────────────────────
@@ -219,15 +326,25 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
   // Forwarding reads back the per-row dialogs. Live — not part of the cache.
   getUrlForwarding: method(z.tuple([s.domainTarget]), async (target) => {
     requireFeature(target, 'getDomainForwarding', 'URL forwarding');
-    return getRegistrarClient(target.registrar).getDomainForwarding(
-      target.domainName,
-    );
+    return getRegistrarClient(
+      target.registrar,
+      resolveDomainAccount(
+        target.registrar,
+        target.domainName,
+        target.accountId,
+      ).id,
+    ).getDomainForwarding(target.domainName);
   }),
   getEmailForwarding: method(z.tuple([s.domainTarget]), async (target) => {
     requireFeature(target, 'getEmailForwarding', 'email forwarding');
-    return getRegistrarClient(target.registrar).getEmailForwarding(
-      target.domainName,
-    );
+    return getRegistrarClient(
+      target.registrar,
+      resolveDomainAccount(
+        target.registrar,
+        target.domainName,
+        target.accountId,
+      ).id,
+    ).getEmailForwarding(target.domainName);
   }),
 
   // ── Bulk jobs ─────────────────────────────────────────────────────────────
@@ -256,9 +373,9 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     deleteFolder(id);
   }),
   assignFolder: method(
-    z.tuple([s.domainKey, z.string().nullable()]),
-    async (domainKey, folderId) => {
-      assignFolder(domainKey, folderId);
+    z.tuple([s.domainName, z.string().nullable()]),
+    async (domainName, folderId) => {
+      assignFolder(domainName, folderId);
     },
   ),
 
@@ -272,8 +389,103 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     return next;
   }),
 
+  // ── Purchase records ──────────────────────────────────────────────────────
+  getPurchases: method(none, async () => getPurchases()),
+  setPurchase: method(z.tuple([s.purchaseInput]), async (input) =>
+    setPurchase(input),
+  ),
+  setSale: method(z.tuple([s.saleInput]), async (input) => setSale(input)),
+  setNotes: method(
+    z.tuple([s.domainName, s.noteText]),
+    async (domainName, notes) => setNotes(domainName, notes),
+  ),
+
+  // ── Domain import ─────────────────────────────────────────────────────────
+  previewDomainImport: method(z.tuple([s.importRows]), async (rows) =>
+    planImport(rows),
+  ),
+  importDomains: method(
+    z.tuple([s.importRows, s.importApply]),
+    async (rows, options) => importDomains(rows, options),
+  ),
+
+  // ── Imported domains ────────────────────────────────────────────────────────
+  getImportedDomains: method(none, async () => getImportedDomains()),
+  updateImportedDomain: method(
+    z.tuple([s.domainName, s.importedDomainFields]),
+    async (domainName, fields) => {
+      updateImportedDomain(domainName, fields);
+      return getImportedDomains();
+    },
+  ),
+
+  // ── Asking prices ─────────────────────────────────────────────────────────
+  getListPrices: method(none, async () => getListPrices()),
+  setListPrices: method(z.tuple([s.listPriceInputs]), async (inputs) => {
+    setListPrices(inputs);
+    return getListPrices();
+  }),
+
+  lookupRegistrations: method(z.tuple([s.domainNameList]), async (names) =>
+    lookupRegistrations(names),
+  ),
+  getRegistrationQuote: method(
+    z.tuple([s.registrarName, s.domainName, s.accountId]),
+    async (registrar, domainName, accountId) =>
+      getRegistrationQuote(registrar, domainName, accountId),
+  ),
+
+  // ── Domain history (events) ───────────────────────────────────────────────
+  // Every change returns the whole log, so the caller refreshes in one call.
+  getDomainEvents: method(none, async () => listEvents()),
+  setDispositions: method(
+    z.tuple([s.ownershipItems, s.disposition, s.optionalDay]),
+    async (items, type, date) => {
+      setDispositions(items, type, date);
+      return listEvents();
+    },
+  ),
+  markSold: method(
+    z.tuple([s.ownershipItems, s.optionalDay]),
+    async (items, date) => {
+      markSold(items, date);
+      return listEvents();
+    },
+  ),
+  restoreOwned: method(
+    z.tuple([s.domainNameList.min(1)]),
+    async (domainNames) => {
+      restoreOwned(domainNames);
+      return listEvents();
+    },
+  ),
+  setAlertsDismissed: method(
+    z.tuple([z.array(s.eventId).min(1).max(5000), z.boolean()]),
+    async (ids, dismissed) => {
+      setAlertsDismissed(ids, dismissed);
+      return listEvents();
+    },
+  ),
+  deleteUserEvent: method(z.tuple([s.eventId]), async (id) => {
+    deleteUserEvent(id);
+    return listEvents();
+  }),
+  deleteDomains: method(
+    z.tuple([s.domainNameList.min(1)]),
+    async (domainNames) => {
+      deleteDomains(domainNames);
+      return listEvents();
+    },
+  ),
+
   // ── Events (polling) ──────────────────────────────────────────────────────
-  getRevisions: method(none, async () => getRevisions()),
+  getRevisions: method(none, async () => ({
+    ...getRevisions(),
+    ...(getRenewalPricingStatus().remaining > 0
+      ? { renewalPricingPending: true }
+      : {}),
+  })),
+  stepRenewalPricing: method(none, async () => stepRenewalPricing()),
 
   // ── MCP pairing ───────────────────────────────────────────────────────────
   // The OAuth state is in the store, so the approval UI works on both hosts;

@@ -1,3 +1,4 @@
+import { domainKey } from '../../../shared/account-key';
 import { useMemo, useState } from 'react';
 import { ChevronRight, Copy, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
@@ -63,6 +64,7 @@ import { NameserversEditor } from './NameserversEditor';
 import { UrlForwardingEditor } from './UrlForwardingEditor';
 import { EmailForwardingEditor } from './EmailForwardingEditor';
 import { useNameserverPresets } from './useNameserverPresets';
+import { priceMoney } from '../../lib/renewals';
 
 /**
  * The three-stage bulk dialog every bulk op uses:
@@ -115,9 +117,7 @@ export function BulkActionDialog({
 
   const candidates = useMemo(
     () =>
-      retryOf
-        ? domains.filter((d) => retryOf.has(`${d.registrar}:${d.domainName}`))
-        : domains,
+      retryOf ? domains.filter((d) => retryOf.has(domainKey(d))) : domains,
     [domains, retryOf],
   );
   const buckets = useMemo(
@@ -126,7 +126,7 @@ export function BulkActionDialog({
         candidates,
         op,
         registrars,
-        (d) => `${d.registrar}:${d.domainName}` in enriched,
+        (d) => domainKey(d) in enriched,
       ),
     [candidates, op, registrars, enriched],
   );
@@ -199,6 +199,7 @@ export function BulkActionDialog({
               : op;
       const targets: DomainTarget[] = targetsToRun.map((d) => ({
         registrar: d.registrar as DomainTarget['registrar'],
+        accountId: d.accountId,
         domainName: d.domainName,
       }));
       const started = await startBulk(targets, finalOp);
@@ -220,7 +221,7 @@ export function BulkActionDialog({
   const retryFailed = (j: BulkJob) => {
     const keys = j.results
       .filter((r) => isRetryable(r.status))
-      .map((r) => `${r.target.registrar}:${r.target.domainName}`);
+      .map((r) => domainKey(r.target));
     setRetryOf(new Set(keys));
     setJobId(null);
   };
@@ -584,11 +585,6 @@ function SkipExisting({
   );
 }
 
-/** Whole/decimal USD, e.g. "$12" or "$12.99". */
-function usd(n: number): string {
-  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-}
-
 const MAX_YEARS = 10;
 
 /** Term picker plus the summed estimate across the domains that will run. */
@@ -603,15 +599,19 @@ function BulkRenew({
   domains: Domain[];
   pricing: ReturnType<typeof useAppStore.getState>['pricing'];
 }) {
+  // Summed per currency: prices aren't converted.
   let known = 0;
-  let total = 0;
+  const totals = new Map<string, number>();
   for (const d of domains) {
-    const p = pricing[`${d.registrar}:${d.domainName}`];
+    const p = pricing[domainKey(d)];
     if (p?.renewal != null) {
       known += 1;
-      total += p.renewal * years;
+      totals.set(p.currency, (totals.get(p.currency) ?? 0) + p.renewal * years);
     }
   }
+  const total = [...totals]
+    .map(([currency, n]) => priceMoney(n, currency))
+    .join(' + ');
   const hasPorkbun = domains.some((d) => d.registrar === 'porkbun');
   return (
     <div className="flex flex-col gap-3">
@@ -643,7 +643,7 @@ function BulkRenew({
             <span className="text-muted-foreground">unknown</span>
           ) : (
             <>
-              {usd(total)}
+              {total}
               {known < domains.length && (
                 <span className="ml-1.5 text-xs text-muted-foreground">
                   for {known} of {domains.length} priced
@@ -674,16 +674,18 @@ function summarize(j: BulkJob): string {
     parts.push(`${j.counts['rate-limited']} rate limited`);
   if (j.counts.unsupported) parts.push(`${j.counts.unsupported} unsupported`);
   if (j.counts.cancelled) parts.push(`${j.counts.cancelled} cancelled`);
+  if (j.counts.unknown) parts.push(`${j.counts.unknown} unconfirmed`);
   return parts.join(' · ') || 'Nothing to do.';
 }
 
 const DOT: Record<DomainOpStatus, string> = {
-  ok: 'bg-[#7ac28d]',
+  ok: 'bg-brand',
   failed: 'bg-red-500',
   unsupported: 'bg-amber-500',
   skipped: 'bg-muted-foreground/50',
   'rate-limited': 'bg-orange-500',
   cancelled: 'bg-muted-foreground/50',
+  unknown: 'bg-amber-500',
 };
 
 function StatusDot({ status }: { status: DomainOpStatus }) {
@@ -713,7 +715,7 @@ function ResultsList({
     <ul className="max-h-64 overflow-y-auto rounded-md border text-xs">
       {[...results].reverse().map((r, i) => (
         <li
-          key={`${r.target.registrar}:${r.target.domainName}:${i}`}
+          key={`${domainKey(r.target)}:${i}`}
           className="flex items-start gap-2 border-b px-2.5 py-1.5 last:border-b-0"
         >
           <span className="mt-1.5 shrink-0">
@@ -773,7 +775,7 @@ function AuthCodeResults({ results }: { results: DomainOpResult[] }) {
       <ul className="max-h-72 overflow-y-auto rounded-md border text-xs">
         {results.map((r, i) => (
           <li
-            key={`${r.target.registrar}:${r.target.domainName}:${i}`}
+            key={`${domainKey(r.target)}:${i}`}
             className="flex items-center gap-2 border-b px-2.5 py-1.5 last:border-b-0"
           >
             <StatusDot status={r.status} />
@@ -818,11 +820,9 @@ function Buckets({
    *  registrar's own constraints. */
   held: { domain: Domain; reason: string }[];
 }) {
-  const heldKeys = new Set(
-    held.map((h) => `${h.domain.registrar}:${h.domain.domainName}`),
-  );
+  const heldKeys = new Set(held.map((h) => domainKey(h.domain)));
   const willChange = buckets.eligible.filter(
-    (d) => !heldKeys.has(`${d.registrar}:${d.domainName}`),
+    (d) => !heldKeys.has(domainKey(d)),
   );
   return (
     <div className="flex flex-col gap-1.5 text-sm">

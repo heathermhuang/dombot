@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryDocStore } from '../storage/doc-store';
 import {
   configureStore,
@@ -18,15 +18,50 @@ beforeEach(async () => {
 });
 
 describe('invoke', () => {
+  it('restores optional positional arguments serialized as JSON null without changing meaningful nulls', async () => {
+    const account = {
+      id: 'dynadot',
+      registrar: 'dynadot' as const,
+      label: '#1',
+    };
+    const handler = vi.fn(() => account);
+    const entry = { ...coreMethods.connectRegistrarAccount, handler };
+    const wire: unknown[] = JSON.parse(
+      JSON.stringify(['dynadot', { apiKey: 'test-key' }, undefined, false]),
+    );
+    await expect(
+      invoke('connectRegistrarAccount', entry, wire),
+    ).resolves.toEqual(account);
+    expect(handler).toHaveBeenCalledWith(
+      'dynadot',
+      { apiKey: 'test-key' },
+      undefined,
+      false,
+    );
+    await expect(
+      invoke('connectRegistrarAccount', entry, [
+        null,
+        { apiKey: 'test-key' },
+        null,
+        false,
+      ]),
+    ).rejects.toBeInstanceOf(ApiValidationError);
+    expect(handler).toHaveBeenCalledTimes(1);
+    const clearPrice = vi.fn(() => undefined);
+    await invoke(
+      'setManualPrice',
+      { ...coreMethods.setManualPrice, handler: clearPrice },
+      ['example.com', null],
+    );
+    expect(clearPrice).toHaveBeenCalledWith('example.com', null);
+  });
   it('pads omitted trailing optional args and runs the handler', async () => {
     // listPortfolio(refresh?) with no args → refresh defaults to true inside
     // the handler; we only check the schema accepts the shorter call here.
     const entry = coreMethods.getDomainDetail;
-    expect(entry.args.parse(['dynadot', 'a.com', undefined])).toEqual([
-      'dynadot',
-      'a.com',
-      undefined,
-    ]);
+    expect(
+      entry.args.parse(['dynadot', 'a.com', undefined, undefined]),
+    ).toEqual(['dynadot', 'a.com', undefined, undefined]);
     // Through invoke: same call minus the optional arg. The registrar client
     // isn't configured, so the handler resolves null for an unknown domain.
     await expect(
@@ -63,12 +98,8 @@ describe('invoke', () => {
     ).rejects.toBeInstanceOf(ApiValidationError);
     // The message names the method and is short enough to show a user.
     await expect(
-      invoke('setManualPrice', coreMethods.setManualPrice, [
-        'nope',
-        'a.com',
-        1,
-      ]),
-    ).rejects.toThrow(/^Invalid arguments to setManualPrice \(0: /);
+      invoke('setManualPrice', coreMethods.setManualPrice, ['a.com', 'nope']),
+    ).rejects.toThrow(/^Invalid arguments to setManualPrice \(1: /);
   });
 
   it('runs handlers against the store', async () => {
@@ -76,15 +107,15 @@ describe('invoke', () => {
       { name: 'Keep', description: '', color: 'teal' },
     ]);
     await invoke('assignFolder', coreMethods.assignFolder, [
-      'dynadot:a.com',
+      'A.com',
       folder.id,
     ]);
     await invoke('updateSettings', coreMethods.updateSettings, [
       { autoSyncIntervalMinutes: 60 },
     ]);
     await flushWrites();
-    expect(await store.get('folders', 'assignments')).toEqual({
-      'dynadot:a.com': folder.id,
+    expect(await store.list('domain-folders')).toEqual({
+      'a.com': folder.id,
     });
     expect(await store.get('settings', 'autoSyncIntervalMinutes')).toBe(60);
     expect(

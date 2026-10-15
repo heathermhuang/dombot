@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "domains-portfolio-www",
+  "account_id": "63a7fe52c985c63bb9e69ce47efdc569",
+  "main": "../src/hosted/portfolio-redirect.ts",
+  "compatibility_date": "2026-09-09",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "www.domains.domains/*",
+      "zone_id": "8fc2286b83c3ef1d122b002b22524a1a",
+    },
+  ],
+}

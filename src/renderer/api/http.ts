@@ -1,3 +1,4 @@
+import { hostPath } from '../lib/platform';
 import type {
   BulkJob,
   BulkProgress,
@@ -47,7 +48,7 @@ async function call<T>(method: string, args: unknown[] = []): Promise<T> {
   // JSON has no `undefined`: a trailing omitted optional would arrive as
   // `null` and fail the method's schema. Drop them; `invoke` pads them back.
   while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
-  const res = await fetch(`/api/${method}`, {
+  const res = await fetch(hostPath(`/api/${method}`), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ args }),
@@ -137,7 +138,11 @@ class Poller {
     }
     this.busy = true;
     try {
-      const rev = await call<Revisions>('getRevisions');
+      const rev =
+        await call<Awaited<ReturnType<DombotApi['getRevisions']>>>(
+          'getRevisions',
+        );
+      if (rev.renewalPricingPending) void driveRenewalPricing();
       if (this.last) {
         for (const kind of ['portfolio', 'bulk', 'approvals'] as const) {
           if (rev[kind] !== this.last[kind]) {
@@ -172,6 +177,30 @@ class Poller {
 
 /** Whether this client is currently stepping a job (drives the poll rate). */
 let driving: string | null = null;
+let pricingDriving = false;
+
+/** Read-only pricing work is persisted by the Worker. Open owner tabs advance
+ * small batches even when another tab is selected; reloads resume the rest. */
+async function driveRenewalPricing(): Promise<void> {
+  if (pricingDriving) return;
+  pricingDriving = true;
+  try {
+    for (;;) {
+      const status =
+        await call<Awaited<ReturnType<DombotApi['stepRenewalPricing']>>>(
+          'stepRenewalPricing',
+        );
+      if (status.remaining === 0) return;
+      const wait = (status.nextAt ?? 0) - Date.now();
+      if (wait > 0)
+        await new Promise<void>((resolve) => setTimeout(resolve, wait));
+    }
+  } catch {
+    // The next revision poll resumes the persisted pending reads.
+  } finally {
+    pricingDriving = false;
+  }
+}
 
 const progressListeners = new Set<Listener<BulkProgress>>();
 const finishedListeners = new Set<Listener<BulkJob>>();
@@ -219,8 +248,31 @@ async function driveBulk(jobId: string, seenResults: number): Promise<void> {
 
 // ── the api object ──────────────────────────────────────────────────────────
 
+/** `openExternal` in a browser: a new tab. */
+export function openExternalInBrowser(url: string): void {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** `saveTextFile` in a browser: a download. CSV gets a BOM for Excel. */
+export function saveTextFileInBrowser(
+  content: string,
+  suggestedName: string,
+): { saved: true; path: string } {
+  const csv = /\.csv$/i.test(suggestedName);
+  const blob = new Blob([csv ? '\ufeff' + content : content], {
+    type: csv ? 'text/csv;charset=utf-8' : 'application/json',
+  });
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = suggestedName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  return { saved: true, path: suggestedName };
+}
+
 export function createHttpApi(): DombotApi {
-  const poller = new Poller(() => driving !== null);
+  const poller = new Poller(() => driving !== null || pricingDriving);
   const m =
     <T>(name: string) =>
     (...args: unknown[]) =>
@@ -229,28 +281,20 @@ export function createHttpApi(): DombotApi {
   return {
     ping: m<string>('ping'),
     getAppInfo: m('getAppInfo'),
-    openExternal: async (url) => {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    },
-    saveTextFile: async (content, suggestedName) => {
-      const csv = /\.csv$/i.test(suggestedName);
-      const blob = new Blob([csv ? '﻿' + content : content], {
-        type: csv ? 'text/csv;charset=utf-8' : 'application/json',
-      });
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = href;
-      a.download = suggestedName;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(href), 10_000);
-      return { saved: true, path: suggestedName };
-    },
+    getReleaseFeed: m('getReleaseFeed'),
+    getUpdaterState: m('getUpdaterState'),
+    downloadUpdate: m('downloadUpdate'),
+    installUpdate: m('installUpdate'),
+    openExternal: async (url) => openExternalInBrowser(url),
+    saveTextFile: async (content, suggestedName) =>
+      saveTextFileInBrowser(content, suggestedName),
 
     hydrateFromCache: async () => {
       const snap =
         await call<Awaited<ReturnType<DombotApi['hydrateFromCache']>>>(
           'hydrateFromCache',
         );
+      if (snap.portfolio?.renewalPricing?.remaining) void driveRenewalPricing();
       return {
         ...snap,
         portfolio: snap.portfolio ? reviveDomains(snap.portfolio) : null,
@@ -263,29 +307,35 @@ export function createHttpApi(): DombotApi {
     exportData: m('exportData'),
     importData: m('importData'),
     getPortfolioPricing: m('getPortfolioPricing'),
+    stepRenewalPricing: m('stepRenewalPricing'),
+    getManualPrices: m('getManualPrices'),
     setManualPrice: m('setManualPrice'),
 
-    listDynadotDomains: async () =>
-      (await call<Domain[]>('listDynadotDomains')).map(reviveDomain),
-    listPortfolio: async (refresh) =>
-      reviveDomains(
-        await call<Awaited<ReturnType<DombotApi['listPortfolio']>>>(
-          'listPortfolio',
-          [refresh],
-        ),
-      ),
-    syncRegistrar: async (name) =>
-      reviveDomains(
-        await call<Awaited<ReturnType<DombotApi['syncRegistrar']>>>(
-          'syncRegistrar',
-          [name],
-        ),
-      ),
-    getDomainDetail: async (registrar, domainName, refresh) => {
+    listPortfolio: async (refresh) => {
+      const portfolio = await call<
+        Awaited<ReturnType<DombotApi['listPortfolio']>>
+      >('listPortfolio', [refresh]);
+      if (portfolio.renewalPricing?.remaining) void driveRenewalPricing();
+      return reviveDomains(portfolio);
+    },
+    syncRegistrar: async (name, accountId) => {
+      const portfolio = await call<
+        Awaited<ReturnType<DombotApi['syncRegistrar']>>
+      >('syncRegistrar', [name, accountId]);
+      if (portfolio.renewalPricing?.remaining) void driveRenewalPricing();
+      return reviveDomains(portfolio);
+    },
+    getDomainDetail: async (
+      registrar,
+      domainName,
+      refresh = false,
+      accountId,
+    ) => {
       const d = await call<Partial<Domain> | null>('getDomainDetail', [
         registrar,
         domainName,
         refresh,
+        accountId,
       ]);
       return d ? reviveDomain(d) : null;
     },
@@ -332,14 +382,24 @@ export function createHttpApi(): DombotApi {
       };
     },
 
+    getRegistrarCatalog: m('getRegistrarCatalog'),
+    connectRegistrarAccount: m('connectRegistrarAccount'),
+    createRegistrarAccount: m('createRegistrarAccount'),
+    renameRegistrarAccount: m('renameRegistrarAccount'),
+    removeRegistrarAccount: m('removeRegistrarAccount'),
+    testRegistrarAccount: m('testRegistrarAccount'),
     getRegistrarMetadata: m('getRegistrarMetadata'),
     getRegistrarCredentials: m('getRegistrarCredentials'),
     saveRegistrarCredentials: m('saveRegistrarCredentials'),
-    setRegistrarEnabled: async (name, enabled) =>
+    getProxySettings: m('getProxySettings'),
+    saveProxySettings: m('saveProxySettings'),
+    removeProxySettings: m('removeProxySettings'),
+    testProxySettings: m('testProxySettings'),
+    setRegistrarEnabled: async (name, enabled, accountId) =>
       reviveDomains(
         await call<Awaited<ReturnType<DombotApi['setRegistrarEnabled']>>>(
           'setRegistrarEnabled',
-          [name, enabled],
+          [name, enabled, accountId],
         ),
       ),
 
@@ -350,7 +410,9 @@ export function createHttpApi(): DombotApi {
         await call<Awaited<ReturnType<DombotApi['getMcpInfo']>>>('getMcpInfo');
       return {
         ...info,
-        url: info.url ? new URL(info.url, window.location.href).href : '',
+        url: info.url
+          ? new URL(hostPath(info.url), window.location.href).href
+          : '',
       };
     },
     listPendingApprovals: m('listPendingApprovals'),
@@ -359,6 +421,9 @@ export function createHttpApi(): DombotApi {
     revokeMcpClient: m('revokeMcpClient'),
     onApprovalsChanged: (cb) => poller.subscribe('approvals', cb),
     onPortfolioChanged: (cb) => poller.subscribe('portfolio', cb),
+    // No app menu in the browser.
+    onSyncRequested: () => () => {},
+    onNavigateRequested: () => () => {},
 
     getFolders: m('getFolders'),
     createFolder: m('createFolder'),
@@ -368,6 +433,25 @@ export function createHttpApi(): DombotApi {
 
     getSettings: m('getSettings'),
     updateSettings: m('updateSettings'),
+    getPurchases: m('getPurchases'),
+    setPurchase: m('setPurchase'),
+    setNotes: m('setNotes'),
+    previewDomainImport: m('previewDomainImport'),
+    importDomains: m('importDomains'),
+    getImportedDomains: m('getImportedDomains'),
+    updateImportedDomain: m('updateImportedDomain'),
+    getListPrices: m('getListPrices'),
+    setListPrices: m('setListPrices'),
+    setSale: m('setSale'),
+    getDomainEvents: m('getDomainEvents'),
+    setDispositions: m('setDispositions'),
+    markSold: m('markSold'),
+    restoreOwned: m('restoreOwned'),
+    setAlertsDismissed: m('setAlertsDismissed'),
+    deleteUserEvent: m('deleteUserEvent'),
+    deleteDomains: m('deleteDomains'),
+    getRegistrationQuote: m('getRegistrationQuote'),
+    lookupRegistrations: m('lookupRegistrations'),
 
     getRevisions: m('getRevisions'),
   };

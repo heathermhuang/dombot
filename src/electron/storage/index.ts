@@ -1,8 +1,16 @@
 import { app, safeStorage } from 'electron';
 import { CREDENTIALS_NAMESPACE } from '../../core/services/credentials';
 import { EncryptedDocStore } from '../../core/storage/encrypted';
-import { configureStore, hydrateStores } from '../../core/storage/namespace';
+import {
+  configureStore,
+  flushWrites,
+  hydrateStores,
+} from '../../core/storage/namespace';
 import type { DocStore } from '../../core/storage/doc-store';
+import { runMigrations } from '../../core/storage/migrations';
+import { sanitizeStoredDiagnostics } from '../../core/storage/sanitize-diagnostics';
+import { migrateLegacyProxies } from '../../core/services/proxies';
+import { PROXIES_NAMESPACE } from '../../shared/proxy';
 import { FsDocStore } from './fs-doc-store';
 import { migrateLegacyCredentials, migrateLegacyMcpTokens } from './migrate';
 import {
@@ -17,8 +25,7 @@ import {
 // store; it also runs the legacy-credentials migration and hydrates every
 // namespace into memory.
 
-function buildStore(): DocStore {
-  const files = new FsDocStore(app.getPath('userData'));
+function buildStore(files: FsDocStore): DocStore {
   if (!safeStorage.isEncryptionAvailable() && plaintextCredentialsAllowed()) {
     console.warn(
       '[storage] safeStorage unavailable and DOMBOT_ALLOW_PLAINTEXT_CREDENTIALS=1 ' +
@@ -29,12 +36,14 @@ function buildStore(): DocStore {
   return new EncryptedDocStore(
     files,
     safeStorageCipher,
-    new Set([CREDENTIALS_NAMESPACE]),
+    // The proxy URL carries a password, so it is sealed like credentials.
+    new Set([CREDENTIALS_NAMESPACE, PROXIES_NAMESPACE]),
   );
 }
 
 export async function initStorage(): Promise<void> {
-  const store = buildStore();
+  const files = new FsDocStore(app.getPath('userData'));
+  const store = buildStore(files);
   configureStore(store);
   await migrateLegacyCredentials(app.getPath('userData'), store, {
     decrypt: (blob) => {
@@ -47,5 +56,10 @@ export async function initStorage(): Promise<void> {
     },
   });
   await migrateLegacyMcpTokens(app.getPath('userData'), store);
+  // Namespace renames and name-keyed folders/prices (docs/storage-model.md).
+  // Copies go through the raw files, so sealed credentials move still sealed.
+  await runMigrations(files, store);
+  await sanitizeStoredDiagnostics(store);
   await hydrateStores();
+  if (await migrateLegacyProxies()) await flushWrites();
 }

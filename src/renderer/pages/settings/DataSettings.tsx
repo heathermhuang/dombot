@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -19,12 +19,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  MAX_BUNDLE_BYTES,
   isSealedBundle,
   openBundle,
   sealBundle,
 } from '../../../shared/bundle-seal';
+import { isDemo } from '../../lib/platform';
 import { useAppStore } from '../../store/app';
-import { SettingsCard } from './SettingsCard';
+import { ImportDomainsDialog } from '../../components/domains/ImportDomainsDialog';
+import { SettingsCard, SettingsField } from './SettingsCard';
+import { Download, Upload } from 'lucide-react';
+import { domainsCsvTemplate } from '../../../shared/domain-csv';
+import { exportAllDomains } from '../../lib/domain-export';
 
 /** Auto-sync interval choices (minutes). `0` disables the background sync. */
 const INTERVAL_OPTIONS: { label: string; minutes: number }[] = [
@@ -79,7 +85,7 @@ export default function DataSettings() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-bold">Sync</h2>
+        <h2 className="text-2xl font-bold">Sync</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           DomBot keeps a copy of your portfolio and refreshes it from the
           registrars on a schedule, so it opens instantly and registrar APIs
@@ -87,36 +93,41 @@ export default function DataSettings() {
         </p>
       </div>
 
-      <SettingsCard title="Auto-sync" contentClassName="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          How often DomBot re-syncs your whole portfolio in the background.
-          Larger portfolios may prefer a longer interval or Off.
-        </p>
-        <div className="flex items-center gap-3">
-          <Select
-            value={interval == null ? undefined : String(interval)}
-            onValueChange={(v) => void setAutoSyncInterval(Number(v))}
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="Loading…" />
-            </SelectTrigger>
-            <SelectContent>
-              {INTERVAL_OPTIONS.map((opt) => (
-                <SelectItem key={opt.minutes} value={String(opt.minutes)}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {interval === 0 && (
-            <span className="text-sm text-muted-foreground">
-              Auto-sync is off — refresh manually or via the agent’s sync tools.
-            </span>
-          )}
-        </div>
+      <SettingsCard title="Auto-sync">
+        <SettingsField
+          label="Sync frequency"
+          htmlFor="auto-sync-interval"
+          description="How often DomBot re-syncs your whole portfolio in the background. Larger portfolios may prefer a longer interval or Off."
+        >
+          <div className="flex items-center gap-3">
+            <Select
+              value={interval == null ? undefined : String(interval)}
+              onValueChange={(v) => void setAutoSyncInterval(Number(v))}
+            >
+              <SelectTrigger id="auto-sync-interval" className="w-52">
+                <SelectValue placeholder="Loading…" />
+              </SelectTrigger>
+              <SelectContent>
+                {INTERVAL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.minutes} value={String(opt.minutes)}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {interval === 0 && (
+              <span className="text-sm text-muted-foreground">
+                Auto-sync is off — refresh manually or via the agent’s sync
+                tools.
+              </span>
+            )}
+          </div>
+        </SettingsField>
       </SettingsCard>
 
-      <DataBundleCard />
+      <SpreadsheetCard />
+      <ExportCard />
+      <ImportCard />
 
       <SettingsCard title="Cached data" contentClassName="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
@@ -144,24 +155,76 @@ export default function DataSettings() {
 }
 
 /**
- * Export / import of the whole store as one JSON file: the backup for a
- * self-hosted instance (its data is unreadable without the root secret), the
- * way to move from the desktop app to a web instance, and what secret
- * rotation round-trips through. Optionally sealed with a passphrase, since
- * the file holds registrar API keys.
+ * Your domains as a spreadsheet: import names (with what you paid, sold for,
+ * and are asking) from any CSV, export them all as a DomBot CSV, or start
+ * from the template (docs/domain-import-export.md).
  */
-function DataBundleCard() {
+function SpreadsheetCard() {
+  const [importing, setImporting] = useState(false);
+
+  async function onExport() {
+    try {
+      const n = await exportAllDomains();
+      if (n !== null) toast.success(`Exported ${n} name${n === 1 ? '' : 's'}`);
+    } catch (err) {
+      toast.error('Export failed', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async function onTemplate() {
+    try {
+      const result = await window.api.saveTextFile(
+        domainsCsvTemplate(),
+        'dombot-domains-template.csv',
+      );
+      if (result.saved) toast.success('Template downloaded');
+    } catch (err) {
+      toast.error('Download failed', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return (
+    <SettingsCard title="Spreadsheet" contentClassName="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">
+        Import domains from a CSV: a DomBot export, a registrar or marketplace
+        export, or your own list. You match the columns and review every change
+        before anything is saved, and names already here are only added to.
+        Export writes every name, Owned and Archive, one per row, in a file
+        DomBot can import again.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button className="gap-2" onClick={() => setImporting(true)}>
+          <Upload className="size-4" />
+          Import domains…
+        </Button>
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => void onExport()}
+        >
+          <Download className="size-4" />
+          Export all domains
+        </Button>
+        <Button variant="ghost" onClick={() => void onTemplate()}>
+          Download template
+        </Button>
+      </div>
+      {importing && <ImportDomainsDialog onClose={() => setImporting(false)} />}
+    </SettingsCard>
+  );
+}
+
+/**
+ * Backup of the whole store as one JSON file. Optionally sealed with a
+ * passphrase, since the file holds registrar API keys.
+ */
+function ExportCard() {
   const [exportPass, setExportPass] = useState('');
   const [exporting, setExporting] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<{
-    name: string;
-    text: string;
-    sealed: boolean;
-  } | null>(null);
-  const [importPass, setImportPass] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
 
   const onExport = async () => {
     setExporting(true);
@@ -183,8 +246,59 @@ function DataBundleCard() {
     }
   };
 
+  return (
+    <SettingsCard title="Export" contentClassName="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">
+        Export everything — registrar keys, portfolio, imported domains,
+        folders, prices, BIN prices, history, settings, and MCP pairings — as
+        one JSON file. Use it as a backup or to move to another DomBot. Leave
+        the passphrase blank and anyone who opens the file can read your
+        registrar API keys. Type one and the file is locked: Import asks for
+        that same passphrase, and DomBot does not keep a copy. If you forget it,
+        the backup cannot be opened.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <SettingsField
+          label="Passphrase (optional)"
+          htmlFor="export-pass"
+          className="w-56"
+        >
+          <PasswordInput
+            id="export-pass"
+            autoComplete="new-password"
+            value={exportPass}
+            onChange={(e) => setExportPass(e.target.value)}
+          />
+        </SettingsField>
+        <Button onClick={() => void onExport()} disabled={exporting}>
+          {exporting ? 'Exporting…' : 'Export data'}
+        </Button>
+      </div>
+    </SettingsCard>
+  );
+}
+
+/**
+ * Restore a full backup, or bring in purchase fields from a spreadsheet.
+ * The full import replaces the store. The spreadsheet does not.
+ */
+function ImportCard() {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<{
+    name: string;
+    text: string;
+    sealed: boolean;
+  } | null>(null);
+  const [importPass, setImportPass] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
   const onPick = async (file: File | undefined) => {
     if (!file) return;
+    if (file.size > MAX_BUNDLE_BYTES) {
+      toast.error('Data file is too large (maximum 32 MiB).');
+      return;
+    }
     const text = await file.text();
     setImportPass('');
     setImportError(null);
@@ -214,41 +328,16 @@ function DataBundleCard() {
   };
 
   return (
-    <SettingsCard
-      title="Export & import"
-      contentClassName="flex flex-col gap-5"
-    >
+    <SettingsCard title="Import" contentClassName="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          Export everything — registrar keys, portfolio, folders, prices,
-          settings, and MCP pairings — as one JSON file. Use it as a backup or
-          to move to another DomBot. The file contains your API keys, so
-          consider a passphrase.
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="export-pass" className="text-xs">
-              Passphrase (optional)
-            </Label>
-            <Input
-              id="export-pass"
-              type="password"
-              autoComplete="new-password"
-              className="w-56"
-              value={exportPass}
-              onChange={(e) => setExportPass(e.target.value)}
-            />
-          </div>
-          <Button onClick={() => void onExport()} disabled={exporting}>
-            {exporting ? 'Exporting…' : 'Export data'}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 border-t pt-5">
-        <p className="text-sm text-muted-foreground">
-          Import a DomBot data file. This <b>replaces</b> everything stored here
-          with the file&apos;s contents.
+          Import replaces everything stored here with a backup file: registrar
+          keys, the saved domain list, imported domains, folders, prices, BIN
+          prices, history, settings, and MCP pairings. It does not contact your
+          registrars. The next Sync does. Names in the file that an account no
+          longer has will leave the list then, and names an account has that the
+          file does not will appear. Purchase records are kept either way,
+          including for names that are not in the list.
         </p>
         <div>
           <input
@@ -261,7 +350,11 @@ function DataBundleCard() {
               e.target.value = '';
             }}
           />
-          <Button variant="outline" onClick={() => fileInput.current?.click()}>
+          <Button
+            variant="outline"
+            disabled={isDemo()}
+            onClick={() => fileInput.current?.click()}
+          >
             Import data…
           </Button>
         </div>
@@ -283,12 +376,9 @@ function DataBundleCard() {
           </DialogHeader>
           {pending?.sealed && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="import-pass" className="text-xs">
-                Passphrase
-              </Label>
-              <Input
+              <Label htmlFor="import-pass">Passphrase</Label>
+              <PasswordInput
                 id="import-pass"
-                type="password"
                 autoComplete="off"
                 value={importPass}
                 onChange={(e) => setImportPass(e.target.value)}

@@ -16,10 +16,13 @@ export interface HelpLink {
  * Keep it terse: which credential, where it's created, and the one gotcha. A
  * field gets a description only when it needs disambiguating (which of two
  * keys, an expected format); otherwise leave it out rather than restate the
- * label.
+ * label. Wrap literal keywords (scopes, prefixes, formats) in backticks; they
+ * render as code.
  */
 export interface RegistrarHelp {
   summary: string;
+  /** Additional connection requirements for the hosted app. */
+  hostedNotice?: string;
   /** The credential page and, where useful, the docs. */
   links: HelpLink[];
   /** Per-field guidance keyed by `ConfigField.name`, shown between the label
@@ -30,6 +33,25 @@ export interface RegistrarHelp {
 // Exhaustive over RegistrarName so adding a registrar to the library forces a
 // help entry here (the build fails until one is written).
 export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
+  '101domain': {
+    summary:
+      'An API key from My Account › Developer Tools – API & MCP, with the ' +
+      '`domains_read` and `dns_read` scopes. Add `dns_write` to edit DNS and ' +
+      'nameservers, and `domains_write` for URL forwarding. Only the primary ' +
+      'user, with 2FA or SSO, can create keys. DNS records can only be ' +
+      'edited on 101domain or Secure Web Accelerator nameservers. Renewals, auto-renew, lock, ' +
+      'privacy and transfers aren’t available through the API.',
+    links: [
+      {
+        label: 'How to create an API key',
+        url: 'https://help.101domain.com/kb/how-to-get-api-keys',
+      },
+    ],
+    fields: {
+      apiKey: 'Keys expire after a year at most.',
+    },
+  },
+
   cloudflare: {
     summary:
       'A user API token with the account-level Registrar permission (Read ' +
@@ -108,7 +130,7 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
     fields: {
       clientId:
         'Account name and application name joined with a colon, e.g. ' +
-        'MyAccount:MyApp.',
+        '`MyAccount:MyApp`.',
     },
   },
 
@@ -117,6 +139,8 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
       'Enable API access under Profile › Tools › Namecheap API Access, ' +
       'generate a key, and whitelist the IP address you will call from ' +
       '(IPv4 only).',
+    hostedNotice:
+      'Namecheap requires API calls from an allowlisted IPv4 address. This hosted app uses Cloudflare Workers; importing your desktop Client IP does not give the server that address. Hosted sync needs a fixed-IPv4 connection approved in your Namecheap API settings.',
     links: [
       {
         label: 'API Access settings',
@@ -126,6 +150,23 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
     fields: {
       clientIp:
         'The whitelisted IPv4 address; calls from any other IP are rejected.',
+    },
+  },
+
+  namecom: {
+    summary:
+      'Use your Name.com username and a production API token. If your account uses two-step verification, enable API Access in its security settings.',
+    hostedNotice:
+      'If the same credentials work on desktop but return HTTP 403 here, Name.com is rejecting the hosted connection. Ask Name.com support to check API access from your hosted server.',
+    links: [
+      {
+        label: 'API token settings',
+        url: 'https://www.name.com/account/settings/api',
+      },
+    ],
+    fields: {
+      apiToken:
+        'Use a token from the Production section, not the Development/Test token.',
     },
   },
 
@@ -146,8 +187,8 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
     summary: 'An API key and secret from the API Access page.',
     links: [{ label: 'API Access', url: 'https://porkbun.com/account/api' }],
     fields: {
-      apiKey: 'Starts with pk1_.',
-      secretApiKey: 'Starts with sk1_.',
+      apiKey: 'Starts with `pk1_`.',
+      secretApiKey: 'Starts with `sk1_`.',
     },
   },
 
