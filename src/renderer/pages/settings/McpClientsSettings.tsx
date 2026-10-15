@@ -57,8 +57,12 @@ export default function McpClientsSettings() {
   // has no honest state to show (it would read "Disabled", then flip).
   const loading = settings === null || info === null;
   const web = isWeb();
-  // A local dev server with no login has no gate for MCP clients to hit.
-  const gated = web && webAuthMode() !== 'password' && !isLocalWeb();
+  const authMode = webAuthMode();
+  // The hosted gateway exposes MCP and OAuth paths without an upstream gate.
+  const gated =
+    web &&
+    !isLocalWeb() &&
+    (authMode === 'cloudflare-access' || authMode === 'external');
 
   return (
     <div className="flex flex-col gap-6">
