@@ -13,21 +13,10 @@
     "html_handling": "none",
     "not_found_handling": "404-page",
   },
+  "services": [{ "binding": "LEGACY", "service": "dombot" }],
   "routes": [
     {
-      "pattern": "alternative.domains/",
-      "zone_id": "e692d7f87e93b565f85445f4abbfcf36",
-    },
-    {
-      "pattern": "alternative.domains/domains",
-      "zone_id": "e692d7f87e93b565f85445f4abbfcf36",
-    },
-    {
-      "pattern": "alternative.domains/domains/",
-      "zone_id": "e692d7f87e93b565f85445f4abbfcf36",
-    },
-    {
-      "pattern": "alternative.domains/public-portfolio/*",
+      "pattern": "alternative.domains/*",
       "zone_id": "e692d7f87e93b565f85445f4abbfcf36",
     },
   ],
