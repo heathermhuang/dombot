@@ -107,11 +107,17 @@ export class Accounts {
       .first<SessionUser>();
   }
   async logout(token: string | undefined): Promise<void> {
-    if (token)
+    if (token && /^[a-f0-9]{64}$/.test(token))
       await this.db
         .prepare('DELETE FROM sessions WHERE token_hash=?1')
         .bind(await tokenHash(token))
         .run();
+  }
+  async logoutAll(user: SessionUser): Promise<void> {
+    await this.db
+      .prepare('DELETE FROM sessions WHERE user_id=?1')
+      .bind(user.id)
+      .run();
   }
   async rateLimit(key: string, limit: number): Promise<boolean> {
     const bucket = `${await tokenHash(key)}:${Math.floor(Date.now() / 600_000)}`;

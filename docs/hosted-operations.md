@@ -43,6 +43,20 @@ and disabled after their controlled test; they are not customer capacity.
 
 ## Account recovery
 
+The account page shows the signed-in email and workspace label. Customers can
+sign out the current browser or all browser sessions without changing their
+password. All-browser sign-out derives the affected user from the current
+session, requires the service's own Origin, and deletes that user's stored
+sessions before clearing the cookie. Login throttling never blocks current-browser
+sign-out. Paired MCP grants remain separate; revoke them in MCP settings when a
+device or agent may be compromised. Password changes still revoke browser sessions
+and pending recovery links.
+
+Sign-in errors preserve the validated local return path and email, never passwords.
+Recovery password-validation errors retain the existing link so a customer can
+correct a mismatch without requesting another one; the atomic one-use/expiry check
+still applies when the corrected form is submitted.
+
 The customer can open `/recover` or the support link from sign-in. Identity verification
 is operator-assisted during early access. Never issue a link solely because someone
 supplies an account email. Verify through an established trusted channel or independently

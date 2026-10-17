@@ -281,6 +281,159 @@ describe('real gateway and isolated Worker instances', () => {
     );
     expect(response.status).toBe(400);
   });
+  it('preserves the workspace destination and email after a failed sign-in', async () => {
+    const next = `/w/${ids[0]}/settings?tab=mcp`;
+    const login = (email: string, submitted: string) =>
+      gateway.fetch(
+        new Request('http://localhost/session/login', {
+          method: 'POST',
+          headers: {
+            Origin: 'http://localhost',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ email, password: submitted, next }),
+          redirect: 'manual',
+        }),
+      );
+    const failed = await login(emails[0], 'incorrect-password');
+    expect(failed.status).toBe(401);
+    const html = await failed.text();
+    expect(html).toContain(`name="next" value="${next}"`);
+    expect(html).toContain(`value="${emails[0]}"`);
+    expect(html).not.toContain('incorrect-password');
+    const retried = await login(` ${emails[0].toUpperCase()} `, password);
+    expect(retried.status).toBe(303);
+    expect(retried.headers.get('location')).toBe(next);
+  });
+  it('always permits same-origin logout when the sign-in IP allowance is exhausted', async () => {
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const bucket = `${await tokenHash('ip:192.0.2.40')}:${Math.floor(Date.now() / 600_000)}`;
+    await control
+      .prepare('INSERT INTO rate_limits(key,count,expires_at) VALUES(?1,30,?2)')
+      .bind(bucket, Date.now() + 600_000)
+      .run();
+    const login = await gateway.fetch(
+      new Request('http://localhost/session/login', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ email: emails[1], password }),
+        redirect: 'manual',
+      }),
+    );
+    expect(login.status).toBe(303);
+    const cookie = login.headers.get('set-cookie')!.split(';')[0];
+    const logout = (origin: string) =>
+      gateway.fetch(
+        new Request('http://localhost/session/logout', {
+          method: 'POST',
+          headers: {
+            Origin: origin,
+            Cookie: cookie,
+            'cf-connecting-ip': '192.0.2.40',
+          },
+          redirect: 'manual',
+        }),
+      );
+    expect((await logout('https://evil.example')).status).toBe(403);
+    expect((await request('/session', 'GET', undefined, cookie)).status).toBe(
+      200,
+    );
+    const response = await logout('http://localhost');
+    expect(response.status).toBe(303);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect((await request('/session', 'GET', undefined, cookie)).status).toBe(
+      401,
+    );
+    expect((await api(1, 'getFolders')).status).toBe(200);
+    await control
+      .prepare('DELETE FROM rate_limits WHERE key=?1')
+      .bind(bucket)
+      .run();
+  });
+  it('revokes every browser session only for the signed-in owner', async () => {
+    const login = () =>
+      gateway.fetch(
+        new Request('http://localhost/session/login', {
+          method: 'POST',
+          headers: {
+            Origin: 'http://localhost',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ email: emails[2], password }),
+          redirect: 'manual',
+        }),
+      );
+    const second = await login();
+    expect(second.status).toBe(303);
+    const secondCookie = second.headers.get('set-cookie')!.split(';')[0];
+    const revoke = (origin: string, cookie?: string) =>
+      gateway.fetch(
+        new Request('http://localhost/account/sessions/logout', {
+          method: 'POST',
+          headers: {
+            Origin: origin,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+          body: new URLSearchParams({ workspaceId: ids[0], email: emails[0] }),
+          redirect: 'manual',
+        }),
+      );
+    expect((await revoke('http://localhost')).status).toBe(401);
+    expect((await revoke('https://evil.example', cookies[2])).status).toBe(403);
+    expect(
+      (await request('/session', 'GET', undefined, secondCookie)).status,
+    ).toBe(200);
+    const response = await revoke('http://localhost', cookies[2]);
+    expect(response.status).toBe(303);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    for (const cookie of [cookies[2], secondCookie])
+      expect((await request('/session', 'GET', undefined, cookie)).status).toBe(
+        401,
+      );
+    expect((await api(0, 'getFolders')).status).toBe(200);
+    expect((await api(1, 'getFolders')).status).toBe(200);
+    const notice = await request(response.headers.get('location')!);
+    expect(await notice.text()).toContain(
+      'Every browser session has been signed out',
+    );
+    const restored = await login();
+    expect(restored.status).toBe(303);
+    cookies[2] = restored.headers.get('set-cookie')!.split(';')[0];
+  });
+  it('immediately suspends browser and MCP access without affecting another tenant', async () => {
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const before = await (await api(0, 'getFolders')).json();
+    await control
+      .prepare('UPDATE workspaces SET enabled=0 WHERE id=?1')
+      .bind(ids[0])
+      .run();
+    try {
+      expect(
+        (await request('/session', 'GET', undefined, cookies[0])).status,
+      ).toBe(401);
+      expect((await api(0, 'getFolders')).status).toBe(404);
+      expect(
+        (
+          await api(0, 'createFolder', [
+            { name: 'Must not be saved', color: 'teal' },
+          ])
+        ).status,
+      ).toBe(404);
+      expect((await request(`/w/${ids[0]}/mcp`)).status).toBe(404);
+      expect((await request(`/w/${ids[0]}/p/public`)).status).toBe(404);
+      expect((await api(1, 'getFolders')).status).toBe(200);
+    } finally {
+      await control
+        .prepare('UPDATE workspaces SET enabled=1 WHERE id=?1')
+        .bind(ids[0])
+        .run();
+    }
+    expect(await (await api(0, 'getFolders')).json()).toEqual(before);
+  });
   it('persists account data only in its own instance and rejects every foreign private surface', async () => {
     for (let i = 0; i < 2; i++) {
       expect(
@@ -492,6 +645,25 @@ describe('real gateway and isolated Worker instances', () => {
     await seed(Date.now() - 1);
     expect((await form('replacement-recovery-password')).status).toBe(400);
     await seed(Date.now() + 900_000);
+    const mismatch = await gateway.fetch(
+      new Request('http://localhost/recover', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          code,
+          password: 'replacement-recovery-password',
+          confirm: 'different-password',
+        }),
+      }),
+    );
+    expect(mismatch.status).toBe(400);
+    const mismatchHtml = await mismatch.text();
+    expect(mismatchHtml).toContain(`name="code" value="${code}"`);
+    expect(mismatchHtml).toContain('role="alert"');
+    expect(mismatchHtml).not.toContain('value="replacement-recovery-password"');
     expect(
       (await form('replacement-recovery-password', 'https://evil.example'))
         .status,
