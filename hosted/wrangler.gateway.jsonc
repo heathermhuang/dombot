@@ -28,6 +28,7 @@
   ],
   "vars": {
     "WORKSPACES": "[]",
+    "SOURCE_COMMIT": "",
     "PUBLIC_REGISTRATION_ENABLED": "false",
     "EMAIL_FROM": "accounts@mail.domains.domains",
     "EMAIL_DELIVERY_VERIFIED": "false",

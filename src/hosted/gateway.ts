@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
+import { sourcePage } from './source';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
 import {
@@ -118,6 +119,7 @@ app.get('/', (c) =>
     ),
   ),
 );
+app.get('/source', (c) => c.html(sourcePage(c.env.SOURCE_COMMIT)));
 app.get('/domains', (c) => {
   const path =
     c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains'
@@ -144,7 +146,7 @@ app.get('/signup', (c) =>
       ? signupStart()
       : page(
           'Request free access',
-          `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request an account.</h1><p>Accounts are free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No account is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
+          `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request early access.</h1><p>The hosted service is free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No account is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
         ),
   ),
 );

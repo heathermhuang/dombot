@@ -1,4 +1,30 @@
-# DomBot
+# domains.domains — hosted, multi-tenant DomBot
+
+[domains.domains](https://domains.domains) is a hosted, multi-tenant version of
+[DomBot](https://github.com/aoxborrow/dombot), created by **Aaron Oxborrow**.
+**Magic Crystal Limited, Hong Kong** maintains the SaaS layer and operates the
+hosted service.
+
+**All your domains. One portfolio.** Connect supported registrars or import your
+domain list, track renewal estimates, publish selected listings and connect AI
+assistants. The hosted edition adds email-verified registration, sign-in/recovery
+and isolated customer runtimes and databases around DomBot's portfolio tools.
+
+## The SaaS layer is open source too
+
+This public fork includes the **complete SaaS layer and maintained DomBot engine**
+under **AGPL-3.0-or-later**, with original copyright and third-party notices
+retained. Browse [the SaaS source](src/hosted),
+[build and self-hosting instructions](docs/hosted-source.md),
+[LICENSE](LICENSE), and [credits](NOTICE.md). The live service offers source links
+at [domains.domains/source](https://domains.domains/source).
+
+Upstream DomBot is the original desktop and single-owner self-hosted application.
+Its documentation follows; local-first/device-only statements describe those
+editions. The hosted service uses operator-managed infrastructure as described
+in [the hosted trust model](docs/hosted-staging.md).
+
+## Original DomBot
 
 [![Latest release](https://img.shields.io/github/v/release/aoxborrow/dombot?label=release)](https://github.com/aoxborrow/dombot/releases/latest)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
@@ -270,9 +296,11 @@ Any paid data feeds are a separate, optional add-on service with their own terms
 [`@aoxborrow/registrar-client`](https://github.com/aoxborrow/registrar-client)
 is a separate project under the MIT license.
 
-## Hosted staging edition
+## Hosted SaaS edition
 
-An invite-only hosted gateway and isolated per-customer Worker deployments are
-available in this branch. See [hosted staging](docs/hosted-staging.md) for
-provisioning, authentication, MCP scopes, migration, and the tested isolation
-boundary. This is a staging foundation, not public signup or a security audit.
+The public hosted source adds a gateway and isolated per-customer Worker/D1
+runtimes around DomBot. [Public registration](docs/public-registration.md) uses
+verified email and prequalified capacity. Start with
+[the hosted source guide](docs/hosted-source.md), then use the foundation and
+operations documents for provisioning and deployment. Engineering checks are
+not a claim of an independent security audit.
