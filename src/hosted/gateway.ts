@@ -573,7 +573,12 @@ app.all('/w/:workspace/*', async (c) => {
       );
   }
   if (path === '/mcp' && c.req.method === 'POST') {
-    if (!(await account(c.env).rateLimit(`mcp:${id}`, 600)))
+    if (
+      !(await account(c.env).rateLimit(
+        `mcp:${id}:${c.req.header('cf-connecting-ip') ?? 'local'}`,
+        600,
+      ))
+    )
       return c.json(
         { error: 'Workspace agent request limit reached. Try again later.' },
         429,

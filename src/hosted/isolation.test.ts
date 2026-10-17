@@ -611,6 +611,22 @@ describe('real gateway and isolated Worker instances', () => {
     expect(JSON.stringify(denied)).toMatch(
       /not found|Unknown tool|spending budget is zero/i,
     );
+    // Public traffic from another Cloudflare source must not spend the owner's allowance.
+    for (let n = 0; n < 600; n++) {
+      const unauthorized = await gateway.fetch(
+        new Request(`http://localhost/w/${ids[0]}/mcp`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'cf-connecting-ip': '198.51.100.9',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        }),
+      );
+      expect([401, 429]).toContain(unauthorized.status);
+    }
+    expect((await mcp(0, tokens[0], 'tools/list')).status).toBe(200);
     const beforeRevoke = await approvalRevision(1);
     expect(
       (
