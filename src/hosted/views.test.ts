@@ -116,10 +116,10 @@ describe('public website brand and product clarity', () => {
       recoveryForm(''),
     ])
       expect(html).not.toMatch(/workspace/i);
-    expect(home(true, true)).toContain('Get started free');
+    expect(home(true, true)).toContain('Create free account');
     expect(home(true, true)).toContain('No invitation needed.');
     expect(home(true, true)).not.toContain('by invitation');
-    expect(home(true)).not.toContain('Get started free');
+    expect(home(true)).not.toContain('Create free account');
   });
   it('labels sample portfolio data and keeps the real access and collection paths', () => {
     const html = home(true);
