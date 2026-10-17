@@ -183,3 +183,12 @@ Keep a tombstone of the immutable ID and never return a retired slot to the invi
 Do not promise automatic physical deletion until its durable job and off-device retention
 process have been qualified. A failed pause leaves the account accessible for retry; an
 uncertain control transaction must be reconciled before repeating it.
+
+## Verified-email public account successor
+
+See [public-registration.md](public-registration.md) before enabling self-service
+signup or recovery email. The additive control migration 0004 records hashed
+verification proofs, versioned legal acceptance and durable message budgets.
+Existing invitation and operator-recovery procedures remain available. The public
+form must advertise instant account creation only while all readiness gates are
+complete; the earlier bounded request queue is the fallback.

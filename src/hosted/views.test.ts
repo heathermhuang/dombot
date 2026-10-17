@@ -13,7 +13,7 @@ describe('managed account help and identity', () => {
       expect(accountForm(kind)).toContain('href="/recover"');
     for (const kind of ['login', 'join'] as const)
       expect(accountForm(kind)).toContain(
-        'mailto:domains@domains.domains?subject=Workspace%20account%20recovery',
+        'mailto:domains@domains.domains?subject=Account%20recovery',
       );
   });
   it('escapes the signed-in identity and workspace label in the account page', () => {
@@ -55,7 +55,7 @@ describe('public website brand and product clarity', () => {
       home(true),
       accountForm('login'),
       accountForm('join'),
-      accountSecurity({ email: 'owner@example.test', label: 'Workspace' }),
+      accountSecurity({ email: 'owner@example.test', label: 'Portfolio' }),
       recoveryForm(''),
       page('Status', '<p>Status</p>'),
     ]) {
@@ -67,6 +67,21 @@ describe('public website brand and product clarity', () => {
       expect(html).not.toContain('M140 10H104');
     }
   });
+  it('uses account and portfolio wording and only advertises public creation when enabled', () => {
+    for (const html of [
+      home(true),
+      home(true, true),
+      accountForm('login'),
+      accountForm('join'),
+      accountSecurity({ email: 'owner@example.test', label: 'Portfolio' }),
+      recoveryForm(''),
+    ])
+      expect(html).not.toMatch(/workspace/i);
+    expect(home(true, true)).toContain('Create free account');
+    expect(home(true, true)).toContain('No invitation needed.');
+    expect(home(true, true)).not.toContain('by invitation');
+    expect(home(true)).not.toContain('Create free account');
+  });
   it('labels sample portfolio data and keeps the real access and collection paths', () => {
     const html = home(true);
     expect(html).toContain('Sample data');
@@ -77,7 +92,7 @@ describe('public website brand and product clarity', () => {
     expect(html).toContain('href="/signup"');
     expect(html).toContain('href="/login"');
     expect(html).toContain('href="/domains"');
-    expect(html).toContain('By invitation, as workspaces become available.');
+    expect(html).toContain('By invitation, as accounts become available.');
     expect(home(false)).not.toContain('href="/domains"');
   });
 });

@@ -57,7 +57,7 @@ export class Accounts {
       );
     }
     const user = await this.user(id);
-    if (!user) throw new AccountError('Workspace is unavailable');
+    if (!user) throw new AccountError('Account is unavailable');
     return { ...user, credentialHash: encoded };
   }
   async login(email: string, password: string): Promise<VerifiedUser | null> {

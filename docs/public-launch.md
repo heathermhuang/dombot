@@ -70,3 +70,13 @@ not instant automatic infrastructure provisioning. Account closure suspends acce
 records a retention deadline; final physical erasure and off-device backup/key custody
 remain explicit operating gates until separately qualified. The agent spending budget is
 zero during this release. Never describe early access as unlimited or lifetime-free.
+
+## Public-registration successor
+
+The verified-email public-account flow supersedes the invitation-only offer only
+when the operator identity, published legal policies, delivered transactional
+email and prequalified capacity gates are complete. See
+[public-registration.md](public-registration.md) for the exact settings and
+verification procedure. Until enabled, the existing bounded request form remains
+active. Use account/portfolio in customer copy; immutable internal tenant IDs do
+not change.

@@ -816,7 +816,7 @@ describe('real gateway and isolated Worker instances', () => {
       (
         await submit(
           '/account/close',
-          { password: 'wrong', confirmation: 'CLOSE MY WORKSPACE' },
+          { password: 'wrong', confirmation: 'CLOSE MY ACCOUNT' },
           cookie,
         )
       ).status,
@@ -842,7 +842,7 @@ describe('real gateway and isolated Worker instances', () => {
           '/account/close',
           {
             password: 'replacement-recovery-password',
-            confirmation: 'CLOSE MY WORKSPACE',
+            confirmation: 'CLOSE MY ACCOUNT',
           },
           cookie,
         )
