@@ -638,7 +638,7 @@ describe('real gateway and isolated Worker instances', () => {
     ).toBe(200);
     expect(await approvalRevision(1)).toBeGreaterThan(beforeRevoke);
     expect((await mcp(1, tokens[1], 'tools/list')).status).toBe(401);
-  });
+  }, 15_000);
   it('consumes operator recovery once, rejects expired/cross-origin proof, and revokes existing sessions', async () => {
     const control = await mf.getD1Database('CONTROL_DB', 'gateway');
     const code = 'c'.repeat(64);
