@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { Accounts } from './accounts';
+import { brandFontBytes, brandFontPath } from './brand-font';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { mcpPolicyDenial } from './mcp-policy';
 import {
@@ -76,7 +77,7 @@ app.use('*', async (c, next) => {
     c.header('X-Robots-Tag', 'noindex, nofollow');
   c.header(
     'Content-Security-Policy',
-    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
   );
   await next();
 });
@@ -86,6 +87,11 @@ app.onError((_error, c) =>
     500,
   ),
 );
+app.get(brandFontPath, (c) => {
+  c.header('Content-Type', 'font/woff2');
+  c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  return c.body(brandFontBytes);
+});
 app.get('/', (c) =>
   c.html(
     home(
