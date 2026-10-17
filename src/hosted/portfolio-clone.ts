@@ -1,7 +1,15 @@
 /** Public-only snapshot. Exact routes leave the existing self-hosted API/MCP alone. */
 export default {
-  async fetch(request: Request, env: { ASSETS: Fetcher }): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: { ASSETS: Fetcher; LEGACY: Fetcher },
+  ): Promise<Response> {
     const url = new URL(request.url);
+    if (
+      !['/', '/domains', '/domains/'].includes(url.pathname) &&
+      !url.pathname.startsWith('/public-portfolio/')
+    )
+      return env.LEGACY.fetch(request);
     if (request.method !== 'GET' && request.method !== 'HEAD')
       return new Response('Method not allowed', {
         status: 405,
