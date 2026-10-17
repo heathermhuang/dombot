@@ -11,6 +11,16 @@ describe('old portfolio www redirect', () => {
       'https://domains.domains/domains?collection=AI',
     );
   });
+  it('does not replay credentials or mutations from www', () => {
+    expect(
+      redirect.fetch(
+        new Request('https://www.domains.domains/session/login', {
+          method: 'POST',
+          body: 'credentials',
+        }),
+      ).status,
+    ).toBe(421);
+  });
   it('never redirects the product testing hostname or an unknown host', () => {
     for (const host of [
       'domains.domains.domains',

@@ -151,6 +151,7 @@ beforeAll(async () => {
       .replace(/\n/g, ' ');
   await control.exec(sql('hosted/migrations/0001_control.sql'));
   await control.exec(sql('hosted/migrations/0002_password_recovery.sql'));
+  await control.exec(sql('hosted/migrations/0003_lifecycle.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
     await db.exec(sql('migrations/0001_docs.sql'));
@@ -607,7 +608,9 @@ describe('real gateway and isolated Worker instances', () => {
         arguments: { domain: 'sentinel.example', years: 1 },
       })
     ).json();
-    expect(JSON.stringify(denied)).toMatch(/not found|Unknown tool/i);
+    expect(JSON.stringify(denied)).toMatch(
+      /not found|Unknown tool|spending budget is zero/i,
+    );
     const beforeRevoke = await approvalRevision(1);
     expect(
       (
@@ -745,6 +748,108 @@ describe('real gateway and isolated Worker instances', () => {
       (await form('/session/login', { email: emails[0], password: next }))
         .status,
     ).toBe(303);
+  });
+
+  it('accepts bounded public requests without allocating a workspace and closes only a reauthenticated owner', async () => {
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const before = await control
+      .prepare('SELECT count(*) AS n FROM workspaces')
+      .first();
+    const submit = (
+      path: string,
+      body: Record<string, string>,
+      cookie?: string,
+      origin = 'http://localhost',
+    ) =>
+      gateway.fetch(
+        new Request('http://localhost' + path, {
+          method: 'POST',
+          headers: {
+            Origin: origin,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+          body: new URLSearchParams(body),
+          redirect: 'manual',
+        }),
+      );
+    expect(
+      (
+        await submit(
+          '/signup',
+          { email: 'new-domainer@example.test' },
+          undefined,
+          'https://foreign.test',
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (await submit('/signup', { email: 'new-domainer@example.test' })).status,
+    ).toBe(202);
+    expect(
+      (await control.prepare('SELECT count(*) AS n FROM workspaces').first())
+        ?.n,
+    ).toBe(before?.n);
+    const login = await submit('/session/login', {
+      email: emails[2],
+      password: 'replacement-recovery-password',
+    });
+    expect(login.status).toBe(303);
+    const cookie = login.headers.get('set-cookie')!.split(';')[0];
+    expect(
+      (
+        await submit(
+          '/account/close',
+          { password: 'wrong', confirmation: 'CLOSE MY WORKSPACE' },
+          cookie,
+        )
+      ).status,
+    ).toBe(401);
+    expect((await api(2, 'getFolders', [], cookie)).status).toBe(200);
+    expect(
+      (await api(2, 'updateSettings', [{ autoSyncIntervalMinutes: 1 }], cookie))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await api(
+          2,
+          'updateSettings',
+          [{ autoSyncIntervalMinutes: 60, mcpEnabled: true }],
+          cookie,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await submit(
+          '/account/close',
+          {
+            password: 'replacement-recovery-password',
+            confirmation: 'CLOSE MY WORKSPACE',
+          },
+          cookie,
+        )
+      ).status,
+    ).toBe(200);
+    expect((await api(2, 'getFolders', [], cookie)).status).toBe(404);
+    expect((await request('/session', 'GET', undefined, cookie)).status).toBe(
+      401,
+    );
+    expect(
+      (await request(`/w/${ids[2]}/.well-known/oauth-protected-resource/mcp`))
+        .status,
+    ).toBe(404);
+    expect((await api(1, 'getFolders')).status).toBe(200);
+    const closed = await control
+      .prepare(
+        'SELECT workspace_id,purge_after,requested_at FROM closure_requests',
+      )
+      .first();
+    expect(closed?.workspace_id).toBe(ids[2]);
+    expect(Number(closed?.purge_after) - Number(closed?.requested_at)).toBe(
+      30 * 86400_000,
+    );
   });
 
   it('revokes browser sessions immediately on logout', async () => {

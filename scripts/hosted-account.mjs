@@ -11,11 +11,11 @@ const option = (name) => {
   return i < 0 ? undefined : args[i + 1];
 };
 if (
-  !['status', 'invite', 'recovery', 'reconcile'].includes(action) ||
+  !['status', 'requests', 'invite', 'recovery', 'reconcile'].includes(action) ||
   !option('config')
 )
   throw Error(
-    'Usage: node scripts/hosted-account.mjs status|invite|recovery|reconcile --config private-gateway.json [--request private-request.json --output private-receipt.json]',
+    'Usage: node scripts/hosted-account.mjs status|requests|invite|recovery|reconcile --config private-gateway.json [--request private-request.json --output private-receipt.json]',
   );
 const config = JSON.parse(await fs.readFile(option('config'), 'utf8'));
 if (
@@ -70,7 +70,36 @@ if (!origin || new URL(origin).protocol !== 'https:')
 const query = async (sql, params = []) =>
   (await cf(`/d1/database/${db}/query`, { sql, params }))[0].results;
 const hash = (x) => createHash('sha256').update(x).digest('hex');
-if (action === 'status') {
+if (action === 'requests') {
+  const output = option('output');
+  if (!output)
+    throw Error(
+      'Provide an owner-only output path for access and closure requests',
+    );
+  const access = await query(
+    'SELECT email,created_at FROM signup_requests ORDER BY created_at',
+  );
+  const closure = await query(
+    'SELECT workspace_id,user_id,requested_at,purge_after FROM closure_requests ORDER BY requested_at',
+  );
+  await fs.mkdir(path.dirname(path.resolve(output)), {
+    recursive: true,
+    mode: 0o700,
+  });
+  await fs.writeFile(
+    output,
+    JSON.stringify({ at: new Date().toISOString(), access, closure }, null, 2) +
+      '\n',
+    { mode: 0o600, flag: 'wx' },
+  );
+  console.log(
+    JSON.stringify({
+      accessRequests: access.length,
+      closureRequests: closure.length,
+      receipt: output,
+    }),
+  );
+} else if (action === 'status') {
   const status = await query(
     'SELECT w.id, w.enabled, (SELECT count(*) FROM users u WHERE u.workspace_id=w.id) AS claimed, (SELECT count(*) FROM invitations i WHERE i.workspace_id=w.id AND i.consumed_at IS NULL AND i.expires_at>?) AS invited FROM workspaces w',
     [Date.now()],

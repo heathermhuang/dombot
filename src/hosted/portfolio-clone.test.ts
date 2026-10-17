@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import clone from './portfolio-clone';
 
 describe('public portfolio clone', () => {
@@ -69,6 +69,20 @@ describe('public portfolio clone', () => {
         )
       ).text(),
     ).toBe('portfolio');
+  });
+  it('resolves every local stylesheet dependency without duplicated URL prefixes', () => {
+    const root = 'public-portfolio';
+    for (const file of readdirSync(root, { recursive: true }).filter((p) =>
+      String(p).endsWith('.css'),
+    )) {
+      const css = readFileSync(root + '/' + file, 'utf8');
+      for (const match of css.matchAll(/url\(["']?([^)"']+)["']?\)/g)) {
+        const url = match[1];
+        if (!url.startsWith('/public-portfolio/')) continue;
+        expect(url.indexOf('/public-portfolio/', 1), url).toBe(-1);
+        expect(existsSync(root + url), url).toBe(true);
+      }
+    }
   });
   it('copies the published sections with local scripts and working public inquiry', () => {
     const html = readFileSync('public-portfolio/index.html', 'utf8');

@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { Accounts } from './accounts';
+import { requestAccess, closeWorkspace } from './lifecycle';
+import { mcpPolicyDenial } from './mcp-policy';
 import {
   accountForm,
   accountSecurity,
@@ -85,10 +87,20 @@ app.onError((_error, c) =>
   ),
 );
 app.get('/', (c) =>
-  c.html(home(Boolean(portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH)))),
+  c.html(
+    home(
+      Boolean(
+        c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains' ||
+        portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH),
+      ),
+    ),
+  ),
 );
 app.get('/domains', (c) => {
-  const path = portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH);
+  const path =
+    c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains'
+      ? 'https://alternative.domains/'
+      : portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH);
   return path
     ? c.redirect(path + new URL(c.req.url).search, 302)
     : c.notFound();
@@ -98,6 +110,140 @@ app.get('/robots.txt', (c) =>
     'User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /join\nDisallow: /account\nDisallow: /session\nDisallow: /app\n',
   ),
 );
+app.get('/signup', (c) =>
+  c.html(
+    page(
+      'Request free access',
+      `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request a workspace.</h1><p>Workspaces are free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No workspace is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
+    ),
+  ),
+);
+app.post('/signup', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+  const accounts = account(c.env);
+  if (
+    !(await accounts.rateLimit('signup:global', 20)) ||
+    !(await accounts.rateLimit(
+      `signup:${c.req.header('cf-connecting-ip') ?? 'local'}`,
+      3,
+    ))
+  )
+    return c.text('Too many access requests. Try again later.', 429);
+  const parsed = z
+    .object({
+      email: z
+        .string()
+        .trim()
+        .email()
+        .max(254)
+        .transform((x) => x.toLowerCase()),
+    })
+    .safeParse(await c.req.parseBody());
+  if (!parsed.success)
+    return c.html(
+      page(
+        'Check your email address',
+        '<h1>Enter a valid email address.</h1><p><a href="/signup">Return to your request</a></p>',
+      ),
+      400,
+    );
+  if (!(await requestAccess(c.env.CONTROL_DB, parsed.data.email))) {
+    c.header('Retry-After', '3600');
+    return c.html(
+      page(
+        'Access requests at capacity',
+        '<h1>Access requests are at capacity.</h1><p>Please try again later or contact domains@domains.domains. No workspace has been allocated.</p>',
+      ),
+      503,
+    );
+  }
+  return c.html(
+    page(
+      'Access request received',
+      '<h1>Request received.</h1><p>Access is by invitation and subject to capacity. If a workspace is available, we will arrange an invitation after review. If you already have an account, sign in or use account recovery.</p><p><a href="/login">Sign in</a> · <a href="/">Return home</a></p>',
+    ),
+    202,
+  );
+});
+app.get('/account/close', async (c) => {
+  const user = await account(c.env).session(readSession(c.req.raw));
+  if (!user) return c.redirect('/login', 303);
+  return c.html(
+    page(
+      'Close your workspace',
+      `<form action="/account/close" method="post"><h1>Close your workspace.</h1><p>Export your backup in Settings first. Closing disables browser, API, paired-agent and public-collection access immediately. Your registrar accounts and domain registrations are not changed.</p><p>We retain your workspace data for 30 days so support can help recover an accidental closure. Physical erasure is then handled by the operator. Your workspace identity is never assigned to another person.</p><label>Current password<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><label>Type CLOSE MY WORKSPACE<input name="confirmation" required></label><button type="submit">Close my workspace</button><p><a href="/account">Keep my workspace</a></p></form>`,
+    ),
+  );
+});
+app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+  const accounts = account(c.env),
+    user = await accounts.session(readSession(c.req.raw));
+  if (!user) return c.json({ error: 'Not signed in' }, 401);
+  if (!(await accounts.rateLimit(`closure:${user.id}`, 6)))
+    return c.text('Too many attempts. Try again later.', 429);
+  const form = await c.req.parseBody();
+  if (
+    form.confirmation !== 'CLOSE MY WORKSPACE' ||
+    typeof form.password !== 'string' ||
+    form.password.length > 256
+  )
+    return c.text(
+      'Enter your current password and the exact confirmation.',
+      400,
+    );
+  const verified = await accounts.login(user.email, form.password);
+  if (!verified)
+    return c.text(
+      'Your password was not recognized. Return to account settings and try again.',
+      401,
+    );
+  const configured = workspaceSchema
+    .parse(JSON.parse(c.env.WORKSPACES))
+    .find((w) => w.id === user.workspace_id);
+  if (!configured)
+    return c.text('Workspace is unavailable. Contact support.', 503);
+  // Serialize behind current tenant operations and pause scheduled sync before
+  // disabling ingress. This changes only the two requested settings.
+  const pause = new Request(new URL('/api/updateSettings', c.req.url), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: new URL(c.req.url).origin,
+    },
+    body: JSON.stringify({
+      args: [{ autoSyncIntervalMinutes: 0, mcpEnabled: false }],
+    }),
+  });
+  pause.headers.set(
+    PROOF_HEADER,
+    await signGatewayRequest(
+      gatewayKey(c.env, user.workspace_id),
+      user.workspace_id,
+      user.id,
+      pause,
+    ),
+  );
+  const paused = await workspaceService(c.env, configured.binding).fetch(pause);
+  if (!paused.ok)
+    return c.text(
+      'Closure could not pause background activity. Your workspace remains accessible; try again or contact support.',
+      503,
+    );
+  if (!(await closeWorkspace(c.env.CONTROL_DB, user, verified.credentialHash)))
+    return c.text(
+      'Your account changed during closure. Sign in and try again.',
+      409,
+    );
+  c.header('Set-Cookie', sessionCookie(c.req.url, ''));
+  return c.html(
+    page(
+      'Workspace closed',
+      '<h1>Your workspace is closed.</h1><p>Browser, agent and public access are disabled. Contact domains@domains.domains within 30 days if you need help recovering an accidental closure.</p><p><a href="/">Return home</a></p>',
+    ),
+  );
+});
+
 app.get('/health', (c) =>
   c.json({
     ok: true,
@@ -396,6 +542,68 @@ app.all('/w/:workspace/*', async (c) => {
       user ? 403 : 401,
     );
   }
+  if (
+    [
+      '/api/getPortfolio',
+      '/api/syncRegistrar',
+      '/api/stepRenewalPricing',
+      '/api/lookupRegistrations',
+    ].includes(path) &&
+    !(await account(c.env).rateLimit(`provider:${id}`, 20))
+  )
+    return c.json(
+      {
+        error:
+          'Provider refresh limit reached. Use cached inventory and try later.',
+      },
+      429,
+    );
+  if (path === '/api/updateSettings' && c.req.method === 'POST') {
+    const body = (await c.req.raw.clone().json()) as {
+      args?: { autoSyncIntervalMinutes?: number }[];
+    };
+    const interval = body.args?.[0]?.autoSyncIntervalMinutes;
+    if (typeof interval === 'number' && interval > 0 && interval < 60)
+      return c.json(
+        {
+          error:
+            'Free workspaces support automatic sync once an hour or less often. Use 0 to disable it.',
+        },
+        400,
+      );
+  }
+  if (path === '/mcp' && c.req.method === 'POST') {
+    if (!(await account(c.env).rateLimit(`mcp:${id}`, 600)))
+      return c.json(
+        { error: 'Workspace agent request limit reached. Try again later.' },
+        429,
+      );
+    let rpc: unknown;
+    try {
+      rpc = await c.req.raw.clone().json();
+    } catch {
+      return c.json({ error: 'Invalid MCP request' }, 400);
+    }
+    const denied = mcpPolicyDenial(rpc, id, c.env.MCP_POLICIES);
+    if (denied)
+      return c.json(
+        {
+          jsonrpc: '2.0',
+          id: rpc && typeof rpc === 'object' && 'id' in rpc ? rpc.id : null,
+          error: { code: -32003, message: denied },
+        },
+        403,
+      );
+  }
+  if (
+    !publicRequest &&
+    path.startsWith('/api/') &&
+    !(await account(c.env).rateLimit(`api:${id}`, 3000))
+  )
+    return c.json(
+      { error: 'Workspace request limit reached. Try again later.' },
+      429,
+    );
   // Even a signed-in visitor to a different workspace's public MCP surface
   // must not receive that workspace's owner authority.
   const owner = user?.workspace_id === id ? user.id : null;
@@ -455,6 +663,9 @@ export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: HostedEnv) {
     await env.CONTROL_DB.batch([
+      env.CONTROL_DB.prepare(
+        'DELETE FROM signup_requests WHERE created_at<?1',
+      ).bind(Date.now() - 30 * 86400_000),
       env.CONTROL_DB.prepare('DELETE FROM sessions WHERE expires_at<?1').bind(
         Date.now(),
       ),

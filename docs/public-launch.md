@@ -49,3 +49,24 @@ The homepage offers an email request for free access; invitations still reserve
 qualified workspace capacity. This does not enable open signup. Quote the actual
 managed hostname in conference materials until the public hostname cutover is
 completed and verified.
+
+The 17 October public-host release preserves the legacy Your.Link collection at
+`https://alternative.domains/`, using only its thirteen already-public collection sections
+and local copies of its public assets. Share, inquiry and canonical links are retained.
+The wrapper sends non-portfolio paths to the existing `dombot` service so the established
+self-hosted `/mcp`, API, assets and authentication routes retain their owning backend.
+No DNS or mail record changes are needed for this route-based promotion.
+
+The managed gateway's apex route serves `domains.domains`, with its canonical origin set
+to `https://domains.domains` only after the portfolio clone passes live checks. `/domains`
+then points to the preserved collection on alternative.domains. The existing explicitly
+published workspace collection remains available at its immutable `/w/.../p/...` path.
+The previous gateway hostname and www redirect GET/HEAD only; POST/other methods return
+421 so credentials and mutations cannot be replayed across origins. Existing host-bound
+browser cookies stay on their original host, and MCP clients must pair on the final origin.
+
+The free-service signup form is a bounded request queue with operator-reviewed invitations,
+not instant automatic infrastructure provisioning. Account closure suspends access and
+records a retention deadline; final physical erasure and off-device backup/key custody
+remain explicit operating gates until separately qualified. The agent spending budget is
+zero during this release. Never describe early access as unlimited or lifetime-free.
