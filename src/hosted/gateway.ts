@@ -105,9 +105,17 @@ app.get('/health', (c) =>
     version: 'hosted-foundation-1',
   }),
 );
-app.get('/login', (c) =>
-  c.html(accountForm('login', '', '', safeNext(c.req.query('next')))),
-);
+app.get('/login', (c) => {
+  const notice =
+    c.req.query('notice') === 'signed-out-all'
+      ? 'Every browser session has been signed out. Sign in to continue.'
+      : c.req.query('notice') === 'password-updated'
+        ? 'Your password was updated and every browser session was signed out. Sign in with your new password.'
+        : '';
+  return c.html(
+    accountForm('login', '', '', safeNext(c.req.query('next')), { notice }),
+  );
+});
 app.get('/join', (c) =>
   c.html(accountForm('join', '', c.req.query('code') ?? '')),
 );
@@ -124,18 +132,21 @@ app.post('/recover', bodyLimit({ maxSize: 16_384 }), async (c) => {
     ))
   )
     return c.text('Too many attempts. Try again later.', 429);
+  const body = await c.req.parseBody();
   const form = z
     .object({
       code: z.string().regex(/^[a-f0-9]{64}$/),
       password: z.string().min(12).max(256),
       confirm: z.string(),
     })
-    .safeParse(await c.req.parseBody());
+    .safeParse(body);
   if (!form.success || form.data.password !== form.data.confirm)
     return c.html(
       recoveryForm(
-        '',
-        'Use matching passwords of at least 12 characters. Open your recovery link again to retry.',
+        typeof body.code === 'string' && /^[a-f0-9]{64}$/.test(body.code)
+          ? body.code
+          : '',
+        'Use matching passwords of at least 12 characters. Your link has not been used. Enter both passwords again.',
       ),
       400,
     );
@@ -158,6 +169,15 @@ app.post('/recover', bodyLimit({ maxSize: 16_384 }), async (c) => {
 app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
   const accounts = account(c.env);
+  const kind = c.req.param('kind');
+  // Signing out must remain available after login throttling, including when
+  // several customers share a public IP. Revoke durably before clearing cookies.
+  if (kind === 'logout') {
+    await accounts.logout(readSession(c.req.raw));
+    c.header('Set-Cookie', sessionCookie(c.req.url, ''));
+    return c.redirect('/login', 303);
+  }
+  if (kind !== 'login' && kind !== 'join') return c.notFound();
   if (
     !(await accounts.rateLimit(
       `ip:${c.req.header('cf-connecting-ip') ?? 'local'}`,
@@ -165,18 +185,15 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
     ))
   )
     return c.text('Too many attempts. Try again later.', 429);
-  const kind = c.req.param('kind');
-  if (kind === 'logout') {
-    await accounts.logout(readSession(c.req.raw));
-    c.header('Set-Cookie', sessionCookie(c.req.url, ''));
-    return c.redirect('/login', 303);
-  }
-  if (kind !== 'login' && kind !== 'join') return c.notFound();
   const form = await c.req.parseBody();
+  const next = safeNext(form.next);
+  const emailInput =
+    typeof form.email === 'string' ? form.email.trim().slice(0, 254) : '';
   const parsed = z
     .object({
       email: z
         .string()
+        .trim()
         .email()
         .max(254)
         .transform((x) => x.trim().toLowerCase()),
@@ -191,6 +208,8 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
         kind,
         'Enter your email and a password of at least 12 characters.',
         typeof form.code === 'string' ? form.code : '',
+        next,
+        { email: emailInput },
       ),
       400,
     );
@@ -207,6 +226,8 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
           'join',
           'The invitation is invalid, expired, or already claimed.',
           code,
+          next,
+          { email },
         ),
         400,
       );
@@ -214,7 +235,13 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
   } else user = await accounts.login(email, password);
   if (!user)
     return c.html(
-      accountForm('login', 'Email or password was not recognized.'),
+      accountForm(
+        'login',
+        'Email or password was not recognized. Check your details and try again.',
+        '',
+        next,
+        { email },
+      ),
       401,
     );
   const token = await accounts.newSession(user);
@@ -223,6 +250,9 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
       accountForm(
         'login',
         'Your credentials changed during sign-in. Please sign in again.',
+        '',
+        next,
+        { email },
       ),
       401,
     );
@@ -251,6 +281,16 @@ app.get('/account', async (c) => {
   if (!user) return c.redirect('/login', 303);
   return c.html(accountSecurity(user));
 });
+app.post('/account/sessions/logout', async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+  const accounts = account(c.env);
+  const user = await accounts.session(readSession(c.req.raw));
+  if (!user) return c.json({ error: 'Not signed in' }, 401);
+  // Derive the affected identity from the session, never a posted user/workspace.
+  await accounts.logoutAll(user);
+  c.header('Set-Cookie', sessionCookie(c.req.url, ''));
+  return c.redirect('/login?notice=signed-out-all', 303);
+});
 app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
   const accounts = account(c.env);
@@ -265,7 +305,13 @@ app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
     })
     .safeParse(await c.req.parseBody());
   if (!parsed.success)
-    return c.text('Use a new password of at least 12 characters.', 400);
+    return c.html(
+      accountSecurity(
+        user,
+        'Use a new password of at least 12 characters. Enter your current password again to retry.',
+      ),
+      400,
+    );
   if (
     !(await accounts.changePassword(
       user,
@@ -273,9 +319,15 @@ app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
       parsed.data.newPassword,
     ))
   )
-    return c.text('Current password was not recognized.', 401);
+    return c.html(
+      accountSecurity(
+        user,
+        'Your current password was not recognized, or your credentials changed. Enter your current password again to retry.',
+      ),
+      401,
+    );
   c.header('Set-Cookie', sessionCookie(c.req.url, ''));
-  return c.redirect('/login', 303);
+  return c.redirect('/login?notice=password-updated', 303);
 });
 
 // RFC 8414 and RFC 9728 issuer-path discovery forms.
