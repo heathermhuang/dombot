@@ -19,7 +19,20 @@
     { "binding": "WORKSPACE_1", "service": "domains-staging-tenant-1" },
     { "binding": "WORKSPACE_2", "service": "domains-staging-tenant-2" },
   ],
-  "vars": { "WORKSPACES": "[]" },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["accounts@mail.domains.domains"],
+      "remote": false,
+    },
+  ],
+  "vars": {
+    "WORKSPACES": "[]",
+    "PUBLIC_REGISTRATION_ENABLED": "false",
+    "EMAIL_FROM": "accounts@mail.domains.domains",
+    "EMAIL_DELIVERY_VERIFIED": "false",
+    "PUBLIC_SIGNUP_IDS": "",
+  },
   "triggers": { "crons": ["17 * * * *"] },
   "observability": {
     "enabled": true,

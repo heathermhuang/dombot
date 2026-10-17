@@ -4,6 +4,21 @@ import { z } from 'zod';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
 import { requestAccess, closeWorkspace } from './lifecycle';
+import { legalPage, legalReady, legalVersion } from './legal';
+import {
+  Registration,
+  registrationReady,
+  registrationIds,
+  emailReady,
+  sendAccountEmail,
+  issueRecovery,
+} from './registration';
+import {
+  signupStart,
+  signupFinish,
+  recoveryStart,
+  checkEmail,
+} from './registration-views';
 import { mcpPolicyDenial } from './mcp-policy';
 import {
   accountForm,
@@ -99,6 +114,7 @@ app.get('/', (c) =>
         c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains' ||
         portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH),
       ),
+      registrationReady(c.env),
     ),
   ),
 );
@@ -116,12 +132,20 @@ app.get('/robots.txt', (c) =>
     'User-agent: *\nAllow: /\nDisallow: /login\nDisallow: /join\nDisallow: /account\nDisallow: /session\nDisallow: /app\n',
   ),
 );
+app.get('/terms', (c) =>
+  c.html(legalPage('terms', c.env), legalReady(c.env) ? 200 : 503),
+);
+app.get('/privacy', (c) =>
+  c.html(legalPage('privacy', c.env), legalReady(c.env) ? 200 : 503),
+);
 app.get('/signup', (c) =>
   c.html(
-    page(
-      'Request free access',
-      `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request a workspace.</h1><p>Workspaces are free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No workspace is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
-    ),
+    registrationReady(c.env)
+      ? signupStart()
+      : page(
+          'Request free access',
+          `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request an account.</h1><p>Accounts are free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No account is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
+        ),
   ),
 );
 app.post('/signup', bodyLimit({ maxSize: 4096 }), async (c) => {
@@ -153,12 +177,42 @@ app.post('/signup', bodyLimit({ maxSize: 4096 }), async (c) => {
       ),
       400,
     );
+  if (registrationReady(c.env)) {
+    const registration = new Registration(
+      c.env.CONTROL_DB,
+      c.env.AUTH_PEPPER,
+      registrationIds(c.env),
+    );
+    if (!(await registration.hasCapacity()))
+      return c.html(
+        page(
+          'Early access is full',
+          '<h1>Early access is full.</h1><p>All available accounts are currently in use. Please check back later. Existing customers can still sign in.</p><p><a href="/login">Sign in</a></p>',
+        ),
+        503,
+      );
+    if (!(await accounts.rateLimit(`signup:email:${parsed.data.email}`, 2)))
+      return c.text('Please wait before requesting another link.', 429);
+    const code = await registration.issue(parsed.data.email);
+    if (
+      code &&
+      !(await sendAccountEmail(c.env, parsed.data.email, code, 'signup'))
+    )
+      return c.html(
+        page(
+          'Email temporarily unavailable',
+          '<h1>Email is temporarily unavailable.</h1><p>No account has been created. Please try again later.</p>',
+        ),
+        503,
+      );
+    return c.html(checkEmail('signup'), 202);
+  }
   if (!(await requestAccess(c.env.CONTROL_DB, parsed.data.email))) {
     c.header('Retry-After', '3600');
     return c.html(
       page(
         'Access requests at capacity',
-        '<h1>Access requests are at capacity.</h1><p>Please try again later or contact domains@domains.domains. No workspace has been allocated.</p>',
+        '<h1>Access requests are at capacity.</h1><p>Please try again later or contact domains@domains.domains. No account has been created.</p>',
       ),
       503,
     );
@@ -166,18 +220,120 @@ app.post('/signup', bodyLimit({ maxSize: 4096 }), async (c) => {
   return c.html(
     page(
       'Access request received',
-      '<h1>Request received.</h1><p>Access is by invitation and subject to capacity. If a workspace is available, we will arrange an invitation after review. If you already have an account, sign in or use account recovery.</p><p><a href="/login">Sign in</a> · <a href="/">Return home</a></p>',
+      '<h1>Request received.</h1><p>Access is by invitation and subject to capacity. If an account is available, we will arrange an invitation after review. If you already have an account, sign in or use account recovery.</p><p><a href="/login">Sign in</a> · <a href="/">Return home</a></p>',
     ),
     202,
   );
+});
+app.get('/signup/verify', async (c) => {
+  if (!registrationReady(c.env)) return c.redirect('/signup', 303);
+  const code = c.req.query('code') ?? '';
+  const email = await new Registration(
+    c.env.CONTROL_DB,
+    c.env.AUTH_PEPPER,
+    registrationIds(c.env),
+  ).emailFor(code);
+  return email
+    ? c.html(signupFinish(code, email))
+    : c.html(
+        page(
+          'Verification link unavailable',
+          '<h1>This link is unavailable.</h1><p>It may have expired or already been used.</p><p><a href="/signup">Request a new verification link</a></p>',
+        ),
+        400,
+      );
+});
+app.post('/signup/verify', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
+  if (!registrationReady(c.env))
+    return c.text('Registration is temporarily unavailable.', 503);
+  const accounts = account(c.env);
+  if (
+    !(await accounts.rateLimit(
+      `signup:claim:${c.req.header('cf-connecting-ip') ?? 'local'}`,
+      10,
+    ))
+  )
+    return c.text('Too many attempts. Try again later.', 429);
+  const form = z
+    .object({
+      code: z.string().regex(/^[a-f0-9]{64}$/),
+      password: z.string().min(12).max(256),
+      confirm: z.string().min(12).max(256),
+      accept: z.literal('yes'),
+      legalVersion: z.literal(legalVersion),
+    })
+    .safeParse(await c.req.parseBody());
+  if (!form.success || form.data.password !== form.data.confirm)
+    return c.html(
+      page(
+        'Check your details',
+        '<h1>Check your details.</h1><p>Use matching passwords of at least 12 characters and accept the Terms and acknowledge the Privacy Policy. Return to your verification link to try again; your link has not been used.</p>',
+      ),
+      400,
+    );
+  const registration = new Registration(
+    c.env.CONTROL_DB,
+    c.env.AUTH_PEPPER,
+    registrationIds(c.env),
+  );
+  let user;
+  try {
+    user = await registration.claim(form.data.code, form.data.password);
+  } catch {
+    return c.html(
+      page(
+        'Account not created',
+        '<h1>No account was created.</h1><p>The link may have expired or already been used, or early access may be full.</p><p><a href="/signup">Try registration again</a> · <a href="/login">Sign in</a></p>',
+      ),
+      409,
+    );
+  }
+  const token = await accounts.newSession(user);
+  if (!token) return c.redirect('/login', 303);
+  c.header('Set-Cookie', sessionCookie(c.req.url, token));
+  return c.redirect('/app', 303);
+});
+app.post('/recover/request', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
+  if (!emailReady(c.env))
+    return c.text(
+      'Email recovery is temporarily unavailable. Contact domains@domains.domains.',
+      503,
+    );
+  const accounts = account(c.env);
+  if (
+    !(await accounts.rateLimit(
+      `recovery:ip:${c.req.header('cf-connecting-ip') ?? 'local'}`,
+      3,
+    )) ||
+    !(await accounts.rateLimit('recovery:global', 20))
+  )
+    return c.text('Too many requests. Try again later.', 429);
+  const form = await c.req.parseBody();
+  const email = z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((s) => s.toLowerCase())
+    .safeParse(form.email);
+  if (!email.success)
+    return c.html(recoveryStart('Enter a valid email address.'), 400);
+  if (!(await accounts.rateLimit(`recovery:email:${email.data}`, 2)))
+    return c.text('Please wait before requesting another link.', 429);
+  const code = await issueRecovery(c.env.CONTROL_DB, email.data);
+  if (code) await sendAccountEmail(c.env, email.data, code, 'recovery');
+  // Match unknown, disabled, and known accounts, including provider failures.
+  return c.html(checkEmail('recovery'), 202);
 });
 app.get('/account/close', async (c) => {
   const user = await account(c.env).session(readSession(c.req.raw));
   if (!user) return c.redirect('/login', 303);
   return c.html(
     page(
-      'Close your workspace',
-      `<form action="/account/close" method="post"><h1>Close your workspace.</h1><p>Export your backup in Settings first. Closing disables browser, API, paired-agent and public-collection access immediately. Your registrar accounts and domain registrations are not changed.</p><p>We retain your workspace data for 30 days so support can help recover an accidental closure. Physical erasure is then handled by the operator. Your workspace identity is never assigned to another person.</p><label>Current password<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><label>Type CLOSE MY WORKSPACE<input name="confirmation" required></label><button type="submit">Close my workspace</button><p><a href="/account">Keep my workspace</a></p></form>`,
+      'Close your account',
+      `<form action="/account/close" method="post"><h1>Close your account.</h1><p>Export your backup in Settings first. Closing disables browser, API, paired-agent and public-collection access immediately. Your registrar accounts and domain registrations are not changed.</p><p>We retain your portfolio data for 30 days so support can help recover an accidental closure. Physical erasure is then handled by the operator. Your account identity is never assigned to another person.</p><label>Current password<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><label>Type CLOSE MY ACCOUNT<input name="confirmation" required></label><button type="submit">Close my account</button><p><a href="/account">Keep my account</a></p></form>`,
     ),
   );
 });
@@ -190,7 +346,7 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
     return c.text('Too many attempts. Try again later.', 429);
   const form = await c.req.parseBody();
   if (
-    form.confirmation !== 'CLOSE MY WORKSPACE' ||
+    form.confirmation !== 'CLOSE MY ACCOUNT' ||
     typeof form.password !== 'string' ||
     form.password.length > 256
   )
@@ -208,7 +364,7 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
     .parse(JSON.parse(c.env.WORKSPACES))
     .find((w) => w.id === user.workspace_id);
   if (!configured)
-    return c.text('Workspace is unavailable. Contact support.', 503);
+    return c.text('Account is unavailable. Contact support.', 503);
   // Serialize behind current tenant operations and pause scheduled sync before
   // disabling ingress. This changes only the two requested settings.
   const pause = new Request(new URL('/api/updateSettings', c.req.url), {
@@ -233,7 +389,7 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
   const paused = await workspaceService(c.env, configured.binding).fetch(pause);
   if (!paused.ok)
     return c.text(
-      'Closure could not pause background activity. Your workspace remains accessible; try again or contact support.',
+      'Closure could not pause background activity. Your account remains accessible; try again or contact support.',
       503,
     );
   if (!(await closeWorkspace(c.env.CONTROL_DB, user, verified.credentialHash)))
@@ -244,8 +400,8 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
   c.header('Set-Cookie', sessionCookie(c.req.url, ''));
   return c.html(
     page(
-      'Workspace closed',
-      '<h1>Your workspace is closed.</h1><p>Browser, agent and public access are disabled. Contact domains@domains.domains within 30 days if you need help recovering an accidental closure.</p><p><a href="/">Return home</a></p>',
+      'Account closed',
+      '<h1>Your account is closed.</h1><p>Browser, agent and public access are disabled. Contact domains@domains.domains within 30 days if you need help recovering an accidental closure.</p><p><a href="/">Return home</a></p>',
     ),
   );
 });
@@ -272,7 +428,11 @@ app.get('/join', (c) =>
   c.html(accountForm('join', '', c.req.query('code') ?? '')),
 );
 app.get('/recover', (c) => {
-  return c.html(recoveryForm(c.req.query('code') ?? ''));
+  return c.html(
+    !c.req.query('code') && emailReady(c.env)
+      ? recoveryStart()
+      : recoveryForm(c.req.query('code') ?? ''),
+  );
 });
 app.post('/recover', bodyLimit({ maxSize: 16_384 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
@@ -500,13 +660,13 @@ app.all('/w/:workspace/*', async (c) => {
   const configured = workspaceSchema
     .parse(JSON.parse(c.env.WORKSPACES))
     .find((w) => w.id === id);
-  if (!configured) return c.json({ error: 'Workspace not found' }, 404);
+  if (!configured) return c.json({ error: 'Portfolio not found' }, 404);
   const workspace = await c.env.CONTROL_DB.prepare(
     'SELECT id FROM workspaces WHERE id=?1 AND enabled=1',
   )
     .bind(id)
     .first();
-  if (!workspace) return c.json({ error: 'Workspace not found' }, 404);
+  if (!workspace) return c.json({ error: 'Portfolio not found' }, 404);
   const url = new URL(c.req.url);
   const base = `/w/${id}`;
   const path = url.pathname.slice(base.length) || '/';
@@ -544,7 +704,7 @@ app.all('/w/:workspace/*', async (c) => {
         303,
       );
     return c.json(
-      { error: user ? 'Workspace access denied' : 'Not signed in' },
+      { error: user ? 'Account access denied' : 'Not signed in' },
       user ? 403 : 401,
     );
   }
@@ -573,7 +733,7 @@ app.all('/w/:workspace/*', async (c) => {
       return c.json(
         {
           error:
-            'Free workspaces support automatic sync once an hour or less often. Use 0 to disable it.',
+            'Free accounts support automatic sync once an hour or less often. Use 0 to disable it.',
         },
         400,
       );
@@ -586,7 +746,7 @@ app.all('/w/:workspace/*', async (c) => {
       ))
     )
       return c.json(
-        { error: 'Workspace agent request limit reached. Try again later.' },
+        { error: 'Account agent request limit reached. Try again later.' },
         429,
       );
     let rpc: unknown;
@@ -612,7 +772,7 @@ app.all('/w/:workspace/*', async (c) => {
     !(await account(c.env).rateLimit(`api:${id}`, 3000))
   )
     return c.json(
-      { error: 'Workspace request limit reached. Try again later.' },
+      { error: 'Account request limit reached. Try again later.' },
       429,
     );
   // Even a signed-in visitor to a different workspace's public MCP surface
@@ -674,6 +834,12 @@ export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: HostedEnv) {
     await env.CONTROL_DB.batch([
+      env.CONTROL_DB.prepare(
+        'DELETE FROM signup_proofs WHERE expires_at<?1',
+      ).bind(Date.now()),
+      env.CONTROL_DB.prepare(
+        'DELETE FROM email_budgets WHERE expires_at<?1',
+      ).bind(Date.now()),
       env.CONTROL_DB.prepare(
         'DELETE FROM signup_requests WHERE created_at<?1',
       ).bind(Date.now() - 30 * 86400_000),

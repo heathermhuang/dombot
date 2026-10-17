@@ -348,7 +348,7 @@ export default function DomainWorkspace({
             <span className="pf-eyebrow">Portfolio</span>
             <h1>Your collection</h1>
             <p className="pf-subtitle">
-              {error || 'Loading your private workspace…'}
+              {error || 'Loading your domain portfolio…'}
             </p>
           </div>
         </header>

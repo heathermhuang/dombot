@@ -276,7 +276,7 @@ export default function Renewals() {
           ` ${summary.base + summary.tld} use a base or TLD rate.`}{' '}
         Confirm current prices with your registrar before spending.
         {!!renewalPricing?.failed &&
-          ` Across this workspace, ${renewalPricing.failed} price updates failed; last saved estimates remain visible.`}
+          ` Across your portfolio, ${renewalPricing.failed} price updates failed; last saved estimates remain visible.`}
       </p>
 
       {/* Totals */}

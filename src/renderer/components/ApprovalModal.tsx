@@ -93,7 +93,7 @@ export default function ApprovalModal() {
                   ))}
                 </ul>
                 <p className="mt-2 break-all text-xs text-muted-foreground">
-                  Workspace: {req.resource}
+                  Portfolio: {req.resource}
                 </p>
               </div>
             )}
