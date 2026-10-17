@@ -1,6 +1,7 @@
 import { page, escapeHtml as e } from './views';
 
-export const legalVersion = '2026-10-18';
+export const legalVersion = '2026-10-18.1';
+export const legalEffectiveDate = '2026-10-18';
 export function legalReady(env: HostedEnv): boolean {
   return Boolean(
     env.LEGAL_OPERATOR_NAME?.trim() && env.LEGAL_JURISDICTION?.trim(),
@@ -14,14 +15,15 @@ export function legalPage(kind: 'terms' | 'privacy', env: HostedEnv): string {
     );
   const operator = e(env.LEGAL_OPERATOR_NAME!.trim());
   const jurisdiction = e(env.LEGAL_JURISDICTION!.trim());
-  const intro = `<p>Effective ${legalVersion}. domains.domains is operated by ${operator}, in ${jurisdiction}. Contact: <a href="mailto:domains@domains.domains">domains@domains.domains</a>.</p>`;
+  const intro = `<p>Effective ${legalEffectiveDate}. Version ${legalVersion}. domains.domains is operated by ${operator}, in ${jurisdiction}. Contact: <a href="mailto:domains@domains.domains">domains@domains.domains</a>.</p>`;
   return page(
     kind === 'terms' ? 'Terms of Service' : 'Privacy Policy',
     `<article class="legal"><h1>${kind === 'terms' ? 'Terms of Service' : 'Privacy Policy'}</h1>${intro}${
       kind === 'terms'
         ? `
 <h2>The service</h2><p>domains.domains helps you manage your domain portfolio, connect supported registrar accounts, review renewal estimates, publish selected collections and connect AI assistants. Your registrar remains responsible for domain registrations, renewals, transfers and its own charges and terms. Estimates may be incomplete or outdated; confirm prices, dates and availability with your registrar.</p>
-<h2>Your account</h2><p>Use an email address you control and keep your password and registrar credentials secure. Connect only accounts and domains you are authorized to manage. You are responsible for reviewing actions you request, permissions you grant and information you choose to publish. Do not abuse the service, attempt to access another person's data, send spam or use it unlawfully.</p>
+<h2>DomBot and open-source software</h2><p>domains.domains is a hosted, multi-tenant version of <a href="https://github.com/aoxborrow/dombot">DomBot</a>, the open-source domain portfolio manager created by Aaron Oxborrow. DomBot provides the portfolio interface, registrar integrations and MCP tools. Our SaaS layer adds hosted registration, sign-in and recovery, isolated customer databases and tenant management. Magic Crystal Limited operates this hosted service.</p><p>The DomBot code and our SaaS layer are publicly available under the <a href="https://github.com/heathermhuang/dombot/blob/main/LICENSE">GNU Affero General Public License v3.0 or later</a>, with upstream copyright notices and applicable third-party licenses retained. Get the <a href="/source">complete source, SaaS layer and build instructions</a> at no charge. These service terms govern use of the managed hosting service and do not reduce rights granted by the software licenses.</p>
+<h2>Your sign-in</h2><p>Use an email address you control and keep your password and registrar credentials secure. Connect only accounts and domains you are authorized to manage. You are responsible for reviewing actions you request, permissions you grant and information you choose to publish. Do not abuse the service, attempt to access another person's data, send spam or use it unlawfully.</p>
 <h2>Early access and charges</h2><p>Account access is free during early access, subject to available capacity. No credit card is required. Registrar and other third-party charges are separate. We will explain any proposed service charges and obtain your agreement before charging you. Features, capacity and availability may change. Early access has no uptime or support-response guarantee; keep your own exports and verify important deadlines directly with your registrar.</p>
 <h2>Connected services and assistants</h2><p>Connecting a registrar allows the actions you authorize through its API. Publishing a collection makes its selected information public. Connect an AI assistant only if you trust it and its provider; they process information you allow them to retrieve. Review permissions and revoke access in MCP settings. Paid registrar actions through the hosted MCP service are currently blocked.</p>
 <h2>Closing or suspending an account</h2><p>You can export a backup and close your account in Account security. Closure immediately disables service access and pauses background synchronization; it does not cancel domain registrations or close registrar accounts. Account data is retained for 30 days for accidental-closure recovery, then queued for manual erasure. Contact support for erasure requests. We may suspend access to address abuse, a security risk or a legal obligation. When practicable, we will explain the reason and provide an opportunity to export data.</p>

@@ -51,6 +51,27 @@ describe('managed account help and identity', () => {
 });
 
 describe('public website brand and product clarity', () => {
+  it('credits upstream DomBot separately from the hosted SaaS source in one shared footer', () => {
+    const env = {
+      LEGAL_OPERATOR_NAME: 'Magic Crystal Limited',
+      LEGAL_JURISDICTION: 'Hong Kong',
+    } as HostedEnv;
+    for (const html of [
+      home(true, true),
+      accountForm('login'),
+      legalPage('terms', env),
+    ]) {
+      expect(html.match(/<footer\b/g)).toHaveLength(1);
+      expect(html).toContain('hosted, multi-tenant version of');
+      expect(html).toContain('href="https://github.com/aoxborrow/dombot"');
+      expect(html).toContain('Aaron Oxborrow');
+      expect(html).toContain('href="/source"');
+    }
+    expect(legalPage('terms', env)).toContain('Our SaaS layer adds');
+    expect(legalPage('terms', env)).toContain(
+      'do not reduce rights granted by the software licenses',
+    );
+  });
   it('publishes the confirmed operator and jurisdiction with the dated policies', () => {
     const env = {
       LEGAL_OPERATOR_NAME: 'Magic Crystal Limited',
@@ -95,10 +116,10 @@ describe('public website brand and product clarity', () => {
       recoveryForm(''),
     ])
       expect(html).not.toMatch(/workspace/i);
-    expect(home(true, true)).toContain('Create free account');
+    expect(home(true, true)).toContain('Get started free');
     expect(home(true, true)).toContain('No invitation needed.');
     expect(home(true, true)).not.toContain('by invitation');
-    expect(home(true)).not.toContain('Create free account');
+    expect(home(true)).not.toContain('Get started free');
   });
   it('labels sample portfolio data and keeps the real access and collection paths', () => {
     const html = home(true);

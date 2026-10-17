@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
+import { sourcePage } from './source';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
 import {
@@ -118,6 +119,7 @@ app.get('/', (c) =>
     ),
   ),
 );
+app.get('/source', (c) => c.html(sourcePage(c.env.SOURCE_COMMIT)));
 app.get('/domains', (c) => {
   const path =
     c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains'

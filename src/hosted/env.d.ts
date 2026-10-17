@@ -13,4 +13,5 @@ interface HostedEnv {
   PUBLIC_SIGNUP_IDS?: string;
   LEGAL_OPERATOR_NAME?: string;
   LEGAL_JURISDICTION?: string;
+  SOURCE_COMMIT?: string;
 }
