@@ -119,3 +119,65 @@ backup encryption root, keep cron disabled, verify the authenticated inventory a
 publication, then disable its routing and restore its original test bindings/keys.
 Do not point this tool at a live customer database. Retain the backup, key and receipt
 in protected operator storage.
+
+## Free service limits and public access requests
+
+The public `/signup` form accepts requests for review. It does not allocate infrastructure
+or issue an account credential. Ready slots remain operator-qualified and invitation-only:
+32 configured immutable workspace identities maximum; the existing pool is ten private
+Workers/D1s, including separately disabled QA slots. Never recycle a customer identity or
+database into the available pool. Expand capacity through the existing controlled provision,
+backup, isolated deployment and qualification procedure before issuing more invitations.
+Autonomous public fleet provisioning remains unavailable.
+
+The queue holds at most 100 email addresses, expires requests after 30 days, accepts at
+most 20 requests globally and three per source IP in ten minutes, and returns a capacity
+error rather than silently discarding a full-queue request. The form gives the same response
+for new and duplicate addresses and makes no immediate-access promise. Export pending
+requests into a protected file for operator review:
+
+```sh
+node scripts/hosted-account.mjs requests --config <private-gateway.json> --output <new-private-request-export.json>
+```
+
+Use the existing `invite` flow after verification and available-capacity qualification.
+The tool never emails an invitation automatically. Pending request exports contain private
+contact information and must not appear in shared reports or source control.
+
+Gateway allowances per workspace are 600 MCP POSTs and 3,000 authenticated API requests
+per ten minutes. Provider-refresh API requests share 20 per ten minutes. Newly selected
+auto-sync intervals must be disabled (`0`) or at least 60 minutes; existing settings are
+preserved by deployment. These limits do not promise unlimited holdings, storage or provider
+quota, and are not a guarantee against every denial-of-service attack.
+
+All three paid MCP tools (register, transfer and renew) are denied at the gateway, even
+when an existing OAuth grant includes `domains:spend`. The early-access agent budget is
+zero. Browser actions retain their existing explicit controls and registrar charges.
+No nonzero agent-spend approvals or budgets are advertised. Existing OAuth scopes still
+apply; gateway policy can only reduce access.
+
+Optional protected `MCP_POLICIES` JSON maps immutable workspace IDs to `allowedTools` and
+`accountIds`. A selected account restriction requires explicit `accountId` for a tool that
+actually supports it, rejects portfolio-wide aggregation, and denies tools outside the
+allowlist. An empty account list leaves the selected tools workspace-wide. Configuration
+is operator-managed during early access, separate from revoking a paired client in Settings.
+Never put tokens, passwords or registrar keys in this configuration.
+
+## Closing and erasing a workspace
+
+`/account/close` requires the current browser session, same-origin POST, current password
+and the exact confirmation `CLOSE MY WORKSPACE`. It first pauses auto-sync and MCP through
+the existing tenant coordinator so earlier work drains, then atomically disables the owning
+workspace, records a closure with a 30-day retention deadline, and removes its browser and
+recovery sessions. The gateway denies all subsequent private, MCP and published-collection
+requests for that workspace. Other owners remain enabled. Registrar registrations, account
+credentials at the provider, and domain settings are not changed.
+
+Closure suspends access; it is not a claim of completed physical erasure. Support can recover
+an accidental closure within retention using independently verified identity. The operator
+reviews closure receipts, stops the tenant cron, and purges the retired Worker/D1 and matching
+backup/key material only after the retention deadline and documented custody/recovery checks.
+Keep a tombstone of the immutable ID and never return a retired slot to the invitation pool.
+Do not promise automatic physical deletion until its durable job and off-device retention
+process have been qualified. A failed pause leaves the account accessible for retry; an
+uncertain control transaction must be reconciled before repeating it.
