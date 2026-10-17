@@ -76,6 +76,10 @@ describe('public portfolio clone', () => {
       String(p).endsWith('.css'),
     )) {
       const css = readFileSync(root + '/' + file, 'utf8');
+      for (const match of css.matchAll(/@import\s+["']([^"']+)["']/g)) {
+        expect(match[1]).toMatch(/^\/public-portfolio\//);
+        expect(existsSync(root + match[1]), match[1]).toBe(true);
+      }
       for (const match of css.matchAll(/url\(["']?([^)"']+)["']?\)/g)) {
         const url = match[1];
         if (!url.startsWith('/public-portfolio/')) continue;

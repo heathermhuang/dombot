@@ -31,7 +31,7 @@
       "path": "public-portfolio/static/style.min.css",
       "bytes": 23657,
       "sha256": "92a1332fbf2100ccbed5fd253319fdfeb953939928f4a933ccf38c2d44f5aec4",
-      "copiedSha256": "0ab5938fc9f14bd52392b61d665351a164cddc4573d0aa673bbd4e99080d8a68"
+      "copiedSha256": "373543d4377ba70bb0a84fe8b9db49113af503ad9080244b667d27791182ce05"
     },
     {
       "source": "https://domains.domains/content/images/WjoTPb_domains_domains_white.png",
@@ -326,6 +326,13 @@
       "bytes": 19872,
       "sha256": "6627e0fdcae8855e8564ebbf028c770228a90ba2fc8fa761048946986fb02bc4",
       "copiedSha256": "6627e0fdcae8855e8564ebbf028c770228a90ba2fc8fa761048946986fb02bc4"
+    },
+    {
+      "source": "https://domains.domains/content/variables.css",
+      "path": "public-portfolio/content/variables.css",
+      "bytes": 364,
+      "sha256": "7f26559f51679d53d2814da4396050896af779b99e5031f62211b266d291a0ff",
+      "copiedSha256": "7f26559f51679d53d2814da4396050896af779b99e5031f62211b266d291a0ff"
     }
   ],
   "changes": [
