@@ -144,8 +144,10 @@ Use the existing `invite` flow after verification and available-capacity qualifi
 The tool never emails an invitation automatically. Pending request exports contain private
 contact information and must not appear in shared reports or source control.
 
-Gateway allowances per workspace are 600 MCP POSTs and 3,000 authenticated API requests
-per ten minutes. Provider-refresh API requests share 20 per ten minutes. Newly selected
+Gateway allowances are 600 MCP POSTs per workspace and trusted source IP, and 3,000
+authenticated API requests per workspace per ten minutes. Unauthenticated traffic from
+another source cannot spend the owner's MCP allowance. Provider-refresh API requests
+share 20 per ten minutes. Newly selected
 auto-sync intervals must be disabled (`0`) or at least 60 minutes; existing settings are
 preserved by deployment. These limits do not promise unlimited holdings, storage or provider
 quota, and are not a guarantee against every denial-of-service attack.
