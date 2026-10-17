@@ -1,0 +1,291 @@
+{
+  "capturedAt": "2026-10-17",
+  "source": "https://domains.domains/domains",
+  "canonical": "https://alternative.domains/",
+  "sourceSha256": "28de2c786b79bd8e038c8cc1fc8a1850951ac04d6075d586c9e844758ace006b",
+  "collectionCount": 13,
+  "assets": [
+    {
+      "source": "https://domains.domains/static/bootstrap.min.css",
+      "path": "public-portfolio/static/bootstrap.min.css",
+      "bytes": 191523,
+      "sha256": "667244226d2cae230d34813312d2b962e94b8454fac7bd98606e67c41929f44a"
+    },
+    {
+      "source": "https://domains.domains/content/profiles/profile_avataraYjXVEdomains_domains.png",
+      "path": "public-portfolio/content/profiles/profile_avataraYjXVEdomains_domains.png",
+      "bytes": 26489,
+      "sha256": "90e2502fa45f7635abecc7ed706aa178532b063519bb169030501aa05f952124"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/all.min.css",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/all.min.css",
+      "bytes": 73830,
+      "sha256": "35cf1a9ae76dc131da4bd5636aa5a8ec0bdd14ec05e070c4d0291fe5a98e9205"
+    },
+    {
+      "source": "https://domains.domains/static/style.min.css?v=1.1",
+      "path": "public-portfolio/static/style.min.css",
+      "bytes": 23657,
+      "sha256": "92a1332fbf2100ccbed5fd253319fdfeb953939928f4a933ccf38c2d44f5aec4"
+    },
+    {
+      "source": "https://domains.domains/content/images/WjoTPb_domains_domains_white.png",
+      "path": "public-portfolio/content/images/WjoTPb_domains_domains_white.png",
+      "bytes": 34821,
+      "sha256": "f2fbc493602de228be34c18ddc9180276bd8c5b82e7688358707535a76240b6c"
+    },
+    {
+      "source": "https://domains.domains/static/biopages.min.css?v=1.1",
+      "path": "public-portfolio/static/biopages.min.css",
+      "bytes": 15297,
+      "sha256": "1516d6641e1ea1f49324ee508bcccc72c9775cfcb33117fa5520bf6f389c1857"
+    },
+    {
+      "source": "https://domains.domains/content/images/drVBtS_domains_domains.png",
+      "path": "public-portfolio/content/images/drVBtS_domains_domains.png",
+      "bytes": 1944,
+      "sha256": "d0ae6ad496b9ba868ab39210422266c7da1f583066257fe760938694b6388afb"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-brands-400.ttf",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-brands-400.ttf",
+      "bytes": 210792,
+      "sha256": "808443ae6c8204395add8543da8a90a60b9376fb0f87ed8e8ea37d109596d805"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-regular.woff2",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-regular.woff2",
+      "bytes": 16980,
+      "sha256": "97d5a594e7f76c7e50045b67667fd6b74b268515efe6425097be1b2647079787"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-regular.svg#NunitoSans",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-regular.svg",
+      "bytes": 48387,
+      "sha256": "068b1f4b7d47548290cc68978229b4ce276c2d0a9a548d3c9e8ff49c3cd4d694"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-800.ttf",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-800.ttf",
+      "bytes": 40892,
+      "sha256": "704342b438335db8567504f57bab57b483ef3bcf68411c72d9bf1d86a8a0efd1"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-600.woff",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-600.woff",
+      "bytes": 21048,
+      "sha256": "af36b391244e3c8c4ab03691c412c59c86c1a02812b16b76db7a907f25b6b59a"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-800.eot?#iefix",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-800.eot",
+      "bytes": 20148,
+      "sha256": "0c52e060dc4e194c101e89c102d39399d3918739f88736060a4801f47581271f"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-regular.ttf",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-regular.ttf",
+      "bytes": 39652,
+      "sha256": "ed9a72228e4ac259a758e7d47a07d8ed121221405897eea5df8bcddcc76f16bb"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-regular.eot?#iefix",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-regular.eot",
+      "bytes": 19638,
+      "sha256": "14caaa8cc7300611dcfe16a8851760a2f5f20539c1821234fd1322a46fb7be9a"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-700.eot?#iefix",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-700.eot",
+      "bytes": 19871,
+      "sha256": "c8983cec7414ea36ab09d817aa10232f29aaa720cf9408b0100030a8813898c3"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-600.woff2",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-600.woff2",
+      "bytes": 17156,
+      "sha256": "c84423c305779f2aab07847a2e3870ac1ea4072e470d5eb149c01e0e0497eae3"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-700.woff2",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-700.woff2",
+      "bytes": 17116,
+      "sha256": "280aaa8929329764ac3213ca093c63505cfcc665347939c79905c426d33867c5"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-700.woff",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-700.woff",
+      "bytes": 21000,
+      "sha256": "36eabaee7f4aa9f31c168c90acabbddd5dbb93948f32e83a6f53df2d78ac7ddf"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-regular-400.woff2",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-regular-400.woff2",
+      "bytes": 25472,
+      "sha256": "e3456d1283b9d75337a773dfd147bf908fd02c01b4bf48576d8603a69b13cbe5"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-brands-400.woff2",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-brands-400.woff2",
+      "bytes": 118684,
+      "sha256": "d7236a19bf23cbb2027280e8f51dc99d6c45976a2ed60de73382b034b18a2b68"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-v4compatibility.ttf",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-v4compatibility.ttf",
+      "bytes": 10836,
+      "sha256": "30f6abf6baa425825828793d6dfad1fb63765d0e5abaa7af6feafb9bfcece5a0"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-800.eot",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-800.eot",
+      "bytes": 20148,
+      "sha256": "0c52e060dc4e194c101e89c102d39399d3918739f88736060a4801f47581271f"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-solid-900.ttf",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-solid-900.ttf",
+      "bytes": 426112,
+      "sha256": "d2f0593540b0e33ba6de255a54f272d466e31144806956bea8cfdbf7edffc9bd"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-v4compatibility.woff2",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-v4compatibility.woff2",
+      "bytes": 4796,
+      "sha256": "0ce9033c69dc714f5f45ef9bf17d55e4c46bcdfad6799a4e92b38e7781bf86bd"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-700.eot",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-700.eot",
+      "bytes": 19871,
+      "sha256": "c8983cec7414ea36ab09d817aa10232f29aaa720cf9408b0100030a8813898c3"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-italic.eot?#iefix",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-italic.eot",
+      "bytes": 20573,
+      "sha256": "be79ac7f334c2d29bbd1739c0db5a70a2d4f178d6e6d7e9c93853bb8e27e9af9"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-italic.woff",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-italic.woff",
+      "bytes": 21856,
+      "sha256": "eea37e13c5322faeafdfbc83185c0e10b8ea807fe93e2e73d942a46fd105818d"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-regular-400.ttf",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-regular-400.ttf",
+      "bytes": 68064,
+      "sha256": "54cf6086f7bb21f9d072ad494a19b4681fa516dd0a14cee52da01d3651a913a3"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-italic.eot",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-italic.eot",
+      "bytes": 20573,
+      "sha256": "be79ac7f334c2d29bbd1739c0db5a70a2d4f178d6e6d7e9c93853bb8e27e9af9"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-600.eot?#iefix",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-600.eot",
+      "bytes": 19872,
+      "sha256": "6627e0fdcae8855e8564ebbf028c770228a90ba2fc8fa761048946986fb02bc4"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-700.svg#NunitoSans",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-700.svg",
+      "bytes": 48458,
+      "sha256": "152e15682395a5a8dc24d4bdffdb4e9e5d921353dd8884c5e399380d4ee56bbc"
+    },
+    {
+      "source": "https://domains.domains/static/%23cccoil-grad",
+      "path": "public-portfolio/static/%23cccoil-grad",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-italic.svg#NunitoSans",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-italic.svg",
+      "bytes": 51354,
+      "sha256": "b656eae57c6103d99fd28c1b5f7e611e62340f5e56b8baf580ba591d4a5e0a3e"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-800.woff",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-800.woff",
+      "bytes": 21204,
+      "sha256": "540786ce117b257cc93e45f865feeb2dddfdd9b09aaec2630e57440790d8f3ec"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-600.ttf",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-600.ttf",
+      "bytes": 40096,
+      "sha256": "27a6442744a9983ecb3c4758a4474b9f4942f9e2fced03797982c8243eb57dd5"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-600.svg#NunitoSans",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-600.svg",
+      "bytes": 48256,
+      "sha256": "84d1bb9d54ed9eb1a164e4e956c33ef793c4907ed0e580c3c43979e300fad794"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-800.svg#NunitoSans",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-800.svg",
+      "bytes": 48556,
+      "sha256": "ff24cc23dc95414aa1242c5e751cb2aa81482e983abe313d0154b9974676b1c6"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-italic.ttf",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-italic.ttf",
+      "bytes": 40668,
+      "sha256": "66a37dc391a0983d5d0ad80e0f4ec92119738f338878da6926a46b7bc84ed326"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/libs/fontawesome/webfonts/fa-solid-900.woff2",
+      "path": "public-portfolio/static/frontend/libs/fontawesome/webfonts/fa-solid-900.woff2",
+      "bytes": 158220,
+      "sha256": "aa75998623a391e61c6901794ace832e3ecdd288b56d608f21bea0411acc0b8e"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-regular.eot",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-regular.eot",
+      "bytes": 19638,
+      "sha256": "14caaa8cc7300611dcfe16a8851760a2f5f20539c1821234fd1322a46fb7be9a"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-700.ttf",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-700.ttf",
+      "bytes": 40828,
+      "sha256": "3e2f13814ae4a3a6a8533e6abfa015296135d6f9cc646f233250d21e64e6aba9"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-regular.woff",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-regular.woff",
+      "bytes": 20864,
+      "sha256": "481b0fe050b9209c7dcd0cf23363c1754d094933aa28b329599d360c050a418e"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-800.woff2",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-800.woff2",
+      "bytes": 17324,
+      "sha256": "6fce8ebc3557b63496f8fafe1c182f2aa8669550f9398b4d9beebddd43306ed3"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-italic.woff2",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-italic.woff2",
+      "bytes": 17684,
+      "sha256": "6637ea3139ffb01e240829717a4f8c195d7be6b81780ed643000b49833d8d6d1"
+    },
+    {
+      "source": "https://domains.domains/static/frontend/fonts/nunito-sans-v12-latin-600.eot",
+      "path": "public-portfolio/static/frontend/fonts/nunito-sans-v12-latin-600.eot",
+      "bytes": 19872,
+      "sha256": "6627e0fdcae8855e8564ebbf028c770228a90ba2fc8fa761048946986fb02bc4"
+    }
+  ],
+  "changes": [
+    "Local assets and accessible collapse/share controller",
+    "Canonical and share URLs",
+    "Public mailto inquiry address",
+    "No private holdings or legacy tracking/server scripts"
+  ]
+}

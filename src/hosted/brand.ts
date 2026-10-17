@@ -1,0 +1,2 @@
+// One-colour d.d mark. Keep the full domain name alongside this symbol.
+export const brandMark = `<svg aria-hidden="true" focusable="false" viewBox="0 0 320 200" fill="currentColor"><path fill-rule="evenodd" d="M140 10H104V63A66 66 0 1 0 140 122ZM104 122a30 30 0 1 1-60 0 30 30 0 0 1 60 0ZM310 10H274V63A66 66 0 1 0 310 122ZM274 122a30 30 0 1 1-60 0 30 30 0 0 1 60 0Z"/><circle cx="160" cy="170" r="18"/></svg>`;

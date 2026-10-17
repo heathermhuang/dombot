@@ -37,3 +37,15 @@ names that still match a fresh successful inventory, plus explicitly historical
 names. Newly discovered private holdings and unmatched records remain unlisted.
 Enable the founder MCP server and the selected automatic-sync interval through
 the authenticated settings API; no registrar purchase or renewal is implied.
+
+## Free conference offer
+
+The managed early-access SaaS is free: no subscription fee and no credit card
+required. Registrar registration, renewal, transfer and other provider charges are
+separate and remain payable to the registrar. This is an early-access offer; do not
+promise lifetime pricing or unlimited capacity.
+
+The homepage offers an email request for free access; invitations still reserve
+qualified workspace capacity. This does not enable open signup. Quote the actual
+managed hostname in conference materials until the public hostname cutover is
+completed and verified.
