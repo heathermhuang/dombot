@@ -1,0 +1,66 @@
+/** Public marketing content. The preview is illustrative and never reads holdings. */
+export const landingStyles = `
+.landing-page{--paper:#faf9f5;--ink:#212a23;--muted:#60685f;--line:#dfe3da;--green:#315b3d;background:var(--paper)}
+.landing-page header,.landing-page main,.landing-page footer{max-width:1240px}
+.landing-page header{padding:22px 32px;border-bottom:1px solid var(--line);gap:28px;align-items:center}
+.landing-page main{padding:0;overflow-wrap:normal}
+.landing-nav{display:flex;align-items:center;gap:30px;margin-left:auto;font-size:14px}
+.landing-nav a{min-height:44px;display:inline-flex;align-items:center;color:var(--muted)}
+.landing-nav .nav-signin{color:var(--ink);font-weight:650}
+.landing-hero{display:grid;grid-template-columns:1fr 1.12fr;gap:64px;align-items:start;padding:64px 32px 88px}
+.hero-copy{padding:20px 0 12px}.hero-label{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--green);font-weight:550;margin:0 0 20px}
+.hero-label:before{content:'';width:18px;height:2px;background:var(--green)}
+.landing-page h1{font-size:clamp(44px,5vw,64px);font-weight:600;line-height:1.06;letter-spacing:-.045em;margin:0 0 26px;max-width:600px;text-wrap:balance}
+.landing-page h1 span{display:block}.landing-page .hero-copy>p:not(.hero-label){font-size:18px;line-height:1.6;max-width:445px;margin:0 0 30px}
+.hero-actions{display:flex;align-items:center;gap:24px;flex-wrap:wrap}.hero-actions .button{font-size:14px;font-weight:600;padding:14px 22px;border-radius:4px;min-height:48px;display:inline-flex;align-items:center;gap:24px}
+.hero-actions .button:after{content:'↗';font-size:19px;line-height:1}.hero-actions .signin-link{font-size:14px;color:var(--ink);padding:12px 0}
+.access-note{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.65}.access-note strong{font-weight:600;color:var(--ink)}
+.product-preview{margin:0;min-width:0;position:relative}
+.preview-caption{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;color:var(--muted);margin:0 0 12px;padding:0 1px}
+.sample-label{font-size:10px;font-weight:600;padding:4px 7px;border:1px solid #d4dccf;line-height:1.2;border-radius:3px;color:#5d6d58}
+.preview-window{background:#fff;border:1px solid #d5ddd1;border-radius:9px;overflow:hidden;box-shadow:0 20px 45px -30px #273b2859,0 3px 8px -5px #273b2824}
+.preview-toolbar{display:flex;align-items:center;justify-content:space-between;background:#eef2e9;padding:14px 20px;border-bottom:1px solid #dce3d6}
+.preview-title{font-size:15px;font-weight:650;letter-spacing:-.035em;color:var(--ink)}.preview-private{font-size:10px;color:#586953;border-left:1px solid #c8d2c2;padding-left:14px}
+.preview-tabs{display:flex;gap:24px;padding:12px 20px 0;border-bottom:1px solid #e7eae3;font-size:11px;color:#69765f}
+.preview-tabs span{padding-bottom:12px}.preview-tabs .selected{color:#315b3d;border-bottom:2px solid #315b3d;font-weight:650}
+.preview-summary{display:flex;justify-content:space-between;align-items:baseline;padding:20px 20px 14px;gap:12px}
+.preview-summary strong{font-size:22px;font-weight:600;letter-spacing:-.045em;color:var(--ink)}.preview-summary span{font-size:10px;color:#69765f}
+.preview-table{width:100%;border-collapse:collapse;text-align:left;font-variant-numeric:tabular-nums;white-space:nowrap}
+.preview-table caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.preview-table th{font-size:10px;font-weight:500;color:#69765f;padding:0 20px 12px;border-bottom:1px solid #edf0e9}
+.preview-table td{padding:14px 20px;border-bottom:1px solid #edf0e9;font-size:12px;color:#35422f}
+.preview-table td:first-child{width:52%}.preview-table td:last-child,.preview-table th:last-child{text-align:right}
+.preview-table .domain-name{display:block;font-size:13px;font-weight:600;letter-spacing:-.02em;color:#283725}
+.preview-table small{display:block;font-size:10px;margin-top:4px;color:#69765f}
+.renewal-soon{color:#92652c!important}.renewal-soon:before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:#bf944d;vertical-align:middle;margin-right:6px}
+.preview-total{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;background:#f8faf5}
+.preview-total div{font-size:10px;color:#69765f;line-height:1.5}.preview-total strong{display:block;font-size:11px;font-weight:500;color:#53614c}
+.preview-total b{font-size:23px;font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#30442a}
+.preview-footnote{font-size:10px;color:#69765f;margin:12px 1px 0;line-height:1.5}
+.registrar-line{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:21px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;font-size:12px;color:var(--muted)}
+.registrar-line p{margin:0;font-size:12px}.registrar-names{display:flex;gap:25px;flex-wrap:wrap;color:#43523b;font-weight:600;font-size:14px;letter-spacing:-.025em}.registrar-names span:last-child{font-weight:400;color:var(--muted);font-size:12px;letter-spacing:0}
+.product-overview{display:grid;grid-template-columns:.8fr 1.2fr;gap:100px;padding:88px 32px 80px}
+.overview-intro h2{font-size:clamp(30px,3vw,39px);font-weight:600;line-height:1.15;letter-spacing:-.05em;margin:0 0 20px;max-width:340px;text-wrap:balance}
+.overview-intro p{font-size:15px;line-height:1.7;max-width:295px;margin:0;color:var(--muted)}
+.overview-list{margin:0;list-style:none;padding:0}.overview-list li{display:grid;grid-template-columns:32px 1fr;gap:15px;padding:22px 0;border-top:1px solid var(--line)}.overview-list li:first-child{padding-top:0;border-top:0}
+.overview-list .step-index{font:11px/1.8 ui-monospace,SFMono-Regular,Menlo,monospace;color:#69765f;letter-spacing:-.04em}
+.overview-list h3{font-size:17px;font-weight:600;letter-spacing:-.03em;line-height:1.4;margin:0 0 7px}.overview-list p{font-size:13px;line-height:1.7;margin:0;max-width:445px}
+.access-strip{margin:0 32px 64px;padding:34px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:35px}
+.access-strip h2{font-size:25px;letter-spacing:-.04em;font-weight:600;margin:0 0 9px}.access-strip p{font-size:13px;line-height:1.7;margin:0;max-width:560px}.access-strip .button{white-space:nowrap;border-radius:4px;font-size:13px;font-weight:600;min-height:46px;padding:12px 19px}
+.landing-page footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:0 32px 30px;border-top:0;font-size:11px}.footer-links{display:flex;gap:22px;flex-wrap:wrap}.landing-page a{transition:color 160ms ease,background-color 160ms ease}.landing-page .button:hover{background:#23482e;text-decoration:none}.landing-page .button:active{transform:translateY(1px)}
+@media(max-width:1020px){.landing-hero{grid-template-columns:1fr;gap:44px;padding-top:52px}.hero-copy{max-width:650px;padding-top:0}.landing-page h1{font-size:64px;max-width:600px}.landing-page .hero-copy>p:not(.hero-label){max-width:520px}.product-preview{max-width:680px;width:100%}.product-overview{gap:55px}.registrar-line{align-items:flex-start}}
+@media(max-width:600px){.landing-page header{padding:17px 22px;gap:7px 18px}.landing-page .brand{font-size:24px;min-height:44px}.landing-nav{gap:18px;font-size:12px;flex-wrap:wrap}.landing-nav .nav-feature{display:none}.landing-hero{padding:40px 22px 48px;gap:38px}.hero-label{font-size:11px;margin-bottom:20px}.landing-page h1{font-size:clamp(42px,10.8vw,60px);margin-bottom:22px;letter-spacing:-.06em}.landing-page .hero-copy>p:not(.hero-label){font-size:16px;line-height:1.65;margin-bottom:25px}.hero-actions{gap:20px}.hero-actions .button{font-size:13px;padding:13px 18px}.access-note{font-size:11px}.preview-toolbar{padding:14px}.preview-tabs{padding-left:14px;gap:22px}.preview-summary{padding:20px 14px 16px}.preview-table th{padding-left:12px;padding-right:12px;font-size:9px}.preview-table td{padding:16px 12px;font-size:11px}.preview-table .domain-name{font-size:12px}.preview-table small{font-size:9px}.preview-total{padding:18px 14px}.preview-caption{font-size:10px}.registrar-line{padding:21px 22px;flex-direction:column;gap:13px}.registrar-names{gap:18px;font-size:13px}.product-overview{grid-template-columns:1fr;padding:48px 22px;gap:35px}.overview-intro h2{font-size:32px;max-width:320px;margin-bottom:14px}.overview-intro p{max-width:420px;font-size:14px}.overview-list h3{font-size:16px}.overview-list li{gap:8px}.access-strip{margin:0 22px 35px;padding:30px 0;align-items:flex-start;flex-direction:column;gap:22px}.access-strip h2{font-size:25px}.landing-page footer{padding:0 22px 25px;gap:14px}.footer-links{gap:18px}}
+@media(max-width:360px){.preview-table th,.preview-table td{padding-left:8px;padding-right:8px}}
+@media(prefers-reduced-motion:reduce){.landing-page a{transition:none}.landing-page .button:active{transform:none}}
+`;
+
+export function landingContent(hasPortfolio: boolean): string {
+  return `<section class="landing-hero" aria-labelledby="hero-title">
+  <div class="hero-copy"><p class="hero-label">Domain portfolio management</p><h1 id="hero-title">A clearer view <span>of your domains.</span></h1><p>Bring your registrar accounts together. See what you own, what renews next, and what it costs to keep.</p><div class="hero-actions"><a class="button" href="/signup">Request free access</a><a class="signin-link" href="/login">Sign in</a></div><div class="access-note"><strong>Free early access. No credit card.</strong><br>By invitation, as workspaces become available.</div></div>
+  <figure class="product-preview" aria-labelledby="preview-caption"><figcaption class="preview-caption" id="preview-caption"><span>A look inside your workspace</span><span class="sample-label">Sample data</span></figcaption><div class="preview-window"><div class="preview-toolbar"><span class="preview-title">Your portfolio</span><span class="preview-private">Private by default</span></div><div class="preview-tabs" aria-hidden="true"><span class="selected">Inventory</span><span>Registrars</span><span>Public collection</span></div><div class="preview-summary"><strong>Domain inventory</strong><span>3 domains · 3 accounts</span></div><table class="preview-table"><caption>Illustrative portfolio using reserved example names and sample renewal estimates</caption><thead><tr><th scope="col">Domain</th><th scope="col">Renews in</th><th scope="col">Annual est.</th></tr></thead><tbody><tr><td><span class="domain-name">studio.example</span><small>Dynadot · Main account</small></td><td class="renewal-soon">42 days</td><td>$12.50</td></tr><tr><td><span class="domain-name">fieldnotes.example</span><small>Porkbun · Personal</small></td><td>118 days</td><td>$16.00</td></tr><tr><td><span class="domain-name">atlas.example</span><small>Namecheap · Projects</small></td><td>234 days</td><td>$21.50</td></tr></tbody></table><div class="preview-total"><div><strong>Annual renewal estimate</strong>Across these three accounts · USD</div><b>$50.00</b></div></div><p class="preview-footnote">Illustration only. Renewal estimates are not registrar quotes.</p></figure>
+</section>
+<section class="registrar-line" aria-label="Ways to bring your portfolio"><p>Keep your registrars. Bring your portfolio together.</p><div class="registrar-names"><span>Dynadot</span><span>Porkbun</span><span>Namecheap</span><span>or import your list</span></div></section>
+<section class="product-overview" id="overview" aria-labelledby="overview-title"><div class="overview-intro"><h2 id="overview-title">See your portfolio.<br>Plan your next move.</h2><p>A practical workspace for the day-to-day work of managing a domain portfolio.</p></div><ol class="overview-list"><li><span class="step-index">01</span><div><h3>Bring your accounts into one view</h3><p>Connect registrar accounts or import your holdings. Browse your inventory without switching between dashboards.</p></div></li><li><span class="step-index">02</span><div><h3>Stay ahead of renewals</h3><p>See upcoming expirations and annual renewal estimates, with their sources. Make decisions with the costs in view.</p></div></li><li><span class="step-index">03</span><div><h3>Share the domains you choose</h3><p>Publish a curated collection for inquiries. Keep the rest of your inventory, notes and account details private.</p></div></li><li><span class="step-index">04</span><div><h3>Connect your AI assistant</h3><p>Give an assistant the access you approve, then review or revoke it in your workspace. Paid agent operations are unavailable during early access.</p></div></li></ol></section>
+<section class="access-strip" aria-labelledby="access-title"><div><h2 id="access-title">Start with your portfolio.</h2><p>Request a free workspace. Invitations are reviewed as capacity allows. There is no subscription fee during early access; registrar charges are separate.</p></div><a class="button" href="/signup">Request free access ↗</a></section>
+<footer class="landing-bottom"><span>Built on the open-source DomBot project.</span><nav class="footer-links" aria-label="More information">${hasPortfolio ? '<a href="/domains">Public domain collection ↗</a>' : ''}<a href="https://github.com/heathermhuang/dombot">Source code ↗</a><a href="mailto:domains@domains.domains">Contact</a></nav></footer>`;
+}
