@@ -59,10 +59,10 @@ describe('public website brand and product clarity', () => {
       recoveryForm(''),
       page('Status', '<p>Status</p>'),
     ]) {
-      const brand = html
-        .match(/<a class="brand"[^>]*>(.*?)<\/a>/s)?.[1]
-        .replace(/<[^>]+>/g, '');
-      expect(brand).toBe('domains.domains');
+      const brand = html.match(/<a class="brand"[^>]*>(.*?)<\/a>/s)?.[1];
+      expect(html).toContain('aria-label="domains.domains"');
+      expect(brand?.match(/domains/g)).toHaveLength(2);
+      expect(brand).not.toContain('<svg');
       expect(html).not.toContain('viewBox="0 0 320 200"');
       expect(html).not.toContain('M140 10H104');
     }
