@@ -5,7 +5,7 @@ import clone from './portfolio-clone';
 describe('public portfolio clone', () => {
   it('routes only public pages/assets and leaves existing services alone', () => {
     const config = JSON.parse(
-      readFileSync('hosted/wrangler.portfolio-clone.jsonc', 'utf8'),
+      readFileSync('hosted/wrangler.portfolio-clone.jsonc', 'utf8').replace(/,\s*([}\]])/g, '$1'),
     );
     expect(config.routes.map((r: { pattern: string }) => r.pattern)).toEqual([
       'alternative.domains/',
