@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { legalPage, legalVersion } from './legal';
 import {
   accountForm,
   accountSecurity,
@@ -50,6 +51,23 @@ describe('managed account help and identity', () => {
 });
 
 describe('public website brand and product clarity', () => {
+  it('publishes the confirmed operator and jurisdiction with the dated policies', () => {
+    const env = {
+      LEGAL_OPERATOR_NAME: 'Magic Crystal Limited',
+      LEGAL_JURISDICTION: 'Hong Kong',
+    } as HostedEnv;
+    for (const kind of ['terms', 'privacy'] as const) {
+      const html = legalPage(kind, env);
+      expect(html).toContain('Magic Crystal Limited');
+      expect(html).toContain('Hong Kong');
+      expect(html).toContain(legalVersion);
+      expect(html).not.toContain('publication pending');
+      expect(html).not.toContain('[Operator');
+    }
+    expect(legalPage('privacy', env)).toContain(
+      'Office of the Privacy Commissioner',
+    );
+  });
   it('uses the full wordmark and excludes the owner-rejected d.d mark on every page', () => {
     for (const html of [
       home(true),
