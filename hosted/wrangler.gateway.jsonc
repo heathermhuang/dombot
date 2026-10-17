@@ -32,6 +32,8 @@
     "EMAIL_FROM": "accounts@mail.domains.domains",
     "EMAIL_DELIVERY_VERIFIED": "false",
     "PUBLIC_SIGNUP_IDS": "",
+    "LEGAL_OPERATOR_NAME": "Magic Crystal Limited",
+    "LEGAL_JURISDICTION": "Hong Kong",
   },
   "triggers": { "crons": ["17 * * * *"] },
   "observability": {
