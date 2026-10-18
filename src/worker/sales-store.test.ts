@@ -914,3 +914,85 @@ describe('body-bound publication admission', () => {
     expect(result.status, await result.clone().text()).toBe(200);
   });
 });
+
+describe('imported Sales inventory', () => {
+  it('offers imported long and IDN names for private drafts without granting publication control', async () => {
+    const memory = new MemoryDocStore(),
+      names = [
+        'imported.example',
+        `${'a'.repeat(63)}.example`,
+        'xn--fsqu00a.example',
+      ];
+    for (const name of names)
+      await memory.put('imported-domains', name, {
+        addedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    configureStore(memory);
+    await hydrateStores();
+    const key = 'imported-sales-fixture'.repeat(3),
+      workspace = crypto.randomUUID(),
+      env = {
+        DB: db,
+        DOMBOT_AUTH: 'gateway',
+        DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+        DOMBOT_GATEWAY_SECRET: key,
+        DOMBOT_WORKSPACE_ID: workspace,
+        DOMBOT_SALES_V1: 'true',
+      } as Env;
+    const auth = await buildAuthConfig(env, root),
+      app = new Hono<{ Bindings: Env; Variables: { auth: AuthConfig } }>();
+    app.use('*', async (c, next) => {
+      c.set('auth', auth);
+      await next();
+    });
+    app.route(
+      '/sales',
+      createSalesRoutes(async (_c, next) => {
+        await next();
+      }),
+    );
+    async function request(path: string, body?: unknown) {
+      const r = new Request('https://fixture.example/sales/' + path, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: {
+          Origin: 'https://fixture.example',
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      r.headers.set(
+        'x-dombot-gateway-proof',
+        await signGatewayRequest(key, workspace, 'seller', r, {
+          purpose: 'sales-owner',
+          recipientVerified: true,
+        }),
+      );
+      return app.request(r, undefined, env);
+    }
+    const inventory = await request('inventory'),
+      items = (await inventory.json()).items;
+    expect(items.map((v: { domain: string }) => v.domain)).toEqual(
+      expect.arrayContaining(names),
+    );
+    expect(items.every((v: { available: boolean }) => !v.available)).toBe(true);
+    const created = await request('listings', { domains: names });
+    expect(created.status, await created.clone().text()).toBe(200);
+    const drafts = (await created.json()).items;
+    expect(drafts).toHaveLength(3);
+    const found = await request('listings?q=imported');
+    expect((await found.json()).items).toHaveLength(1);
+    const reviews = await request('reviews', {
+      items: drafts.map((v: { draft: { id: string }; revision: string }) => ({
+        id: v.draft.id,
+        revision: v.revision,
+      })),
+    });
+    expect(reviews.status).toBe(409);
+    expect(
+      (await db
+        .prepare('SELECT count(*) AS n FROM published_sales')
+        .first<{ n: number }>())!.n,
+    ).toBe(0);
+  });
+});
