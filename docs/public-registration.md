@@ -87,10 +87,10 @@ requests without changing existing credentials. Disablement does not remove
 accounts already created. Keep additive migration tables when rolling back the
 gateway; retain their records for investigation and applicable retention.
 
-## Confirmed operator
+## Legal operator configuration
 
-On 18 October 2026 the owner confirmed **Magic Crystal Limited, Hong Kong** as the
-service operator. Use that exact legal name and jurisdiction in production. The
-public privacy/support contact is domains@domains.domains. This confirmation does
-not replace actual sender authentication, support-inbox receipt or live account
-journey checks.
+Keep `LEGAL_OPERATOR_NAME` and `LEGAL_JURISDICTION` aligned with the confirmed
+operator identified in the published Terms and Privacy Policy. Use domains.domains
+as the public product brand. The privacy/support contact is domains@domains.domains.
+Legal identification does not replace actual sender authentication, support-inbox
+receipt or live account journey checks.
