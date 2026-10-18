@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
+import { productImages } from './product-images';
 import { sourcePage } from './source';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
@@ -93,7 +94,8 @@ app.use('*', async (c, next) => {
     c.header('X-Robots-Tag', 'noindex, nofollow');
   c.header(
     'Content-Security-Policy',
-    "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" +
+      (c.req.path === '/' ? "; img-src 'self'" : ''),
   );
   await next();
 });
@@ -107,6 +109,19 @@ app.get(brandFontPath, (c) => {
   c.header('Content-Type', 'font/woff2');
   c.header('Cache-Control', 'public, max-age=31536000, immutable');
   return c.body(brandFontBytes);
+});
+app.get('/product/:image', async (c) => {
+  const image = Object.values(productImages).find(
+    (entry) => entry.path === c.req.path,
+  );
+  if (!image) return c.notFound();
+  if (!c.env.LANDING_ASSETS) return c.text('Preview unavailable', 503);
+  const url = new URL(image.file, c.req.url);
+  const response = await c.env.LANDING_ASSETS.fetch(new Request(url));
+  if (!response.ok) return c.notFound();
+  c.header('Content-Type', 'image/png');
+  c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  return c.body(response.body);
 });
 app.get('/', (c) =>
   c.html(

@@ -1,4 +1,5 @@
 interface HostedEnv {
+  LANDING_ASSETS?: Fetcher;
   CANONICAL_ORIGIN?: string;
   MCP_POLICIES?: string;
   PUBLIC_PORTFOLIO_PATH?: string;

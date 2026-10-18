@@ -84,3 +84,11 @@ itself as hosted DomBot. “Account” means the email/password sign-in; “regi
 account” means an account held at a domain registrar. A portfolio is the set of
 domains a person manages. Creating a sign-in does not create or transfer domain
 registrations, and importing a list does not move domains between registrars.
+
+### Public product previews
+
+The gateway uses the `LANDING_ASSETS` static-assets binding for the two original
+DomBot demo screenshots under `site/public`. Keep `run_worker_first: true`: the
+gateway exposes only the explicit, content-hashed preview paths in
+`src/hosted/product-images.ts`. Other public files do not bypass gateway routing.
+The images are credited as upstream sample data and contain no customer holdings.
