@@ -13,5 +13,5 @@
 
 ## Open-source provenance
 
-- Credit Aaron Oxborrow specifically for the original DomBot project. In the shared public footer and Terms, identify domains.domains as providing hosting and the multi-tenant SaaS layer in a separate sentence so authorship is unambiguous. Use the upstream https://github.com/aoxborrow/dombot link for original DomBot, and https://github.com/heathermhuang/dombot for the complete hosted fork and SaaS layer.
+- Use the owner-approved public attribution exactly: “domains.domains is a hosted, multi-tenant version of aoxborrow/dombot.” Link aoxborrow/dombot to the upstream repository. Keep Aaron Oxborrow’s original-project credit separate in the Terms, source page and copyright/license notices. Use the upstream https://github.com/aoxborrow/dombot link for original DomBot, and https://github.com/heathermhuang/dombot for the complete hosted fork and SaaS layer.
 - The SaaS layer is open source under AGPL-3.0-or-later; retain upstream copyright and third-party notices. Keep the public source offer at /source accessible without sign-in, and set SOURCE_COMMIT to the deployed Git revision for exact source links.

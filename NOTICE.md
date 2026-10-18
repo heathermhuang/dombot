@@ -16,7 +16,7 @@ recorded upstream revision and artifact integrity are in
 
 ## domains.domains SaaS layer
 
-domains.domains adds managed, multi-tenant hosting and a SaaS layer to DomBot. Its SaaS-layer source is
+domains.domains is a hosted, multi-tenant version of [aoxborrow/dombot](https://github.com/aoxborrow/dombot). Its SaaS-layer source is
 included in this public repository under **AGPL-3.0-or-later**: the gateway,
 registration/recovery flows, tenant isolation, migrations, deployment templates,
 build scripts and tests. See [docs/hosted-source.md](docs/hosted-source.md).

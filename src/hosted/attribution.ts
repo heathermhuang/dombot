@@ -1,7 +1,7 @@
 export const upstreamSource = 'https://github.com/aoxborrow/dombot';
 export const saasSource = 'https://github.com/heathermhuang/dombot';
 
-export const softwareCredit = `<p class="software-credit">Original <a href="${upstreamSource}">DomBot</a> by <a href="https://github.com/aoxborrow">Aaron Oxborrow</a>. Hosting and multi-tenant SaaS layer by domains.domains.</p>`;
+export const softwareCredit = `<p class="software-credit">domains.domains is a hosted, multi-tenant version of <a href="${upstreamSource}">aoxborrow/dombot</a>.</p>`;
 
 export function publicSourceLinks(commit?: string) {
   const pinned = /^[a-f0-9]{40}$/.test(commit ?? '');
