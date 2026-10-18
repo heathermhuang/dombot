@@ -67,6 +67,7 @@ const TAB_OPTIONS: Record<
 };
 
 export default function App() {
+  const { search } = useLocation();
   const publication = usePortfolioEditor();
   useEffect(() => {
     if (!portfolioEditor.isDirty()) return;
@@ -281,7 +282,9 @@ export default function App() {
               <Route path="/public-page" element={<YourSite />} />
               <Route
                 path="/public-portfolio"
-                element={<Navigate to="/public-page" replace />}
+                element={
+                  <Navigate to={{ pathname: '/public-page', search }} replace />
+                }
               />
             </>
           )}
