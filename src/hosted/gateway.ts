@@ -971,7 +971,8 @@ app.all('/w/:workspace/*', async (c) => {
   const url = new URL(c.req.url);
   const base = `/w/${id}`;
   const path = url.pathname.slice(base.length) || '/';
-  const publicRequest = mcpPath(path) || /^\/p\/[a-z0-9-]+$/.test(path);
+  const publicRequest =
+    mcpPath(path) || /^\/p\/[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?$/.test(path);
   // Polls have their own allowance, separate from registration/issuance.
   // Bound public metadata/status traffic before it can enter the tenant.
   if (

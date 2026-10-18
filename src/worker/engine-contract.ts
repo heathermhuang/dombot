@@ -3,6 +3,7 @@ export interface DomBotEnvironment {
   DB: D1Database;
   ASSETS: Fetcher;
   DOMBOT_AUTH: string;
+  DOMBOT_OWNER_SITE_V2?: string;
   DOMBOT_SECRET?: string;
   DOMBOT_PASSWORD?: string;
   DOMBOT_GATEWAY_SECRET?: string;

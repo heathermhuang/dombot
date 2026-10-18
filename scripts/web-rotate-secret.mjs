@@ -148,6 +148,13 @@ if (status.mode !== 'password') {
 // 1–2. Export, sealed, to disk.
 await login();
 const plain = await api('exportData', []);
+if (JSON.parse(plain).publicationDraft?.version === 2) {
+  const state = await fetch(`${url}/publishing/site`, { headers: { cookie } });
+  if (!state.ok || !(await state.json()).enabled)
+    throw new Error(
+      'Enable DOMBOT_OWNER_SITE_V2 on this compatible runtime before rotating a v2 site root key. No secret was changed.',
+    );
+}
 const file = `dombot-data-${new Date().toISOString().slice(0, 10)}-pre-rotation.json`;
 writeFileSync(file, await sealBundle(plain, passphrase), { mode: 0o600 });
 console.log(`Exported to ./${file} (sealed with your passphrase).`);

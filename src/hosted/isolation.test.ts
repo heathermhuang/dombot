@@ -136,6 +136,7 @@ beforeAll(async () => {
               String.fromCharCode(...new Uint8Array(32).fill(i + 1)),
             ),
             DOMBOT_AUTH: 'gateway',
+            DOMBOT_OWNER_SITE_V2: 'true',
             DOMBOT_GATEWAY_SECRET: keys[i],
             DOMBOT_WORKSPACE_ID: id,
             DOMBOT_PUBLIC_BASE_PATH: `/w/${id}`,
@@ -178,6 +179,71 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(async () => {
   await mf?.dispose();
+});
+
+describe('owner site routing and isolation', () => {
+  it('serves selected collection routes anonymously without opening private editor routes', async () => {
+    const { emptyOwnerSite } = await import('../shared/owner-site');
+    const site = emptyOwnerSite();
+    site.handle = 'sample-owner';
+    site.profile.name = 'Sample owner, tenant A';
+    site.domainPresentations = [
+      {
+        id: 'past',
+        domain: 'past.example',
+        ownership: 'historical',
+        availability: 'not-for-sale',
+        description: 'Sample data',
+        askingPrice: null,
+        currency: 'USD',
+      },
+    ];
+    site.collections = [
+      {
+        id: 'sample',
+        slug: 'sample',
+        title: 'Sample collection',
+        intro: 'Sample .example data',
+        domainIds: ['past'],
+      },
+    ];
+    site.homepage.collectionIds = ['sample'];
+    const saved = await request(
+      `/w/${ids[0]}/publishing/site`,
+      'PUT',
+      { draft: site, revision: null },
+      cookies[0],
+    );
+    expect(saved.status).toBe(200);
+    const { revision } = (await saved.json()) as { revision: string };
+    expect(
+      (
+        await request(
+          `/w/${ids[0]}/publishing/publish`,
+          'POST',
+          { revision },
+          cookies[0],
+        )
+      ).status,
+    ).toBe(200);
+    const publicPath = `/w/${ids[0]}/p/sample-owner`;
+    const publicSite = await request(publicPath);
+    expect(publicSite.status).toBe(200);
+    expect(await publicSite.text()).toContain(`${publicPath}/c/sample`);
+    const collection = await request(`${publicPath}/c/sample`);
+    expect(collection.status).toBe(200);
+    expect(await collection.text()).toContain('past.example');
+    expect((await request(`/w/${ids[1]}/p/sample-owner/c/sample`)).status).toBe(
+      404,
+    );
+    for (const cookie of [undefined, cookies[1]])
+      for (const path of ['/publishing/site', '/publishing/preview'])
+        expect(
+          (await request(`/w/${ids[0]}${path}`, 'GET', undefined, cookie))
+            .status,
+        ).toBe(cookie ? 403 : 401);
+    expect((await request(`${publicPath}/c/sample/edit`)).status).toBe(303);
+  });
 });
 
 describe('real gateway and isolated Worker instances', () => {

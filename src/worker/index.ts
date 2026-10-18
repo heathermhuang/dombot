@@ -320,6 +320,7 @@ app.post(
         );
         entry = publicationBackupMethods(
           new PublicationStore(c.env.DB, cipher),
+          c.env.DOMBOT_OWNER_SITE_V2 === 'true',
         )[name];
       }
       const result = await invoke(name, entry, args);
