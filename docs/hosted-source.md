@@ -2,8 +2,7 @@
 
 **domains.domains is a hosted, multi-tenant version of
 [DomBot](https://github.com/aoxborrow/dombot), created by Aaron Oxborrow.**
-Magic Crystal Limited, Hong Kong maintains the hosted SaaS layer and operates
-domains.domains. This entire hosted fork is public at
+domains.domains maintains the hosted SaaS layer. This entire fork is public at
 <https://github.com/heathermhuang/dombot> under **AGPL-3.0-or-later**.
 See [LICENSE](../LICENSE) and [credits and notices](../NOTICE.md).
 

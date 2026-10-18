@@ -114,8 +114,10 @@ describe('public website brand and product clarity', () => {
       accountForm('join'),
       accountSecurity({ email: 'owner@example.test', label: 'Portfolio' }),
       recoveryForm(''),
-    ])
+    ]) {
       expect(html).not.toMatch(/workspace/i);
+      expect(html).not.toContain('Magic Crystal Limited');
+    }
     expect(home(true, true)).toContain('Create free account');
     expect(home(true, true)).toContain('No invitation needed.');
     expect(home(true, true)).not.toContain('by invitation');
