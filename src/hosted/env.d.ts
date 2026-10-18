@@ -1,4 +1,16 @@
 interface HostedEnv {
+  SALES_EMAIL?: SendEmail;
+  SALES_EMAIL_FROM?: string;
+  SALES_MAIL_ENABLED?: string;
+  SALES_MAIL_DELIVERY_VERIFIED?: string;
+  SALES_MAIL_DAILY_LIMIT?: string;
+  SALES_MAIL_MONTHLY_LIMIT?: string;
+  SALES_CUSTOM_HOSTS_ENABLED?: string;
+  SALES_HOST_ALLOWLIST?: string;
+  SALES_CF_ZONE_ID?: string;
+  SALES_CF_API_TOKEN?: string;
+  SALES_CNAME_TARGET?: string;
+  SALES_EDGE_KEYS?: string;
   LANDING_ASSETS?: Fetcher;
   CANONICAL_ORIGIN?: string;
   MCP_POLICIES?: string;

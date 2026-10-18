@@ -1,3 +1,5 @@
+import SalesActivity from './sales/SalesActivity';
+import { supportsSales } from '../lib/platform';
 import { useMemo, useState, type ComponentType } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -704,6 +706,7 @@ export default function Activity() {
           <h1 className="mt-1.5 text-2xl font-bold leading-none sm:mt-0.5 sm:text-[32px]">
             Activity
           </h1>
+          {supportsSales() && <SalesActivity />}
         </div>
 
         <FilterToolbar

@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify, decodeJwt } from 'jose';
+import { salesAdmissionSchema, type SalesAdmission } from './sales-admission';
 
 export const PROOF_HEADER = 'x-dombot-gateway-proof';
 const encoder = new TextEncoder();
@@ -17,9 +18,14 @@ export async function signGatewayRequest(
   workspace: string,
   owner: string | null,
   request: Request,
+  sales?: SalesAdmission,
 ): Promise<string> {
   if (secret.length < 32) throw new Error('Gateway key is not configured');
-  return new SignJWT({ owner, request: await fingerprint(request) })
+  return new SignJWT({
+    owner,
+    request: await fingerprint(request),
+    ...(sales ? { version: 2, sales: salesAdmissionSchema.parse(sales) } : {}),
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuer('domains-gateway')
     .setAudience(workspace)
@@ -33,7 +39,7 @@ export async function verifyGatewayRequest(
   workspace: string,
   request: Request,
   rejected?: (reason: string) => void,
-): Promise<{ owner: string | null } | null> {
+): Promise<{ owner: string | null; sales?: SalesAdmission } | null> {
   if (!secret || secret.length < 32 || !workspace) return null;
   const token = request.headers.get(PROOF_HEADER);
   if (!token) return null;
@@ -50,6 +56,13 @@ export async function verifyGatewayRequest(
     });
     if (payload.request !== (await fingerprint(request))) return null;
     if (payload.owner !== null && typeof payload.owner !== 'string')
+      return null;
+    if (payload.version === 2) {
+      const sales = salesAdmissionSchema.safeParse(payload.sales);
+      if (!sales.success) return null;
+      return { owner: payload.owner as string | null, sales: sales.data };
+    }
+    if (payload.sales !== undefined || payload.version !== undefined)
       return null;
     return { owner: payload.owner as string | null };
   } catch (error) {
@@ -75,4 +88,31 @@ export async function verifyGatewayRequest(
     rejected?.(reason);
     return null;
   }
+}
+
+/** A public edge key can admit only anonymous sales requests, never owners. */
+export async function verifyTenantAdmission(
+  env: {
+    DOMBOT_GATEWAY_SECRET?: string;
+    DOMBOT_SALES_EDGE_SECRET?: string;
+    DOMBOT_WORKSPACE_ID?: string;
+  },
+  request: Request,
+  rejected?: (reason: string) => void,
+) {
+  const main = await verifyGatewayRequest(
+    env.DOMBOT_GATEWAY_SECRET ?? '',
+    env.DOMBOT_WORKSPACE_ID ?? '',
+    request,
+    rejected,
+  );
+  if (main) return main;
+  const edge = await verifyGatewayRequest(
+    env.DOMBOT_SALES_EDGE_SECRET ?? '',
+    env.DOMBOT_WORKSPACE_ID ?? '',
+    request,
+  );
+  return edge?.owner === null && edge.sales?.purpose === 'sales-public'
+    ? edge
+    : null;
 }

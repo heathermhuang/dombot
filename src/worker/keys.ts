@@ -73,6 +73,35 @@ export function deriveEncryptionKey(root: Uint8Array): Promise<Uint8Array> {
   return hkdf(root, 'dombot/enc/v1');
 }
 
+/** Sales ingress never opens the registrar key/namespace. */
+export function deriveSalesKey(root: Uint8Array): Promise<Uint8Array> {
+  return hkdf(root, 'dombot/sales/enc/v1');
+}
+export async function salesIndexer(
+  root: Uint8Array,
+  purpose: string,
+): Promise<(value: string) => Promise<string>> {
+  const raw = await hkdf(root, `dombot/sales/index/${purpose}/v1`);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  return async (value) =>
+    toBase64Url(
+      new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(value))),
+    );
+}
+export async function salesIndex(
+  root: Uint8Array,
+  purpose: string,
+  value: string,
+): Promise<string> {
+  return (await salesIndexer(root, purpose))(value);
+}
+
 /**
  * HMAC key for session cookies. The password's hash is the HKDF salt, so a
  * password rotation yields a different key and every existing cookie fails

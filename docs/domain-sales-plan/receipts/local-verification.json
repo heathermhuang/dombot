@@ -1,0 +1,69 @@
+{
+  "recordedAt": "2026-10-18T23:24:14.731345+00:00",
+  "baseCommit": "e829d5edc6f72e3e5c4f3d7fcd4853fda5beaa7f",
+  "engine": {
+    "version": "1.5.0-hosted.8",
+    "sourceSha256": "b44e08450b654dd18447b85d30756049d6000603ca5037a5ba15b297ed0ca335",
+    "archive": "vendor/domains-domains-dombot-engine-1.5.0-hosted.8.tgz",
+    "sha256": "a2ff097106151837923ff1e96725506abc10e3d79c33b5e2000aa0dbda32ec4c",
+    "integrity": "sha512-t/CjOVuajUPbE26/uB+mCPDTJOfIzcA804mUbHSfe+9+MzR3dIWClaP5aYDTCW2fqfhl3zn8z3X8288CXqIwOQ=="
+  },
+  "localChecks": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "engineVerify": "passed",
+    "unitTests": {
+      "passed": 1246,
+      "skipped": 1,
+      "files": 113
+    },
+    "securityRegression": {
+      "passed": 4
+    },
+    "webBuild": "passed",
+    "demoBuild": "passed",
+    "siteBuild": "passed",
+    "dryRuns": {
+      "gateway": "passed",
+      "tenant": "passed",
+      "publicEdge": "passed",
+      "selfHostedWorker": "passed"
+    }
+  },
+  "browser": {
+    "provenance": "local synthetic .example fixture, no real mail/DNS/provider writes",
+    "observed": [
+      "draft save and preview",
+      "exact single publication and public lander",
+      "105-item bulk publication completed with receipts",
+      "inquiry persistence and explicit confirmation",
+      "seller reply visible in buyer portal; private note absent",
+      "light and dark themes",
+      "no body overflow at 320,390,768,1280 CSS pixels"
+    ],
+    "outstanding": [
+      "full keyboard traversal",
+      "200 percent browser zoom",
+      "long-domain and IDN browser acceptance",
+      "independent user acceptance"
+    ]
+  },
+  "specialistReview": {
+    "blockingFinding": "cached delivery batch could bypass a later block/delete/lease expiry",
+    "repair": "atomic final one-use send claim with live eligibility and suppression checks",
+    "recheck": "no blocking findings in the fix"
+  },
+  "liveRelease": {
+    "deployed": false,
+    "remoteMigrations": false,
+    "realSalesEmail": false,
+    "domainActivated": false,
+    "betaComplete": false,
+    "blockedOn": [
+      "named controlled apex/www fixture",
+      "custom-hostname and fallback-origin access currently 403",
+      "sales sender, budget and actual delivery qualification",
+      "operator privacy review and publication"
+    ]
+  }
+}

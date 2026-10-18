@@ -26,6 +26,11 @@
   ],
   "send_email": [
     {
+      "name": "SALES_EMAIL",
+      "allowed_sender_addresses": ["sales@mail.domains.domains"],
+      "remote": false,
+    },
+    {
       "name": "EMAIL",
       "allowed_sender_addresses": ["accounts@mail.domains.domains"],
       "remote": false,
@@ -38,13 +43,21 @@
     "EMAIL_FROM": "accounts@mail.domains.domains",
     "EMAIL_DELIVERY_VERIFIED": "false",
     "PUBLIC_SIGNUP_IDS": "",
+    "SALES_MAIL_ENABLED": "false",
+    "SALES_MAIL_DELIVERY_VERIFIED": "false",
+    "SALES_EMAIL_FROM": "sales@mail.domains.domains",
+    "SALES_MAIL_DAILY_LIMIT": "0",
+    "SALES_MAIL_MONTHLY_LIMIT": "0",
+    "SALES_CUSTOM_HOSTS_ENABLED": "false",
     "LEGAL_OPERATOR_NAME": "Magic Crystal Limited",
     "LEGAL_JURISDICTION": "Hong Kong",
   },
-  "triggers": { "crons": ["17 * * * *"] },
+  "triggers": { "crons": ["17 * * * *", "*/2 * * * *"] },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false },
     "redact_query_string": true,
   },
 }

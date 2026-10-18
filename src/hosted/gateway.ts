@@ -1,3 +1,8 @@
+import { canonicalDomain } from '../shared/publication';
+import {
+  salesFormScript,
+  salesFormScriptPath,
+} from '../shared/sales-form-script';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
@@ -39,9 +44,22 @@ import {
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { canonicalRedirect, portfolioAlias } from './launch';
 import { gatewayKey, workspaceSchema, workspaceService } from './workspaces';
+import { salesPublicPath } from '../shared/sales-admission';
+import {
+  drainSales,
+  drainSalesWorkspace,
+  salesRecipient,
+} from './sales-notifications';
+import { salesHostRequest } from './sales-host-routes';
 type GatewayVariables = { user: Awaited<ReturnType<Accounts['session']>> };
 type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
+app.get(salesFormScriptPath, (c) =>
+  c.body(salesFormScript, 200, {
+    'Content-Type': 'text/javascript',
+    'Cache-Control': 'public,max-age=3600',
+  }),
+);
 const account = (env: HostedEnv) =>
   new Accounts(env.CONTROL_DB, env.AUTH_PEPPER);
 const secure = (url: string) => new URL(url).protocol === 'https:';
@@ -972,7 +990,11 @@ app.all('/w/:workspace/*', async (c) => {
   const base = `/w/${id}`;
   const path = url.pathname.slice(base.length) || '/';
   const publicRequest =
-    mcpPath(path) || /^\/p\/[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?$/.test(path);
+    mcpPath(path) ||
+    /^\/p\/[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?$/.test(path) ||
+    salesPublicPath(path, c.req.method);
+  if (path.startsWith('/sales-internal'))
+    return c.json({ error: 'Not found' }, 404);
   // Polls have their own allowance, separate from registration/issuance.
   // Bound public metadata/status traffic before it can enter the tenant.
   if (
@@ -1009,6 +1031,33 @@ app.all('/w/:workspace/*', async (c) => {
       { error: user ? 'Account access denied' : 'Not signed in' },
       user ? 403 : 401,
     );
+  }
+  if (
+    path === '/sales/recipient' &&
+    c.req.method === 'GET' &&
+    user?.workspace_id === id
+  )
+    return c.json(await salesRecipient(c.env, id, user.email));
+  if (path === '/sales/hosts' || path.startsWith('/sales/hosts/')) {
+    if (!user || user.workspace_id !== id)
+      return c.json({ error: 'Not signed in' }, 401);
+    if (c.req.method !== 'GET') {
+      if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+      if (!(await new Passkeys(c.env).fresh(user)))
+        return c.json(
+          {
+            error: 'Confirm your identity before changing domain setup.',
+            reauth: '/account/reauth',
+          },
+          428,
+        );
+      if (!(await account(c.env).rateLimit(`sales-host:${id}`, 10)))
+        return c.json(
+          { error: 'Domain setup request limit reached. Try later.' },
+          429,
+        );
+    }
+    return salesHostRequest(c.env, id, user.id, path, c.req.raw);
   }
   const sensitive = new Set([
     'getRegistrarCredentials',
@@ -1115,7 +1164,7 @@ app.all('/w/:workspace/*', async (c) => {
   }
   if (
     !publicRequest &&
-    path.startsWith('/api/') &&
+    (path.startsWith('/api/') || path.startsWith('/sales/')) &&
     !(await account(c.env).rateLimit(`api:${id}`, 3000))
   )
     return c.json(
@@ -1131,6 +1180,10 @@ app.all('/w/:workspace/*', async (c) => {
     c.header('Set-Cookie', sessionCookie(c.req.url, ''));
     return c.json({ ok: true });
   }
+  const deletedSalesNames =
+    apiMethod === 'deleteDomains' && c.env.SALES_CUSTOM_HOSTS_ENABLED === 'true'
+      ? ((await c.req.raw.clone().json()) as { args?: unknown[] }).args?.[0]
+      : null;
   const headers = new Headers(c.req.raw.headers);
   for (const key of [...headers.keys()])
     if (
@@ -1147,15 +1200,65 @@ app.all('/w/:workspace/*', async (c) => {
   });
   request.headers.set(
     PROOF_HEADER,
-    await signGatewayRequest(gatewayKey(c.env, id), id, owner, request),
+    await signGatewayRequest(
+      gatewayKey(c.env, id),
+      id,
+      owner,
+      request,
+      salesPublicPath(path, c.req.method)
+        ? {
+            purpose: 'sales-public',
+            host: url.hostname,
+            listing: null,
+            epoch: 0,
+          }
+        : path.startsWith('/sales/') && owner && user
+          ? {
+              purpose: 'sales-owner',
+              recipientVerified:
+                c.env.SALES_MAIL_ENABLED === 'true' &&
+                (await salesRecipient(c.env, id, user.email)).verified,
+            }
+          : undefined,
+    ),
   );
   const response = await workspaceService(c.env, configured.binding).fetch(
     request,
   );
+  if (response.ok && Array.isArray(deletedSalesNames))
+    await c.env.CONTROL_DB.prepare(
+      "UPDATE sales_hostnames SET status='detached',epoch=epoch+1,control_expires_at=0,updated_at=? WHERE workspace_id=? AND domain IN (SELECT value FROM json_each(?))",
+    )
+      .bind(
+        Date.now(),
+        id,
+        JSON.stringify(
+          deletedSalesNames.map((value) => canonicalDomain(String(value))),
+        ),
+      )
+      .run();
   const resultHeaders = new Headers(response.headers);
+  if (
+    c.req.method === 'POST' &&
+    response.ok &&
+    (salesPublicPath(path, c.req.method) ||
+      /^\/sales\/inbox\/[^/]+\/messages$/.test(path))
+  ) {
+    // Scheduled recovery owns reliability; this only shortens time to first attempt.
+    try {
+      c.executionCtx.waitUntil(drainSalesWorkspace(c.env, id).catch(() => {}));
+    } catch {
+      /* Node route tests have no execution context. */
+    }
+  }
   resultHeaders.delete('set-cookie');
   const location = resultHeaders.get('location');
-  if (location?.startsWith('/') && !location.startsWith('//'))
+  if (
+    location?.startsWith('/') &&
+    !location.startsWith('//') &&
+    location !== base &&
+    !location.startsWith(base + '/')
+  )
     resultHeaders.set('location', base + location);
   // Tenant HTML supplies its own CSP, including the existing app asset policy.
   c.header(
@@ -1204,7 +1307,9 @@ app.get('*', (c) =>
 
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledController, env: HostedEnv) {
+  async scheduled(event: ScheduledController, env: HostedEnv) {
+    await drainSales(env);
+    if (event.cron !== '17 * * * *') return;
     await env.CONTROL_DB.batch([
       env.CONTROL_DB.prepare(
         'DELETE FROM email_signins WHERE expires_at<?1',

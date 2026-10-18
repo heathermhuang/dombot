@@ -58,11 +58,13 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // become `{ amount, currency }`); an older build would read them as no price.
 // v8 adds `imported-domains` (`manual-domains` in builds from main before
 // the rename, which import maps across).
-export const BUNDLE_VERSION = 8;
+// v9 introduces the explicit host sales backup extension. Older runtimes must
+// reject it rather than silently losing conversations and sales settings.
+export const BUNDLE_VERSION = 9;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | typeof BUNDLE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -93,7 +95,10 @@ export function exportBundle(app: DataBundle['app']): string {
 export class BundleError extends Error {}
 
 /** Parses plain bundle text. Throws BundleError. */
-export function parseBundle(text: string): DataBundle {
+export function parseBundle(
+  text: string,
+  hostOptions?: { sales: boolean },
+): DataBundle {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -104,7 +109,14 @@ export function parseBundle(text: string): DataBundle {
   if (!head || head.format !== BUNDLE_FORMAT) {
     throw new BundleError('Not a DomBot data file.');
   }
-  if (![1, 2, 3, 4, 5, 6, 7, BUNDLE_VERSION].includes(head.version as number)) {
+  if ('sales' in head && head.sales !== undefined && !hostOptions?.sales) {
+    throw new BundleError(
+      'This backup includes hosted sales data. Restore it on a compatible hosted account so conversations are not lost.',
+    );
+  }
+  if (
+    ![1, 2, 3, 4, 5, 6, 7, 8, BUNDLE_VERSION].includes(head.version as number)
+  ) {
     throw new BundleError(
       `This file was made by a newer DomBot (format v${String(head.version)}). Update and try again.`,
     );

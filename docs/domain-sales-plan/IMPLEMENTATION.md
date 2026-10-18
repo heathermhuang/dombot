@@ -1,0 +1,36 @@
+# Sales implementation and release ledger
+
+19 October 2026. Source candidate on `codex/domain-sales`, based on `e829d5edc6f72e3e5c4f3d7fcd4853fda5beaa7f`. This ledger distinguishes implemented behavior from live qualification. The primary checkout and earlier owner-site research checkout remain preserved.
+
+## Implemented behavior
+
+- Sales listings, private drafts, four buyer paths, source or override pricing, exact expiring publication reviews, pause/unpublish and copying earlier public terms into a private draft. Public schemas exclude floors, costs, registrar credentials and private notes. Source changes suppress stale control without silently republishing.
+- Inbox with pending/verified buyers, scanner-safe explicit confirmation, purpose-bound hashed capabilities, chronological message pagination, private notes, follow-up/status and seller-entered outcome reconciliation. Outcomes are observations, not proof of provider payment or transfer.
+- Encrypted inquiry/message/outbox storage, payload-bound idempotency, bounded intake and recovery, suppression, retention, fenced delivery leases and one-use final send claims. An expired or ambiguous send remains unknown; it is never automatically replayed. A successful send claim is the authorization boundary; a later block cannot recall a message already being submitted to the provider.
+- Optional selected shop with independent exact review, filters, pagination and public allowlist CSV. Generic CSV is not provider-specific import or marketplace synchronization. Existing v1/v2 public-site selections and snapshots remain independent; the new writer does not enable Owner Site V2.
+- Fixed selection bulk jobs up to 500 names, explicit page versus all-matching selection, reviews in batches of 100, approval bound to the complete manifest and resumable per-item receipts. Completed items are not replayed. Larger selections must be split explicitly.
+- Separate gateway, tenant and public-edge admissions. The public edge has its own key, no owner authority, no seller cookies, a narrow route allowlist and fresh host/account/epoch checks. Hostname setup requires allowlisting, fresh owner authentication, TXT proof, DNS snapshot, provider/TLS observations and an exact served publication revision. No automatic DNS writes.
+- Version 9 portable host backup with strict relationships and root-key re-encryption. Restore is private and silent: public pages, host bindings, reviews, capabilities, jobs and outbox grants are revoked; restored buyers require fresh confirmation, and restored registrar cache is stale until a connected sync. Desktop consumers refuse a host Sales extension rather than dropping it.
+- Full domains.domains hosted wordmark, Archivo and existing light/dark primitives; additive Sales navigation. No pricing, commissions, checkout custody or financial transaction introduced. Manual provider links are seller configured; no SellerHub API sync/write is enabled.
+
+## Verification evidence
+
+The local harness uses disposable `.example` inventory, synthetic registrar observations, simulated Turnstile verification and a mail-intent viewer. It denies registrar/provider requests and has no email transport. Command: `node scripts/sales-local-qualification.mjs --large`; open the URL printed by the script. The large fixture supplies more than one page of results.
+
+Reviewable synthetic screenshots: [listings](receipts/local-listings.png) and [saved editor/preview](receipts/local-editor.png).
+
+Actual local browser receipts cover private save, saved preview, exact single publication and public lander; all-matching selection and 105 completed bulk publication receipts; inquiry persistence, explicit confirmation, seller private note and reply, and a buyer capability view containing the reply while excluding the private note. Private fields survive validation failures. Layout metrics show no body overflow at 320, 390, 768 and 1280 CSS pixels; light and dark themes were exercised. These are synthetic local browser receipts, not SMTP, registrar or DNS qualification. Full keyboard/200% browser-zoom and independent-user acceptance remain release checks.
+
+Regression coverage includes atomic publication CAS, stale terms, encrypted PII, token purpose and scanner behavior, tenant/edge isolation, lease replay/expiry/spam/delete, restored buyer reconfirmation, bounded backup restore, global listing filters, shop visibility, source-price changes, multi-batch approval, hostname ownership/epochs/TLS and sender quotas/unknown delivery. A specialist read-only security review found a cached delivery lease race; the final tenant send claim and regression tests fix it. Recheck reported no blocking findings in that fix. This is engineering review, not formal CSO or customer acceptance.
+
+The exact engine manifest is `hosted/dombot-engine.lock.json`; source edits must repack and reinstall the archive before `engine:verify`. Final local checks passed: typecheck, lint, engine verification, 1,246 tests (one skipped), four security regressions, web/demo/site builds, and gateway/tenant/public-edge/self-hosted dry runs. See [machine-readable local receipt](receipts/local-verification.json). Build warnings about the existing large renderer chunk and runtime-served Archivo URL do not establish performance qualification.
+
+## Live observations and remaining gates
+
+- Cloudflare identity, canonical gateway settings and ten existing tenant service bindings were read successfully. `mail.domains.domains` is enabled. Existing auth email delivery does not qualify the separate sales sender, budgets or recipient path.
+- Custom-hostname and fallback-origin reads on the confirmed domains.domains zone return 403 Authentication error. Entitlement, apex routing, fallback origin, pricing, TLS and actual activation are unqualified. A named owner-controlled apex/www fixture is still required. Do not invent one or change customer domains.
+- Operator review and publication of the proposed buyer privacy/retention copy are required before external collection. `SALES_PRIVACY_REVIEWED` remains off externally. The encrypted 90-day suppression address needed for key rotation is explicitly documented in the proposed copy.
+- No real email, remote migration, deployment, provider write, DNS write, payment or transfer has been performed by this implementation run. No sales beta or live customer journey is claimed. GitHub deployment secret names were empty when inspected, so this repository's self-hosted auto-deploy is currently unconfigured.
+- Spaceship API docs were inspected; live SellerHub eligibility and generated-link permissions are unqualified. Reviewed manual links are available. Actual handoff, reliable sales-mail receipt and recovery, and controlled apex/www activation remain required for beta acceptance.
+
+See [operations runbook](operations.md), [buyer policy proposal](buyer-data-policy-proposed.md) and [delivery acceptance](03-delivery-and-verification.md). Do not mark beta complete until those external gates and exact-candidate live receipts are satisfied.
