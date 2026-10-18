@@ -62,14 +62,18 @@ describe('public website brand and product clarity', () => {
       legalPage('terms', env),
     ]) {
       expect(html.match(/<footer\b/g)).toHaveLength(1);
-      expect(html).toContain('Original <a href=');
-      expect(html).toContain(
-        'Hosting and multi-tenant SaaS layer by domains.domains.',
+      const credit = html
+        .match(/<p class="software-credit">(.*?)<\/p>/s)?.[1]
+        .replace(/<[^>]+>/g, '');
+      expect(credit).toBe(
+        'domains.domains is a hosted, multi-tenant version of aoxborrow/dombot.',
       );
       expect(html).toContain('href="https://github.com/aoxborrow/dombot"');
-      expect(html).toContain('Aaron Oxborrow');
       expect(html).toContain('href="/source"');
     }
+    expect(legalPage('terms', env)).toContain(
+      'The original DomBot project was created by Aaron Oxborrow.',
+    );
     expect(legalPage('terms', env)).toContain('Our SaaS layer adds');
     expect(legalPage('terms', env)).toContain(
       'do not reduce rights granted by the software licenses',
