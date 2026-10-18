@@ -185,9 +185,10 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
 function SiteAuthor() {
   const { state, draft, status, error } = useSiteEditor();
   const location = useLocation();
+  const requestedView = new URLSearchParams(location.search).get('view');
   const [view, setView] = useState(
-    new URLSearchParams(location.search).get('view') === 'preview'
-      ? 'preview'
+    requestedView === 'preview' || requestedView === 'review'
+      ? requestedView
       : 'edit',
   );
   const [actionError, setActionError] = useState('');
@@ -207,8 +208,13 @@ function SiteAuthor() {
     }
   };
   useEffect(() => {
-    void siteEditor.load().catch(() => {});
-  }, []);
+    void siteEditor
+      .load()
+      .then(() => {
+        if (requestedView === 'review') return siteEditor.refreshReview();
+      })
+      .catch(() => {});
+  }, [requestedView]);
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => {
       if (siteEditor.isDirty()) {
