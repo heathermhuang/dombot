@@ -62,11 +62,8 @@ describe('public website brand and product clarity', () => {
       legalPage('terms', env),
     ]) {
       expect(html.match(/<footer\b/g)).toHaveLength(1);
-      const credit = html
-        .match(/<p class="software-credit">(.*?)<\/p>/s)?.[1]
-        .replace(/<[^>]+>/g, '');
-      expect(credit).toBe(
-        'domains.domains is a hosted, multi-tenant version of aoxborrow/dombot.',
+      expect(html).toContain(
+        '<p class="software-credit">domains.domains is a hosted, multi-tenant version of <a href="https://github.com/aoxborrow/dombot">aoxborrow/dombot</a>.</p>',
       );
       expect(html).toContain('href="https://github.com/aoxborrow/dombot"');
       expect(html).toContain('href="/source"');
