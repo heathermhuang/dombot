@@ -2,8 +2,7 @@
 
 [domains.domains](https://domains.domains) is a hosted, multi-tenant version of
 [DomBot](https://github.com/aoxborrow/dombot), created by **Aaron Oxborrow**.
-**Magic Crystal Limited, Hong Kong** maintains the SaaS layer and operates the
-hosted service.
+domains.domains adds a SaaS layer with managed hosting.
 
 **All your domains. One portfolio.** Connect supported registrars or import your
 domain list, track renewal estimates, publish selected listings and connect AI

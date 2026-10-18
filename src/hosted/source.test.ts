@@ -20,6 +20,7 @@ describe('public corresponding-source offer', () => {
     );
     expect(html).toContain('https://github.com/aoxborrow/dombot');
     expect(html).toContain('Aaron Oxborrow');
+    expect(html).not.toContain('Magic Crystal Limited');
     expect(html).toContain('GNU Affero General Public License v3.0 or later');
     expect(html).toContain('Build and self-hosting instructions');
     expect(html).toContain('Source for this deployment');

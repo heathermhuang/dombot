@@ -9,7 +9,7 @@
 
 ## Legal operator
 
-- The owner confirmed on 18 October 2026 that domains.domains is operated by **Magic Crystal Limited, Hong Kong**. Use that exact company name and jurisdiction in the Terms and Privacy Policy. Public privacy/support contact is domains@domains.domains.
+- The owner confirmed on 18 October 2026 that domains.domains is operated by **Magic Crystal Limited, Hong Kong**. Use that exact company name and jurisdiction in the Terms and Privacy Policy. Public privacy/support contact is domains@domains.domains. Use **domains.domains** in public product copy, shared footers, source offers and project documentation; reserve the company name for necessary legal identification in Terms and Privacy. Retain existing copyright and license notices.
 
 ## Open-source provenance
 
