@@ -125,9 +125,11 @@ describe('public website brand and product clarity', () => {
     const html = home(true);
     expect(html).toContain('Sample data');
     expect(html).toContain(
-      'Illustration only. Renewal estimates are not registrar quotes.',
+      'Sample data and prices, not a customer portfolio or registrar quote.',
     );
-    expect(html).toContain('studio.example');
+    expect(html.match(/<img\b/g)).toHaveLength(2);
+    expect(html).toContain('href="https://demo.dombot.ai/"');
+    expect(html).toContain('Original DomBot demo');
     expect(html).toContain('href="/signup"');
     expect(html).toContain('href="/login"');
     expect(html).toContain('href="/domains"');
