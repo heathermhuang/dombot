@@ -1,8 +1,8 @@
 # domains.domains — hosted, multi-tenant DomBot
 
-[domains.domains](https://domains.domains) is a hosted, multi-tenant version of
-[DomBot](https://github.com/aoxborrow/dombot), created by **Aaron Oxborrow**.
-domains.domains adds a SaaS layer with managed hosting.
+[domains.domains](https://domains.domains) adds managed, multi-tenant hosting and
+a SaaS layer to [DomBot](https://github.com/aoxborrow/dombot). The original DomBot
+project was created by **Aaron Oxborrow**.
 
 **All your domains. One portfolio.** Connect supported registrars or import your
 domain list, track renewal estimates, publish selected listings and connect AI
