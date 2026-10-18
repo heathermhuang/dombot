@@ -55,7 +55,12 @@ export class Passkeys {
       (!hasKeys || user.auth_method === 'passkey'),
     );
   }
-  async options(kind: Challenge['kind'], user?: SessionUser, session?: string) {
+  async options(
+    kind: Challenge['kind'],
+    user?: SessionUser,
+    session?: string,
+    next = '/app',
+  ) {
     if (this.env.CANONICAL_ORIGIN !== origin)
       throw new Error('Passkeys unavailable on this origin');
     if (kind !== 'login' && (!user || !session))
@@ -109,7 +114,7 @@ export class Passkeys {
       : null;
     await db
       .prepare(
-        'INSERT INTO webauthn_challenges(id,challenge,kind,user_id,session_hash,credential_hash,expires_at) VALUES(?1,?2,?3,?4,?5,?6,?7)',
+        'INSERT INTO webauthn_challenges(id,challenge,kind,user_id,session_hash,credential_hash,expires_at,next_path) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)',
       )
       .bind(
         id,
@@ -119,6 +124,7 @@ export class Passkeys {
         kind !== 'login' && session ? await tokenHash(session) : null,
         credential?.password_hash ?? null,
         Date.now() + 300_000,
+        kind === 'register' ? '/account' : next,
       )
       .run();
     return { id, options };

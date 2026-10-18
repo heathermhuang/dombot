@@ -35,7 +35,10 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
     say('Follow your browser’s passkey prompt.');
     try {
       const kind = button.dataset.passkey;
-      const challenge = await post('/auth/passkeys/options', { kind });
+      const next = document.querySelector<HTMLInputElement>(
+        '#auth-next, input[name="next"]',
+      )?.value;
+      const challenge = await post('/auth/passkeys/options', { kind, next });
       const response =
         kind === 'register'
           ? await startRegistration({ optionsJSON: challenge.options })
@@ -44,16 +47,9 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
         id: challenge.id,
         response,
       });
-      const next = document.querySelector<HTMLInputElement>(
-        '#auth-next, input[name="next"]',
-      )?.value;
-      location.assign(
-        kind === 'register'
-          ? '/account'
-          : next && /^\/(?:app|account|w\/)/.test(next) && !next.includes('\\')
-            ? next
-            : result.next,
-      );
+      // The server binds and validates the destination when issuing the
+      // challenge. Never navigate directly to text read from the page.
+      location.assign(result.next);
     } catch {
       say(
         'Passkey confirmation was not completed. Try again, or use email to sign in. Existing passkeys are still required for sensitive actions.',

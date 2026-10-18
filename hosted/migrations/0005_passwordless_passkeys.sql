@@ -31,6 +31,7 @@ CREATE TABLE webauthn_challenges (
  id TEXT PRIMARY KEY,
  challenge TEXT NOT NULL,
  kind TEXT NOT NULL CHECK(kind IN ('register','login','reauth')),
+ next_path TEXT NOT NULL DEFAULT '/app',
  user_id TEXT,
  session_hash TEXT,
  credential_hash TEXT,

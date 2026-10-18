@@ -339,6 +339,7 @@ app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
           form.kind,
           form.kind === 'login' ? undefined : user!,
           session,
+          safeNext(form.next),
         ),
       );
     } catch {
@@ -370,7 +371,12 @@ app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
         400,
       );
     c.header('Set-Cookie', sessionCookie(c.req.url, token));
-    return c.json({ next: '/app' });
+    const destination = await c.env.CONTROL_DB.prepare(
+      'SELECT next_path FROM webauthn_challenges WHERE id=?1 AND consumed_at IS NOT NULL',
+    )
+      .bind(form.id)
+      .first<{ next_path: string }>();
+    return c.json({ next: safeNext(destination?.next_path) });
   }
   if (action === 'remove') {
     if (!user || !session) return c.json({ error: 'Sign in first' }, 401);

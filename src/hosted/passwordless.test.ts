@@ -394,6 +394,36 @@ describe('one email flow for sign-in and signup', () => {
   });
 });
 describe('passkeys and fresh authentication', () => {
+  it('binds only a validated local return path when issuing the passkey challenge', async () => {
+    for (const [next, expected] of [
+      ['/account/close', '/account/close'],
+      ['javascript:alert(1)', '/app'],
+      ['//evil.test/path', '/app'],
+      ['/w/' + ids[0] + '/settings', '/w/' + ids[0] + '/settings'],
+    ]) {
+      const response = await gateway.fetch(
+        new Request('https://domains.domains/auth/passkeys/options', {
+          method: 'POST',
+          headers: {
+            Origin: 'https://domains.domains',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ kind: 'login', next }),
+        }),
+        env,
+      );
+      expect(response.status).toBe(200);
+      const challenge = (await response.json()) as { id: string };
+      expect(
+        (
+          await db
+            .prepare('SELECT next_path FROM webauthn_challenges WHERE id=?1')
+            .bind(challenge.id)
+            .first()
+        )?.next_path,
+      ).toBe(expected);
+    }
+  });
   it('verifies a real ES256 registration and login, rotates tokens, and rejects replay', async () => {
     const { accounts, user, token } = await owner(),
       keys = new Passkeys(env),
