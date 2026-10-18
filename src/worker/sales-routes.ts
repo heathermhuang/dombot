@@ -32,6 +32,7 @@ import {
 import { canonicalDomain } from '../shared/publication';
 import { getListPrices } from '../core/services/list-prices';
 import { getCachedPortfolio } from '../core/services/registrars';
+import { getImportedDomains } from '../core/services/imported-domains';
 import { SalesStore } from './sales-store';
 import { SalesInquiryStore } from './sales-inquiry-store';
 import { observeSale, createSaleObserver } from './sales-observation';
@@ -46,6 +47,15 @@ type SalesEnv = {
   Variables: { auth: AuthConfig; salesRecipientVerified?: boolean };
 };
 const revision = z.string().uuid();
+// Imported holdings can have private drafts; only registrar observations grant publication control.
+const salesInventoryNames = () => [
+  ...new Set([
+    ...(getCachedPortfolio()?.domains ?? []).map((d) =>
+      canonicalDomain(d.domainName),
+    ),
+    ...Object.keys(getImportedDomains()).map(canonicalDomain),
+  ]),
+];
 export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   const app = new Hono<SalesEnv>();
   app.use('*', async (c, next) => {
@@ -141,13 +151,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   app.get('/inventory', (c) => {
     const q = (c.req.query('q') ?? '').toLowerCase().slice(0, 253),
       cursor = c.req.query('cursor') ?? '';
-    const names = [
-      ...new Set(
-        (getCachedPortfolio()?.domains ?? []).map((d) =>
-          canonicalDomain(d.domainName),
-        ),
-      ),
-    ]
+    const names = salesInventoryNames()
       .filter((d) => d > cursor && d.includes(q))
       .sort();
     return c.json({
@@ -180,9 +184,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
     const domains = q
       ? [
           ...new Set([
-            ...(getCachedPortfolio()?.domains ?? []).map((d) =>
-              canonicalDomain(d.domainName),
-            ),
+            ...salesInventoryNames(),
             ...listEvents().map((e) => e.domain),
           ]),
         ].filter(
@@ -222,11 +224,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       .strict()
       .parse(await c.req.json());
     const db = await SalesStore.from(c.env),
-      names = new Set(
-        (getCachedPortfolio()?.domains ?? []).map((d) =>
-          canonicalDomain(d.domainName),
-        ),
-      ),
+      names = new Set(salesInventoryNames()),
       items = [];
     for (const value of [...new Set(domains.map(canonicalDomain))]) {
       if (!names.has(value))
