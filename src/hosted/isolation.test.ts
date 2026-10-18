@@ -150,6 +150,7 @@ beforeAll(async () => {
       .replace(/^--.*$/gm, '')
       .replace(/\n/g, ' ');
   await control.exec(sql('hosted/migrations/0001_control.sql'));
+  await control.exec(sql('hosted/migrations/0005_passwordless_passkeys.sql'));
   await control.exec(sql('hosted/migrations/0002_password_recovery.sql'));
   await control.exec(sql('hosted/migrations/0003_lifecycle.sql'));
   for (let i = 0; i < ids.length; i++) {
@@ -183,7 +184,7 @@ describe('real gateway and isolated Worker instances', () => {
   it('preserves the origin signal for native login forms', async () => {
     const response = await request('/login');
     expect(response.headers.get('Referrer-Policy')).toBe('same-origin');
-    expect(await response.text()).toContain('action="/session/login"');
+    expect(await response.text()).toContain('action="/auth/email/request"');
   });
   it('rejects cross-origin signup and mismatched invitations', async () => {
     const send = (origin: string, email: string) =>

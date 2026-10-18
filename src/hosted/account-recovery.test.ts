@@ -18,7 +18,11 @@ beforeAll(async () => {
     }),
   );
   db = (await mf.getD1Database('DB')) as unknown as D1Database;
-  for (const file of ['0001_control.sql', '0002_password_recovery.sql'])
+  for (const file of [
+    '0001_control.sql',
+    '0005_passwordless_passkeys.sql',
+    '0002_password_recovery.sql',
+  ])
     await db.exec(
       readFileSync('hosted/migrations/' + file, 'utf8')
         .replace(/^--.*$/gm, '')

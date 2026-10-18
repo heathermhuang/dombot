@@ -1,6 +1,18 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import { EmailAuth } from './email-auth';
+import { Passkeys } from './passkeys';
+import { authScript } from '../../hosted/generated-auth';
+import {
+  emailStart,
+  emailCode,
+  emailConfirm,
+  authUnavailable,
+  reauthPage,
+  passkeyPanel,
+  withAuthScript,
+} from './auth-views';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
 import { productImages } from './product-images';
@@ -15,12 +27,7 @@ import {
   sendAccountEmail,
   issueRecovery,
 } from './registration';
-import {
-  signupStart,
-  signupFinish,
-  recoveryStart,
-  checkEmail,
-} from './registration-views';
+import { signupFinish, recoveryStart, checkEmail } from './registration-views';
 import { mcpPolicyDenial } from './mcp-policy';
 import {
   accountForm,
@@ -56,7 +63,9 @@ const safeNext = (value: unknown) =>
   /^\/w\/[a-f0-9-]{36}\//.test(value) &&
   !/[\r\n\\]/.test(value)
     ? value
-    : '/app';
+    : value === '/account' || value === '/account/close'
+      ? value
+      : '/app';
 const mcpPath = (path: string) =>
   [
     '/mcp',
@@ -95,7 +104,13 @@ app.use('*', async (c, next) => {
   c.header(
     'Content-Security-Policy',
     "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" +
-      (c.req.path === '/' ? "; img-src 'self'" : ''),
+      (c.req.path === '/' ? "; img-src 'self'" : '') +
+      (c.req.path.startsWith('/auth/') ||
+      c.req.path.startsWith('/account') ||
+      c.req.path.startsWith('/login') ||
+      c.req.path === '/signup'
+        ? "; script-src 'self'; connect-src 'self'"
+        : ''),
   );
   await next();
 });
@@ -155,10 +170,231 @@ app.get('/terms', (c) =>
 app.get('/privacy', (c) =>
   c.html(legalPage('privacy', c.env), legalReady(c.env) ? 200 : 503),
 );
+app.get('/auth/browser.js', (c) => {
+  c.header('Content-Type', 'text/javascript; charset=utf-8');
+  return c.body(authScript);
+});
+app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
+  if (!emailReady(c.env))
+    return c.text(
+      'Email sign-in is temporarily unavailable. Use an existing password.',
+      503,
+    );
+  const accounts = account(c.env),
+    form = await c.req.parseBody();
+  const sessionUser =
+    form.intent === 'reauth'
+      ? await accounts.session(readSession(c.req.raw))
+      : null;
+  const email = z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((x) => x.toLowerCase())
+    .safeParse(sessionUser?.email ?? form.email);
+  if (!email.success) return c.text('Enter a valid email address.', 400);
+  const user =
+    form.intent === 'reauth'
+      ? await accounts.session(readSession(c.req.raw))
+      : undefined;
+  if (form.intent === 'reauth' && !user) return c.redirect('/login', 303);
+  if (user && (await new Passkeys(c.env).list(user)).length)
+    return c.redirect(
+      '/account/reauth?next=' + encodeURIComponent(safeNext(form.next)),
+      303,
+    );
+  if (
+    !(await accounts.rateLimit('email-auth:global', 20)) ||
+    !(await accounts.rateLimit(
+      'email-auth:ip:' + (c.req.header('cf-connecting-ip') ?? 'local'),
+      4,
+    )) ||
+    !(await accounts.rateLimit('email-auth:email:' + email.data, 2))
+  )
+    return c.text('Please wait before requesting another email.', 429);
+  let waitUntil: ((promise: Promise<unknown>) => void) | undefined;
+  try {
+    const ctx = c.executionCtx;
+    waitUntil = (promise) => ctx.waitUntil(promise);
+  } catch {
+    /* Direct unit-test invocation has no Worker context. */
+  }
+  const id = await new EmailAuth(c.env).issue(
+    user?.email ?? email.data,
+    safeNext(form.next),
+    user ?? undefined,
+    readSession(c.req.raw),
+    waitUntil,
+  );
+  return c.html(emailCode(id), 202);
+});
+app.get('/auth/email/confirm', async (c) => {
+  const id = c.req.query('id') ?? '',
+    token = c.req.query('token') ?? '';
+  const proof = await new EmailAuth(c.env).peek(id, token);
+  return proof
+    ? c.html(emailConfirm(id, token, proof.email, !proof.user_id))
+    : c.html(authUnavailable(), 400);
+});
+app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
+  if (
+    !(await account(c.env).rateLimit(
+      'email-auth:verify:' + (c.req.header('cf-connecting-ip') ?? 'local'),
+      30,
+    ))
+  )
+    return c.text('Too many attempts. Try later.', 429);
+  const form = await c.req.parseBody();
+  const id = typeof form.id === 'string' ? form.id : '';
+  const link = typeof form.token === 'string';
+  const proof = link ? form.token : form.code;
+  const result =
+    typeof proof === 'string'
+      ? await new EmailAuth(c.env).consume(
+          id,
+          proof,
+          link,
+          form.accept === 'yes' && form.legalVersion === legalVersion,
+          readSession(c.req.raw),
+        )
+      : null;
+  if (!result) return c.html(authUnavailable(), 400);
+  c.header('Set-Cookie', sessionCookie(c.req.url, result.token));
+  return c.redirect(safeNext(result.next), 303);
+});
+app.get('/account/reauth', async (c) => {
+  const user = await account(c.env).session(readSession(c.req.raw));
+  if (!user) return c.redirect('/login', 303);
+  return c.html(
+    reauthPage(
+      safeNext(c.req.query('next')),
+      (await new Passkeys(c.env).list(user)).length > 0,
+      user.email,
+    ),
+  );
+});
+app.post('/auth/password/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
+  const accounts = account(c.env),
+    old = readSession(c.req.raw),
+    user = await accounts.session(old);
+  if (!user) return c.redirect('/login', 303);
+  if ((await new Passkeys(c.env).list(user)).length)
+    return c.text('Confirm with an existing passkey.', 403);
+  if (!(await accounts.rateLimit('stepup:' + user.id, 6)))
+    return c.text('Too many attempts.', 429);
+  const form = await c.req.parseBody();
+  const verified =
+    typeof form.password === 'string' && form.password.length <= 256
+      ? await accounts.login(user.email, form.password)
+      : null;
+  if (!verified)
+    return c.text(
+      'Password not recognized. Try again or use a confirmation email.',
+      401,
+    );
+  // Mint only while the original session is still active, then revoke it.
+  if (!(await accounts.session(old))) return c.redirect('/login', 303);
+  const token = await accounts.newSession(verified);
+  if (!token) return c.redirect('/login', 303);
+  await accounts.logout(old);
+  c.header('Set-Cookie', sessionCookie(c.req.url, token));
+  return c.redirect(safeNext(form.next), 303);
+});
+app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
+  if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+  const accounts = account(c.env),
+    session = readSession(c.req.raw),
+    user = await accounts.session(session),
+    keys = new Passkeys(c.env);
+  if (
+    !(await accounts.rateLimit(
+      'passkey:ip:' + (c.req.header('cf-connecting-ip') ?? 'local'),
+      30,
+    )) ||
+    (user && !(await accounts.rateLimit('passkey:user:' + user.id, 20)))
+  )
+    return c.json({ error: 'Too many attempts. Try later.' }, 429);
+  const action = c.req.param('action');
+  const form = await c.req.json();
+  if (action === 'options') {
+    if (!['register', 'login', 'reauth'].includes(form.kind))
+      return c.json({ error: 'Invalid request' }, 400);
+    if (form.kind !== 'login' && !user)
+      return c.json({ error: 'Sign in first' }, 401);
+    if (form.kind === 'register' && user && !(await keys.fresh(user)))
+      return c.json(
+        {
+          error: 'Confirm your identity before continuing.',
+          reauth: '/account/reauth?next=%2Faccount',
+        },
+        428,
+      );
+    try {
+      return c.json(
+        await keys.options(
+          form.kind,
+          form.kind === 'login' ? undefined : user!,
+          session,
+        ),
+      );
+    } catch {
+      return c.json(
+        {
+          error:
+            'Passkeys are unavailable or the ten-passkey limit was reached.',
+        },
+        400,
+      );
+    }
+  }
+  if (action === 'verify') {
+    if (
+      typeof form.id !== 'string' ||
+      !form.response ||
+      typeof form.response.id !== 'string'
+    )
+      return c.json({ error: 'Invalid request' }, 400);
+    const token = await keys.verify(
+      form.id,
+      form.response,
+      user ?? undefined,
+      session,
+    );
+    if (!token)
+      return c.json(
+        { error: 'Passkey confirmation was not completed. Try again.' },
+        400,
+      );
+    c.header('Set-Cookie', sessionCookie(c.req.url, token));
+    return c.json({ next: '/app' });
+  }
+  if (action === 'remove') {
+    if (!user || !session) return c.json({ error: 'Sign in first' }, 401);
+    if (!(await keys.fresh(user)))
+      return c.json(
+        {
+          error: 'Confirm your identity before continuing.',
+          reauth: '/account/reauth?next=%2Faccount',
+        },
+        428,
+      );
+    if (
+      typeof form.id !== 'string' ||
+      !(await keys.remove(user, form.id, session))
+    )
+      return c.json({ error: 'Passkey could not be removed.' }, 400);
+    return c.json({ ok: true });
+  }
+  return c.notFound();
+});
 app.get('/signup', (c) =>
   c.html(
     registrationReady(c.env)
-      ? signupStart()
+      ? emailStart()
       : page(
           'Request free access',
           `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request early access.</h1><p>The hosted service is free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No account is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
@@ -347,10 +583,12 @@ app.post('/recover/request', bodyLimit({ maxSize: 4096 }), async (c) => {
 app.get('/account/close', async (c) => {
   const user = await account(c.env).session(readSession(c.req.raw));
   if (!user) return c.redirect('/login', 303);
+  if (!(await new Passkeys(c.env).fresh(user)))
+    return c.redirect('/account/reauth?next=%2Faccount%2Fclose', 303);
   return c.html(
     page(
       'Close your account',
-      `<form action="/account/close" method="post"><h1>Close your account.</h1><p>Export your backup in Settings first. Closing disables browser, API, paired-agent and public-collection access immediately. Your registrar accounts and domain registrations are not changed.</p><p>We retain your portfolio data for 30 days so support can help recover an accidental closure. Physical erasure is then handled by the operator. Your account identity is never assigned to another person.</p><label>Current password<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><label>Type CLOSE MY ACCOUNT<input name="confirmation" required></label><button type="submit">Close my account</button><p><a href="/account">Keep my account</a></p></form>`,
+      `<form action="/account/close" method="post"><h1>Close your account.</h1><p>Export your backup in Settings first. Closing disables browser, API, paired-agent and public-collection access immediately. Your registrar accounts and domain registrations are not changed.</p><p>We retain your portfolio data for 30 days so support can help recover an accidental closure. Physical erasure is then handled by the operator. Your account identity is never assigned to another person.</p><label>Type CLOSE MY ACCOUNT<input name="confirmation" required></label><button type="submit">Close my account</button><p><a href="/account">Keep my account</a></p></form>`,
     ),
   );
 });
@@ -359,19 +597,28 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
   const accounts = account(c.env),
     user = await accounts.session(readSession(c.req.raw));
   if (!user) return c.json({ error: 'Not signed in' }, 401);
+  if (!(await new Passkeys(c.env).fresh(user)))
+    return c.redirect('/account/reauth?next=%2Faccount%2Fclose', 303);
   if (!(await accounts.rateLimit(`closure:${user.id}`, 6)))
     return c.text('Too many attempts. Try again later.', 429);
   const form = await c.req.parseBody();
   if (
     form.confirmation !== 'CLOSE MY ACCOUNT' ||
-    typeof form.password !== 'string' ||
-    form.password.length > 256
+    (form.password !== undefined &&
+      (typeof form.password !== 'string' || form.password.length > 256))
   )
     return c.text(
       'Enter your current password and the exact confirmation.',
       400,
     );
-  const verified = await accounts.login(user.email, form.password);
+  const verified =
+    typeof form.password === 'string'
+      ? await accounts.login(user.email, form.password)
+      : await c.env.CONTROL_DB.prepare(
+          'SELECT password_hash AS credentialHash FROM users WHERE id=?1',
+        )
+          .bind(user.id)
+          .first<{ credentialHash: string }>();
   if (!verified)
     return c.text(
       'Your password was not recognized. Return to account settings and try again.',
@@ -430,7 +677,17 @@ app.get('/health', (c) =>
     version: 'hosted-foundation-1',
   }),
 );
-app.get('/login', (c) => {
+app.get('/login', (c) =>
+  c.html(
+    emailStart(
+      safeNext(c.req.query('next')),
+      c.req.query('notice') === 'signed-out-all'
+        ? 'Every browser session has been signed out.'
+        : '',
+    ),
+  ),
+);
+app.get('/login/password', (c) => {
   const notice =
     c.req.query('notice') === 'signed-out-all'
       ? 'Every browser session has been signed out. Sign in to continue.'
@@ -608,7 +865,26 @@ app.get('/session', async (c) => {
 app.get('/account', async (c) => {
   const user = await account(c.env).session(readSession(c.req.raw));
   if (!user) return c.redirect('/login', 303);
-  return c.html(accountSecurity(user));
+  const keys = await new Passkeys(c.env).list(user);
+  const credential = await c.env.CONTROL_DB.prepare(
+    'SELECT password_hash FROM users WHERE id=?1',
+  )
+    .bind(user.id)
+    .first<{ password_hash: string }>();
+  let html = accountSecurity(user);
+  if (!credential?.password_hash.startsWith('scrypt-v1:'))
+    html = html.replace(
+      /<form action="\/account\/password"[\s\S]*?<\/form>/,
+      '<p>You sign in with email or a passkey. No password is required.</p>',
+    );
+  return c.html(
+    withAuthScript(
+      html.replace(
+        '<section class="session-actions"',
+        passkeyPanel(keys) + '<section class="session-actions"',
+      ),
+    ),
+  );
 });
 app.post('/account/sessions/logout', async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
@@ -625,6 +901,8 @@ app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
   const accounts = account(c.env);
   const user = await accounts.session(readSession(c.req.raw));
   if (!user) return c.json({ error: 'Not signed in' }, 401);
+  if (!(await new Passkeys(c.env).fresh(user)))
+    return c.redirect('/account/reauth?next=%2Faccount', 303);
   if (!(await accounts.rateLimit(`password:${user.id}`, 6)))
     return c.text('Too many attempts. Try again later.', 429);
   const parsed = z
@@ -725,6 +1003,39 @@ app.all('/w/:workspace/*', async (c) => {
       user ? 403 : 401,
     );
   }
+  const sensitive = new Set([
+    'getRegistrarCredentials',
+    'saveRegistrarCredentials',
+    'connectRegistrarAccount',
+    'createRegistrarAccount',
+    'removeRegistrarAccount',
+    'getProxySettings',
+    'saveProxySettings',
+    'removeProxySettings',
+    'testProxySettings',
+    'exportData',
+    'importData',
+    'applyDomainOp',
+    'startBulk',
+    'resolveApproval',
+  ]);
+  let apiMethod = '';
+  try {
+    if (path.startsWith('/api/')) apiMethod = decodeURIComponent(path.slice(5));
+  } catch {
+    return c.json({ error: 'Invalid API path' }, 400);
+  }
+  if (!publicRequest && user && sensitive.has(apiMethod)) {
+    if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    if (!(await new Passkeys(c.env).fresh(user)))
+      return c.json(
+        {
+          error: 'Confirm your identity before continuing.',
+          reauth: '/account/reauth?next=' + encodeURIComponent(base + '/'),
+        },
+        428,
+      );
+  }
   if (
     [
       '/api/getPortfolio',
@@ -741,10 +1052,22 @@ app.all('/w/:workspace/*', async (c) => {
       },
       429,
     );
-  if (path === '/api/updateSettings' && c.req.method === 'POST') {
+  if (apiMethod === 'updateSettings' && c.req.method === 'POST') {
     const body = (await c.req.raw.clone().json()) as {
-      args?: { autoSyncIntervalMinutes?: number }[];
+      args?: { autoSyncIntervalMinutes?: number; mcpEnabled?: boolean }[];
     };
+    if (
+      body.args?.[0]?.mcpEnabled !== undefined &&
+      user &&
+      !(await new Passkeys(c.env).fresh(user))
+    )
+      return c.json(
+        {
+          error: 'Confirm your identity before continuing.',
+          reauth: '/account/reauth?next=' + encodeURIComponent(base + '/'),
+        },
+        428,
+      );
     const interval = body.args?.[0]?.autoSyncIntervalMinutes;
     if (typeof interval === 'number' && interval > 0 && interval < 60)
       return c.json(
@@ -832,10 +1155,35 @@ app.all('/w/:workspace/*', async (c) => {
     'Content-Security-Policy',
     resultHeaders.get('content-security-policy') ?? "default-src 'none'",
   );
-  return new Response(response.body, {
+  const proxied = new Response(response.body, {
     status: response.status,
     headers: resultHeaders,
   });
+  if (
+    !publicRequest &&
+    owner &&
+    c.req.method === 'GET' &&
+    response.ok &&
+    resultHeaders.get('content-type')?.includes('text/html')
+  ) {
+    resultHeaders.delete('content-length');
+    return new HTMLRewriter()
+      .on('head', {
+        element(head) {
+          head.prepend(
+            '<script type="module" src="/auth/browser.js"></script>',
+            { html: true },
+          );
+        },
+      })
+      .transform(
+        new Response(proxied.body, {
+          status: proxied.status,
+          headers: resultHeaders,
+        }),
+      );
+  }
+  return proxied;
 });
 app.get('*', (c) =>
   c.html(
@@ -851,6 +1199,12 @@ export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: HostedEnv) {
     await env.CONTROL_DB.batch([
+      env.CONTROL_DB.prepare(
+        'DELETE FROM email_signins WHERE expires_at<?1',
+      ).bind(Date.now()),
+      env.CONTROL_DB.prepare(
+        'DELETE FROM webauthn_challenges WHERE expires_at<?1',
+      ).bind(Date.now()),
       env.CONTROL_DB.prepare(
         'DELETE FROM signup_proofs WHERE expires_at<?1',
       ).bind(Date.now()),

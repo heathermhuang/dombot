@@ -34,6 +34,8 @@ Use Node.js 22.13 or newer. In a clean checkout:
 ```sh
 npm ci --ignore-scripts
 npm rebuild esbuild
+npm ci --prefix hosted --ignore-scripts
+node hosted/build-auth.mjs
 npm run engine:verify
 npm run typecheck
 npm run lint
@@ -79,7 +81,7 @@ network service and retain the original DomBot attribution.
 
 DomBot describes a portfolio that gathers domains from different registrars.
 The hosted offer uses **“All your domains. One portfolio.”** and identifies
-itself as hosted DomBot. “Account” means the email/password sign-in; “registrar
+itself as hosted DomBot. “Account” means the email or passkey sign-in; “registrar
 account” means an account held at a domain registrar. A portfolio is the set of
 domains a person manages. Creating a sign-in does not create or transfer domain
 registrations, and importing a list does not move domains between registrars.

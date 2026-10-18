@@ -5,9 +5,12 @@ export interface SessionUser {
   email: string;
   workspace_id: string;
   label: string;
+  authenticated_at?: number;
+  auth_method?: string;
 }
 export interface VerifiedUser extends SessionUser {
   credentialHash: string;
+  authMethod?: string;
 }
 export class AccountError extends Error {}
 export class Accounts {
@@ -68,8 +71,9 @@ export class Accounts {
       .bind(email)
       .first<{ id: string; password_hash: string }>();
     // Still perform the expensive operation for an unknown address.
-    const record =
-      row?.password_hash ?? `scrypt-v1:${'0'.repeat(64)}:${'0'.repeat(128)}`;
+    const record = row?.password_hash.startsWith('scrypt-v1:')
+      ? row.password_hash
+      : `scrypt-v1:${'0'.repeat(64)}:${'0'.repeat(128)}`;
     const valid = await verifyPassword(password, record, this.pepper);
     const user = valid && row ? await this.user(row.id) : null;
     return user && row ? { ...user, credentialHash: row.password_hash } : null;
@@ -86,13 +90,15 @@ export class Accounts {
     const token = opaqueToken();
     const result = await this.db
       .prepare(
-        'INSERT INTO sessions(token_hash,user_id,expires_at) SELECT ?1,u.id,?3 FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.id=?2 AND u.password_hash=?4 AND w.enabled=1 RETURNING user_id',
+        'INSERT INTO sessions(token_hash,user_id,expires_at,authenticated_at,auth_method) SELECT ?1,u.id,?3,?5,?6 FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.id=?2 AND u.password_hash=?4 AND w.enabled=1 RETURNING user_id',
       )
       .bind(
         await tokenHash(token),
         user.id,
         Date.now() + 7 * 86400_000,
         user.credentialHash,
+        Date.now(),
+        user.authMethod ?? 'password',
       )
       .all();
     return result.results.length === 1 ? token : null;
@@ -101,7 +107,7 @@ export class Accounts {
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
     return this.db
       .prepare(
-        'SELECT u.id,u.email,u.workspace_id,w.label FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspaces w ON w.id=u.workspace_id WHERE s.token_hash=?1 AND s.expires_at>?2 AND w.enabled=1',
+        'SELECT u.id,u.email,u.workspace_id,w.label,s.authenticated_at,s.auth_method FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspaces w ON w.id=u.workspace_id WHERE s.token_hash=?1 AND s.expires_at>?2 AND w.enabled=1',
       )
       .bind(await tokenHash(token), Date.now())
       .first<SessionUser>();

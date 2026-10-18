@@ -15,3 +15,9 @@
 
 - Use the owner-approved public attribution exactly: “domains.domains is a hosted, multi-tenant version of aoxborrow/dombot.” Link aoxborrow/dombot to the upstream repository. Keep Aaron Oxborrow’s original-project credit separate in the Terms, source page and copyright/license notices. Use the upstream https://github.com/aoxborrow/dombot link for original DomBot, and https://github.com/heathermhuang/dombot for the complete hosted fork and SaaS layer.
 - The SaaS layer is open source under AGPL-3.0-or-later; retain upstream copyright and third-party notices. Keep the public source offer at /source accessible without sign-in, and set SOURCE_COMMIT to the deployed Git revision for exact source links.
+
+## Hosted authentication
+
+- Run `npm ci --prefix hosted --ignore-scripts` and `node hosted/build-auth.mjs` after the normal root dependency install, before hosted typechecks/tests/bundles. Auth dependencies belong to `hosted/package.json` so they do not change the pinned tenant engine.
+- The default account journey uses ten-minute single-use email links/codes and optional passkeys. Preserve explicit legal acceptance, qualified capacity, immutable identities, existing password access, single-use challenge transactions and five-minute fresh authentication for sensitive actions. Once a passkey exists, email/password sign-in must not bypass the passkey check. See `docs/passwordless-auth.md`.
+- QQ/163/126 inbox delivery and mainland-China network access require actual controlled receipts; never infer them from Google mailbox delivery or removal of Google login dependencies.

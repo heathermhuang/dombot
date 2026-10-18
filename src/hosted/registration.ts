@@ -133,6 +133,26 @@ export async function sendAccountEmail(
   code: string,
   kind: 'signup' | 'recovery',
 ): Promise<boolean> {
+  const url = new URL(
+    kind === 'signup' ? '/signup/verify' : '/recover',
+    env.CANONICAL_ORIGIN,
+  );
+  url.searchParams.set('code', code);
+  return sendAuthEmail(env, email, {
+    subject:
+      kind === 'signup'
+        ? 'Verify your email for domains.domains'
+        : 'Reset your domains.domains password',
+    text: `${kind === 'signup' ? 'Verify your email to start using hosted DomBot' : 'Set a new password for your domains.domains sign-in'}:\n\n${url.href}\n\nThis link expires in ${kind === 'signup' ? 20 : 15} minutes and can be used once. If you did not request this, ignore this email. Your account has not been changed.\n\ndomains.domains`,
+  });
+}
+
+/** Reserve the shared transactional quota before every auth email. */
+export async function sendAuthEmail(
+  env: HostedEnv,
+  email: string,
+  content: { subject: string; text: string; html?: string },
+): Promise<boolean> {
   if (!emailReady(env)) return false;
   const now = new Date();
   const buckets = [
@@ -163,20 +183,11 @@ export async function sendAccountEmail(
     )
   )
     return false;
-  const url = new URL(
-    kind === 'signup' ? '/signup/verify' : '/recover',
-    env.CANONICAL_ORIGIN,
-  );
-  url.searchParams.set('code', code);
   try {
     await env.EMAIL!.send({
       from: { email: env.EMAIL_FROM!, name: 'domains.domains' },
       to: email,
-      subject:
-        kind === 'signup'
-          ? 'Verify your email for domains.domains'
-          : 'Reset your domains.domains password',
-      text: `${kind === 'signup' ? 'Verify your email to start using hosted DomBot' : 'Set a new password for your domains.domains sign-in'}:\n\n${url.href}\n\nThis link expires in ${kind === 'signup' ? 20 : 15} minutes and can be used once. If you did not request this, ignore this email. Your account has not been changed.\n\ndomains.domains`,
+      ...content,
     });
     return true;
   } catch {

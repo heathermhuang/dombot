@@ -36,6 +36,8 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm rebuild esbuild
+          npm ci --prefix hosted --ignore-scripts
+          node hosted/build-auth.mjs
       - name: Typecheck
         run: npm run typecheck
       - name: Verify pinned DomBot engine
@@ -62,6 +64,8 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm rebuild esbuild
+          npm ci --prefix hosted --ignore-scripts
+          node hosted/build-auth.mjs
       - name: Build the web renderer
         run: npm run web:build
       - name: Verify pinned DomBot engine
