@@ -19,7 +19,10 @@ describe('public corresponding-source offer', () => {
       `https://github.com/heathermhuang/dombot/archive/${commit}.tar.gz`,
     );
     expect(html).toContain('https://github.com/aoxborrow/dombot');
-    expect(html).toContain('Aaron Oxborrow');
+    expect(html).toContain('project was created by Aaron Oxborrow.');
+    expect(html).toContain(
+      'domains.domains adds managed, multi-tenant hosting and a SaaS layer.',
+    );
     expect(html).not.toContain('Magic Crystal Limited');
     expect(html).toContain('GNU Affero General Public License v3.0 or later');
     expect(html).toContain('Build and self-hosting instructions');

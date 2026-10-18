@@ -62,7 +62,10 @@ describe('public website brand and product clarity', () => {
       legalPage('terms', env),
     ]) {
       expect(html.match(/<footer\b/g)).toHaveLength(1);
-      expect(html).toContain('hosted, multi-tenant version of');
+      expect(html).toContain('Original <a href=');
+      expect(html).toContain(
+        'Hosting and multi-tenant SaaS layer by domains.domains.',
+      );
       expect(html).toContain('href="https://github.com/aoxborrow/dombot"');
       expect(html).toContain('Aaron Oxborrow');
       expect(html).toContain('href="/source"');

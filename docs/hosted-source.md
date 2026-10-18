@@ -1,8 +1,8 @@
 # Open-source hosted DomBot
 
-**domains.domains is a hosted, multi-tenant version of
-[DomBot](https://github.com/aoxborrow/dombot), created by Aaron Oxborrow.**
-domains.domains maintains the hosted SaaS layer. This entire fork is public at
+**domains.domains adds managed, multi-tenant hosting and a SaaS layer to
+[DomBot](https://github.com/aoxborrow/dombot).** The original DomBot project was
+created by Aaron Oxborrow. This entire hosted fork is public at
 <https://github.com/heathermhuang/dombot> under **AGPL-3.0-or-later**.
 See [LICENSE](../LICENSE) and [credits and notices](../NOTICE.md).
 
