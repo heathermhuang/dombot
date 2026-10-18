@@ -89,7 +89,18 @@ export function siteChanges(
             }),
       )
     : new Map<string, Disclosure>();
+  if (published)
+    before.set('Site presentation', {
+      label: 'Site presentation',
+      value: isOwnerSite(published)
+        ? 'Owner profile with curated collections and projects'
+        : 'Legacy domain list',
+    });
   const after = siteDisclosures(draft);
+  after.set('Site presentation', {
+    label: 'Site presentation',
+    value: 'Owner profile with curated collections and projects',
+  });
   return [...new Set([...before.keys(), ...after.keys()])]
     .filter(
       (key) => (before.get(key)?.value ?? '') !== (after.get(key)?.value ?? ''),

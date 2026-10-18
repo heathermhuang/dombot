@@ -16,9 +16,10 @@ import {
   isOwnerSite,
   ownerSiteDraftSchema,
   selectedSite,
+  type PublishedOwnerSite,
 } from '../../shared/owner-site';
 import { siteChanges } from '../../shared/owner-site-review';
-import { renderOwnerSite } from '../../shared/render-owner-site';
+import { SitePreview } from '../components/owner-site/SitePreview';
 import { ProfileEditor } from '../components/owner-site/ProfileEditor';
 import { SectionsEditor } from '../components/owner-site/SectionsEditor';
 import './your-site.css';
@@ -66,15 +67,11 @@ export default function YourSite({
   if (state.revision && !isOwnerSite(state.draft)) {
     if (new URLSearchParams(location.search).has('legacy'))
       return <DomainWorkspace area="page" />;
-    let preview = '';
+    let preview: PublishedOwnerSite | null = null;
     let conversionError = '';
     try {
       const converted = convertOwnerSite(state.draft);
-      preview = renderOwnerSite(
-        { ...selectedSite(converted), publishedAt: 1 },
-        new URL('https://preview.invalid/p/' + converted.handle),
-        true,
-      );
+      preview = { ...selectedSite(converted), publishedAt: 1 };
     } catch (e) {
       conversionError = (e as Error).message;
     }
@@ -91,7 +88,9 @@ export default function YourSite({
         {conversionError ? (
           <p role="alert">{conversionError}</p>
         ) : (
-          <iframe title="Site conversion preview" sandbox="" srcDoc={preview} />
+          preview && (
+            <SitePreview site={preview} title="Site conversion preview" />
+          )
         )}
         <div className="os-actions">
           <button
@@ -196,7 +195,6 @@ function SiteAuthor() {
   const [receipt, setReceipt] = useState('');
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
-  const [previewPath, setPreviewPath] = useState('');
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setActionError('');
@@ -235,19 +233,6 @@ function SiteAuthor() {
     if (!draft || !state || !projection.site) return [];
     return siteChanges(draft, state.publishedSnapshot);
   }, [draft, state, projection]);
-  const preview = useMemo(
-    () =>
-      projection.site
-        ? renderOwnerSite(
-            projection.site,
-            new URL(
-              `https://preview.invalid/p/${projection.site.handle}${previewPath}`,
-            ),
-            true,
-          )
-        : '',
-    [projection, previewPath],
-  );
   if (!draft || !state)
     return (
       <section className="os-editor">
@@ -450,40 +435,8 @@ function SiteAuthor() {
             Only selected content appears. External links and contact actions
             are disabled.
           </p>
-          {preview ? (
-            <iframe
-              title="Your site preview"
-              sandbox="allow-same-origin"
-              srcDoc={preview}
-              onLoad={(e) => {
-                const doc = e.currentTarget.contentDocument;
-                if (!doc) return;
-                doc.addEventListener('click', (event) => {
-                  const a = (event.target as Element).closest('a');
-                  if (!a) return;
-                  event.preventDefault();
-                  const url = new URL(
-                    a.getAttribute('href') ?? '',
-                    'https://preview.invalid',
-                  );
-                  if (url.origin === 'https://preview.invalid') {
-                    setPreviewPath(
-                      url.pathname.replace(`/p/${draft.handle}`, '') +
-                        url.search,
-                    );
-                  }
-                });
-                doc.addEventListener('submit', (event) => {
-                  event.preventDefault();
-                  const form = event.target as HTMLFormElement;
-                  const params = new URLSearchParams();
-                  new FormData(form).forEach((value, key) =>
-                    params.set(key, String(value)),
-                  );
-                  setPreviewPath(previewPath.split('?')[0] + '?' + params);
-                });
-              }}
-            />
+          {projection.site ? (
+            <SitePreview site={projection.site} />
           ) : (
             <p>Resolve the selected content above to preview.</p>
           )}

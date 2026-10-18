@@ -227,6 +227,19 @@ describe('owner site disclosure contract', () => {
     expect(selectedSite(site).domainPresentations.map((v) => v.domain)).toEqual(
       ['one.example', 'two.example'],
     );
+    const conversionChanges = siteChanges(site, {
+      ...old,
+      listings: old.listings.filter((v) => v.visibility !== 'private') as Array<
+        import('./publication').PublicListing
+      >,
+      publishedAt: 1000,
+    });
+    expect(
+      conversionChanges.some(
+        (v) =>
+          v.key === 'Site presentation' && v.before === 'Legacy domain list',
+      ),
+    ).toBe(true);
     const changes = siteChanges(site, null);
     expect(changes.some((v) => v.after.includes('owner@sample.example'))).toBe(
       true,
