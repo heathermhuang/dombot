@@ -1,0 +1,93 @@
+# Owner sites
+
+An owner can introduce themselves, describe their interests and welcome conversations
+without displaying any domains. Collections explain a deliberate selection; projects
+show what the owner is building. This improves presentation and contact. It does not
+claim to acquire buyers, verify project ownership or increase sales.
+
+## Owner workflow
+
+Open **Your site**, choose a name and address, and create a private draft. The address
+is fixed after creation. Add profile text, optional public email and HTTPS links.
+A profile with no domains is a complete site and requires no registrar connection.
+
+Collections and projects start excluded. Choose their domains, order the selection
+with the accessible move buttons, then explicitly include the section on your site.
+A selected empty collection cannot publish. Incomplete excluded sections can remain
+in the draft. Catalogue browsing is optional, starts off, and uses only checked names.
+Adding inventory never adds a name to any public selection.
+
+Domain details have one availability and asking price across all sections. New
+selections start **Not for sale**. **Open to inquiries** requires a public email;
+a price is optional. Current holdings require a fresh, unambiguous ownership check.
+Previously owned names require the owner's explicit assertion, do not imply a sale,
+and cannot accept inquiries. Projects' domain references use the same checks.
+
+Preview uses the public renderer with contact and external navigation disabled.
+Review lists the precise before/after disclosures, including removals, section order,
+links, contact, descriptions, names and prices. Only **Publish changes** updates the
+public snapshot. Publication returns a live link and dated receipt. Unpublish removes
+public access and retains the private draft; downloaded/indexed copies cannot be recalled.
+
+## Compatibility and storage
+
+The existing encrypted draft and public snapshot tables hold strict versioned JSON;
+no database migration is required. v1 documents have no `version`; owner sites use
+`version: 2`. Unknown versions and extra fields fail closed. Anonymous routes read
+only the published snapshot, before private initialization, without registrar calls.
+All responses remain `no-store`. Owner endpoints and previews remain `noindex`.
+
+Existing v1 pages retain their original renderer and content. **Update your site**
+previews a deterministic draft conversion and requires an explicit save, followed by
+review and publication. It preserves selections, descriptions, collections, email,
+prices and historical assertions. Private entries stay unselected. The converted
+catalogue contains exactly the old public selection. Conversion never republishes.
+Oversized legacy content reports validation errors instead of truncating it.
+
+`/p/:handle` remains stable. Collections use `/p/:handle/c/:slug`; old
+`?collection=Title` bookmarks resolve only a known published collection. Unknown
+selections return a scoped not-found result, never the wider inventory. Legacy search
+and history bookmarks use the explicit converted catalogue. Disabled catalogue queries
+cannot disclose anything else. The gateway permits only these exact public paths;
+editor, draft, preview and other workspace routes keep their existing owner checks.
+
+The editor reuses the existing serialized autosave, bounded reads, revision conflicts,
+retry and reload protocol through `DraftSession`. Its domain picker reads private
+inventory without creating a second inventory. Existing registrar management remains
+available independently of site publication.
+
+## Operator rollout and recovery
+
+`DOMBOT_OWNER_SITE_V2=true` enables v2 creation, conversion, draft writes and publishing
+for one instance. Missing/other values keep it off. Only an operator binding enables
+it; request parameters cannot. Off retains compatible public reads, preview, export and
+explicit unpublish. A legacy editor cannot overwrite a v2 draft. Backup imports of v2
+drafts also require the flag; the root-key rotation script checks it before rotating.
+
+Deploy compatible readers before enabling writes for that instance. Rebuild the pinned
+engine with `npm run engine:pack`, update its npm integrity from the resulting engine
+lock, reinstall that exact archive, and run `npm run engine:verify`. Do not bypass the
+engine export boundary or deploy source with an old packaged renderer/runtime.
+
+Inspect live bindings, ingress, schedules and routing; do not deploy placeholder
+configs. Preserve all existing vars/secrets and tenant IDs. Save owner-only database
+backups plus semantic pre/post receipts. Start with an existing controlled synthetic
+QA account; keep ordinary accounts off. Deploy the gateway only when its public-route
+allowlist changes. Feature deployment does not publish or convert owner content, alter
+DNS, cut over the legacy personal portfolio, or update the product homepage.
+
+Export/import includes the versioned draft. Invalid/future versions fail before mutation.
+Restore creates a new revision and leaves the site unpublished, including after root-key
+rotation. Enable the compatible v2 flag before restoring/rotating v2 content. Do not use
+a v1-only binary for v2 import, rotation or rollback.
+
+Emergency recovery: disable v2 writes while retaining a dual-reader runtime. Export the
+draft and explicitly unpublish if content must stop being served. Retain this compatible
+release as the rollback floor after any v2 write; earlier v1-only engines cannot read it.
+
+## Validation boundary
+
+Synthetic browser checks and automated regressions demonstrate software behavior.
+They are not customer interviews, sales lift, independent review or formal CSO clearance.
+The consenting owner/visitor study in [the plan](owner-site-plan.md) remains the gate
+for broad enablement. No external participants are contacted by this implementation.

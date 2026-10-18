@@ -7,6 +7,8 @@ import { runMigrations } from '../core/storage/migrations';
 import { D1DocStore } from './storage/d1-doc-store';
 import { MemoryDocStore } from '../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../core/storage/namespace';
+import { emptyOwnerSite, selectedSite } from '../shared/owner-site';
+import { sampleSite } from '../shared/owner-site.fixture';
 import { emptyDraft, privateListing } from '../shared/publication';
 import { PublicationStore, PublicationConflict } from './publication-store';
 import { buildAuthConfig, createSession, type AuthConfig } from './auth';
@@ -29,6 +31,7 @@ const origin = 'http://localhost';
 const env = {
   DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
   DOMBOT_PASSWORD: 'test-password',
+  DOMBOT_OWNER_SITE_V2: '',
 };
 const draft = {
   ...emptyDraft(),
@@ -121,6 +124,7 @@ beforeEach(async () => {
     db.prepare('DELETE FROM published_portfolios'),
   ]);
   privateReads = 0;
+  env.DOMBOT_OWNER_SITE_V2 = '';
   const memory = new MemoryDocStore();
   await memory.put('registrar-credentials', 'dynadot', {
     apiKey: 'NEVER_PUBLIC_CREDENTIAL',
@@ -131,7 +135,13 @@ beforeEach(async () => {
     data: {
       lastSyncedAt: Date.now(),
       lastError: null,
-      domains: ['visible.com', 'private.com'].map((domainName) => ({
+      domains: [
+        'visible.com',
+        'private.com',
+        'selected.example',
+        'inquiries.example',
+        'never-disclose.example',
+      ].map((domainName) => ({
         domainName,
         registrar: 'dynadot',
         notes: 'NEVER_PUBLIC_NOTES',
@@ -475,5 +485,218 @@ describe('publication database and HTTP boundary', () => {
         new URL('http://localhost/p/portfolio?collection=Other'),
       ),
     ).toContain('No domains match');
+  });
+});
+
+describe('versioned owner site database and HTTP boundary', () => {
+  it('starts off and refuses client attempts to enable v2; enforces auth/origin on every new endpoint', async () => {
+    const site = emptyOwnerSite();
+    expect(
+      (await call('/publishing/site', 'PUT', { draft: site, revision: null }))
+        .status,
+    ).toBe(403);
+    expect(
+      (await call('/publishing/site/convert', 'POST', { revision: null }))
+        .status,
+    ).toBe(403);
+    env.DOMBOT_OWNER_SITE_V2 = 'true';
+    for (const [path, method] of [
+      ['/publishing/site', 'GET'],
+      ['/publishing/site', 'PUT'],
+      ['/publishing/site/convert', 'POST'],
+    ])
+      expect((await call(path, method, undefined, false)).status).toBe(401);
+    expect(
+      (
+        await call(
+          '/publishing/site',
+          'PUT',
+          { draft: site, revision: null },
+          true,
+          'https://attacker.example',
+        )
+      ).status,
+    ).toBe(403);
+    expect((await store.draft()).revision).toBeNull();
+  });
+  it('publishes a zero-domain profile and supports disabled-editor recovery without private public reads', async () => {
+    env.DOMBOT_OWNER_SITE_V2 = 'true';
+    const site = emptyOwnerSite();
+    site.profile.name = 'Sample profile only';
+    const saved = await call('/publishing/site', 'PUT', {
+      draft: site,
+      revision: null,
+    });
+    expect(saved.status).toBe(200);
+    const { revision } = await saved.json();
+    expect(
+      (await call('/publishing/publish', 'POST', { revision })).status,
+    ).toBe(200);
+    privateReads = 0;
+    const response = await call('/p/portfolio', 'GET', undefined, false);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('Sample profile only');
+    expect(html).not.toMatch(/visible.com|private.com|Search|0 holdings/);
+    expect(privateReads).toBe(0);
+    env.DOMBOT_OWNER_SITE_V2 = '';
+    expect(
+      (await call('/publishing/site', 'PUT', { draft: site, revision })).status,
+    ).toBe(403);
+    expect(
+      (await call('/publishing/publish', 'POST', { revision })).status,
+    ).toBe(403);
+    expect((await call('/publishing', 'PUT', { draft, revision })).status).toBe(
+      409,
+    );
+    expect((await call('/publishing/site')).status).toBe(200);
+    const backup = JSON.parse(
+      await publicationBackupMethods(store).exportData.handler(),
+    );
+    expect(backup.publicationDraft.version).toBe(2);
+    expect(
+      (await call('/publishing/unpublish', 'POST', { revision })).status,
+    ).toBe(200);
+    expect((await call('/p/portfolio', 'GET', undefined, false)).status).toBe(
+      404,
+    );
+    expect(
+      (await call('/publishing/publish', 'POST', { revision })).status,
+    ).toBe(409);
+  });
+  it('keeps a v1 publication byte-identical during explicit conversion; locks the handle and prevents stale legacy overwrite', async () => {
+    const revision = await store.save(draft, null);
+    await call('/publishing/publish', 'POST', { revision });
+    const before = await (
+      await call('/p/portfolio', 'GET', undefined, false)
+    ).text();
+    env.DOMBOT_OWNER_SITE_V2 = 'true';
+    const converted = await call('/publishing/site/convert', 'POST', {
+      revision,
+    });
+    expect(converted.status).toBe(200);
+    const next = await converted.json();
+    expect(
+      await (await call('/p/portfolio', 'GET', undefined, false)).text(),
+    ).toBe(before);
+    expect(
+      (await call('/publishing', 'PUT', { draft, revision: next.revision }))
+        .status,
+    ).toBe(409);
+    const saved = await store.draft();
+    if (!('version' in saved.draft)) throw new Error('Expected conversion');
+    expect(
+      (
+        await call('/publishing/site', 'PUT', {
+          draft: { ...saved.draft, handle: 'changed' },
+          revision: next.revision,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await call('/publishing/publish', 'POST', { revision: next.revision }))
+        .status,
+    ).toBe(200);
+    expect(
+      await (await call('/p/portfolio', 'GET', undefined, false)).text(),
+    ).toContain('Browse selected holdings');
+    expect(
+      (await call('/p/portfolio?collection=absent', 'GET', undefined, false))
+        .status,
+    ).toBe(404);
+  });
+  it('reads only published collection content and fails closed on hidden, corrupt and foreign references', async () => {
+    env.DOMBOT_OWNER_SITE_V2 = 'true';
+    const site = sampleSite();
+    const saved = await call('/publishing/site', 'PUT', {
+      draft: site,
+      revision: null,
+    });
+    const { revision } = await saved.json();
+    expect(
+      (await call('/publishing/publish', 'POST', { revision })).status,
+    ).toBe(200);
+    privateReads = 0;
+    for (const path of [
+      '/p/portfolio',
+      '/p/portfolio/c/one',
+      '/p/portfolio?collection=Selected%20ideas',
+      '/p/portfolio?view=catalogue&q=never',
+    ]) {
+      const html = await (await call(path, 'GET', undefined, false)).text();
+      expect(html).not.toMatch(
+        /never-disclose|NEVER_DISCLOSE|apiKey|dynadot|lastSyncedAt/,
+      );
+    }
+    expect(
+      (await call('/p/portfolio/c/hidden', 'GET', undefined, false)).status,
+    ).toBe(404);
+    expect(
+      (await call('/p/another-owner/c/one', 'GET', undefined, false)).status,
+    ).toBe(404);
+    expect(privateReads).toBe(0);
+    await db
+      .prepare("UPDATE published_portfolios SET payload = 'not-json'")
+      .run();
+    expect((await call('/p/portfolio', 'GET', undefined, false)).status).toBe(
+      503,
+    );
+  });
+  it('restores a sealed v2 backup under a new root without publication and rejects future versions before mutation', async () => {
+    env.DOMBOT_OWNER_SITE_V2 = 'true';
+    const site = sampleSite();
+    const { revision } = await (
+      await call('/publishing/site', 'PUT', { draft: site, revision: null })
+    ).json();
+    await call('/publishing/publish', 'POST', { revision });
+    const backup = await publicationBackupMethods(store).exportData.handler();
+    const bad = JSON.parse(backup);
+    bad.publicationDraft.version = 3;
+    await expect(
+      publicationBackupMethods(store).importData.handler(JSON.stringify(bad)),
+    ).rejects.toThrow(/Nothing was imported/);
+    expect((await store.published())?.revision).toBe(revision);
+    await expect(
+      publicationBackupMethods(store, false).importData.handler(backup),
+    ).rejects.toThrow(/Nothing was imported/);
+    expect((await store.published())?.revision).toBe(revision);
+    const rotated = new PublicationStore(
+      db,
+      await aesGcmCipher(new Uint8Array(32).fill(9)),
+    );
+    await publicationBackupMethods(rotated).importData.handler(backup);
+    expect((await rotated.draft()).draft).toEqual(site);
+    expect(await rotated.published()).toBeNull();
+    expect((await rotated.draft()).revision).not.toBe(revision);
+  });
+  it('rejects v2 races across store instances and never resurrects an unpublished snapshot', async () => {
+    const site = sampleSite();
+    const other = new PublicationStore(
+      db,
+      await aesGcmCipher(await deriveEncryptionKey(root)),
+    );
+    const revision = await store.save(site, null);
+    const next = await other.save(
+      { ...site, profile: { ...site.profile, name: 'Newer' } },
+      revision,
+    );
+    await expect(store.save(site, revision)).rejects.toBeInstanceOf(
+      PublicationConflict,
+    );
+    await expect(
+      store.publish(
+        { ...selectedSite(site), publishedAt: Date.now() },
+        revision,
+      ),
+    ).rejects.toBeInstanceOf(PublicationConflict);
+    await other.publish(
+      { ...selectedSite(site), publishedAt: Date.now() },
+      next,
+    );
+    await store.unpublish(next);
+    await expect(
+      other.publish({ ...selectedSite(site), publishedAt: Date.now() }, next),
+    ).rejects.toBeInstanceOf(PublicationConflict);
+    expect(await store.published()).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { hostPath } from './platform';
 import { PortfolioSession } from './portfolio-session';
 
-async function request<T>(
+export async function publicationRequest<T>(
   path = '',
   method = 'GET',
   body?: unknown,
@@ -53,10 +53,11 @@ async function request<T>(
 }
 
 export const portfolioEditor = new PortfolioSession({
-  load: () => request(),
-  save: (draft, revision) => request('', 'PUT', { draft, revision }),
-  publish: (revision) => request('/publish', 'POST', { revision }),
-  unpublish: (revision) => request('/unpublish', 'POST', { revision }),
+  load: () => publicationRequest(),
+  save: (draft, revision) => publicationRequest('', 'PUT', { draft, revision }),
+  publish: (revision) => publicationRequest('/publish', 'POST', { revision }),
+  unpublish: (revision) =>
+    publicationRequest('/unpublish', 'POST', { revision }),
 });
 export const usePortfolioEditor = () =>
   useSyncExternalStore(portfolioEditor.subscribe, portfolioEditor.getSnapshot);

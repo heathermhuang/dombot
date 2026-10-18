@@ -1,12 +1,19 @@
 import { z } from 'zod';
 import { coreMethods, method } from '../core/api';
 import { BundleError, parseBundle } from '../core/storage/bundle';
-import { draftSchema, type PortfolioDraft } from '../shared/publication';
+import {
+  anyDraftSchema,
+  isOwnerSite,
+  type AnyDraft,
+} from '../shared/owner-site';
 import type { PublicationStore } from './publication-store';
 
 /** Host extension to the normal sealed export: draft selections travel, public
  * status never does. The existing root-key rotation script uses these methods. */
-export function publicationBackupMethods(store: PublicationStore) {
+export function publicationBackupMethods(
+  store: PublicationStore,
+  v2WritesEnabled = true,
+) {
   return {
     exportData: method<'exportData'>(z.tuple([]), async () => {
       const text = await coreMethods.exportData.handler();
@@ -25,14 +32,18 @@ export function publicationBackupMethods(store: PublicationStore) {
       const bundle = parseBundle(text) as ReturnType<typeof parseBundle> & {
         publicationDraft?: unknown;
       };
-      let draft: PortfolioDraft | null = null;
+      let draft: AnyDraft | null = null;
       if (bundle.publicationDraft != null) {
-        const parsed = draftSchema.safeParse(bundle.publicationDraft);
+        const parsed = anyDraftSchema.safeParse(bundle.publicationDraft);
         if (!parsed.success)
           throw new BundleError(
             'Invalid public portfolio draft in this backup. Nothing was imported.',
           );
         draft = parsed.data;
+        if (isOwnerSite(draft) && !v2WritesEnabled)
+          throw new BundleError(
+            'Enable the compatible owner site editor before restoring a v2 backup. Nothing was imported.',
+          );
       }
       await store.restore(draft);
       return coreMethods.importData.handler(text);

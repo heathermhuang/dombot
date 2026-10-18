@@ -33,7 +33,7 @@ import DemoBanner from './components/DemoBanner';
 import { useWeeklyUpdateCheck } from './lib/updates';
 import StatusBar from './components/StatusBar';
 import { isDemo, supportsPublishing, webAuthMode } from './lib/platform';
-import DomainWorkspace from './pages/DomainWorkspace';
+import YourSite from './pages/YourSite';
 import { useTabMetrics, type TabMetrics } from './lib/tab-metrics';
 import {
   TabLink,
@@ -270,11 +270,7 @@ export default function App() {
           <Route
             path="/"
             element={
-              supportsPublishing() ? (
-                <DomainWorkspace area="domains" />
-              ) : (
-                <Domains />
-              )
+              supportsPublishing() ? <YourSite inventory /> : <Domains />
             }
           />
           <Route path="/renewals" element={<Renewals />} />
@@ -282,10 +278,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           {supportsPublishing() && (
             <>
-              <Route
-                path="/public-page"
-                element={<DomainWorkspace area="page" />}
-              />
+              <Route path="/public-page" element={<YourSite />} />
               <Route
                 path="/public-portfolio"
                 element={<Navigate to="/public-page" replace />}
@@ -326,7 +319,7 @@ function HostedSyncControl() {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Domains', icon: Globe },
-  { to: '/public-page', label: 'Public page', icon: Globe },
+  { to: '/public-page', label: 'Your site', icon: Globe },
   { to: '/renewals', label: 'Renewals', icon: CalendarClock },
   { to: '/activity', label: 'Activity', icon: History },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },

@@ -1,10 +1,14 @@
 import type { Cipher } from '../core/storage/encrypted';
+import { emptyDraft } from '../shared/publication';
 import {
-  draftSchema,
-  emptyDraft,
-  type PortfolioDraft,
-  type PublishedPortfolio,
-} from '../shared/publication';
+  anyDraftSchema,
+  anyPublishedSchema,
+  isOwnerSite,
+  type AnyDraft,
+  type AnyPublished,
+} from '../shared/owner-site';
+
+export class PublicationInputError extends Error {}
 
 export class PublicationConflict extends Error {
   constructor() {
@@ -20,7 +24,7 @@ export class PublicationStore {
     private readonly cipher: Cipher,
   ) {}
 
-  async draft(): Promise<{ draft: PortfolioDraft; revision: string | null }> {
+  async draft(): Promise<{ draft: AnyDraft; revision: string | null }> {
     const row = await this.db
       .prepare(
         "SELECT sealed, revision FROM portfolio_drafts WHERE id = 'main'",
@@ -29,7 +33,7 @@ export class PublicationStore {
     // Corrupt or unreadable drafts must fail closed, never become a fresh empty draft.
     return row
       ? {
-          draft: draftSchema.parse(
+          draft: anyDraftSchema.parse(
             JSON.parse(await this.cipher.open(row.sealed)),
           ),
           revision: row.revision,
@@ -37,10 +41,22 @@ export class PublicationStore {
       : { draft: emptyDraft(), revision: null };
   }
 
-  async save(draft: PortfolioDraft, expected: string | null): Promise<string> {
+  async save(draft: AnyDraft, expected: string | null): Promise<string> {
+    const previous = await this.draft();
+    if (previous.revision !== expected) throw new PublicationConflict();
+    if (isOwnerSite(previous.draft) && !isOwnerSite(draft))
+      throw new PublicationConflict();
+    if (
+      isOwnerSite(draft) &&
+      previous.revision &&
+      draft.handle !== previous.draft.handle
+    )
+      throw new PublicationInputError(
+        'The site address cannot change after the first save.',
+      );
     const revision = crypto.randomUUID();
     const sealed = await this.cipher.seal(
-      JSON.stringify(draftSchema.parse(draft)),
+      JSON.stringify(anyDraftSchema.parse(draft)),
     );
     const statement =
       expected === null
@@ -59,7 +75,7 @@ export class PublicationStore {
   }
 
   async published(): Promise<{
-    snapshot: PublishedPortfolio;
+    snapshot: AnyPublished;
     revision: string;
   } | null> {
     const row = await this.db
@@ -69,13 +85,14 @@ export class PublicationStore {
       .first<{ payload: string; revision: string }>();
     return row
       ? {
-          snapshot: JSON.parse(row.payload) as PublishedPortfolio,
+          snapshot: anyPublishedSchema.parse(JSON.parse(row.payload)),
           revision: row.revision,
         }
       : null;
   }
 
-  async publish(snapshot: PublishedPortfolio, expected: string): Promise<void> {
+  async publish(snapshot: AnyPublished, expected: string): Promise<void> {
+    snapshot = anyPublishedSchema.parse(snapshot);
     // Checking the revision and publishing are ONE database statement. A stale
     // preview cannot overwrite a newer draft, even across Worker isolates.
     const row = await this.db
@@ -107,7 +124,7 @@ export class PublicationStore {
 
   /** A backup restore never makes content public. It also works after a root
    * key rotation, when the previous draft can no longer be decrypted. */
-  async restore(draft: PortfolioDraft | null): Promise<void> {
+  async restore(draft: AnyDraft | null): Promise<void> {
     const write = draft
       ? this.db
           .prepare(
@@ -115,7 +132,7 @@ export class PublicationStore {
           )
           .bind(
             crypto.randomUUID(),
-            await this.cipher.seal(JSON.stringify(draftSchema.parse(draft))),
+            await this.cipher.seal(JSON.stringify(anyDraftSchema.parse(draft))),
           )
       : this.db.prepare("DELETE FROM portfolio_drafts WHERE id = 'main'");
     await this.db.batch([
