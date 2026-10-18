@@ -23,6 +23,11 @@ Its documentation follows; local-first/device-only statements describe those
 editions. The hosted service uses operator-managed infrastructure as described
 in [the hosted trust model](docs/hosted-staging.md).
 
+The feature-gated Sales source adds reviewed domain landers, inquiries, replies and
+selected shops. See the [implementation and qualification ledger](docs/domain-sales-plan/IMPLEMENTATION.md)
+and [operations runbook](docs/domain-sales-plan/operations.md). This source is not
+a claim that the sales beta is enabled or qualified on the live service.
+
 ## Original DomBot
 
 [![Latest release](https://img.shields.io/github/v/release/aoxborrow/dombot?label=release)](https://github.com/aoxborrow/dombot/releases/latest)

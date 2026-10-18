@@ -56,5 +56,10 @@
     // "CF_ACCESS_AUD": "<application audience tag>"
   },
 
-  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false },
+  },
 }

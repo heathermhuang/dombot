@@ -1,0 +1,28 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "domains-sales-lander",
+  "main": "../src/hosted/lander-edge.ts",
+  "compatibility_date": "2026-10-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "CONTROL_DB",
+      "database_name": "domains-staging-control",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "services": [
+    { "binding": "WORKSPACE_0", "service": "domains-staging-tenant-0" },
+  ],
+  "vars": { "SALES_CUSTOM_HOSTS_ENABLED": "false", "WORKSPACES": "[]" },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false },
+    "redact_query_string": true,
+  },
+}

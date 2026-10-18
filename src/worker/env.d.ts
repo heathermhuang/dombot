@@ -2,6 +2,14 @@
 // plain vars present in wrangler.jsonc, so the rest is declared here. All
 // optional: boot fails with a clear message when a required one is missing.
 interface Env {
+  DOMBOT_SALES_V1?: string;
+  SALES_INQUIRIES_ENABLED?: string;
+  SALES_PRIVACY_REVIEWED?: string;
+  SALES_MAIL_ENABLED?: string;
+  SALES_TURNSTILE_SITEKEY?: string;
+  SALES_TURNSTILE_SECRET?: string;
+  DOMBOT_SALES_ORIGIN?: string;
+  DOMBOT_SALES_EDGE_SECRET?: string;
   /** Opt-in per instance. Compatible public reads/export/unpublish remain on. */
   DOMBOT_OWNER_SITE_V2?: string;
   DOMBOT_GATEWAY_SECRET?: string;

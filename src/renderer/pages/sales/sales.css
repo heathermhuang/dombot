@@ -1,0 +1,344 @@
+@font-face {
+  font-family: Archivo;
+  src: url('/brand/archivo-latin-7150c0ec5ad3.woff2') format('woff2');
+  font-display: swap;
+}
+.sales {
+  --sales-forest: var(--primary);
+  font-family: Archivo, var(--font-sans), sans-serif;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 24px;
+}
+.sales-nav {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  overflow: auto;
+  white-space: nowrap;
+  margin-bottom: 28px;
+}
+.sales-nav a {
+  min-height: 44px;
+  padding: 8px 2px;
+  border-bottom: 2px solid transparent;
+}
+.sales-nav a.active {
+  border-color: var(--primary);
+  font-weight: 600;
+}
+.sales h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.sales h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 24px 0 16px;
+}
+.sales p {
+  line-height: 1.6;
+}
+.sales-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.sales-kicker {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-bottom: 8px;
+}
+.sales-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.sales button,
+.sales .sales-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  background: var(--background);
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.sales button.primary,
+.sales .primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.sales button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sales input:not([type='checkbox']),
+.sales select,
+.sales textarea {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  padding: 10px 12px;
+  max-width: 100%;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+.sales input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--primary);
+}
+.sales .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+.sales .checkbox-label input {
+  flex: none;
+}
+.sales-field {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.sales-field > span {
+  font-weight: 500;
+}
+.sales textarea {
+  min-height: 120px;
+}
+.sales-table-region {
+  overflow: auto;
+  width: 100%;
+}
+.sales table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+}
+.sales th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sales td {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+}
+.sales td a.domain {
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sales .small {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.sales .badge {
+  font-size: 12px;
+  display: inline-block;
+  background: var(--muted);
+  padding: 3px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+.sales-notice {
+  font-size: 13px;
+  min-height: 20px;
+  color: var(--muted-foreground);
+}
+.sales-error {
+  border: 1px solid var(--destructive);
+  padding: 14px;
+  border-radius: 4px;
+  margin: 12px 0;
+}
+.sales-empty {
+  padding: 48px 0;
+  max-width: 650px;
+}
+.sales-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 40px;
+}
+.sales-editor form {
+  min-width: 0;
+  max-width: 650px;
+}
+.sales-preview {
+  width: 100%;
+  min-height: 750px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #f7f8f4;
+}
+.sales-section {
+  border-top: 1px solid var(--border);
+  padding: 8px 0 24px;
+}
+.sales-section p {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  max-width: 70ch;
+}
+.sales .grid-two {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+.sales-inbox {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 32px;
+}
+.sales-inbox-list a {
+  display: block;
+  border-bottom: 1px solid var(--border);
+  padding: 18px 12px;
+}
+.sales-inbox-list a.active {
+  background: var(--muted);
+}
+.sales-thread {
+  max-width: 800px;
+  min-width: 0;
+}
+.sales-thread .message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sales-thread .private-note {
+  background: var(--muted);
+  padding: 18px;
+}
+.sales-review-list > section {
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+}
+.sales-review-list dl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.sales-review-list dt {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.sales-review-list dd {
+  margin: 0;
+  font-size: 14px;
+}
+.sales :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.sales-mobile-tabs {
+  display: none;
+}
+.sales .link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sales .checks {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+@media (max-width: 1023px) {
+  .sales-editor {
+    grid-template-columns: 1fr;
+  }
+  .sales-mobile-tabs {
+    display: flex;
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .sales-editor .hide-mobile {
+    display: none;
+  }
+  .sales-inbox {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+}
+@media (max-width: 639px) {
+  .sales h1 {
+    font-size: 24px;
+  }
+  .sales-nav {
+    gap: 20px;
+  }
+  .sales-toolbar > input {
+    flex: 1;
+    min-width: 180px;
+  }
+  .sales th,
+  .sales td {
+    padding: 12px 6px;
+  }
+  .sales th:nth-child(n + 5),
+  .sales td:nth-child(n + 5) {
+    display: none;
+  }
+  .sales table {
+    font-size: 12px;
+  }
+  .sales td a.domain {
+    font-size: 14px;
+  }
+  .sales .selection {
+    min-width: 32px;
+  }
+  .sales .grid-two {
+    grid-template-columns: minmax(0, 1fr) 90px;
+  }
+  .sales-inbox {
+    display: block;
+  }
+  .sales-inbox.has-thread .sales-inbox-list {
+    display: none;
+  }
+  .sales-review-list dl {
+    grid-template-columns: 85px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .sales .sales-preview {
+    min-height: 850px;
+  }
+  .sales-heading {
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sales * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

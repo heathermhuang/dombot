@@ -46,6 +46,18 @@ import { createPublicPortfolioRoutes } from './public-portfolio';
 import { createPublicationRoutes } from './publication-routes';
 import { PublicationStore } from './publication-store';
 import { publicationBackupMethods } from './publication-backup';
+import { createPublicSalesRoutes } from './public-sales';
+import { createSalesInternalRoutes } from './sales-internal';
+import { createSalesRoutes } from './sales-routes';
+import { SalesStore } from './sales-store';
+import { hasSales } from './sales-backup';
+import {
+  createSaleObserver,
+  salesControlState,
+  changedSalesDomains,
+} from './sales-observation';
+import { SalesInquiryStore } from './sales-inquiry-store';
+import { reconcileSalesOutcomes } from './sales-reconciliation';
 
 // The Cloudflare Worker host: the same core (services, API table, storage
 // façade) as the desktop app behind an HTTP transport. See
@@ -136,6 +148,8 @@ function retainRequestWork(c: Context, work: Promise<unknown>): void {
 // Anonymous access is limited to the published projection. Never hydrate the
 // private store or decrypt credentials to serve these pages.
 app.route('/', createPublicPortfolioRoutes());
+app.route('/', createPublicSalesRoutes());
+app.route('/sales-internal', createSalesInternalRoutes());
 
 // ── boot on every request ───────────────────────────────────────────────────
 app.use('*', async (c, next) => {
@@ -179,9 +193,22 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
           : path === c.req.path,
       );
     await hydrate(oauthOnly);
+    const salesReady = !oauthOnly && (await hasSales(c.env.DB));
+    const beforeSales = salesReady
+      ? salesControlState()
+      : new Map<string, string>();
     await next();
     try {
+      if (salesReady)
+        await reconcileSalesOutcomes(await SalesStore.from(c.env));
       await flushWrites();
+      if (c.req.method !== 'GET' && salesReady)
+        await (
+          await SalesStore.from(c.env)
+        ).reconcile(
+          createSaleObserver(),
+          changedSalesDomains(beforeSales, salesControlState()),
+        );
     } catch (err) {
       // The handler already answered, but its data didn't land; the next
       // hydrate will show the pre-request state. Say so instead of 200.
@@ -228,6 +255,7 @@ app.get('/auth/status', async (c) => {
     mode: auth.mode,
     authenticated: await isAuthenticated(auth, c.req.raw, c.env.DB),
     version: APP_VERSION,
+    sales: c.env.DOMBOT_SALES_V1 === 'true',
   });
 });
 
@@ -289,6 +317,7 @@ app.post('/auth/logout', async (c) => {
 // ── the API: one route over the method table ────────────────────────────────
 
 app.route('/publishing', createPublicationRoutes(stateful));
+app.route('/sales', createSalesRoutes(stateful));
 
 app.post(
   '/api/:method',
@@ -321,9 +350,12 @@ app.post(
         entry = publicationBackupMethods(
           new PublicationStore(c.env.DB, cipher),
           c.env.DOMBOT_OWNER_SITE_V2 === 'true',
+          (await hasSales(c.env.DB)) ? await SalesStore.from(c.env) : undefined,
         )[name];
       }
       const result = await invoke(name, entry, args);
+      if (name === 'deleteDomains' && (await hasSales(c.env.DB)))
+        await (await SalesStore.from(c.env)).removeNames(args[0] as string[]);
       return c.json({ result: result === undefined ? null : result });
     } catch (err) {
       if (err instanceof ApiValidationError || err instanceof BundleError) {
@@ -379,6 +411,14 @@ export default {
     await withRequestLock(async () => {
       await bootOnce(env);
       await hydrate();
+      if (await hasSales(env.DB))
+        await reconcileSalesOutcomes(await SalesStore.from(env));
+      if (await hasSales(env.DB))
+        await new SalesInquiryStore(
+          await SalesStore.from(env),
+          env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
+        ).cleanup();
+      const beforeSales = salesControlState();
       const minutes = getSettings().autoSyncIntervalMinutes;
       if (minutes <= 0) {
         console.log('[cron] auto-sync disabled in settings');
@@ -386,6 +426,13 @@ export default {
       }
       const ran = await syncAll(minutes * 60_000);
       await stepRenewalPricing();
+      if (await hasSales(env.DB))
+        await (
+          await SalesStore.from(env)
+        ).reconcile(
+          createSaleObserver(),
+          changedSalesDomains(beforeSales, salesControlState()),
+        );
       console.log(
         ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
       );

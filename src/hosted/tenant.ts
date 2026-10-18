@@ -1,4 +1,4 @@
-import { verifyGatewayRequest } from '../shared/gateway-proof';
+import { verifyTenantAdmission } from '../shared/gateway-proof';
 import { mcpPreflight } from '@domains-domains/dombot-engine';
 import engineManifest from '@domains-domains/dombot-engine/manifest';
 import { WorkspaceCoordinator } from './workspace-coordinator';
@@ -20,13 +20,7 @@ function coordinator(env: HostedTenantEnv) {
  * key. No caller can select a database or tenant through a request parameter. */
 export default {
   async fetch(request, env) {
-    if (
-      !(await verifyGatewayRequest(
-        env.DOMBOT_GATEWAY_SECRET ?? '',
-        env.DOMBOT_WORKSPACE_ID ?? '',
-        request,
-      ))
-    ) {
+    if (!(await verifyTenantAdmission(env, request))) {
       return Response.json(
         { error: 'Trusted gateway request required' },
         { status: 403, headers: { 'Cache-Control': 'no-store' } },

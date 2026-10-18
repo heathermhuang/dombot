@@ -9,10 +9,12 @@ export type AuthMode =
 let web = false;
 let demo = false;
 let authMode: AuthMode | null = null;
+let sales = false;
 
-export function markWeb(mode: AuthMode): void {
+export function markWeb(mode: AuthMode, salesEnabled = false): void {
   web = true;
   authMode = mode;
+  sales = salesEnabled;
 }
 
 /** The demo build: a browser host (downloads, no stdio) with a few controls
@@ -77,4 +79,7 @@ export function hostPath(path: string): string {
 /** Publication endpoints exist only on the hosted app, not the local demo. */
 export function supportsPublishing(): boolean {
   return web && !demo;
+}
+export function supportsSales(): boolean {
+  return web && !demo && sales;
 }

@@ -32,7 +32,19 @@ import ApprovalModal from './components/ApprovalModal';
 import DemoBanner from './components/DemoBanner';
 import { useWeeklyUpdateCheck } from './lib/updates';
 import StatusBar from './components/StatusBar';
-import { isDemo, supportsPublishing, webAuthMode } from './lib/platform';
+import {
+  isDemo,
+  supportsPublishing,
+  supportsSales,
+  webAuthMode,
+} from './lib/platform';
+import SalesListings from './pages/sales/Listings';
+import SalesListingEditor from './pages/sales/ListingEditor';
+import SalesReview from './pages/sales/PublicationReview';
+import SalesInbox from './pages/sales/Inbox';
+import SalesShop from './pages/sales/Shop';
+import SalesChannels from './pages/sales/Channels';
+import SalesDomainSetup from './pages/sales/DomainSetup';
 import YourSite from './pages/YourSite';
 import { useTabMetrics, type TabMetrics } from './lib/tab-metrics';
 import {
@@ -168,39 +180,51 @@ export default function App() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            aria-label="DomBot — go to Domains"
+            aria-label={
+              webAuthMode() === 'gateway'
+                ? 'domains.domains — go to Domains'
+                : 'DomBot — go to Domains'
+            }
             className="group relative -top-px -ml-1 flex items-center gap-2"
           >
-            <svg
-              viewBox="0 0 32 32"
-              aria-hidden="true"
-              className="size-[34px]"
-              fill="var(--brand)"
-            >
-              <path d="m25 6h-18c-1.06087 0-2.07828.42143-2.82843 1.17157-.75014.75015-1.17157 1.76756-1.17157 2.82843v14c0 1.0609.42143 2.0783 1.17157 2.8284.75015.7502 1.76756 1.1716 2.82843 1.1716h18c1.0609 0 2.0783-.4214 2.8284-1.1716.7502-.7501 1.1716-1.7675 1.1716-2.8284v-14c0-1.06087-.4214-2.07828-1.1716-2.82843-.7501-.75014-1.7675-1.17157-2.8284-1.17157zm2 18c0 .5304-.2107 1.0391-.5858 1.4142s-.8838.5858-1.4142.5858h-18c-.53043 0-1.03914-.2107-1.41421-.5858-.37508-.3751-.58579-.8838-.58579-1.4142v-14c0-.53043.21071-1.03914.58579-1.41421.37507-.37508.88378-.58579 1.41421-.58579h18c.5304 0 1.0391.21071 1.4142.58579.3751.37507.5858.88378.5858 1.41421zm-6.5-7h-9c-.9283 0-1.8185.3687-2.47487 1.0251-.65638.6564-1.02513 1.5466-1.02513 2.4749s.36875 1.8185 1.02513 2.4749c.65637.6564 1.54657 1.0251 2.47487 1.0251h9c.9283 0 1.8185-.3687 2.4749-1.0251s1.0251-1.5466 1.0251-2.4749-.3687-1.8185-1.0251-2.4749-1.5466-1.0251-2.4749-1.0251zm-3.5 2v3h-2v-3zm-7 1.5c0-.3978.158-.7794.4393-1.0607s.6629-.4393 1.0607-.4393h1.5v3h-1.5c-.3978 0-.7794-.158-1.0607-.4393s-.4393-.6629-.4393-1.0607zm10.5 1.5h-1.5v-3h1.5c.3978 0 .7794.158 1.0607.4393s.4393.6629.4393 1.0607-.158.7794-.4393 1.0607-.6629.4393-1.0607.4393z" />
-              <circle cx="10.5" cy="12" r="2" />
-              <circle cx="21.5" cy="12" r="2" />
-            </svg>
-            <span className="max-w-0 overflow-hidden text-xl font-bold tracking-tight whitespace-nowrap opacity-0 transition-all duration-200 lg:group-hover:max-w-[7ch] lg:group-hover:opacity-100">
-              Dom<span className="text-brand">Bot</span>
-            </span>
+            {webAuthMode() === 'gateway' ? (
+              <span
+                className="text-lg font-semibold tracking-tight whitespace-nowrap"
+                style={{ fontFamily: 'Archivo, sans-serif' }}
+              >
+                domains.domains
+              </span>
+            ) : (
+              <>
+                <svg
+                  viewBox="0 0 32 32"
+                  aria-hidden="true"
+                  className="size-[34px]"
+                  fill="var(--brand)"
+                >
+                  <path d="m25 6h-18c-1.06087 0-2.07828.42143-2.82843 1.17157-.75014.75015-1.17157 1.76756-1.17157 2.82843v14c0 1.0609.42143 2.0783 1.17157 2.8284.75015.7502 1.76756 1.1716 2.82843 1.1716h18c1.0609 0 2.0783-.4214 2.8284-1.1716.7502-.7501 1.1716-1.7675 1.1716-2.8284v-14c0-1.06087-.4214-2.07828-1.1716-2.82843-.7501-.75014-1.7675-1.17157-2.8284-1.17157zm2 18c0 .5304-.2107 1.0391-.5858 1.4142s-.8838.5858-1.4142.5858h-18c-.53043 0-1.03914-.2107-1.41421-.5858-.37508-.3751-.58579-.8838-.58579-1.4142v-14c0-.53043.21071-1.03914.58579-1.41421.37507-.37508.88378-.58579 1.41421-.58579h18c.5304 0 1.0391.21071 1.4142.58579.3751.37507.5858.88378.5858 1.41421zm-6.5-7h-9c-.9283 0-1.8185.3687-2.47487 1.0251-.65638.6564-1.02513 1.5466-1.02513 2.4749s.36875 1.8185 1.02513 2.4749c.65637.6564 1.54657 1.0251 2.47487 1.0251h9c.9283 0 1.8185-.3687 2.4749-1.0251s1.0251-1.5466 1.0251-2.4749-.3687-1.8185-1.0251-2.4749-1.5466-1.0251-2.4749-1.0251zm-3.5 2v3h-2v-3zm-7 1.5c0-.3978.158-.7794.4393-1.0607s.6629-.4393 1.0607-.4393h1.5v3h-1.5c-.3978 0-.7794-.158-1.0607-.4393s-.4393-.6629-.4393-1.0607zm10.5 1.5h-1.5v-3h1.5c.3978 0 .7794.158 1.0607.4393s.4393.6629.4393 1.0607-.158.7794-.4393 1.0607-.6629.4393-1.0607.4393z" />
+                  <circle cx="10.5" cy="12" r="2" />
+                  <circle cx="21.5" cy="12" r="2" />
+                </svg>
+                <span className="max-w-0 overflow-hidden text-xl font-bold tracking-tight whitespace-nowrap opacity-0 transition-all duration-200 lg:group-hover:max-w-[7ch] lg:group-hover:opacity-100">
+                  Dom<span className="text-brand">Bot</span>
+                </span>
+              </>
+            )}
           </button>
-          {webAuthMode() === 'gateway' && (
-            <span className="ml-2 truncate text-xs font-medium text-muted-foreground">
-              domains.domains
-            </span>
-          )}
         </div>
         {/* Desktop: the tab strip. On phones it collapses into the hamburger
             menu on the right (MobileNav). */}
         <TabStrip
           className={cn(
             'mr-4 hidden self-end justify-self-end',
-            supportsPublishing() ? 'lg:flex' : 'sm:flex',
+            supportsPublishing() ? 'xl:flex' : 'sm:flex',
           )}
         >
           {NAV_ITEMS.filter(
-            (item) => item.to !== '/public-page' || supportsPublishing(),
+            (item) =>
+              (item.to !== '/public-page' || supportsPublishing()) &&
+              (item.to !== '/sales' || supportsSales()),
           ).map(({ to, label, icon }) => {
             const { metric, ...options } = TAB_OPTIONS[to] ?? {};
             return (
@@ -228,7 +252,7 @@ export default function App() {
           {webAuthMode() === 'gateway' && (
             <a
               href="/account"
-              className="mr-2 text-sm text-muted-foreground hover:text-foreground"
+              className="mr-2 hidden text-sm text-muted-foreground hover:text-foreground sm:inline-flex"
             >
               Account
             </a>
@@ -279,6 +303,28 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           {supportsPublishing() && (
             <>
+              <Route path="/sales" element={<SalesListings />} />
+              <Route
+                path="/sales/listings/:id"
+                element={<SalesListingEditor />}
+              />
+              <Route
+                path="/sales/listings/:id/setup"
+                element={<SalesDomainSetup />}
+              />
+              <Route
+                path="/sales/bulk-review/:jobId"
+                element={<SalesReview />}
+              />
+              <Route path="/sales/review/:reviewId" element={<SalesReview />} />
+              <Route path="/sales/inbox" element={<SalesInbox />} />
+              <Route path="/sales/inbox/:id" element={<SalesInbox />} />
+              <Route path="/sales/shop" element={<SalesShop />} />
+              <Route path="/sales/channels" element={<SalesChannels />} />
+            </>
+          )}
+          {supportsPublishing() && (
+            <>
               <Route path="/public-page" element={<YourSite />} />
               <Route
                 path="/public-portfolio"
@@ -322,7 +368,8 @@ function HostedSyncControl() {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Domains', icon: Globe },
-  { to: '/public-page', label: 'Your site', icon: Globe },
+  { to: '/sales', label: 'Sales', icon: Globe },
+  { to: '/public-page', label: 'Public site', icon: Globe },
   { to: '/renewals', label: 'Renewals', icon: CalendarClock },
   { to: '/activity', label: 'Activity', icon: History },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -353,14 +400,16 @@ function MobileNav() {
           variant="outline"
           size="icon"
           aria-label="Open navigation menu"
-          className={supportsPublishing() ? 'lg:hidden' : 'sm:hidden'}
+          className={supportsPublishing() ? 'xl:hidden' : 'sm:hidden'}
         >
           <Menu />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         {NAV_ITEMS.filter(
-          (item) => item.to !== '/public-page' || supportsPublishing(),
+          (item) =>
+            (item.to !== '/public-page' || supportsPublishing()) &&
+            (item.to !== '/sales' || supportsSales()),
         ).map(({ to, label, icon: Icon }) => {
           const active = isActive(to);
           const metric = TAB_OPTIONS[to]?.metric;
@@ -388,6 +437,11 @@ function MobileNav() {
             </DropdownMenuItem>
           );
         })}
+        {webAuthMode() === 'gateway' && (
+          <DropdownMenuItem onSelect={() => window.location.assign('/account')}>
+            Account security
+          </DropdownMenuItem>
+        )}
         {/* The Sync action lives here on phones; on wider screens it's in the
             status bar. Domains has its own in the page header. */}
         {pathname !== '/' && (

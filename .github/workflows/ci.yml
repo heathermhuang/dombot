@@ -72,6 +72,8 @@ jobs:
         run: npm run engine:verify
       - name: Bundle hosted gateway
         run: npx wrangler deploy --config hosted/wrangler.gateway.jsonc --dry-run --outdir dist/gateway
+      - name: Bundle public lander edge
+        run: npx wrangler deploy --config hosted/wrangler.lander.jsonc --dry-run --outdir dist/lander
       - name: Bundle hosted tenant
         run: npx wrangler deploy --config hosted/wrangler.tenant.jsonc --dry-run --outdir dist/tenant
       - name: Bundle the Worker without deploying

@@ -4,6 +4,14 @@ export interface DomBotEnvironment {
   ASSETS: Fetcher;
   DOMBOT_AUTH: string;
   DOMBOT_OWNER_SITE_V2?: string;
+  DOMBOT_SALES_V1?: string;
+  SALES_INQUIRIES_ENABLED?: string;
+  SALES_PRIVACY_REVIEWED?: string;
+  SALES_MAIL_ENABLED?: string;
+  SALES_TURNSTILE_SITEKEY?: string;
+  SALES_TURNSTILE_SECRET?: string;
+  DOMBOT_SALES_ORIGIN?: string;
+  DOMBOT_SALES_EDGE_SECRET?: string;
   DOMBOT_SECRET?: string;
   DOMBOT_PASSWORD?: string;
   DOMBOT_GATEWAY_SECRET?: string;

@@ -58,8 +58,9 @@ if (window.api) {
       .catch(() => ({ mode: 'password', authenticated: false }))) as {
       mode: AuthMode;
       authenticated: boolean;
+      sales?: boolean;
     };
-    markWeb(status.mode);
+    markWeb(status.mode, status.sales === true);
     const start = () => {
       setSessionActive(true);
       render(app);

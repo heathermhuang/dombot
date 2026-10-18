@@ -7,6 +7,7 @@
   },
   "include": [
     "src/hosted/gateway.ts",
+    "src/hosted/lander-edge.ts",
     "src/hosted/accounts.ts",
     "src/hosted/crypto.ts",
     "src/hosted/views.ts",

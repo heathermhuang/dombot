@@ -8,6 +8,7 @@ import {
 } from './registration';
 import { legalVersion } from './legal';
 import { escapeHtml } from './views';
+import { salesRecipientHash } from './sales-notifications';
 
 interface EmailProof {
   id: string;
@@ -223,6 +224,28 @@ export class EmailAuth {
         !(await new Accounts(db, this.env.AUTH_PEPPER).session(token))
       )
         return null;
+      if (this.env.SALES_MAIL_ENABLED === 'true') {
+        // Sales metadata must never make an otherwise valid auth proof fail.
+        try {
+          const verifiedUser = await new Accounts(
+            db,
+            this.env.AUTH_PEPPER,
+          ).session(token);
+          if (verifiedUser)
+            await db
+              .prepare(
+                'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET email_hash=excluded.email_hash,verified_at=excluded.verified_at',
+              )
+              .bind(
+                verifiedUser.workspace_id,
+                salesRecipientHash(this.env, verifiedUser.email),
+                now,
+              )
+              .run();
+        } catch {
+          /* Keep auth independent; the seller can verify again. */
+        }
+      }
       return { token, next: row.next_path };
     } catch {
       return null;

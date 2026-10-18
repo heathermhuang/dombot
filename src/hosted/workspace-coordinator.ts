@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import worker from '@domains-domains/dombot-engine';
-import { verifyGatewayRequest } from '../shared/gateway-proof';
+import { verifyTenantAdmission } from '../shared/gateway-proof';
 
 /** One coordinator per tenant deployment. DomBot owns a single-instance,
  * in-memory store, so every API/MCP request and scheduled sync must reach
@@ -9,14 +9,9 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     let rejected = 'invalid';
     if (
-      !(await verifyGatewayRequest(
-        this.env.DOMBOT_GATEWAY_SECRET ?? '',
-        this.env.DOMBOT_WORKSPACE_ID ?? '',
-        request,
-        (reason) => {
-          rejected = reason;
-        },
-      ))
+      !(await verifyTenantAdmission(this.env, request, (reason) => {
+        rejected = reason;
+      }))
     ) {
       return Response.json(
         { error: 'Trusted gateway request required' },
