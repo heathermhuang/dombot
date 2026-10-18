@@ -16,6 +16,7 @@ beforeAll(async () => {
   db = (await mf.getD1Database('DB')) as unknown as D1Database;
   for (const f of [
     '0001_control.sql',
+    '0005_passwordless_passkeys.sql',
     '0002_password_recovery.sql',
     '0003_lifecycle.sql',
   ])
@@ -49,7 +50,7 @@ describe('bounded free-service lifecycle', () => {
   });
   it('closes only the reauthenticated owner, invalidates sessions and retains the immutable mapping', async () => {
     await db.exec(
-      "INSERT INTO workspaces(id,label) VALUES('one','one'),('two','two');INSERT INTO users VALUES('owner','one@example.test','one','current',0),('other','two@example.test','two','other',0);INSERT INTO sessions VALUES('a','owner',9999999999999),('b','other',9999999999999);INSERT INTO password_resets(token_hash,user_id,expires_at,operator_case) VALUES('r','owner',9999999999999,'qa');",
+      "INSERT INTO workspaces(id,label) VALUES('one','one'),('two','two');INSERT INTO users VALUES('owner','one@example.test','one','current',0),('other','two@example.test','two','other',0);INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('a','owner',9999999999999),('b','other',9999999999999);INSERT INTO password_resets(token_hash,user_id,expires_at,operator_case) VALUES('r','owner',9999999999999,'qa');",
     );
     const user = {
       id: 'owner',

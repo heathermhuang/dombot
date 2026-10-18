@@ -47,6 +47,7 @@ beforeAll(async () => {
   db = (await mf.getD1Database('DB')) as unknown as D1Database;
   for (const file of [
     '0001_control.sql',
+    '0005_passwordless_passkeys.sql',
     '0002_password_recovery.sql',
     '0003_lifecycle.sql',
     '0004_public_registration.sql',

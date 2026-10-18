@@ -126,3 +126,6 @@ wrangler.local.jsonc
 
 # Immutable DomBot engine dependency consumed by the SaaS adapter
 !vendor/domains-domains-dombot-engine-*.tgz
+
+# Generated SaaS authentication browser bundle
+hosted/generated-auth.ts

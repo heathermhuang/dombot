@@ -7,8 +7,7 @@ immutable implementation details. The rejected `d.d` mark must not return.
 ## Release gates
 
 Apply `hosted/migrations/0004_public_registration.sql` to the control database
-before deploying this gateway. It only adds tables; it does not alter existing
-accounts or tenant data.
+and `hosted/migrations/0005_passwordless_passkeys.sql` before deploying the gateway. The latter adds proof/passkey tables and session freshness metadata. Existing credentials, tenant identities and portfolio data are retained.
 
 Public signup opens only when all of these settings are complete:
 
@@ -53,10 +52,7 @@ Support is `domains@domains.domains`. Its actual inbox/alias must exist at the
 Google mail provider and a received message must be verified. An MX record or a
 message in the sending Gmail account does not prove delivery to support.
 
-Verification links expire after 20 minutes; recovery links after 15 minutes.
-Only token hashes are stored. GET requests do not consume links. Creating an
-account requires matching passwords of at least 12 characters and explicit
-acceptance of the current Terms and acknowledgement of Privacy. Acceptance
+The default `/login` and `/signup` screen asks only for email. A ten-minute, single-use magic link and six-digit code share one proof; either invalidates both. Codes allow at most five attempts. Only proof hashes are stored (codes use a peppered HMAC). GET never consumes a link. New accounts require explicit current Terms acceptance and Privacy acknowledgement. Existing users keep their immutable identity and can sign in when public signup is closed or full. Existing passwords remain usable at `/login/password`. Legacy signup links expire after 20 minutes and password-recovery links after 15 minutes. Acceptance
 versions and time are recorded with the account creation transaction. Resending
 invalidates the previous link. Password recovery revokes browser sessions;
 paired assistants remain separately revocable in MCP settings.

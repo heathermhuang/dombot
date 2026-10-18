@@ -32,6 +32,9 @@ serve different purposes; the Terms do not reduce the software license rights.
   Its bundled notices remain in the vendored package and source archive.
 - Archivo is distributed under the SIL Open Font License 1.1; see
   [assets/brand/typography/OFL.txt](assets/brand/typography/OFL.txt).
+- The SaaS authentication layer uses SimpleWebAuthn by Matthew Miller and other
+  MIT-licensed dependencies. Their full notices are in
+  [hosted/THIRD_PARTY_NOTICES.txt](hosted/THIRD_PARTY_NOTICES.txt).
 - Other dependencies retain their own copyright and license notices.
 
 Customer portfolios, credentials, database contents and production secrets are
