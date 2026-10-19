@@ -42,6 +42,29 @@ describe('bounded inbound MIME projection', () => {
       body: 'A normal reply',
     });
   });
+  it.each([
+    'On Mon, 19 Oct 2026, "Example" <example@example.com> wrote:',
+    'On Mon, 19 Oct 2026, "Example"\n<example@example.com> wrote:',
+  ])(
+    'trims email attributions without quote-prefix markers: %s',
+    async (attribution) => {
+      const value = await parseRelayEmail(
+        incoming(
+          plain(
+            'My new reply.\n\n' +
+              attribution +
+              '\n\n' +
+              'Old conversation history. '.repeat(300),
+          ),
+        ),
+      );
+      expect(value.body).toBe('My new reply.');
+    },
+  );
+  it('keeps ordinary prose without an email attribution or quote prefix', async () => {
+    const body = 'My thoughts:\nOn Monday, an author wrote:\nA quoted passage.';
+    expect((await parseRelayEmail(incoming(plain(body)))).body).toBe(body);
+  });
   it('ignores authentication-result, routing and reply headers as authority', async () => {
     const value = await parseRelayEmail(
       incoming(
