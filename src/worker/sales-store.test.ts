@@ -26,6 +26,11 @@ import { createSalesInternalRoutes } from './sales-internal';
 import { createSalesRoutes } from './sales-routes';
 import { buildAuthConfig, type AuthConfig } from './auth';
 import { publicShop, publicSalesCsv } from './sales-shop';
+import { PublicationStore } from './publication-store';
+import { emptyDraft } from '../shared/publication';
+import { emptyOwnerSite } from '../shared/owner-site';
+import { aesGcmCipher } from '../core/storage/encrypted';
+import { deriveEncryptionKey } from './keys';
 
 let mf: Miniflare, db: D1Database, store: SalesStore, inbox: SalesInquiryStore;
 const root = new Uint8Array(32).fill(9);
@@ -67,7 +72,11 @@ beforeAll(async () => {
     }),
   );
   db = await mf.getD1Database('DB');
-  for (const file of ['0004_sales.sql', '0005_sales_inquiries.sql'])
+  for (const file of [
+    '0002_publication.sql',
+    '0004_sales.sql',
+    '0005_sales_inquiries.sql',
+  ])
     await db.exec(
       readFileSync(`migrations/${file}`, 'utf8')
         .replace(/^--.*$/gm, '')
@@ -83,6 +92,8 @@ afterAll(async () => mf?.dispose());
 beforeEach(async () => {
   await db.batch(
     [
+      'portfolio_drafts',
+      'published_portfolios',
       'sales_events',
       'sales_leads',
       'sales_reviews',
@@ -946,83 +957,137 @@ describe('body-bound publication admission', () => {
 });
 
 describe('imported Sales inventory', () => {
-  it('offers imported long and IDN names for private drafts without granting publication control', async () => {
-    const memory = new MemoryDocStore(),
-      names = [
-        'imported.example',
-        `${'a'.repeat(63)}.example`,
-        'xn--fsqu00a.example',
-      ];
-    for (const name of names)
-      await memory.put('imported-domains', name, {
-        addedAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-    configureStore(memory);
-    await hydrateStores();
-    const key = 'imported-sales-fixture'.repeat(3),
-      workspace = crypto.randomUUID(),
-      env = {
-        DB: db,
-        DOMBOT_AUTH: 'gateway',
-        DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
-        DOMBOT_GATEWAY_SECRET: key,
-        DOMBOT_WORKSPACE_ID: workspace,
-        DOMBOT_SALES_V1: 'true',
-      } as Env;
-    const auth = await buildAuthConfig(env, root),
-      app = new Hono<{ Bindings: Env; Variables: { auth: AuthConfig } }>();
-    app.use('*', async (c, next) => {
-      c.set('auth', auth);
-      await next();
-    });
-    app.route(
-      '/sales',
-      createSalesRoutes(async (_c, next) => {
+  it.each(['legacy', 'owner-site'])(
+    'offers imported and %s private collection names without granting publication control',
+    async (format) => {
+      const memory = new MemoryDocStore(),
+        names = [
+          'imported.example',
+          `${'a'.repeat(63)}.example`,
+          'xn--fsqu00a.example',
+        ];
+      for (const name of names)
+        await memory.put('imported-domains', name, {
+          addedAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      configureStore(memory);
+      await hydrateStores();
+      const collectionDomain = 'collection-pilot.fixture.example',
+        publication = new PublicationStore(
+          db,
+          await aesGcmCipher(await deriveEncryptionKey(root)),
+        );
+      const collection =
+        format === 'legacy'
+          ? {
+              ...emptyDraft(),
+              listings: [
+                {
+                  domain: collectionDomain,
+                  collection: 'PRIVATE_COLLECTION_SENTINEL',
+                  description: 'PRIVATE_DESCRIPTION_SENTINEL',
+                  visibility: 'private' as const,
+                  askingPrice: null,
+                  currency: 'USD',
+                },
+              ],
+            }
+          : {
+              ...emptyOwnerSite(),
+              domainPresentations: [
+                {
+                  id: 'sample',
+                  domain: collectionDomain,
+                  ownership: 'current' as const,
+                  availability: 'not-for-sale' as const,
+                  description: 'PRIVATE_DESCRIPTION_SENTINEL',
+                  askingPrice: null,
+                  currency: 'USD',
+                },
+              ],
+            };
+      await publication.save(collection, null);
+      const key = 'imported-sales-fixture'.repeat(3),
+        workspace = crypto.randomUUID(),
+        env = {
+          DB: db,
+          DOMBOT_AUTH: 'gateway',
+          DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+          DOMBOT_GATEWAY_SECRET: key,
+          DOMBOT_WORKSPACE_ID: workspace,
+          DOMBOT_SALES_V1: 'true',
+        } as Env;
+      const auth = await buildAuthConfig(env, root),
+        app = new Hono<{ Bindings: Env; Variables: { auth: AuthConfig } }>();
+      app.use('*', async (c, next) => {
+        c.set('auth', auth);
         await next();
-      }),
-    );
-    async function request(path: string, body?: unknown) {
-      const r = new Request('https://fixture.example/sales/' + path, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: {
-          Origin: 'https://fixture.example',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
       });
-      r.headers.set(
-        'x-dombot-gateway-proof',
-        await signGatewayRequest(key, workspace, 'seller', r, {
-          purpose: 'sales-owner',
-          recipientVerified: true,
+      app.route(
+        '/sales',
+        createSalesRoutes(async (_c, next) => {
+          await next();
         }),
       );
-      return app.request(r, undefined, env);
-    }
-    const inventory = await request('inventory'),
-      items = (await inventory.json()).items;
-    expect(items.map((v: { domain: string }) => v.domain)).toEqual(
-      expect.arrayContaining(names),
-    );
-    expect(items.every((v: { available: boolean }) => !v.available)).toBe(true);
-    const created = await request('listings', { domains: names });
-    expect(created.status, await created.clone().text()).toBe(200);
-    const drafts = (await created.json()).items;
-    expect(drafts).toHaveLength(3);
-    const found = await request('listings?q=imported');
-    expect((await found.json()).items).toHaveLength(1);
-    const reviews = await request('reviews', {
-      items: drafts.map((v: { draft: { id: string }; revision: string }) => ({
-        id: v.draft.id,
-        revision: v.revision,
-      })),
-    });
-    expect(reviews.status).toBe(409);
-    expect(
-      (await db
-        .prepare('SELECT count(*) AS n FROM published_sales')
-        .first<{ n: number }>())!.n,
-    ).toBe(0);
-  });
+      async function request(path: string, body?: unknown) {
+        const r = new Request('https://fixture.example/sales/' + path, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: {
+            Origin: 'https://fixture.example',
+            ...(body === undefined
+              ? {}
+              : { 'Content-Type': 'application/json' }),
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        r.headers.set(
+          'x-dombot-gateway-proof',
+          await signGatewayRequest(key, workspace, 'seller', r, {
+            purpose: 'sales-owner',
+            recipientVerified: true,
+          }),
+        );
+        return app.request(r, undefined, env);
+      }
+      const inventory = await request('inventory'),
+        items = (await inventory.json()).items;
+      expect(items.map((v: { domain: string }) => v.domain)).toEqual(
+        expect.arrayContaining([...names, collectionDomain]),
+      );
+      expect(JSON.stringify(items)).not.toContain(
+        'PRIVATE_DESCRIPTION_SENTINEL',
+      );
+      expect(JSON.stringify(items)).not.toContain(
+        'PRIVATE_COLLECTION_SENTINEL',
+      );
+      expect(items.every((v: { available: boolean }) => !v.available)).toBe(
+        true,
+      );
+      const created = await request('listings', {
+        domains: [...names, collectionDomain],
+      });
+      expect(created.status, await created.clone().text()).toBe(200);
+      const drafts = (await created.json()).items;
+      expect(drafts).toHaveLength(4);
+      const found = await request('listings?q=imported');
+      expect((await found.json()).items).toHaveLength(1);
+      const collectionSearch = await request('listings?q=collection-pilot');
+      expect((await collectionSearch.json()).items).toHaveLength(1);
+      expect((await publication.draft()).draft).toEqual(collection);
+      expect(await publication.published()).toBeNull();
+      const reviews = await request('reviews', {
+        items: drafts.map((v: { draft: { id: string }; revision: string }) => ({
+          id: v.draft.id,
+          revision: v.revision,
+        })),
+      });
+      expect(reviews.status).toBe(409);
+      expect(
+        (await db
+          .prepare('SELECT count(*) AS n FROM published_sales')
+          .first<{ n: number }>())!.n,
+      ).toBe(0);
+    },
+  );
 });
