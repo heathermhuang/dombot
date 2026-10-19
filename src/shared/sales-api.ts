@@ -19,6 +19,7 @@ export interface SalesListing {
 }
 export interface SalesListingDetail extends SalesListing {
   observation: {
+    controlSource?: 'registrar' | 'operator-dns';
     price: {
       amount: string | null;
       currency: string;

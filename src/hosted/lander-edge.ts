@@ -21,6 +21,7 @@ export default {
       new Response('Sales page unavailable', {
         status: 404,
         headers: {
+          'X-Domains-Sales-Edge': 'public-v1',
           'Cache-Control': 'no-store',
           'Referrer-Policy': 'no-referrer',
         },

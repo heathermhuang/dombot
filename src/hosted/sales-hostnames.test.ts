@@ -194,6 +194,83 @@ describe('controlled hostname lifecycle', () => {
       ),
     ).rejects.toThrow();
   });
+  it('qualifies an allowlisted managed Worker host through its platform control observation and exact HTTPS revision proof', async () => {
+    const e = env(),
+      now = Date.now();
+    e.SALES_CF_API_TOKEN = undefined;
+    e.SALES_MANAGED_HOSTS = JSON.stringify([
+      {
+        workspace,
+        hostname: 'fixture.example',
+        domain: 'fixture.example',
+        providerId: 'managed-domain',
+        service: 'domains-sales-lander',
+        observedAt: now - 1000,
+        expiresAt: now + 3600000,
+      },
+    ]);
+    const seen: string[] = [];
+    const managedFetcher: typeof fetch = async (input, init) => {
+      const r = input instanceof Request ? input : new Request(input, init);
+      seen.push(new URL(r.url).hostname);
+      if (new URL(r.url).hostname === 'api.cloudflare.com')
+        throw Error('No SaaS provider for managed domains');
+      return fetcher(input, init);
+    };
+    const h = new SalesHostnames(e, managedFetcher),
+      p = await h.plan(
+        workspace,
+        listing,
+        'fixture.example',
+        'fixture.example',
+      );
+    challenge = p.challenge;
+    seen.length = 0;
+    expect(
+      (
+        await h.activate(
+          workspace,
+          listing,
+          'fixture.example',
+          p.epoch,
+          p.challenge,
+          'wrong-revision',
+        )
+      ).status,
+    ).toBe('checking-page');
+    expect(
+      (
+        await h.activate(
+          workspace,
+          listing,
+          'fixture.example',
+          p.epoch,
+          p.challenge,
+          'published-fixture-revision',
+        )
+      ).status,
+    ).toBe('active');
+    expect(seen).not.toContain('api.cloudflare.com');
+    expect(seen).not.toContain('cloudflare-dns.com');
+    const row = await db
+      .prepare(
+        'SELECT control_expires_at FROM sales_hostnames WHERE hostname=?',
+      )
+      .bind('fixture.example')
+      .first<{ control_expires_at: number }>();
+    expect(row!.control_expires_at).toBe(now + 3600000);
+    await h.detach(workspace, listing, 'fixture.example', p.epoch);
+    await expect(
+      h.activate(
+        workspace,
+        listing,
+        'fixture.example',
+        p.epoch,
+        p.challenge,
+        'published-fixture-revision',
+      ),
+    ).rejects.toThrow();
+  });
   it('edge forwards only registry-selected public operations, strips cookies and rejects closed accounts', async () => {
     const e = env();
     Reflect.set(e, 'WORKSPACE_0', {

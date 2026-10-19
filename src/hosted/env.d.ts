@@ -7,6 +7,7 @@ interface HostedEnv {
   SALES_MAIL_MONTHLY_LIMIT?: string;
   SALES_CUSTOM_HOSTS_ENABLED?: string;
   SALES_HOST_ALLOWLIST?: string;
+  SALES_MANAGED_HOSTS?: string;
   SALES_CF_ZONE_ID?: string;
   SALES_CF_API_TOKEN?: string;
   SALES_CNAME_TARGET?: string;

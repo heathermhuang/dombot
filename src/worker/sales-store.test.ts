@@ -254,6 +254,30 @@ describe('durable inquiry and outbox', () => {
     await inbox.remove(first.id, (await inbox.lead(first.id)).revision);
     expect(await inbox.claim(removed.id, removed.lease)).toBe(false);
   });
+  it('fresh-link recovery cancels only unsent obsolete links and preserves unknown delivery evidence', async () => {
+    const p = await live(),
+      r = await inbox.intake({ ...input(), observedRevision: p.revision }, p),
+      [old] = await inbox.lease();
+    await inbox.ack(old.id, old.lease, 'retryable', null);
+    await inbox.freshLink(r.id);
+    expect(
+      (await db
+        .prepare('SELECT state FROM sales_outbox WHERE id=?')
+        .bind(old.id)
+        .first<{ state: string }>())!.state,
+    ).toBe('suppressed');
+    expect(await inbox.claim(old.id, old.lease)).toBe(false);
+    const [fresh] = await inbox.lease();
+    await inbox.ack(fresh.id, fresh.lease, 'unknown', null);
+    await inbox.freshLink(r.id);
+    expect(
+      (await db
+        .prepare('SELECT state FROM sales_outbox WHERE id=?')
+        .bind(fresh.id)
+        .first<{ state: string }>())!.state,
+    ).toBe('unknown');
+    expect(await inbox.lease()).toHaveLength(1);
+  });
   it('private notes never reach the buyer and reply tokens are purpose-bound', async () => {
     const p = await live(),
       r = await inbox.intake({ ...input(), observedRevision: p.revision }, p);
@@ -354,6 +378,12 @@ describe('backup, jobs and public HTTP', () => {
     expect(publicResponse.status).toBe(200);
     const html = await publicResponse.text();
     expect(html).not.toContain('SECRET_FLOOR');
+    const form = renderSalesLander(p, '', 'test-sitekey', {
+      privacyUrl: 'https://accounts.example/privacy',
+      inquiryPath: '/inquiries',
+    });
+    expect(form).toContain('href="https://accounts.example/privacy"');
+    expect(form).toContain('action="/inquiries"');
     expect(html).toContain('domains.domains');
     const key = 'test-edge-secret-for-sales'.repeat(3),
       workspace = crypto.randomUUID();

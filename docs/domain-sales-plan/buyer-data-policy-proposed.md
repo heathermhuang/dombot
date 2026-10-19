@@ -1,6 +1,6 @@
 # Buyer data copy for operator review
 
-Proposed; not published. The delivery plan requires operator review before external buyer collection. Keep `SALES_PRIVACY_REVIEWED` off until the final wording is approved and the linked policy is published. Local synthetic qualification is separate.
+Approved by the operator on 19 October 2026 in the implementation chat; publication is part of the managed pilot release. Keep `SALES_PRIVACY_REVIEWED` off until the final wording is approved and the linked policy is published. Local synthetic qualification is separate.
 
 ## Proposed Privacy Policy addition
 

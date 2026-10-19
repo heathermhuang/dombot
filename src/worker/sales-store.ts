@@ -26,6 +26,7 @@ import type { ListPrice } from '../shared/ipc';
 import { deriveSalesKey, parseRootSecret, salesIndexer } from './keys';
 
 export interface SaleObservation {
+  controlSource?: 'registrar' | 'operator-dns';
   price: ListPrice | null;
   ownershipFingerprint: string;
   controlExpiresAt: number;

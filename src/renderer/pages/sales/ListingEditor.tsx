@@ -426,7 +426,9 @@ function ListingEditorView() {
               <h2>Domain setup</h2>
               <p>
                 {remote.data.observation.available
-                  ? 'Current control observed from a connected registrar.'
+                  ? remote.data.observation.controlSource === 'operator-dns'
+                    ? 'DNS control verified by the service operator for this managed host.'
+                    : 'Current control observed from a connected registrar.'
                   : remote.data.observation.reason}
               </p>
               <p>

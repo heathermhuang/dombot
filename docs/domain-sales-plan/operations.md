@@ -26,3 +26,13 @@ Cleanup removes pending inquiries after seven days, inactive verified/reconfirma
 ## Bounded operation limits
 
 Listing and inbox pages: 100. Exact publication review: 100 items, 15-minute expiry. Fixed bulk selection: 500, split larger work explicitly. Mail lease: 10 items, 60 seconds; final one-use claim required. Workspace send cap: min(configured daily limit, 30). Pilot workspace inquiry cap: 100/day; IP/listing intake: 5/hour; bounded recovery: 3/hour and 5/day per lead, plus recipient cap. Limits are controls, not capacity or performance certification.
+
+## Operator-managed subdomain pilot
+
+For an explicitly approved hostname in the operator's own Cloudflare zone, Workers Custom Domains supplies DNS and certificates without requiring Cloudflare for SaaS activation. This is a distinct qualified path; it does not certify customer apex hosting or SaaS entitlements. Snapshot existing DNS/routes, verify the hostname is unused, preserve the root application/mail records, then attach only the named hosts to `domains-sales-lander`.
+
+The operator observes its exact Workers Custom Domain resource and successful HTTPS edge response, records the observation receipt, and deploys `DOMBOT_SALES_DNS_CONTROL` only to the controlled workspace. Each strict entry binds workspace, canonical domain, SHA-256 proof reference, observation time and expiry (maximum 24 hours). Imported inventory alone still grants no control. The editor labels this source as operator-verified DNS rather than a registrar registration. This metadata is never accepted from a seller API request or portable backup.
+
+`SALES_MANAGED_HOSTS` records the operator-observed Workers Custom Domain ID, exact workspace/hostname/domain/service and the same bounded lease. The controller still requires the listing's current publication, an allowlisted host, exact HTTPS served revision and binding epoch. Ordinary customer/SaaS claims continue to require per-host TXT proof; the managed path uses the separately scoped operator platform-control observation. Its ordinary Cloudflare for SaaS provider remains separate. Registry routing expires at the attestation deadline. Pause/unpublish and detach before removing a managed observation; removing configuration alone is not the revocation workflow. Keep other tenants' Sales flags off.
+
+19 October 2026: the operator approved publishing the proposed buyer policy and using a subdomain of `alternative.domains`. The controlled fixture is `sales-pilot.alternative.domains` plus `www.sales-pilot.alternative.domains`. This does not authorize replacing the root `alternative.domains` application or mail records.

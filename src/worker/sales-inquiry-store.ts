@@ -688,6 +688,7 @@ export class SalesInquiryStore {
           'UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose=?',
         )
         .bind(Date.now(), l.id, purpose),
+      this.obsoleteLinkMail(l.id, purpose),
       await this.tokenWrite(next, purpose, l.id, purpose === 'thread' ? 7 : 1),
       await this.outbox(
         crypto.randomUUID(),
@@ -704,6 +705,17 @@ export class SalesInquiryStore {
         },
       ),
     ]);
+  }
+  private obsoleteLinkMail(lead: string, purpose: 'verify' | 'thread') {
+    return this.db
+      .prepare(
+        "UPDATE sales_outbox SET state='suppressed',lease_token=NULL,lease_expires_at=NULL,updated_at=? WHERE lead_id=? AND kind=? AND (state IN ('queued','retryable') OR (state='leased' AND claimed_at IS NULL))",
+      )
+      .bind(
+        Date.now(),
+        lead,
+        purpose === 'thread' ? 'buyer-reply' : 'verification',
+      );
   }
   async freshLink(id: string): Promise<void> {
     const l = await this.lead(id),
@@ -730,6 +742,7 @@ export class SalesInquiryStore {
           'UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose=?',
         )
         .bind(Date.now(), id, purpose),
+      this.obsoleteLinkMail(id, purpose),
       await this.tokenWrite(raw, purpose, id, purpose === 'thread' ? 7 : 1),
       await this.outbox(
         crypto.randomUUID(),

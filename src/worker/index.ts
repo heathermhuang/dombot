@@ -195,7 +195,7 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
     await hydrate(oauthOnly);
     const salesReady = !oauthOnly && (await hasSales(c.env.DB));
     const beforeSales = salesReady
-      ? salesControlState()
+      ? salesControlState(c.env)
       : new Map<string, string>();
     await next();
     try {
@@ -206,8 +206,8 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
         await (
           await SalesStore.from(c.env)
         ).reconcile(
-          createSaleObserver(),
-          changedSalesDomains(beforeSales, salesControlState()),
+          createSaleObserver(c.env),
+          changedSalesDomains(beforeSales, salesControlState(c.env)),
         );
     } catch (err) {
       // The handler already answered, but its data didn't land; the next
@@ -418,7 +418,7 @@ export default {
           await SalesStore.from(env),
           env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
         ).cleanup();
-      const beforeSales = salesControlState();
+      const beforeSales = salesControlState(env);
       const minutes = getSettings().autoSyncIntervalMinutes;
       if (minutes <= 0) {
         console.log('[cron] auto-sync disabled in settings');
@@ -430,8 +430,8 @@ export default {
         await (
           await SalesStore.from(env)
         ).reconcile(
-          createSaleObserver(),
-          changedSalesDomains(beforeSales, salesControlState()),
+          createSaleObserver(env),
+          changedSalesDomains(beforeSales, salesControlState(env)),
         );
       console.log(
         ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
