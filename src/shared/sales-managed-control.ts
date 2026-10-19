@@ -47,6 +47,26 @@ function read<T>(raw: string | undefined, schema: z.ZodType<T>): T[] {
 export const managedControls = (raw?: string) =>
   read(raw, managedControlSchema);
 export const managedHosts = (raw?: string) => read(raw, managedHostSchema);
+/** Routing policy only. Production hosts still require current DNS and HTTPS proof. */
+export const operatorHostSchema = z
+  .object({
+    workspace: z.string().uuid(),
+    hostname: saleDomainSchema,
+    domain: saleDomainSchema,
+    providerId: z.string().min(1).max(100),
+    service: z.literal('domains-sales-lander'),
+  })
+  .strict();
+export function operatorHosts(raw?: string) {
+  try {
+    return z
+      .array(operatorHostSchema)
+      .max(500)
+      .parse(JSON.parse(raw ?? '[]'));
+  } catch {
+    return [];
+  }
+}
 export function managedControl(
   env: {
     DOMBOT_AUTH?: string;

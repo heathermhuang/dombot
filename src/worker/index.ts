@@ -52,7 +52,7 @@ import { createSalesRoutes } from './sales-routes';
 import { SalesStore } from './sales-store';
 import { hasSales } from './sales-backup';
 import {
-  createSaleObserver,
+  createVerifiedSaleObserver,
   salesControlState,
   changedSalesDomains,
 } from './sales-observation';
@@ -206,7 +206,7 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
         await (
           await SalesStore.from(c.env)
         ).reconcile(
-          createSaleObserver(c.env),
+          createVerifiedSaleObserver(c.env),
           changedSalesDomains(beforeSales, salesControlState(c.env)),
         );
     } catch (err) {
@@ -430,7 +430,7 @@ export default {
         await (
           await SalesStore.from(env)
         ).reconcile(
-          createSaleObserver(env),
+          createVerifiedSaleObserver(env),
           changedSalesDomains(beforeSales, salesControlState(env)),
         );
       console.log(

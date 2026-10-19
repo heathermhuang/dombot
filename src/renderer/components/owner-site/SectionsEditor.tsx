@@ -415,7 +415,7 @@ export function SectionsEditor({
                 ? 'Previously owned'
                 : d.availability === 'inquiries'
                   ? 'Open to inquiries'
-                  : 'Not for sale'}
+                  : 'Not accepting inquiries'}
             </summary>
             <div className="os-fields">
               <label>
@@ -468,7 +468,7 @@ export function SectionsEditor({
                     })
                   }
                 >
-                  <option value="not-for-sale">Not for sale</option>
+                  <option value="not-for-sale">Not accepting inquiries</option>
                   <option value="inquiries">Open to inquiries</option>
                 </select>
               </label>

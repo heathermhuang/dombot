@@ -68,7 +68,7 @@ export function siteDisclosures(
     add(
       `Domain: ${d.domain}`,
       `Domain: ${d.domain}`,
-      `${d.ownership === 'historical' ? 'Previously owned' : d.availability === 'inquiries' ? 'Open to inquiries' : 'Not for sale'}\n${d.description}${d.askingPrice !== null ? `\n${d.currency} ${d.askingPrice}` : ''}`,
+      `${d.ownership === 'historical' ? 'Previously owned' : d.availability === 'inquiries' ? 'Open to inquiries' : 'Not accepting inquiries'}\n${d.description}${d.askingPrice !== null ? `\n${d.currency} ${d.askingPrice}` : ''}`,
     );
   return rows;
 }

@@ -1020,7 +1020,7 @@ export function generateDemoSeed(
     names.filter((n) => tlds.includes(n.slice(n.indexOf('.') + 1)));
   const folders: DemoFolder[] = [
     {
-      name: 'For Sale',
+      name: 'Open to inquiries',
       color: 'green',
       description: 'Listed, or should be',
       domains: names.filter((_, i) => i % 8 === 3).slice(0, 60),
@@ -1028,7 +1028,7 @@ export function generateDemoSeed(
     {
       name: 'Personal',
       color: 'blue',
-      description: 'Not for sale at any price',
+      description: 'Not accepting inquiries',
       domains: names.filter((_, i) => i % 9 === 0).slice(0, 24),
     },
     {

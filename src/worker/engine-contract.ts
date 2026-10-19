@@ -5,6 +5,7 @@ export interface DomBotEnvironment {
   DOMBOT_AUTH: string;
   DOMBOT_OWNER_SITE_V2?: string;
   DOMBOT_SALES_DNS_CONTROL?: string;
+  SALES_DNS_CONTROL_ENABLED?: string;
   DOMBOT_SALES_V1?: string;
   SALES_INQUIRIES_ENABLED?: string;
   SALES_PRIVACY_REVIEWED?: string;

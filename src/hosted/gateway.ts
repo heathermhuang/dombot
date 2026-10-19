@@ -1,6 +1,10 @@
 import { canonicalDomain } from '../shared/publication';
 import { receiveSalesReply } from './sales-relay';
 import {
+  domainControlRequest,
+  refreshDomainControls,
+} from './sales-domain-control';
+import {
   salesFormScript,
   salesFormScriptPath,
 } from '../shared/sales-form-script';
@@ -52,6 +56,7 @@ import {
   salesRecipient,
 } from './sales-notifications';
 import { salesHostRequest } from './sales-host-routes';
+import { refreshSalesHostnames } from './sales-hostnames';
 type GatewayVariables = { user: Awaited<ReturnType<Accounts['session']>> };
 type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
@@ -1039,7 +1044,12 @@ app.all('/w/:workspace/*', async (c) => {
     user?.workspace_id === id
   )
     return c.json(await salesRecipient(c.env, id, user.email));
-  if (path === '/sales/hosts' || path.startsWith('/sales/hosts/')) {
+  if (
+    path === '/sales/hosts' ||
+    path.startsWith('/sales/hosts/') ||
+    path === '/sales/domain-control' ||
+    path.startsWith('/sales/domain-control/')
+  ) {
     if (!user || user.workspace_id !== id)
       return c.json({ error: 'Not signed in' }, 401);
     if (c.req.method !== 'GET') {
@@ -1058,7 +1068,9 @@ app.all('/w/:workspace/*', async (c) => {
           429,
         );
     }
-    return salesHostRequest(c.env, id, user.id, path, c.req.raw);
+    return path.startsWith('/sales/domain-control')
+      ? domainControlRequest(c.env, id, user.id, c.req.raw)
+      : salesHostRequest(c.env, id, user.id, path, c.req.raw);
   }
   const sensitive = new Set([
     'getRegistrarCredentials',
@@ -1175,6 +1187,30 @@ app.all('/w/:workspace/*', async (c) => {
   // Even a signed-in visitor to a different workspace's public MCP surface
   // must not receive that workspace's owner authority.
   const owner = user?.workspace_id === id ? user.id : null;
+  if (publicRequest && path.startsWith('/d/')) {
+    let domain: string;
+    try {
+      domain = canonicalDomain(path.split('/')[2]);
+    } catch {
+      return c.text('Domain page unavailable', 404);
+    }
+    const lost = await c.env.CONTROL_DB.prepare(
+      "SELECT 1 FROM sales_domain_controls WHERE workspace_id=? AND domain=? AND status IN ('lost','recovering')",
+    )
+      .bind(id, domain)
+      .first();
+    if (lost) return c.text('Domain page unavailable', 404);
+  }
+  if (publicRequest && path.startsWith('/shop/')) {
+    // Until the tenant acknowledges a known loss, its shop projection may still
+    // contain the old publication. Resume unaffected listings after that ack.
+    const pendingLoss = await c.env.CONTROL_DB.prepare(
+      "SELECT 1 FROM sales_domain_controls WHERE workspace_id=? AND status IN ('lost','recovering') AND tenant_ack_epoch<last_loss_epoch LIMIT 1",
+    )
+      .bind(id)
+      .first();
+    if (pendingLoss) return c.text('Portfolio temporarily unavailable', 503);
+  }
   if (path === '/auth/logout' && c.req.method === 'POST') {
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
     await account(c.env).logout(readSession(c.req.raw));
@@ -1310,8 +1346,23 @@ export default {
   fetch: app.fetch,
   email: receiveSalesReply,
   async scheduled(event: ScheduledController, env: HostedEnv) {
-    await drainSales(env);
-    if (event.cron !== '17 * * * *') return;
+    let maintenanceFailed = false;
+    for (const task of [
+      drainSales,
+      refreshDomainControls,
+      refreshSalesHostnames,
+    ]) {
+      try {
+        await task(env);
+      } catch {
+        maintenanceFailed = true;
+      }
+    }
+    if (event.cron !== '17 * * * *') {
+      if (maintenanceFailed)
+        throw Error('Inquiry maintenance needs attention.');
+      return;
+    }
     await env.CONTROL_DB.batch([
       env.CONTROL_DB.prepare(
         'DELETE FROM email_signins WHERE expires_at<?1',
@@ -1338,5 +1389,6 @@ export default {
         'DELETE FROM password_resets WHERE expires_at<?1',
       ).bind(Date.now()),
     ]);
+    if (maintenanceFailed) throw Error('Inquiry maintenance needs attention.');
   },
 } satisfies ExportedHandler<HostedEnv>;

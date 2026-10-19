@@ -7,6 +7,8 @@
 - Product illustrations must visibly say they use sample data. Never use private registrar holdings, account details or invented customer endorsements as marketing proof.
 - Use “account” for sign-in and access, and “portfolio” for domain holdings. Keep internal immutable tenant identities unchanged. Public registration requires verified email, published Terms and Privacy with the confirmed operator identity, and prequalified capacity; registrar charges are separate. Do not advertise open registration while these gates are off.
 
+- Use inquiry-focused copy throughout public and account UI: “Domain inquiries”, “Get in touch” and “Open to inquiries”. Do not use availability slogans. Keep internal schema identifiers stable. Public inquiry pages refer to the contact or domain owner.
+
 ## Legal operator
 
 - The owner confirmed on 18 October 2026 that domains.domains is operated by **Magic Crystal Limited, Hong Kong**. Use that exact company name and jurisdiction in the Terms and Privacy Policy. Public privacy/support contact is domains@domains.domains. Use **domains.domains** in public product copy, shared footers, source offers and project documentation; reserve the company name for necessary legal identification in Terms and Privacy. Retain existing copyright and license notices.

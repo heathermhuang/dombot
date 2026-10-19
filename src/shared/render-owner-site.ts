@@ -36,7 +36,7 @@ export function renderOwnerSite(
       : `<a href="${e(href)}" rel="noopener noreferrer">${e(label)}${arrow ? ' ↗' : ''}</a>`;
   const row = (id: string) => {
     const d = domains.get(id)!;
-    return `<article class="domain"><div><h3>${e(d.domain)}</h3>${d.description ? `<p>${e(d.description)}</p>` : ''}</div><div class="availability">${d.ownership === 'historical' ? 'Previously owned' : d.availability === 'not-for-sale' ? 'Not for sale' : `${d.askingPrice === null ? '' : `<strong>${e(d.currency)} ${d.askingPrice.toLocaleString('en-US')}</strong> `}${link('Inquire', `mailto:${site.profile.contactEmail}?subject=${encodeURIComponent(`Inquiry: ${d.domain}`)}`)}`}</div></article>`;
+    return `<article class="domain"><div><h3>${e(d.domain)}</h3>${d.description ? `<p>${e(d.description)}</p>` : ''}</div><div class="availability">${d.ownership === 'historical' ? 'Previously owned' : d.availability === 'not-for-sale' ? 'Not accepting inquiries' : `${d.askingPrice === null ? '' : `<strong>${e(d.currency)} ${d.askingPrice.toLocaleString('en-US')}</strong> `}${link('Inquire', `mailto:${site.profile.contactEmail}?subject=${encodeURIComponent(`Inquiry: ${d.domain}`)}`)}`}</div></article>`;
   };
   const profile = site.profile;
   let content: string;

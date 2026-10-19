@@ -26,13 +26,16 @@ import type { ListPrice } from '../shared/ipc';
 import { deriveSalesKey, parseRootSecret, salesIndexer } from './keys';
 
 export interface SaleObservation {
-  controlSource?: 'registrar' | 'operator-dns';
+  controlSource?: 'registrar' | 'operator-dns' | 'dns';
   price: ListPrice | null;
   ownershipFingerprint: string;
   controlExpiresAt: number;
   available: boolean;
   reason: string | null;
 }
+export type SaleObserver = (
+  draft: SaleDraft,
+) => SaleObservation | Promise<SaleObservation>;
 export type SavedSale = SalesListing;
 export class SalesStore {
   constructor(
@@ -308,7 +311,7 @@ export class SalesStore {
           draft: {
             version: 1,
             handle: 'shop',
-            title: 'Domains for sale',
+            title: 'Selected domains',
             intro: '',
             listingIds: [],
           },
@@ -335,7 +338,7 @@ export class SalesStore {
   }
   async prepare(
     ids: { id: string; revision: string }[],
-    observe: (d: SaleDraft) => SaleObservation,
+    observe: SaleObserver,
   ): Promise<SalesReview> {
     if (
       !ids.length ||
@@ -351,7 +354,7 @@ export class SalesStore {
     for (const ref of ids) {
       const saved = await this.get(ref.id);
       if (saved.revision !== ref.revision) throw conflict();
-      const observation = observe(saved.draft);
+      const observation = await observe(saved.draft);
       if (!observation.available || observation.controlExpiresAt <= Date.now())
         throw new SalesError(
           'CONTROL_UNCERTAIN',
@@ -418,7 +421,7 @@ export class SalesStore {
   }
   async publish(
     id: string,
-    observe: (d: SaleDraft) => SaleObservation,
+    observe: SaleObserver,
     jobId?: string,
   ): Promise<{ id: string; revision: string; domain: string }[]> {
     const row = await this.db
@@ -486,7 +489,7 @@ export class SalesStore {
     const selected = new Set(shop.published?.listingIds ?? []);
     for (const item of review.items) {
       const saved = await this.get(item.id),
-        o = observe(saved.draft),
+        o = await observe(saved.draft),
         destination = await this.destination(saved.draft.destinationId);
       if (
         !o.available ||
@@ -699,10 +702,7 @@ export class SalesStore {
   }
 
   /** Suppression follows inventory/history; a healthy observation never republishes. */
-  async reconcile(
-    observe: (d: SaleDraft) => SaleObservation,
-    domains: string[],
-  ): Promise<void> {
+  async reconcile(observe: SaleObserver, domains: string[]): Promise<void> {
     for (let offset = 0; offset < domains.length; offset += 100) {
       const hashes = await Promise.all(
         domains.slice(offset, offset + 100).map((d) => this.hash('domain', d)),
@@ -715,7 +715,7 @@ export class SalesStore {
         .bind(...hashes)
         .all<{ id: string; sealed: string }>();
       for (const row of rows.results) {
-        const o = observe(await this.open(row.sealed, saleDraftSchema));
+        const o = await observe(await this.open(row.sealed, saleDraftSchema));
         if (!o.available)
           await this.db
             .prepare(

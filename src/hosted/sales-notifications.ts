@@ -157,7 +157,8 @@ export async function drainSalesWorkspace(
         .first())
     )
       return;
-    let state: 'accepted' | 'retryable' | 'unknown' | 'suppressed' = 'unknown',
+    let state: 'accepted' | 'retryable' | 'unknown' | 'suppressed' | 'failed' =
+        'unknown',
       receipt: string | null = null;
     const attempt = `${workspace}:${item.id}:${item.lease}`;
     const base = `${env.CANONICAL_ORIGIN}/w/${workspace}/`;
@@ -243,8 +244,39 @@ export async function drainSalesWorkspace(
         });
         state = 'accepted';
         receipt = result.messageId;
-      } catch {
-        state = 'unknown';
+      } catch (error) {
+        const code =
+          error && typeof error === 'object' && 'code' in error
+            ? error.code
+            : null;
+        const temporary = ['E_RATE_LIMIT_EXCEEDED', 'E_DAILY_LIMIT_EXCEEDED'];
+        const rejected = [
+          'E_VALIDATION_ERROR',
+          'E_FIELD_MISSING',
+          'E_TOO_MANY_RECIPIENTS',
+          'E_TOO_MANY_ATTACHMENTS',
+          'E_SENDER_NOT_VERIFIED',
+          'E_RECIPIENT_NOT_ALLOWED',
+          'E_SENDER_DOMAIN_NOT_AVAILABLE',
+          'E_CONTENT_TOO_LARGE',
+          'E_HEADER_NOT_ALLOWED',
+          'E_HEADER_USE_API_FIELD',
+          'E_HEADER_VALUE_INVALID',
+          'E_HEADER_VALUE_TOO_LONG',
+          'E_HEADER_NAME_INVALID',
+          'E_HEADERS_TOO_LARGE',
+          'E_HEADERS_TOO_MANY',
+        ];
+        if (typeof code === 'string' && temporary.includes(code)) {
+          state = 'retryable';
+          receipt = code;
+        } else if (code === 'E_RECIPIENT_SUPPRESSED') {
+          state = 'suppressed';
+          receipt = code;
+        } else if (typeof code === 'string' && rejected.includes(code)) {
+          state = 'failed';
+          receipt = code;
+        } else state = 'unknown';
       }
       await env.CONTROL_DB.prepare(
         'UPDATE sales_delivery_receipts SET state=?,provider_receipt=?,updated_at=? WHERE attempt_key=?',
@@ -265,18 +297,28 @@ export async function drainSalesWorkspace(
 export async function drainSales(env: HostedEnv): Promise<void> {
   if (!salesMailReady(env)) return;
   const workspaces = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
+  let failed = false;
   for (const w of workspaces.slice(0, 32)) {
-    const checkpoint = await env.CONTROL_DB.prepare(
-      'SELECT next_check_at FROM sales_dispatch_checkpoints WHERE workspace_id=?',
-    )
-      .bind(w.id)
-      .first<{ next_check_at: number }>();
-    if (checkpoint && checkpoint.next_check_at > Date.now()) continue;
-    await drainSalesWorkspace(env, w.id);
-    await env.CONTROL_DB.prepare(
-      'INSERT INTO sales_dispatch_checkpoints(workspace_id,next_check_at,updated_at) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET next_check_at=excluded.next_check_at,updated_at=excluded.updated_at',
-    )
-      .bind(w.id, Date.now() + 120_000, Date.now())
-      .run();
+    try {
+      const checkpoint = await env.CONTROL_DB.prepare(
+        'SELECT next_check_at FROM sales_dispatch_checkpoints WHERE workspace_id=?',
+      )
+        .bind(w.id)
+        .first<{ next_check_at: number }>();
+      if (checkpoint && checkpoint.next_check_at > Date.now()) continue;
+      await drainSalesWorkspace(env, w.id);
+      await env.CONTROL_DB.prepare(
+        'INSERT INTO sales_dispatch_checkpoints(workspace_id,next_check_at,updated_at) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET next_check_at=excluded.next_check_at,updated_at=excluded.updated_at',
+      )
+        .bind(
+          w.id,
+          Math.floor(Date.now() / 120_000) * 120_000 + 120_000,
+          Date.now(),
+        )
+        .run();
+    } catch {
+      failed = true;
+    }
   }
+  if (failed) throw Error('Some inquiry dispatchers need attention.');
 }
