@@ -101,6 +101,7 @@ export async function parseRelayEmail(message: ForwardableEmailMessage) {
             { selector: 'img', format: 'skip' },
             { selector: 'script', format: 'skip' },
             { selector: 'style', format: 'skip' },
+            { selector: 'div.gmail_quote', format: 'skip' },
             { selector: 'a', options: { ignoreHref: true } },
           ],
         })

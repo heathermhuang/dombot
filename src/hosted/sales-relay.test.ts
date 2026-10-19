@@ -68,6 +68,18 @@ describe('bounded inbound MIME projection', () => {
     expect(value.body).not.toContain('bad()');
     expect(value.body).not.toContain('tracker.example');
   });
+  it('omits Gmail HTML reply history before conversion and the new-text length check', async () => {
+    const raw = plain()
+      .replace('text/plain', 'text/html')
+      .replace(
+        'A normal reply',
+        '<p>My new reply.</p><br><br><div class="gmail_quote">On Mon, 19 Oct 2026, &quot;Example&quot; &lt;example@example.com&gt; wrote:<br><blockquote><div style="white-space: pre-wrap;">' +
+          'Old conversation history. '.repeat(300) +
+          '</div></blockquote></div>',
+      );
+    const value = await parseRelayEmail(incoming(raw));
+    expect(value.body).toBe('My new reply.');
+  });
   it.each([
     'From: second@example.com\r\n',
     'Message-ID: <two@example.com>\r\n',
