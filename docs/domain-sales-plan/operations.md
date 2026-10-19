@@ -38,3 +38,23 @@ The operator observes its exact Workers Custom Domain resource and successful HT
 `SALES_MANAGED_HOSTS` records the operator-observed Workers Custom Domain ID, exact workspace/hostname/domain/service and the same bounded lease. The controller still requires the listing's current publication, an allowlisted host, exact HTTPS served revision and binding epoch. Ordinary customer/SaaS claims continue to require per-host TXT proof; the managed path uses the separately scoped operator platform-control observation. Its ordinary Cloudflare for SaaS provider remains separate. Registry routing expires at the attestation deadline. Pause/unpublish and detach before removing a managed observation; removing configuration alone is not the revocation workflow. Keep other tenants' Sales flags off.
 
 19 October 2026: the operator approved publishing the proposed buyer policy and using a subdomain of `alternative.domains`. The controlled fixture is `sales-pilot.alternative.domains` plus `www.sales-pilot.alternative.domains`. This does not authorize replacing the root `alternative.domains` application or mail records.
+
+## Controlled pilot qualification receipt
+
+The 19 October owner-mailbox trial is recorded in
+[the managed pilot receipt](receipts/managed-pilot-20261019.json). Runtime source,
+provider versions, normal browser actions and actual inbox delivery are separate
+fields. Keep the historical disabled-fleet and failed-attempt receipts intact.
+
+For a bounded quota-recovery experiment, use only the explicitly controlled test
+inquiry. Journal the original workspace budget, restore it using compare-and-swap,
+and retain legitimate attempted-send charges. A test-only acceleration of the
+known retryable item's due time must preserve its state, attempts, unclaimed
+status and delivery history; record that the normal one-hour backoff was shortened.
+Never accelerate, claim or replay an unknown provider outcome. This experiment
+does not qualify a provider outage.
+
+The managed-host attestations expire within 24 hours. Before extending the pilot,
+refresh the exact provider resources, protected DNS and HTTPS observations and
+use the normal host-control workflow. Do not silently convert the bounded pilot
+into permanent customer hosting or expand the hostname allowlist.

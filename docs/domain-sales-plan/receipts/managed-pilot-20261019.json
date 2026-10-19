@@ -1,0 +1,205 @@
+{
+  "recordedAt": "2026-10-19T09:37:57.494Z",
+  "controlledPilotComplete": true,
+  "generalAvailabilityQualified": false,
+  "runtimeSourceCommit": "16a89538ffd3f81c3c67dff14966e4b912a666c9",
+  "engine": {
+    "name": "@domains-domains/dombot-engine",
+    "version": "1.5.0-hosted.11",
+    "upstream": {
+      "repository": "https://github.com/aoxborrow/dombot",
+      "revision": "feef729a1758c1ff667ce3b78d03a13ec3d6573b",
+      "version": "1.5.0"
+    },
+    "archive": "vendor/domains-domains-dombot-engine-1.5.0-hosted.11.tgz",
+    "sourceSha256": "18f5d5420afd66b1b6977c8f2d532a9a42ee397fbf17fcb3210f6f455af9352d",
+    "packageSha256": "6b4012b0e0dbc4f446e4a1f58124436f05fa00f84b493c9daa2b42b87a852a3d",
+    "typesSha256": "e18df343dfb81131ff27fac072a8072d84398d72db092ce33bdc9a188f957cad",
+    "manifestSha256": "466eb8c4807f625405791c52e9df7d71947db3a13b28d3feb8280361528e03a2",
+    "sha256": "b35e67669fec4745c48f907ded359a455412d46196469c92157552f3ee39c665",
+    "integrity": "sha512-d5NzVOhiOoqcTfuWWR1FlNf04h6hT62VICu7SdV6su87d4qZZLX3VxwWqsLmkFwR3ocVQsW9ttcmlBLuPAP8Uw=="
+  },
+  "deployments": [
+    {
+      "service": "domains-staging",
+      "versions": [
+        {
+          "version_id": "97cc4d5f-303b-4676-8111-b8e3197a2e04",
+          "percentage": 100
+        }
+      ]
+    },
+    {
+      "service": "domains-staging-tenant-0",
+      "versions": [
+        {
+          "version_id": "97e51490-c588-434f-837e-3d7ad21fe084",
+          "percentage": 100
+        }
+      ]
+    },
+    {
+      "service": "domains-sales-lander",
+      "versions": [
+        {
+          "version_id": "b56d6dff-a12d-44a0-8b57-e6c21520b581",
+          "percentage": 100
+        }
+      ]
+    }
+  ],
+  "requiredCI": "Passed for PRs 54 through 57; evidence-only follow-up checked separately",
+  "hostname": {
+    "at": "2026-10-19T09:21:27.447Z",
+    "sourceCommit": "16a89538ffd3f81c3c67dff14966e4b912a666c9",
+    "normalOwnerBrowserActivation": true,
+    "ownerUIBothHostsActive": true,
+    "hosts": [
+      {
+        "host": "sales-pilot.alternative.domains",
+        "status": 200,
+        "exactRevisionVerified": true
+      },
+      {
+        "host": "www.sales-pilot.alternative.domains",
+        "status": 200,
+        "exactRevisionVerified": true
+      }
+    ],
+    "revision": "74e4eb08-bbb1-468b-8c3f-49a2c6df2e50",
+    "publicSourceOfferExactCommit": true,
+    "approvedBuyerPolicyPublished": true,
+    "existingPortfolioAndMailDnsPreserved": true,
+    "qualifiedPath": "operator-managed Cloudflare Workers Custom Domains",
+    "generalCustomerApexOrSaaSEntitlementQualified": false,
+    "registry": [
+      {
+        "hostname": "sales-pilot.alternative.domains",
+        "epoch": 3,
+        "status": "active",
+        "observed_revision": "74e4eb08-bbb1-468b-8c3f-49a2c6df2e50",
+        "provider_status": "active",
+        "ssl_status": "active",
+        "controlExpiresAt": "2026-10-19T23:54:03.933Z"
+      },
+      {
+        "hostname": "www.sales-pilot.alternative.domains",
+        "epoch": 1,
+        "status": "active",
+        "observed_revision": "74e4eb08-bbb1-468b-8c3f-49a2c6df2e50",
+        "provider_status": "active",
+        "ssl_status": "active",
+        "controlExpiresAt": "2026-10-19T23:54:03.933Z"
+      }
+    ]
+  },
+  "productionTurnstileWithManualHumanCheck": true,
+  "actualCustomHostnameInquirySubmitted": true,
+  "normalOwnerBrowserUsed": true,
+  "inbox": {
+    "confirmation": {
+      "inbox": true,
+      "dkimPass": true,
+      "spfPass": true,
+      "dmarcPass": true,
+      "scannerGetDidNotConfirm": true,
+      "explicitConfirmationPassed": true
+    },
+    "sellerReply": {
+      "inbox": true,
+      "dkimPass": true,
+      "spfPass": true,
+      "dmarcPass": true
+    },
+    "sellerAlerts": [
+      {
+        "inbox": true,
+        "dkimPass": true,
+        "spfPass": true,
+        "dmarcPass": true
+      },
+      {
+        "inbox": true,
+        "dkimPass": true,
+        "spfPass": true,
+        "dmarcPass": true
+      }
+    ],
+    "freshLink": {
+      "inbox": true,
+      "privateNoteAbsent": true,
+      "dkimPass": true,
+      "spfPass": true,
+      "dmarcPass": true
+    }
+  },
+  "browser": {
+    "at": "2026-10-19T09:37:10.784Z",
+    "freshLinkWorks": true,
+    "sellerReplyVisible": true,
+    "buyerResponseVisible": true,
+    "privateNoteAbsent": true,
+    "oldThreadLinkRevoked": true
+  },
+  "outbox": [
+    {
+      "kind": "buyer-reply",
+      "state": "accepted",
+      "attempts": 1
+    },
+    {
+      "kind": "buyer-reply",
+      "state": "accepted",
+      "attempts": 1
+    },
+    {
+      "kind": "seller-alert",
+      "state": "accepted",
+      "attempts": 1
+    },
+    {
+      "kind": "seller-alert",
+      "state": "accepted",
+      "attempts": 2
+    },
+    {
+      "kind": "verification",
+      "state": "accepted",
+      "attempts": 1
+    }
+  ],
+  "quotaRecovery": {
+    "at": "2026-10-19T09:29:47.832Z",
+    "kind": "controlled workspace quota-deferral test",
+    "scope": "only the owner sample Sales mailbox budget",
+    "phase": "passed",
+    "attemptsCharged": 1,
+    "quotaDeferralObserved": true,
+    "workspaceBudgetRestored": true,
+    "globalBudgetsUntouched": true,
+    "authBudgetsUntouched": true,
+    "scheduledRetrySucceeded": true,
+    "actualRecoveredAlertInInbox": true,
+    "controlledRetryDueTimeAdvanced": true,
+    "originalRetryDelayMs": 3511503,
+    "originalFailedProofAttemptsRetained": true
+  },
+  "preservation": {
+    "rootBodyUnchanged": true,
+    "protectedDnsChecks": 18,
+    "existingControlIdentitiesUnchanged": true,
+    "originalPublishedPortfolioPreserved": true,
+    "anonymousOwnerInboxRequiresLogin": true,
+    "otherNineTenantsSalesOff": true
+  },
+  "pilotControlExpiresAt": "2026-10-19T23:52:39.755Z",
+  "limits": [
+    "Bounded operator-managed subdomain sample; requalify control before expiry",
+    "No independent customer acceptance or general customer apex qualification",
+    "No Cloudflare for SaaS billing/entitlement activation",
+    "No purchase, payment, transfer or provider API handoff executed",
+    "Quota deferral and recovery qualified; provider outage and ambiguous-send recovery remain regression-test evidence",
+    "No formal CSO clearance"
+  ],
+  "receiptPrivacy": "No recipient addresses, email message IDs, raw capability URLs, credentials or conversation bodies"
+}

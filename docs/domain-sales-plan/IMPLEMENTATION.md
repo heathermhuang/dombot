@@ -1,5 +1,48 @@
 # Sales implementation and release ledger
 
+## Current controlled pilot — 19 October 2026
+
+The operator-managed sample is live at `sales-pilot.alternative.domains` and
+`www.sales-pilot.alternative.domains`. Both hostnames returned ordinary public
+HTTPS 200 with active certificates and exact publication revision
+`74e4eb08-bbb1-468b-8c3f-49a2c6df2e50`. This qualifies the explicitly approved
+Workers Custom Domains path; ordinary customer apex hosting and Cloudflare for
+SaaS entitlement remain separate.
+
+The gateway runs commit `16a89538ffd3f81c3c67dff14966e4b912a666c9`; the owner
+workspace runs engine `1.5.0-hosted.11`. PRs #54–#57 have green required CI and
+CodeQL. The production source offer names the exact gateway commit. The approved
+buyer policy is published. Other tenants retain their previous disabled Sales
+configuration. The root portfolio, original published portfolio and 18 protected
+DNS observations were preserved.
+
+The controlled owner-mailbox journey used the production Turnstile widget with a
+manual human check, the real public custom-domain form, normal email delivery,
+and the authenticated owner UI. Opening the confirmation email link alone left
+the inquiry pending; explicit confirmation enabled seller replies. The seller
+reply reached the buyer mailbox, appeared in the private conversation, and the
+buyer response appeared in the seller inbox. The owner-only note was absent
+from buyer email and the conversation. Confirmation, reply and seller-alert
+messages reached the inbox with SPF, DKIM and DMARC passing.
+
+A temporary quota hold affected only this owner's Sales workspace budget. It
+produced a known retryable seller alert, then restored the budget. The controlled
+fixture's retry deadline was advanced after restoration; the ordinary scheduled
+dispatcher retried it successfully, and the alert reached the inbox. No unknown
+provider outcome was replayed. Global/auth budget settings and delivery history
+were preserved. Earlier attempts that did not prove deferral remain in the
+private operational journal.
+
+Fresh-link recovery revoked the previous conversation link and retained delivery
+history. Replacement-link delivery and access are recorded in the final pilot
+receipt. This is a controlled sample qualification, not an independent customer
+acceptance, purchase/transfer execution, provider-outage experiment or formal CSO
+clearance. The managed observations are bounded to 24 hours and require fresh
+operator qualification before expiry; this is not unattended permanent hosting.
+
+See [the live pilot receipt](receipts/managed-pilot-20261019.json). The historical
+sections below describe earlier candidates and gates, not current pilot state.
+
 19 October 2026. Source candidate on `codex/domain-sales`, based on `e829d5edc6f72e3e5c4f3d7fcd4853fda5beaa7f`. This ledger distinguishes implemented behavior from live qualification. The primary checkout and earlier owner-site research checkout remain preserved.
 
 ## Implemented behavior
