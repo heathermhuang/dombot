@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { createHmac } from 'node:crypto';
+import { createHmac, createHash } from 'node:crypto';
+import { newReplyAddress, relayDisplayName } from './sales-relay-address';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { workspaceSchema, workspaceService, gatewayKey } from './workspaces';
 import {
@@ -165,6 +166,22 @@ export async function drainSalesWorkspace(
     } else if (!(await reserveBudget(env, workspace))) {
       state = 'retryable';
     } else {
+      let replyAddress: ReturnType<typeof newReplyAddress> = null;
+      try {
+        replyAddress =
+          item.mail.context && item.kind !== 'verification'
+            ? newReplyAddress(env, workspace)
+            : null;
+      } catch {
+        await salesInternal(env, workspace, 'ack', {
+          id: item.id,
+          lease: item.lease,
+          state: 'retryable',
+          receipt: null,
+          retryAfter: 3600_000,
+        });
+        continue;
+      }
       const grant = await env.CONTROL_DB.prepare(
         "INSERT INTO sales_delivery_receipts(attempt_key,workspace_id,outbox_id,state,created_at,updated_at) VALUES(?,?,?,'sending',?,?) ON CONFLICT DO NOTHING RETURNING attempt_key",
       )
@@ -174,6 +191,22 @@ export async function drainSalesWorkspace(
       const claim = await salesInternal(env, workspace, 'claim', {
         id: item.id,
         lease: item.lease,
+        ...(replyAddress
+          ? {
+              emailRelay: {
+                tokenHash: createHash('sha256')
+                  .update(replyAddress.raw)
+                  .digest('base64url'),
+                purpose:
+                  item.kind === 'seller-alert' ? 'email-owner' : 'email-buyer',
+                participant:
+                  item.kind === 'seller-alert'
+                    ? owner.email
+                    : item.mail.context!.email,
+                expiresAt: Date.now() + 7 * 86400_000,
+              },
+            }
+          : {}),
       });
       if (!claim.ok || !((await claim.json()) as { ok: boolean }).ok) {
         await env.CONTROL_DB.prepare(
@@ -184,15 +217,28 @@ export async function drainSalesWorkspace(
         continue;
       }
       try {
-        const content = renderSalesEmail(item.mail, item.kind);
+        const content = renderSalesEmail(item.mail, item.kind, {
+          replyByEmail: !!replyAddress,
+        });
         const result = await env.SALES_EMAIL!.send({
           from: { email: env.SALES_EMAIL_FROM!, name: 'domains.domains' },
           to: item.kind === 'seller-alert' ? owner.email : item.mail.recipient!,
-          ...(item.mail.context && item.kind === 'seller-alert'
+          ...(replyAddress
             ? {
-                replyTo: item.mail.context.email,
+                replyTo: {
+                  email: replyAddress.address,
+                  name:
+                    item.kind === 'seller-alert'
+                      ? relayDisplayName(item.mail.context!.name)
+                      : 'Domain conversation · domains.domains',
+                },
+                headers: { 'X-Auto-Response-Suppress': 'All' },
               }
-            : {}),
+            : item.mail.context && item.kind === 'seller-alert'
+              ? {
+                  replyTo: item.mail.context.email,
+                }
+              : {}),
           ...content,
         });
         state = 'accepted';

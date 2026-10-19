@@ -8,7 +8,7 @@ import {
   readPublicSale,
   type SaleObservation,
 } from './sales-store';
-import { SalesInquiryStore } from './sales-inquiry-store';
+import { SalesInquiryStore, tokenHash } from './sales-inquiry-store';
 import {
   emptySale,
   publishedSaleSchema,
@@ -115,6 +115,272 @@ async function live(name = 'fixture.example') {
   await store.publish(review.id, observation);
   return (await readPublicSale(db, name))!;
 }
+async function relayFixture(claim = true) {
+  const p = await live();
+  const lead = await inbox.intake(
+    { ...input(), observedRevision: p.revision },
+    p,
+  );
+  const [verification] = await inbox.lease();
+  await inbox.claim(verification.id, verification.lease);
+  await inbox.ack(verification.id, verification.lease, 'accepted', 'fixture');
+  await inbox.confirm(verification.mail.url.split('/').at(-1)!);
+  const [notification] = await inbox.lease();
+  const raw = 'ab'.repeat(24),
+    hash = await tokenHash(raw);
+  const grant = {
+    tokenHash: hash,
+    purpose: 'email-owner' as const,
+    participant: 'owner@example.com',
+    expiresAt: Date.now() + 7 * 86400_000,
+  };
+  if (claim) {
+    expect(await inbox.claim(notification.id, notification.lease, grant)).toBe(
+      true,
+    );
+    await inbox.ack(notification.id, notification.lease, 'accepted', 'fixture');
+  }
+  return {
+    leadId: lead.id,
+    raw,
+    hash,
+    grant,
+    notification,
+    request: {
+      token: raw,
+      from: 'owner@example.com',
+      ownerEmail: 'owner@example.com',
+      messageId: '<reply-1@fixture.example>',
+      body: 'Owner email reply',
+    },
+  };
+}
+describe('role-scoped email relay grants', () => {
+  it('logs owner and buyer replies once, creating only the opposite participant intent', async () => {
+    const f = await relayFixture();
+    await inbox.checkRelay(f.request);
+    await inbox.relayMessage(f.request);
+    await inbox.relayMessage(f.request);
+    await expect(
+      inbox.relayMessage({ ...f.request, body: 'changed duplicate' }),
+    ).rejects.toThrow();
+    const [toBuyer] = await inbox.lease();
+    expect(toBuyer.kind).toBe('buyer-reply');
+    expect(toBuyer.mail.recipient).toBe('buyer@example.com');
+    const buyerToken = 'cd'.repeat(24);
+    expect(
+      await inbox.claim(toBuyer.id, toBuyer.lease, {
+        tokenHash: await tokenHash(buyerToken),
+        purpose: 'email-buyer',
+        participant: 'buyer@example.com',
+        expiresAt: Date.now() + 86400_000,
+      }),
+    ).toBe(true);
+    await inbox.ack(toBuyer.id, toBuyer.lease, 'accepted', 'fixture');
+    await expect(
+      inbox.relayMessage({ ...f.request, token: buyerToken }),
+    ).rejects.toThrow();
+    await expect(
+      inbox.relayMessage({ ...f.request, from: 'buyer@example.com' }),
+    ).rejects.toThrow();
+    await inbox.relayMessage({
+      ...f.request,
+      token: buyerToken,
+      from: 'buyer@example.com',
+      body: 'Buyer email reply',
+    });
+    const thread = await inbox.thread(f.leadId, true);
+    expect(thread.messages.map((m) => [m.direction, m.body])).toEqual([
+      ['reply', 'Owner email reply'],
+      ['buyer', 'Buyer email reply'],
+    ]);
+    const outgoing = await inbox.lease();
+    expect(outgoing).toHaveLength(1);
+    expect(outgoing[0].kind).toBe('seller-alert');
+    const metadata = JSON.stringify(
+      (
+        await db
+          .prepare("SELECT * FROM sales_tokens WHERE purpose LIKE 'email-%'")
+          .all()
+      ).results,
+    );
+    expect(metadata).not.toContain(f.raw);
+    expect(metadata).not.toContain('owner@example.com');
+  });
+  it('reconciles concurrent duplicate deliveries without a permanent rejection', async () => {
+    const f = await relayFixture();
+    const replies = await Promise.all([
+      inbox.relayMessage(f.request),
+      inbox.relayMessage(f.request),
+    ]);
+    expect(replies[0].id).toBe(replies[1].id);
+    expect((await inbox.thread(f.leadId, true)).messages).toHaveLength(1);
+    const outgoing = await inbox.lease();
+    expect(outgoing).toHaveLength(1);
+    expect(outgoing[0].kind).toBe('buyer-reply');
+  });
+  it('re-admits concurrent distinct replies after a revision conflict', async () => {
+    const f = await relayFixture();
+    const replies = await Promise.all([
+      inbox.relayMessage(f.request),
+      inbox.relayMessage({
+        ...f.request,
+        messageId: '<reply-2@fixture.example>',
+        body: 'Second owner reply',
+      }),
+    ]);
+    expect(replies[0].id).not.toBe(replies[1].id);
+    const thread = await inbox.thread(f.leadId, true);
+    expect(thread.messages.map((m) => m.body).sort()).toEqual([
+      'Owner email reply',
+      'Second owner reply',
+    ]);
+    expect(await inbox.lease()).toHaveLength(2);
+  });
+  it('registers only one role grant when two send claims race', async () => {
+    const f = await relayFixture(false);
+    const results = await Promise.all([
+      inbox.claim(f.notification.id, f.notification.lease, f.grant),
+      inbox.claim(f.notification.id, f.notification.lease, {
+        ...f.grant,
+        tokenHash: await tokenHash('ef'.repeat(24)),
+      }),
+    ]);
+    expect(results.sort()).toEqual([false, true]);
+    expect(
+      (
+        await db
+          .prepare(
+            "SELECT count(*) AS n FROM sales_tokens WHERE purpose LIKE 'email-%'",
+          )
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(1);
+  });
+  it('refuses a buyer-purpose grant on an owner notification', async () => {
+    const f = await relayFixture(false);
+    expect(
+      await inbox.claim(f.notification.id, f.notification.lease, {
+        ...f.grant,
+        purpose: 'email-buyer',
+        participant: 'buyer@example.com',
+      }),
+    ).toBe(false);
+    expect(
+      (
+        await db
+          .prepare(
+            "SELECT count(*) AS n FROM sales_tokens WHERE purpose LIKE 'email-%'",
+          )
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(0);
+  });
+  it.each([
+    'expired',
+    'fresh-link',
+    'spam',
+    'delete',
+    'restore',
+    'participant-change',
+  ])(
+    'rejects %s aliases without a new message or delivery intent',
+    async (mode) => {
+      const f = await relayFixture();
+      if (mode === 'expired')
+        await db
+          .prepare('UPDATE sales_tokens SET expires_at=0 WHERE token_hash=?')
+          .bind(f.hash)
+          .run();
+      if (mode === 'fresh-link') await inbox.freshLink(f.leadId);
+      if (mode === 'spam') {
+        let l = await inbox.lead(f.leadId);
+        await inbox.update(f.leadId, l.revision, 'spam', null);
+        l = await inbox.lead(f.leadId);
+        await inbox.update(f.leadId, l.revision, 'new', null);
+      }
+      if (mode === 'delete')
+        await inbox.remove(f.leadId, (await inbox.lead(f.leadId)).revision);
+      if (mode === 'restore')
+        await restoreSales(store, await exportSales(store));
+      const before = (await db
+        .prepare('SELECT count(*) AS n FROM sales_outbox')
+        .first<{ n: number }>())!.n;
+      await expect(
+        inbox.relayMessage({
+          ...f.request,
+          ...(mode === 'participant-change'
+            ? {
+                from: 'new-owner@example.com',
+                ownerEmail: 'new-owner@example.com',
+              }
+            : {}),
+        }),
+      ).rejects.toThrow();
+      expect(
+        (
+          await db
+            .prepare('SELECT count(*) AS n FROM sales_messages')
+            .first<{ n: number }>()
+        )?.n,
+      ).toBe(0);
+      expect(
+        (
+          await db
+            .prepare('SELECT count(*) AS n FROM sales_outbox')
+            .first<{ n: number }>()
+        )?.n,
+      ).toBe(before);
+    },
+  );
+  it('atomically denies revocation after parsing but before committing the message', async () => {
+    const f = await relayFixture(),
+      original = store.seal.bind(store);
+    store.seal = async (value) => {
+      if ((value as { body?: string }).body === 'racing reply')
+        await db
+          .prepare('UPDATE sales_tokens SET revoked_at=? WHERE token_hash=?')
+          .bind(Date.now(), f.hash)
+          .run();
+      return original(value);
+    };
+    try {
+      await expect(
+        inbox.relayMessage({ ...f.request, body: 'racing reply' }),
+      ).rejects.toThrow();
+    } finally {
+      store.seal = original;
+    }
+    expect(
+      (
+        await db
+          .prepare('SELECT count(*) AS n FROM sales_messages')
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(0);
+    expect(
+      (
+        await db
+          .prepare(
+            "SELECT count(*) AS n FROM sales_outbox WHERE kind='buyer-reply'",
+          )
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(0);
+  });
+  it('removes quoted role credentials and caps valid-alias traffic', async () => {
+    const f = await relayFixture();
+    await inbox.relayMessage({
+      ...f.request,
+      body: `Reply. reply+11111111.${f.raw}@replies.example https://host.example/w/fixture/t/${'x'.repeat(43)}`,
+    });
+    const text = JSON.stringify(await inbox.thread(f.leadId, true));
+    expect(text).not.toContain(f.raw);
+    expect(text).not.toContain('x'.repeat(43));
+    for (let i = 0; i < 20; i++) await inbox.checkRelay(f.request);
+    await expect(inbox.checkRelay(f.request)).rejects.toThrow();
+  });
+});
 describe('sales transaction and privacy boundary', () => {
   it('keeps drafts encrypted and publishes only explicit allowlisted snapshots', async () => {
     const snapshot = await live();

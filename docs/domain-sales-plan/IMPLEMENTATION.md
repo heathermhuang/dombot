@@ -15,11 +15,11 @@ focuses the resulting heading. Turnstile uses compact rendering on narrow screen
 and flexible rendering elsewhere, with a fresh check after crossing the breakpoint.
 The 320-pixel browser check has no horizontal overflow.
 
-Automatic capture of direct mailbox replies is **not implemented by this change**.
-A buyer-only Reply-To sends no copy to the application. The owner was asked to
-choose between direct addressing with an additional recording recipient and a
-conversation relay that can record every normal Reply. No inbound email rule,
-mailbox permission or logging claim is enabled while that choice is pending.
+The operator subsequently selected the conversation relay on 19 October. Engine
+`.14` implements role-scoped private reply addresses, atomic grant registration
+and message recording through the existing opposite-party outbox. Native mailbox
+reply qualification remains a separate live receipt; implementation and provider
+setup do not establish delivered or recorded replies by themselves.
 
 ## Current controlled pilot — 19 October 2026
 
