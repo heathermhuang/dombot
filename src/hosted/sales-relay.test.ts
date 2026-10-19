@@ -113,6 +113,22 @@ describe('bounded inbound MIME projection', () => {
     const value = await parseRelayEmail(incoming(raw));
     expect(value.body).toBe('My new reply.');
   });
+  it('uses HTML quote boundaries when the plain alternative has lost that structure', async () => {
+    const raw = `From: owner@example.com\r\nTo: ${alias}\r\nMessage-ID: <multipart@fixture.example>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary="fixture"\r\n\r\n--fixture\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nMy new reply.\r\nOld history without a plain-text attribution.\r\n--fixture\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>My new reply.</p><div class="gmail_quote">Old history without a plain-text attribution.</div>\r\n--fixture--\r\n`;
+    expect((await parseRelayEmail(incoming(raw))).body).toBe('My new reply.');
+  });
+  it.each([
+    '<div class="gmail_quote">Only old history</div>',
+    '<p>' + 'x'.repeat(4001) + '</p>',
+  ])(
+    'does not fall back to plaintext when sanitized HTML is empty or too long',
+    async (html) => {
+      const raw = `From: owner@example.com\r\nTo: ${alias}\r\nMessage-ID: <multipart-limits@fixture.example>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary="fixture"\r\n\r\n--fixture\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nOld history.\r\n--fixture\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${html}\r\n--fixture--\r\n`;
+      await expect(parseRelayEmail(incoming(raw))).rejects.toThrow(
+        'Reply text must be',
+      );
+    },
+  );
   it.each([
     'From: second@example.com\r\n',
     'Message-ID: <two@example.com>\r\n',
