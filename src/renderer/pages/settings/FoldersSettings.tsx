@@ -225,7 +225,7 @@ function FolderFormDialog({
             <Input
               id="folder-name"
               value={name}
-              placeholder="e.g. For sale"
+              placeholder="e.g. Open to inquiries"
               autoFocus
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {

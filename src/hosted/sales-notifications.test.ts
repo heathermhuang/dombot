@@ -1,7 +1,19 @@
-import { beforeAll, beforeEach, afterAll, describe, it, expect } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  afterAll,
+  describe,
+  it,
+  expect,
+  vi,
+} from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readdirSync, readFileSync } from 'node:fs';
-import { drainSalesWorkspace, salesRecipientHash } from './sales-notifications';
+import {
+  drainSalesWorkspace,
+  drainSales,
+  salesRecipientHash,
+} from './sales-notifications';
 import { verifyGatewayRequest } from '../shared/gateway-proof';
 import { createHash } from 'node:crypto';
 import { receiveSalesReply } from './sales-relay';
@@ -98,6 +110,7 @@ beforeEach(async () => {
   await db.batch(
     [
       'sales_verified_recipients',
+      'sales_dispatch_checkpoints',
       'closure_requests',
       'sales_delivery_receipts',
       'sales_email_budgets',
@@ -419,3 +432,99 @@ describe('separate sales delivery', () => {
     ).toBe('unknown');
   });
 });
+
+it('aligns dispatch checkpoints with the next cron boundary instead of skipping it', async () => {
+  const e = await verified(),
+    original = e.WORKSPACE_0.fetch;
+  let leases = 0;
+  e.WORKSPACE_0 = {
+    fetch: async (r: Request) => {
+      if (new URL(r.url).pathname.endsWith('/lease')) leases++;
+      return original(r);
+    },
+  } as Fetcher;
+  const boundary = Math.floor(Date.now() / 120000) * 120000;
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(boundary + 30000);
+  try {
+    await drainSales(e);
+    expect(
+      (await db
+        .prepare(
+          'SELECT next_check_at FROM sales_dispatch_checkpoints WHERE workspace_id=?',
+        )
+        .bind(workspace)
+        .first<{ next_check_at: number }>())!.next_check_at,
+    ).toBe(boundary + 120000);
+    clock.mockReturnValue(boundary + 140000);
+    await drainSales(e);
+    expect(leases).toBe(2);
+  } finally {
+    clock.mockRestore();
+  }
+});
+it('keeps healthy account delivery moving when another dispatcher fails', async () => {
+  const e = await verified(),
+    broken = '66666666-6666-4666-8666-666666666666';
+  await db
+    .prepare('INSERT INTO workspaces(id,label,enabled) VALUES(?,?,1)')
+    .bind(broken, 'Broken fixture')
+    .run();
+  await db
+    .prepare(
+      'INSERT INTO users(id,email,workspace_id,password_hash,created_at) VALUES(?,?,?,?,?)',
+    )
+    .bind(
+      crypto.randomUUID(),
+      'broken@example.com',
+      broken,
+      'fixture-only',
+      Date.now(),
+    )
+    .run();
+  await db
+    .prepare(
+      'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,?)',
+    )
+    .bind(broken, salesRecipientHash(e, 'broken@example.com'), Date.now())
+    .run();
+  e.WORKSPACES = JSON.stringify([
+    { id: broken, binding: 'WORKSPACE_1', label: 'Broken' },
+    { id: workspace, binding: 'WORKSPACE_0', label: 'Healthy' },
+  ]);
+  e.GATEWAY_KEYS = JSON.stringify({ [workspace]: secret, [broken]: secret });
+  e.WORKSPACE_1 = {
+    fetch: async () => {
+      throw Error('Synthetic service outage');
+    },
+  } as Fetcher;
+  await expect(drainSales(e)).rejects.toThrow('dispatchers need attention');
+  expect(sends).toBe(1);
+  expect(
+    await db
+      .prepare('SELECT 1 FROM sales_dispatch_checkpoints WHERE workspace_id=?')
+      .bind(broken)
+      .first(),
+  ).toBeNull();
+});
+it.each([
+  ['E_RATE_LIMIT_EXCEEDED', 'retryable'],
+  ['E_DAILY_LIMIT_EXCEEDED', 'retryable'],
+  ['E_RECIPIENT_SUPPRESSED', 'suppressed'],
+  ['E_RECIPIENT_NOT_ALLOWED', 'failed'],
+  ['E_INTERNAL_SERVER_ERROR', 'unknown'],
+])(
+  'classifies documented provider rejection %s without replaying ambiguous outcomes',
+  async (code, state) => {
+    const e = await verified();
+    e.SALES_EMAIL = {
+      send: async () => {
+        throw Object.assign(new Error('Provider text must not be retained'), {
+          code,
+        });
+      },
+    } as SendEmail;
+    await drainSalesWorkspace(e, workspace);
+    expect(acks.at(-1)?.state).toBe(state);
+    expect(JSON.stringify(acks)).not.toContain('Provider text');
+  },
+);

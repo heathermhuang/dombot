@@ -1,4 +1,4 @@
-import { managedHosts } from '../shared/sales-managed-control';
+import { managedHosts, operatorHosts } from '../shared/sales-managed-control';
 import { z } from 'zod';
 import { createHash, randomBytes } from 'node:crypto';
 import { canonicalDomain } from '../shared/publication';
@@ -20,6 +20,101 @@ export interface HostBinding {
   observed_revision: string | null;
   provider_status: string | null;
   ssl_status: string | null;
+  next_check_at: number;
+}
+
+/** Renew only existing approved bindings. Never discover or activate private inventory. */
+export async function refreshSalesHostnames(
+  env: HostedEnv,
+  fetcher?: typeof fetch,
+) {
+  if (env.SALES_CUSTOM_HOSTS_ENABLED !== 'true') return;
+  const legacy = new Set(
+    managedHosts(env.SALES_MANAGED_HOSTS).map((h) => h.hostname),
+  );
+  const policies = new Set(
+    operatorHosts(env.SALES_OPERATOR_HOSTS).map((h) => h.hostname),
+  );
+  const names = (env.SALES_HOST_ALLOWLIST ?? '')
+    .split(',')
+    .filter((name) => !!name && (!legacy.has(name) || policies.has(name)));
+  if (!names.length) return;
+  const now = Date.now(),
+    rows = await env.CONTROL_DB.prepare(
+      "SELECT h.* FROM sales_hostnames h JOIN workspaces w ON w.id=h.workspace_id WHERE h.hostname IN (SELECT value FROM json_each(?)) AND h.status IN ('active','checking-page','pending-dns','pending-tls') AND h.next_check_at<=? AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id) ORDER BY h.next_check_at LIMIT 20",
+    )
+      .bind(JSON.stringify(names), now)
+      .all<HostBinding>();
+  const controller = new SalesHostnames(env, fetcher);
+  for (const row of rows.results) {
+    const claimed = await env.CONTROL_DB.prepare(
+      'UPDATE sales_hostnames SET next_check_at=? WHERE hostname=? AND epoch=? AND next_check_at<=? RETURNING hostname',
+    )
+      .bind(now + 120_000, row.hostname, row.epoch, now)
+      .first();
+    if (!claimed) continue;
+    try {
+      const configured = workspaceSchema
+        .parse(JSON.parse(env.WORKSPACES))
+        .find((w) => w.id === row.workspace_id);
+      if (!configured) throw Error('Account unavailable');
+      const request = new Request(
+        new URL(
+          `/sales-internal/host-state?listing=${row.listing_id}`,
+          env.CANONICAL_ORIGIN,
+        ),
+      );
+      request.headers.set(
+        PROOF_HEADER,
+        await signGatewayRequest(
+          gatewayKey(env, row.workspace_id),
+          row.workspace_id,
+          null,
+          request,
+          { purpose: 'sales-hostnames' },
+        ),
+      );
+      const response = await workspaceService(env, configured.binding).fetch(
+        request,
+      );
+      if (!response.ok) throw Error('Publication unavailable');
+      const value = z
+        .object({
+          published: z
+            .object({ domain: z.string(), revision: z.string() })
+            .nullable(),
+        })
+        .parse(await response.json());
+      if (!value.published || value.published.domain !== row.domain) {
+        await controller.detach(
+          row.workspace_id,
+          row.listing_id,
+          row.hostname,
+          row.epoch,
+        );
+        continue;
+      }
+      const plan = z
+        .object({ proof: z.object({ value: z.string() }) })
+        .passthrough()
+        .parse(JSON.parse(row.plan));
+      const challenge = plan.proof.value.replace(/^domains-sales=/, '');
+      await controller.activate(
+        row.workspace_id,
+        row.listing_id,
+        row.hostname,
+        row.epoch,
+        challenge,
+        value.published.revision,
+      );
+    } catch {
+      await env.CONTROL_DB.prepare(
+        'UPDATE sales_hostnames SET next_check_at=? WHERE hostname=? AND epoch=?',
+      )
+        .bind(Date.now() + 120_000, row.hostname, row.epoch)
+        .run();
+    }
+  }
 }
 const digest = (s: string) => createHash('sha256').update(s).digest('hex');
 const dnsSchema = z.object({
@@ -41,8 +136,11 @@ export async function salesDns(
   type: string,
   fetcher: typeof fetch = fetch,
 ) {
-  host = host.startsWith('_domains-sales.')
-    ? '_domains-sales.' + canonicalDomain(host.slice(15))
+  const prefix = ['_domains-sales.', '_domains-inquiry.'].find((p) =>
+    host.startsWith(p),
+  );
+  host = prefix
+    ? prefix + canonicalDomain(host.slice(prefix.length))
     : canonicalDomain(host);
   const url = new URL('https://cloudflare-dns.com/dns-query');
   url.search = new URLSearchParams({ name: host, type, do: 'true' }).toString();
@@ -139,9 +237,16 @@ export class SalesHostnames {
       throw new Error(
         'Detach the existing binding before preparing a new claim.',
       );
-    const managed = managedHosts(this.env.SALES_MANAGED_HOSTS).find(
+    const policy = operatorHosts(this.env.SALES_OPERATOR_HOSTS).find(
       (v) => v.hostname === hostname,
     );
+    if (policy && (policy.workspace !== workspace || policy.domain !== domain))
+      throw Error('This hostname belongs to another account.');
+    const managed = !policy
+      ? managedHosts(this.env.SALES_MANAGED_HOSTS).find(
+          (v) => v.hostname === hostname,
+        )
+      : undefined;
     if (
       managed &&
       (managed.workspace !== workspace || managed.domain !== domain)
@@ -187,7 +292,11 @@ export class SalesHostnames {
         : [],
       preserve: ['MX', 'TXT', 'CAA', 'NS', 'DS'],
       automaticDnsWrites: false,
-      controlMethod: managed ? 'managed-worker' : 'dns-txt',
+      controlMethod: managed
+        ? 'managed-worker'
+        : policy
+          ? 'operator-worker'
+          : 'dns-txt',
       rollback:
         'Detach this binding first, then restore only the exact A/AAAA/CNAME records in this snapshot if those records still equal your reviewed change. Keep unrelated later changes and mail/verification records.',
     };
@@ -255,9 +364,19 @@ export class SalesHostnames {
       .first<HostBinding>();
     if (!r || r.status === 'detached' || digest(challenge) !== r.challenge_hash)
       throw new Error('Hostname claim changed. Prepare a fresh plan.');
-    const managed = managedHosts(this.env.SALES_MANAGED_HOSTS).find(
+    const policy = operatorHosts(this.env.SALES_OPERATOR_HOSTS).find(
       (v) => v.hostname === hostname,
     );
+    if (
+      policy &&
+      (policy.workspace !== workspace || policy.domain !== r.domain)
+    )
+      throw Error('This hostname belongs to another account.');
+    const managed = !policy
+      ? managedHosts(this.env.SALES_MANAGED_HOSTS).find(
+          (v) => v.hostname === hostname,
+        )
+      : undefined;
     if (
       managed &&
       (managed.workspace !== workspace ||
@@ -280,8 +399,25 @@ export class SalesHostnames {
             a.type === 16 &&
             a.data.replaceAll('"', '') === `domains-sales=${challenge}`,
         )
-      )
+      ) {
+        if (r.status === 'active') {
+          const lost = await this.env.CONTROL_DB.prepare(
+            "UPDATE sales_hostnames SET status='control-lost',epoch=epoch+1,control_expires_at=0,updated_at=? WHERE hostname=? AND workspace_id=? AND epoch=? RETURNING epoch",
+          )
+            .bind(Date.now(), hostname, workspace, epoch)
+            .first<{ epoch: number }>();
+          if (lost)
+            await bindingWrite(
+              this.env,
+              workspace,
+              hostname,
+              listing,
+              lost.epoch,
+              false,
+            );
+        }
         throw new Error('The domain-control TXT proof is not visible yet.');
+      }
     }
     const providerSchema = z
       .object({
@@ -292,9 +428,9 @@ export class SalesHostnames {
       })
       .passthrough();
     let provider;
-    if (managed) {
+    if (managed || policy) {
       provider = {
-        id: managed.providerId,
+        id: (managed ?? policy)!.providerId,
         hostname,
         status: 'active',
         ssl: { status: 'active' },
@@ -329,7 +465,9 @@ export class SalesHostnames {
       ? provider.status === 'active'
         ? 'pending-tls'
         : 'pending-dns'
-      : 'checking-page';
+      : r.status === 'active' && r.control_expires_at > Date.now()
+        ? 'active'
+        : 'checking-page';
     if (
       !(await this.env.CONTROL_DB.prepare(
         'UPDATE sales_hostnames SET provider_id=?,provider_status=?,ssl_status=?,status=?,updated_at=?,control_expires_at=? WHERE hostname=? AND workspace_id=? AND epoch=? RETURNING hostname',
@@ -340,7 +478,11 @@ export class SalesHostnames {
           provider.ssl.status,
           state,
           Date.now(),
-          managed ? managed.expiresAt : Date.now() + 86400_000,
+          state === 'active'
+            ? r.control_expires_at
+            : managed
+              ? managed.expiresAt
+              : Date.now() + 86400_000,
           hostname,
           workspace,
           epoch,
@@ -376,15 +518,29 @@ export class SalesHostnames {
     );
     const served = await this.fetcher(probe);
     const observed = served.headers.get('X-Domains-Sales-Revision');
-    if (!served.ok || observed !== revision)
+    if (!served.ok || observed !== revision) {
+      await this.env.CONTROL_DB.prepare(
+        "UPDATE sales_hostnames SET status='checking-page',control_expires_at=0,updated_at=? WHERE hostname=? AND workspace_id=? AND epoch=?",
+      )
+        .bind(Date.now(), hostname, workspace, epoch)
+        .run();
       return {
         status: 'checking-page',
         error: 'The exact published revision is not served yet.',
       };
+    }
     const updated = await this.env.CONTROL_DB.prepare(
-      "UPDATE sales_hostnames SET status='active',observed_revision=?,updated_at=? WHERE hostname=? AND workspace_id=? AND epoch=? AND status='checking-page' RETURNING hostname",
+      "UPDATE sales_hostnames SET status='active',observed_revision=?,updated_at=?,control_expires_at=?,next_check_at=? WHERE hostname=? AND workspace_id=? AND epoch=? AND status IN ('checking-page','active') RETURNING hostname",
     )
-      .bind(revision, Date.now(), hostname, workspace, epoch)
+      .bind(
+        revision,
+        Date.now(),
+        managed ? managed.expiresAt : Date.now() + 86400_000,
+        Date.now() + 6 * 3600_000,
+        hostname,
+        workspace,
+        epoch,
+      )
       .first();
     if (!updated) throw new Error('Binding changed during page verification.');
     return { status: 'active', revision, epoch };

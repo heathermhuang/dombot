@@ -1,5 +1,15 @@
 # Sales implementation and release ledger
 
+## Production inquiry candidate
+
+Engine `.15` adds renewable per-listing DNS verification and durable, fenced
+control observations. Production operator-host policies retain TXT/TLS/revision
+checks and bounded renewal. Queued delivery, provider rejections and cross-account
+failures are handled separately. Public and account defaults use inquiry-focused
+language. See [production operations](production-inquiries.md) for the migration,
+opt-in rollout and required live qualification. This section describes the source
+candidate; it does not replace the historical receipts below.
+
 ## Inquiry and email UX follow-up
 
 Engine `.12` adds the full original inquiry, buyer contact details, offer, public

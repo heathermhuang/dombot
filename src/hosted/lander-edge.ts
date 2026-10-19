@@ -49,7 +49,7 @@ export default {
       return missing();
     }
     const row = await env.CONTROL_DB.prepare(
-      "SELECT h.* FROM sales_hostnames h JOIN workspaces w ON w.id=h.workspace_id WHERE h.hostname=? AND h.status IN ('active','checking-page') AND h.control_expires_at>? AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)",
+      "SELECT h.* FROM sales_hostnames h JOIN workspaces w ON w.id=h.workspace_id WHERE h.hostname=? AND h.status IN ('active','checking-page') AND h.control_expires_at>? AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id) AND NOT EXISTS(SELECT 1 FROM sales_domain_controls d WHERE d.workspace_id=h.workspace_id AND d.listing_id=h.listing_id AND d.status IN ('lost','recovering'))",
     )
       .bind(host, Date.now())
       .first<HostBinding>();

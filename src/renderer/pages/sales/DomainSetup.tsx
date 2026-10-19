@@ -9,7 +9,7 @@ import {
 import { SalesShell, SalesFeedback, Field } from './shared';
 
 interface Plan {
-  controlMethod?: 'managed-worker' | 'dns-txt';
+  controlMethod?: 'managed-worker' | 'operator-worker' | 'dns-txt';
   hostname: string;
   epoch: number;
   challenge: string;
@@ -32,11 +32,19 @@ interface Host {
   ssl_status: string | null;
   plan: Plan;
 }
+interface DomainVerification {
+  enabled: boolean;
+  status: string;
+  observedAt: number;
+  expiresAt: number;
+  proof: { type: string; name: string; value: string } | null;
+}
 export default function DomainSetup() {
   const { id = '' } = useParams(),
     remote = useSalesData<{ items: Host[]; enabled: boolean }>(
       `/hosts?listing=${id}`,
     ),
+    control = useSalesData<DomainVerification>(`/domain-control?listing=${id}`),
     action = useSalesAction();
   const [hostname, setHostname] = useState(''),
     [plan, setPlan] = useState<Plan | null>(null);
@@ -48,11 +56,115 @@ export default function DomainSetup() {
       <p className="sales-kicker">SALES / DOMAIN SETUP</p>
       <h1>Connect the actual domain.</h1>
       <SalesFeedback
-        error={remote.error || action.error}
+        error={remote.error || control.error || action.error}
         notice={action.notice}
         loading={action.busy}
         retry={() => void remote.reload()}
       />
+      {action.reauth && (
+        <p>
+          <a
+            className="link"
+            href={action.reauth}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Confirm your identity
+          </a>
+          , then return here and retry. Your setup stays here.
+        </p>
+      )}
+      <section className="sales-section">
+        <h2>Verify domain control</h2>
+        <p>
+          Verify your DNS before publishing a domain that is not connected
+          through a registrar. This does not publish it or change existing DNS
+          records.
+        </p>
+        {control.data?.proof ? (
+          <>
+            <p>
+              Add this TXT record with your DNS provider and keep it in place:
+            </p>
+            <p>
+              <strong>Name</strong>
+              <br />
+              <code style={{ overflowWrap: 'anywhere' }}>
+                {control.data.proof.name}
+              </code>
+            </p>
+            <p>
+              <strong>Value</strong>
+              <br />
+              <code style={{ overflowWrap: 'anywhere' }}>
+                {control.data.proof.value}
+              </code>
+            </p>
+            <p>
+              Status:{' '}
+              {control.data.status === 'verified'
+                ? 'Verified'
+                : control.data.status === 'lost'
+                  ? 'Verification record missing'
+                  : control.data.status === 'expired'
+                    ? 'Verification expired'
+                    : 'Waiting for verification'}
+              {control.data.observedAt > 0 && (
+                <>
+                  {' '}
+                  · last checked{' '}
+                  {new Date(control.data.observedAt).toLocaleString()}
+                </>
+              )}
+            </p>
+            <button
+              disabled={action.busy || !control.data.enabled}
+              onClick={() =>
+                void action.run(async () => {
+                  const r = await salesRequest<DomainVerification>(
+                    '/domain-control/check',
+                    'POST',
+                    { listingId: id },
+                  );
+                  await control.reload();
+                  action.setNotice(
+                    r.status === 'verified'
+                      ? 'Domain verified. Review and publish it from the listing editor.'
+                      : 'The verification record is missing. Check its name and value, then retry.',
+                  );
+                })
+              }
+            >
+              Check verification record
+            </button>
+          </>
+        ) : (
+          <button
+            disabled={action.busy || !control.data?.enabled}
+            onClick={() =>
+              void action.run(async () => {
+                await salesRequest('/domain-control/plan', 'POST', {
+                  listingId: id,
+                });
+                await control.reload();
+              })
+            }
+          >
+            Prepare verification record
+          </button>
+        )}
+        <p className="small">
+          Verified records are checked every six hours. Observations expire
+          within 24 hours. A missing record stops the affected page;
+          verification alone never publishes a private draft.
+        </p>
+        {control.data?.enabled === false && (
+          <p className="small">
+            DNS verification is not enabled for this account. Connected
+            registrar verification remains available.
+          </p>
+        )}
+      </section>
       <p className="small">
         Domain activation requires current control, exact routing, an active
         certificate and the published revision served on the hostname. DNS and
@@ -87,6 +199,30 @@ export default function DomainSetup() {
             }
           >
             Detach hostname
+          </button>{' '}
+          <button
+            disabled={action.busy || !remote.data?.enabled}
+            onClick={() =>
+              void action.run(async () => {
+                const challenge = h.plan.proof.value.replace(
+                  /^domains-sales=/,
+                  '',
+                );
+                const r = await salesRequest<{
+                  status: string;
+                  error?: string;
+                }>('/hosts/activate', 'POST', {
+                  listingId: id,
+                  hostname: h.hostname,
+                  epoch: h.epoch,
+                  challenge,
+                });
+                await remote.reload();
+                action.setNotice(r.error ?? `Connection status: ${r.status}`);
+              })
+            }
+          >
+            Check connection
           </button>
         </section>
       ))}

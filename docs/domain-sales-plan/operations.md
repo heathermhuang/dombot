@@ -1,5 +1,9 @@
 # Sales operations
 
+For renewable domain control and production inquiry rollout, use
+[production inquiry operations](production-inquiries.md). Historical managed-host
+attestations below remain bounded demonstrations and are not production grants.
+
 Sales is disabled by default. Source, gateway, tenant engine, tenant schema, control schema, public edge, sender and hostname provider are separate releases. Never deploy a repository template over a live gateway configuration: derive the candidate from current settings and preserve all ten workspace bindings, auth settings, legal/source routes and existing secrets.
 
 ## Candidate and migration sequence

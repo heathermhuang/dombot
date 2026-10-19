@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { saleModeSchema } from '../shared/sales';
 import { SalesError } from '../shared/sales-review';
 import { sourcePriceFingerprint } from '../core/publication/sales';
-import { SalesStore, type SaleObservation } from './sales-store';
-import type { SaleDraft } from '../shared/sales';
+import { SalesStore, type SaleObserver } from './sales-store';
 
 export const bulkActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mode'), mode: saleModeSchema }).strict(),
@@ -178,7 +177,7 @@ export class SalesJobs {
     ]);
     return { id };
   }
-  async step(id: string, observe: (d: SaleDraft) => SaleObservation) {
+  async step(id: string, observe: SaleObserver) {
     const job = await this.store.db
       .prepare('SELECT sealed,status FROM sales_jobs WHERE id=?')
       .bind(id)
@@ -261,7 +260,7 @@ export class SalesJobs {
             ...draft,
             priceSource: {
               kind: 'portfolio',
-              fingerprint: sourcePriceFingerprint(observe(draft).price),
+              fingerprint: sourcePriceFingerprint((await observe(draft)).price),
             },
           };
         const next = crypto.randomUUID();

@@ -35,7 +35,11 @@ import { getCachedPortfolio } from '../core/services/registrars';
 import { getImportedDomains } from '../core/services/imported-domains';
 import { SalesStore } from './sales-store';
 import { SalesInquiryStore } from './sales-inquiry-store';
-import { observeSale, createSaleObserver } from './sales-observation';
+import {
+  observeSale,
+  createSaleObserver,
+  createVerifiedSaleObserver,
+} from './sales-observation';
 import { SalesJobs, bulkActionSchema } from './sales-jobs';
 import { aesGcmCipher } from '../core/storage/encrypted';
 import { deriveEncryptionKey, parseRootSecret } from './keys';
@@ -155,6 +159,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   app.get('/capabilities', (c) =>
     c.json({
       sales: c.env.DOMBOT_SALES_V1 === 'true',
+      domainControl: c.env.SALES_DNS_CONTROL_ENABLED === 'true',
       inquiries: c.env.SALES_INQUIRIES_ENABLED === 'true',
       sending: c.env.SALES_MAIL_ENABLED === 'true',
       provider: SALES_PROVIDER_CAPABILITIES,
@@ -166,24 +171,27 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
     const names = (await salesInventoryNames(c.env))
       .filter((d) => d > cursor && d.includes(q))
       .sort();
+    const observe = createVerifiedSaleObserver(c.env);
     return c.json({
-      items: names.slice(0, 100).map((domain) => {
-        const draft = emptySale(domain, 'unreviewed'),
-          o = observeSale(draft, c.env);
-        return {
-          domain,
-          price: o.price
-            ? {
-                amount: o.price.amount,
-                currency: o.price.currency,
-                updatedAt: o.price.updatedAt,
-              }
-            : null,
-          priceFingerprint: sourcePriceFingerprint(o.price),
-          available: o.available,
-          reason: o.reason,
-        };
-      }),
+      items: await Promise.all(
+        names.slice(0, 100).map(async (domain) => {
+          const draft = emptySale(domain, 'unreviewed'),
+            o = await observe(draft);
+          return {
+            domain,
+            price: o.price
+              ? {
+                  amount: o.price.amount,
+                  currency: o.price.currency,
+                  updatedAt: o.price.updatedAt,
+                }
+              : null,
+            priceFingerprint: sourcePriceFingerprint(o.price),
+            available: o.available,
+            reason: o.reason,
+          };
+        }),
+      ),
       cursor: names.length > 100 ? names[99] : null,
     });
   });
@@ -254,7 +262,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
         continue;
       }
       const draft = emptySale(value, 'unreviewed'),
-        o = observeSale(draft, c.env);
+        o = createSaleObserver(c.env)(draft);
       draft.priceSource = {
         kind: 'portfolio',
         fingerprint: sourcePriceFingerprint(o.price),
@@ -267,9 +275,10 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   app.get('/listings/:id', async (c) => {
     const db = await SalesStore.from(c.env),
       saved = await db.get(c.req.param('id')),
-      o = observeSale(saved.draft, c.env);
+      o = await observeSale(saved.draft, c.env);
     return c.json({
       ...saved,
+      dnsVerificationEnabled: c.env.SALES_DNS_CONTROL_ENABLED === 'true',
       observation: {
         ...o,
         price: o.price
@@ -344,7 +353,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   app.get('/listings/:id/preview', async (c) => {
     const db = await SalesStore.from(c.env),
       saved = await db.get(c.req.param('id')),
-      o = observeSale(saved.draft, c.env);
+      o = await observeSale(saved.draft, c.env);
     return c.html(
       renderSalesLander(
         salesProjection(
@@ -402,7 +411,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       .parse(await c.req.json());
     const review = await (
       await SalesStore.from(c.env)
-    ).prepare(v.items, createSaleObserver(c.env));
+    ).prepare(v.items, createVerifiedSaleObserver(c.env));
     await requireRecipient(
       c.env,
       c.get('salesRecipientVerified'),
@@ -423,7 +432,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       .parse(await c.req.json());
     const db = await SalesStore.from(c.env),
       reviews = [],
-      observe = createSaleObserver(c.env);
+      observe = createVerifiedSaleObserver(c.env);
     for (let offset = 0; offset < value.items.length; offset += 100) {
       const review = await db.prepare(
         value.items.slice(offset, offset + 100),
@@ -459,7 +468,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       (await db.review(v.reviewId)).items,
     );
     return c.json({
-      items: await db.publish(v.reviewId, createSaleObserver(c.env)),
+      items: await db.publish(v.reviewId, createVerifiedSaleObserver(c.env)),
       message:
         'Publication review completed. Check the current listing state; domain setup is separate.',
     });
@@ -782,8 +791,9 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       .all();
     const delivery = await db.db
       .prepare(
-        "SELECT state,count(*) AS count,min(due_at) AS oldest FROM sales_outbox WHERE state NOT IN ('accepted','delivered','suppressed') GROUP BY state",
+        "SELECT state,count(*) AS count,min(due_at) AS oldest FROM sales_outbox WHERE state IN ('unknown','failed') OR (state IN ('queued','retryable') AND due_at<=?) OR (state='leased' AND lease_expires_at<=?) GROUP BY state",
       )
+      .bind(Date.now() - 300_000, Date.now())
       .all();
     return c.json({
       publications: publications.results,
@@ -857,7 +867,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       await jobs.publicationItems(c.req.param('id')),
     );
     return c.json(
-      await jobs.step(c.req.param('id'), createSaleObserver(c.env)),
+      await jobs.step(c.req.param('id'), createVerifiedSaleObserver(c.env)),
     );
   });
   // Internal scheduling endpoints live in their own purpose-gated app, never here.

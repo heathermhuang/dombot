@@ -18,8 +18,9 @@ export interface SalesListing {
   published: PublishedSale | null;
 }
 export interface SalesListingDetail extends SalesListing {
+  dnsVerificationEnabled?: boolean;
   observation: {
-    controlSource?: 'registrar' | 'operator-dns';
+    controlSource?: 'registrar' | 'operator-dns' | 'dns';
     price: {
       amount: string | null;
       currency: string;

@@ -102,7 +102,7 @@ describe('owner site disclosure contract', () => {
       publicSite,
       new URL('https://site.example/p/portfolio/c/one'),
     );
-    expect(collection).toContain('Not for sale');
+    expect(collection).toContain('Not accepting inquiries');
     expect(collection).toContain('USD 250');
     expect(collection).toContain('Previously owned');
     expect(collection).not.toContain('USD 100');

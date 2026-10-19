@@ -62,14 +62,23 @@ export function useSalesData<T>(path: string) {
 export function useSalesAction() {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState('');
+    [notice, setNotice] = useState(''),
+    [reauth, setReauth] = useState('');
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setError('');
     setNotice('');
+    setReauth('');
     try {
       await work();
     } catch (e) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'reauth' in e &&
+        e.reauth === '/account/reauth'
+      )
+        setReauth('/account/reauth');
       setError(
         e instanceof Error
           ? e.message
@@ -79,7 +88,7 @@ export function useSalesAction() {
       setBusy(false);
     }
   };
-  return { error, busy, notice, setNotice, run };
+  return { error, busy, notice, setNotice, reauth, run };
 }
 export function downloadSales(name: string, value: unknown) {
   const url = URL.createObjectURL(

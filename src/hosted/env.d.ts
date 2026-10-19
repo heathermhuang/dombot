@@ -1,4 +1,7 @@
 interface HostedEnv {
+  SALES_DOMAIN_CONTROL_ENABLED?: string;
+  SALES_DOMAIN_CONTROL_WORKSPACES?: string;
+  SALES_OPERATOR_HOSTS?: string;
   SALES_RELAY_ENABLED?: string;
   SALES_RELAY_ADDRESS?: string;
   SALES_RELAY_WORKSPACES?: string;

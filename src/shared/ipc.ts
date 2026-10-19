@@ -859,7 +859,7 @@ export function isHiddenFolder(id: string | null | undefined): boolean {
  * motivating case is `forSale` — not yet acted on anywhere.
  */
 export interface FolderSettings {
-  /** Marks the folder's domains as listed for sale. Groundwork only. */
+  /** Marks the folder's domains as listed for inquiries. Groundwork only. */
   forSale?: boolean;
   // future: autoRenew?: boolean; nameserverProfile?: string; ...
 }
