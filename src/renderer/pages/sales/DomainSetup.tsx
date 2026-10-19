@@ -9,6 +9,7 @@ import {
 import { SalesShell, SalesFeedback, Field } from './shared';
 
 interface Plan {
+  controlMethod?: 'managed-worker' | 'dns-txt';
   hostname: string;
   epoch: number;
   challenge: string;
@@ -123,10 +124,18 @@ export default function DomainSetup() {
       {plan && (
         <section className="sales-section">
           <h2>Review before connecting</h2>
-          <p>
-            Add control proof: {plan.proof.type} · {plan.proof.name} ·{' '}
-            <code>{plan.proof.value}</code>
-          </p>
+          {plan.controlMethod === 'managed-worker' ? (
+            <p>
+              The operator has verified this host through its Cloudflare Worker
+              Custom Domain and HTTPS routing. The exact published revision will
+              be checked before activation.
+            </p>
+          ) : (
+            <p>
+              Add control proof: {plan.proof.type} · {plan.proof.name} ·{' '}
+              <code>{plan.proof.value}</code>
+            </p>
+          )}
           {plan.changes.map((r) => (
             <p key={r.name}>
               {r.type} · {r.name} → {r.target}

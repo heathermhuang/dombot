@@ -172,8 +172,19 @@ export function createPublicSalesRoutes() {
           ? (c.env.SALES_TURNSTILE_SITEKEY ?? null)
           : null,
         admission?.sales?.purpose === 'sales-public' && admission.sales.listing
-          ? { inquiryPath: '/inquiries' }
-          : {},
+          ? {
+              inquiryPath: '/inquiries',
+              privacyUrl: new URL(
+                '/privacy',
+                c.env.DOMBOT_SALES_ORIGIN ?? c.req.url,
+              ).href,
+            }
+          : {
+              privacyUrl: new URL(
+                '/privacy',
+                c.env.DOMBOT_SALES_ORIGIN ?? c.req.url,
+              ).href,
+            },
       ),
       200,
       salesHeaders,

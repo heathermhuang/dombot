@@ -1,3 +1,4 @@
+import { managedHosts } from '../shared/sales-managed-control';
 import { z } from 'zod';
 import { createHash, randomBytes } from 'node:crypto';
 import { canonicalDomain } from '../shared/publication';
@@ -138,6 +139,21 @@ export class SalesHostnames {
       throw new Error(
         'Detach the existing binding before preparing a new claim.',
       );
+    const managed = managedHosts(this.env.SALES_MANAGED_HOSTS).find(
+      (v) => v.hostname === hostname,
+    );
+    if (
+      managed &&
+      (managed.workspace !== workspace || managed.domain !== domain)
+    )
+      throw new Error('This managed hostname belongs to another account.');
+    if (
+      managed &&
+      (managed.observedAt > Date.now() || managed.expiresAt <= Date.now())
+    )
+      throw new Error(
+        'The operator must renew the managed hostname observation.',
+      );
     const epoch = (current?.epoch ?? 0) + 1,
       challenge = randomBytes(32).toString('base64url');
     const before = await Promise.all(
@@ -171,6 +187,7 @@ export class SalesHostnames {
         : [],
       preserve: ['MX', 'TXT', 'CAA', 'NS', 'DS'],
       automaticDnsWrites: false,
+      controlMethod: managed ? 'managed-worker' : 'dns-txt',
       rollback:
         'Detach this binding first, then restore only the exact A/AAAA/CNAME records in this snapshot if those records still equal your reviewed change. Keep unrelated later changes and mail/verification records.',
     };
@@ -237,19 +254,34 @@ export class SalesHostnames {
       .first<HostBinding>();
     if (!r || r.status === 'detached' || digest(challenge) !== r.challenge_hash)
       throw new Error('Hostname claim changed. Prepare a fresh plan.');
-    const proof = await salesDns(
-      `_domains-sales.${hostname}`,
-      'TXT',
-      this.fetcher,
+    const managed = managedHosts(this.env.SALES_MANAGED_HOSTS).find(
+      (v) => v.hostname === hostname,
     );
     if (
-      !proof.answers.some(
-        (a) =>
-          a.type === 16 &&
-          a.data.replaceAll('"', '') === `domains-sales=${challenge}`,
-      )
+      managed &&
+      (managed.workspace !== workspace ||
+        managed.domain !== r.domain ||
+        managed.observedAt > Date.now() ||
+        managed.expiresAt <= Date.now())
     )
-      throw new Error('The domain-control TXT proof is not visible yet.');
+      throw new Error(
+        'The managed hostname observation is unavailable or expired.',
+      );
+    if (!managed) {
+      const proof = await salesDns(
+        `_domains-sales.${hostname}`,
+        'TXT',
+        this.fetcher,
+      );
+      if (
+        !proof.answers.some(
+          (a) =>
+            a.type === 16 &&
+            a.data.replaceAll('"', '') === `domains-sales=${challenge}`,
+        )
+      )
+        throw new Error('The domain-control TXT proof is not visible yet.');
+    }
     const providerSchema = z
       .object({
         id: z.string(),
@@ -259,7 +291,14 @@ export class SalesHostnames {
       })
       .passthrough();
     let provider;
-    if (r.provider_id)
+    if (managed) {
+      provider = {
+        id: managed.providerId,
+        hostname,
+        status: 'active',
+        ssl: { status: 'active' },
+      };
+    } else if (r.provider_id)
       provider = providerSchema.parse(await this.provider(`/${r.provider_id}`));
     else {
       // Reconcile any earlier ambiguous creation before issuing another request.
@@ -300,7 +339,7 @@ export class SalesHostnames {
           provider.ssl.status,
           state,
           Date.now(),
-          Date.now() + 86400_000,
+          managed ? managed.expiresAt : Date.now() + 86400_000,
           hostname,
           workspace,
           epoch,

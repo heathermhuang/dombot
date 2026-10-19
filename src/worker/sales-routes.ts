@@ -157,7 +157,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
     return c.json({
       items: names.slice(0, 100).map((domain) => {
         const draft = emptySale(domain, 'unreviewed'),
-          o = observeSale(draft);
+          o = observeSale(draft, c.env);
         return {
           domain,
           price: o.price
@@ -242,7 +242,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
         continue;
       }
       const draft = emptySale(value, 'unreviewed'),
-        o = observeSale(draft);
+        o = observeSale(draft, c.env);
       draft.priceSource = {
         kind: 'portfolio',
         fingerprint: sourcePriceFingerprint(o.price),
@@ -255,7 +255,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   app.get('/listings/:id', async (c) => {
     const db = await SalesStore.from(c.env),
       saved = await db.get(c.req.param('id')),
-      o = observeSale(saved.draft);
+      o = observeSale(saved.draft, c.env);
     return c.json({
       ...saved,
       observation: {
@@ -332,7 +332,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
   app.get('/listings/:id/preview', async (c) => {
     const db = await SalesStore.from(c.env),
       saved = await db.get(c.req.param('id')),
-      o = observeSale(saved.draft);
+      o = observeSale(saved.draft, c.env);
     return c.html(
       renderSalesLander(
         salesProjection(
@@ -390,7 +390,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       .parse(await c.req.json());
     const review = await (
       await SalesStore.from(c.env)
-    ).prepare(v.items, createSaleObserver());
+    ).prepare(v.items, createSaleObserver(c.env));
     await requireRecipient(
       c.env,
       c.get('salesRecipientVerified'),
@@ -411,7 +411,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       .parse(await c.req.json());
     const db = await SalesStore.from(c.env),
       reviews = [],
-      observe = createSaleObserver();
+      observe = createSaleObserver(c.env);
     for (let offset = 0; offset < value.items.length; offset += 100) {
       const review = await db.prepare(
         value.items.slice(offset, offset + 100),
@@ -447,7 +447,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       (await db.review(v.reviewId)).items,
     );
     return c.json({
-      items: await db.publish(v.reviewId, createSaleObserver()),
+      items: await db.publish(v.reviewId, createSaleObserver(c.env)),
       message:
         'Publication review completed. Check the current listing state; domain setup is separate.',
     });
@@ -844,7 +844,9 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       c.get('salesRecipientVerified'),
       await jobs.publicationItems(c.req.param('id')),
     );
-    return c.json(await jobs.step(c.req.param('id'), createSaleObserver()));
+    return c.json(
+      await jobs.step(c.req.param('id'), createSaleObserver(c.env)),
+    );
   });
   // Internal scheduling endpoints live in their own purpose-gated app, never here.
   return app;

@@ -1,4 +1,8 @@
 import {
+  managedControl,
+  managedControls,
+} from '../shared/sales-managed-control';
+import {
   getCachedPortfolio,
   getRegistrarMetadata,
 } from '../core/services/registrars';
@@ -10,7 +14,14 @@ import type { SaleDraft } from '../shared/sales';
 import type { SaleObservation } from './sales-store';
 
 /** A request-local index; it never survives a hydrate or crosses tenants. */
-export function createSaleObserver(): (draft: SaleDraft) => SaleObservation {
+export function createSaleObserver(
+  env: Partial<
+    Pick<
+      Env,
+      'DOMBOT_AUTH' | 'DOMBOT_WORKSPACE_ID' | 'DOMBOT_SALES_DNS_CONTROL'
+    >
+  > = {},
+): (draft: SaleDraft) => SaleObservation {
   const domains = new Map<
     string,
     NonNullable<ReturnType<typeof getCachedPortfolio>>['domains']
@@ -37,6 +48,23 @@ export function createSaleObserver(): (draft: SaleDraft) => SaleObservation {
       ? Math.min(...matched.map((a) => a?.sync.lastSyncedAt ?? 0))
       : 0;
     const archived = ownership.get(draft.domain)?.archived;
+    const managed = managedControl(env, draft.domain, now);
+    if (managed && !archived)
+      return {
+        price: prices[draft.domain] ?? null,
+        available: true,
+        reason: null,
+        controlSource: 'operator-dns',
+        controlExpiresAt: managed.expiresAt,
+        ownershipFingerprint: JSON.stringify([
+          'operator-dns',
+          managed.workspace,
+          managed.domain,
+          managed.proofId,
+          managed.observedAt,
+          managed.expiresAt,
+        ]),
+      };
     const available =
       ids.size === 1 &&
       !archived &&
@@ -46,6 +74,7 @@ export function createSaleObserver(): (draft: SaleDraft) => SaleObservation {
       observedAt + 86400_000 > now;
     return {
       price: prices[draft.domain] ?? null,
+      controlSource: 'registrar',
       ownershipFingerprint: JSON.stringify([
         draft.domain,
         [...ids].sort(),
@@ -63,13 +92,33 @@ export function createSaleObserver(): (draft: SaleDraft) => SaleObservation {
     };
   };
 }
-export function observeSale(draft: SaleDraft): SaleObservation {
-  return createSaleObserver()(draft);
+export function observeSale(
+  draft: SaleDraft,
+  env: Partial<
+    Pick<
+      Env,
+      'DOMBOT_AUTH' | 'DOMBOT_WORKSPACE_ID' | 'DOMBOT_SALES_DNS_CONTROL'
+    >
+  > = {},
+): SaleObservation {
+  return createSaleObserver(env)(draft);
 }
-export function salesControlState(): Map<string, string> {
-  const observer = createSaleObserver(),
+export function salesControlState(
+  env: Partial<
+    Pick<
+      Env,
+      'DOMBOT_AUTH' | 'DOMBOT_WORKSPACE_ID' | 'DOMBOT_SALES_DNS_CONTROL'
+    >
+  > = {},
+): Map<string, string> {
+  const observer = createSaleObserver(env),
     names = new Set(
-      (getCachedPortfolio()?.domains ?? []).map((d) => {
+      [
+        ...(getCachedPortfolio()?.domains ?? []),
+        ...managedControls(env.DOMBOT_SALES_DNS_CONTROL).map((p) => ({
+          domainName: p.domain,
+        })),
+      ].map((d) => {
         try {
           return canonicalDomain(d.domainName);
         } catch {

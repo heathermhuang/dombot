@@ -2,6 +2,7 @@
 // plain vars present in wrangler.jsonc, so the rest is declared here. All
 // optional: boot fails with a clear message when a required one is missing.
 interface Env {
+  DOMBOT_SALES_DNS_CONTROL?: string;
   DOMBOT_SALES_V1?: string;
   SALES_INQUIRIES_ENABLED?: string;
   SALES_PRIVACY_REVIEWED?: string;
