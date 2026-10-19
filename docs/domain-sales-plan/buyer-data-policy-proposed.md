@@ -1,6 +1,6 @@
 # Buyer data copy for operator review
 
-Approved by the operator on 19 October 2026 in the implementation chat; publication is part of the managed pilot release. Keep `SALES_PRIVACY_REVIEWED` off until the final wording is approved and the linked policy is published. Local synthetic qualification is separate.
+Approved by the operator and published at `https://domains.domains/privacy` on 19 October 2026 for the managed pilot. `SALES_PRIVACY_REVIEWED` is enabled only for the controlled owner workspace. Local synthetic qualification and legal clearance remain separate. The retained filename records the original proposal.
 
 ## Proposed Privacy Policy addition
 
