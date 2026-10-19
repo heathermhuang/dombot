@@ -10,6 +10,7 @@ import { getListPrices } from '../core/services/list-prices';
 import { listEvents } from '../core/services/domain-events';
 import { ownershipByDomain } from '../shared/ownership';
 import { canonicalDomain } from '../shared/publication';
+import { salesControlClockToleranceMs } from '../shared/sales-domain-control';
 import type { SaleDraft } from '../shared/sales';
 import {
   SalesStore,
@@ -115,7 +116,11 @@ export function createVerifiedSaleObserver(env: Env): SaleObserver {
     const row = await env.DB.prepare(
       'SELECT c.domain_hash,c.proof_id,c.epoch,c.observed_at,c.expires_at FROM sales_control_leases c JOIN sale_drafts d ON d.id=c.listing_id WHERE d.domain_hash=? AND c.domain_hash=d.domain_hash AND c.revoked_at IS NULL AND c.observed_at<=? AND c.expires_at>?',
     )
-      .bind(await store.hash('domain', draft.domain), Date.now(), Date.now())
+      .bind(
+        await store.hash('domain', draft.domain),
+        Date.now() + salesControlClockToleranceMs,
+        Date.now(),
+      )
       .first<{
         domain_hash: string;
         proof_id: string;

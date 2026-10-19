@@ -19,6 +19,8 @@ Transient failures retain only the last bounded observation and retry the due
 record after two minutes. Expired observations cannot authorize publication.
 
 Every observation advances a fenced generation before a tenant grant is issued.
+A five-second clock allowance matches signed gateway admission across Cloudflare
+hosts; observations farther in the future are rejected and expiry is not relaxed.
 A newer loss cannot be undone by an older successful check. A persistent loss
 generation also reaches the tenant if the original revocation delivery failed.
 Restoring the record makes verification available again, but a publication that
@@ -79,7 +81,7 @@ that is overdue by five minutes, rather than flagging normal queued mail.
    live settings, identities, legacy portfolio and protected DNS observations.
 2. Apply additive control migration `0008_sales_domain_controls.sql` and tenant
    migration `0006_sales_control_leases.sql` before enabling new writers. Deploy
-   engine `.15` and the gateway/edge from the same reviewed source. Do not infer
+   engine `.16` and the gateway/edge from the same reviewed source. Do not infer
    coordinator adoption from an outer engine header.
 3. Keep `SALES_DNS_CONTROL_ENABLED=false` on tenants until migrated. Enable it
    only for the intended account, together with gateway

@@ -5,7 +5,10 @@ import { verifyGatewayRequest } from '../shared/gateway-proof';
 import { deliveryStateSchema } from '../shared/sales';
 import { SalesStore } from './sales-store';
 import { SalesInquiryStore } from './sales-inquiry-store';
-import { domainControlLeaseSchema } from '../shared/sales-domain-control';
+import {
+  domainControlLeaseSchema,
+  salesControlClockToleranceMs,
+} from '../shared/sales-domain-control';
 import {
   emailRelayGrantSchema,
   relayAdmissionSchema,
@@ -48,7 +51,10 @@ export function createSalesInternalRoutes() {
     if (v.valid && c.env.SALES_DNS_CONTROL_ENABLED !== 'true')
       return c.json({ ok: false }, 403);
     const now = Date.now();
-    if (v.observedAt > now || (v.valid && v.expiresAt <= now))
+    if (
+      v.observedAt > now + salesControlClockToleranceMs ||
+      (v.valid && v.expiresAt <= now)
+    )
       return c.json({ ok: false }, 409);
     const store = await SalesStore.from(c.env),
       saved = await store.get(v.listing);
