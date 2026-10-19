@@ -3,6 +3,8 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readdirSync, readFileSync } from 'node:fs';
 import { drainSalesWorkspace, salesRecipientHash } from './sales-notifications';
 import { verifyGatewayRequest } from '../shared/gateway-proof';
+import { createHash } from 'node:crypto';
+import { receiveSalesReply } from './sales-relay';
 
 let mf: Miniflare,
   db: D1Database,
@@ -96,6 +98,7 @@ beforeEach(async () => {
   await db.batch(
     [
       'sales_verified_recipients',
+      'closure_requests',
       'sales_delivery_receipts',
       'sales_email_budgets',
       'email_budgets',
@@ -128,15 +131,163 @@ async function verified() {
     .run();
   return e;
 }
+describe('relay gateway admission', () => {
+  const rawToken = 'ab'.repeat(24),
+    address = `reply+11111111.${rawToken}@replies.example`;
+  async function setup() {
+    const e = await verified();
+    e.SALES_RELAY_ENABLED = 'true';
+    e.SALES_RELAY_ADDRESS = 'reply@replies.example';
+    e.SALES_RELAY_WORKSPACES = JSON.stringify([workspace]);
+    const saved: Record<string, unknown>[] = [],
+      paths: string[] = [];
+    e.WORKSPACE_0 = {
+      fetch: async (r: Request) => {
+        expect(
+          (await verifyGatewayRequest(secret, workspace, r))?.sales?.purpose,
+        ).toBe('sales-notifications');
+        const p = new URL(r.url).pathname;
+        paths.push(p);
+        if (p.endsWith('/due')) return Response.json({ dueAt: null });
+        const body = (await r.json()) as Record<string, unknown>;
+        if (p.endsWith('/relay-check'))
+          return Response.json(
+            {
+              ok: body.token === rawToken && body.from === 'seller@example.com',
+            },
+            {
+              status:
+                body.token === rawToken && body.from === 'seller@example.com'
+                  ? 200
+                  : 403,
+            },
+          );
+        if (p.endsWith('/relay-message')) saved.push(body);
+        return Response.json({ ok: true });
+      },
+    } as unknown as Fetcher;
+    return { e, saved, paths };
+  }
+  async function deliver(
+    e: HostedEnv,
+    options: {
+      to?: string;
+      from?: string;
+      headerFrom?: string;
+      extra?: string;
+    } = {},
+  ) {
+    const body = `From: ${options.headerFrom ?? 'seller@example.com'}\r\nTo: attacker@example.net\r\nReply-To: attacker@example.net\r\nCc: attacker@example.net\r\nBcc: attacker@example.net\r\nMessage-ID: <reply-gateway@fixture.example>\r\nAuthentication-Results: mx.cloudflare.net; dmarc=pass\r\n${options.extra ?? ''}Content-Type: text/plain; charset=utf-8\r\n\r\nNative email reply. ${address}`;
+    let rejected = '';
+    const waits: Promise<unknown>[] = [];
+    const message = {
+      from: options.from ?? 'seller@example.com',
+      to: options.to ?? address,
+      raw: new Response(body).body!,
+      rawSize: new TextEncoder().encode(body).length,
+      headers: new Headers(),
+      setReject: (reason: string) => {
+        rejected = reason;
+      },
+      forward() {
+        throw Error('Raw forwarding is forbidden');
+      },
+      reply() {
+        throw Error('Direct SMTP reply is forbidden');
+      },
+    } as ForwardableEmailMessage;
+    await receiveSalesReply(message, e, {
+      waitUntil: (p) => waits.push(p),
+    } as unknown as ExecutionContext);
+    await Promise.all(waits);
+    return rejected;
+  }
+  it('uses the exact SMTP alias and current participant, ignoring routing/authentication headers', async () => {
+    const f = await setup();
+    expect(await deliver(f.e)).toBe('');
+    expect(f.saved).toHaveLength(1);
+    expect(f.saved[0]).toMatchObject({
+      from: 'seller@example.com',
+      ownerEmail: 'seller@example.com',
+      token: rawToken,
+    });
+    expect(f.saved[0].body).toBe('Native email reply. [private reply address]');
+    expect(Object.keys(f.saved[0]).sort()).toEqual([
+      'body',
+      'from',
+      'messageId',
+      'ownerEmail',
+      'token',
+    ]);
+  });
+  it.each([
+    { to: address.replace('11111111', '22222222') },
+    { to: address.replace('replies.example', 'foreign.example') },
+    { from: 'attacker@example.net' },
+    { headerFrom: 'attacker@example.net' },
+    { extra: 'Auto-Submitted: auto-replied\r\n' },
+  ])(
+    'does not log invalid/mismatched/automatic messages: %j',
+    async (options) => {
+      const f = await setup();
+      expect(await deliver(f.e, options)).not.toBe('');
+      expect(f.saved).toHaveLength(0);
+    },
+  );
+  it.each(['disabled', 'closure', 'unverified'])(
+    'denies %s accounts before any tenant message write',
+    async (state) => {
+      const f = await setup();
+      if (state === 'disabled')
+        await db
+          .prepare('UPDATE workspaces SET enabled=0 WHERE id=?')
+          .bind(workspace)
+          .run();
+      if (state === 'closure')
+        await db
+          .prepare(
+            'INSERT INTO closure_requests(workspace_id,user_id,requested_at,purge_after) VALUES(?,?,?,?)',
+          )
+          .bind(workspace, user, Date.now(), Date.now() + 86400000)
+          .run();
+      if (state === 'unverified')
+        await db.prepare('DELETE FROM sales_verified_recipients').run();
+      expect(await deliver(f.e)).not.toBe('');
+      expect(f.paths).toHaveLength(0);
+      expect(f.saved).toHaveLength(0);
+    },
+  );
+});
 describe('separate sales delivery', () => {
-  it.each(['seller-alert', 'buyer-reply'])(
-    'sends full %s context without exposing the owner email to the buyer',
-    async (kind) => {
+  it.each([
+    ['seller-alert', false],
+    ['buyer-reply', false],
+    ['seller-alert', true],
+    ['buyer-reply', true],
+  ] as const)(
+    'sends full %s context with relay=%s without exposing the owner email to the buyer',
+    async (kind, relay) => {
       const e = await verified();
+      if (relay) {
+        e.SALES_RELAY_ENABLED = 'true';
+        e.SALES_RELAY_ADDRESS = 'reply@replies.example';
+        e.SALES_RELAY_WORKSPACES = JSON.stringify([workspace]);
+      }
       let sent: EmailMessageBuilder | undefined;
+      let claimBody:
+        | {
+            emailRelay?: {
+              tokenHash: string;
+              purpose: string;
+              participant: string;
+            };
+          }
+        | undefined;
       const oldFetch = e.WORKSPACE_0.fetch;
       e.WORKSPACE_0 = {
         fetch: async (r: Request) => {
+          if (new URL(r.url).pathname.endsWith('/claim'))
+            claimBody = await r.clone().json();
           const response = await oldFetch(r);
           if (!new URL(r.url).pathname.endsWith('/lease')) return response;
           const value = (await response.json()) as {
@@ -180,9 +331,26 @@ describe('separate sales delivery', () => {
       expect(sent?.to).toBe(
         kind === 'seller-alert' ? 'seller@example.com' : 'buyer@example.com',
       );
-      expect(sent?.replyTo).toBe(
-        kind === 'seller-alert' ? 'buyer@example.com' : undefined,
-      );
+      if (relay) {
+        const target = sent!.replyTo as { email: string; name: string };
+        const raw = target.email.match(
+          /^reply\+11111111\.([a-f0-9]{48})@replies\.example$/,
+        )?.[1];
+        expect(raw).toBeTruthy();
+        expect(claimBody?.emailRelay).toMatchObject({
+          tokenHash: createHash('sha256').update(raw!).digest('base64url'),
+          purpose: kind === 'seller-alert' ? 'email-owner' : 'email-buyer',
+          participant:
+            kind === 'seller-alert'
+              ? 'seller@example.com'
+              : 'buyer@example.com',
+        });
+        expect(sent?.text).toContain('Reply to this email to continue.');
+        expect(sent?.text).not.toContain(raw!);
+      } else
+        expect(sent?.replyTo).toBe(
+          kind === 'seller-alert' ? 'buyer@example.com' : undefined,
+        );
       expect(sent?.text).toContain('Please send the details.');
       expect(sent?.html).toContain('buyer@example.com');
       expect(sent?.subject).toContain('sample.example');

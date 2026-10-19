@@ -44,6 +44,8 @@
     "EMAIL_DELIVERY_VERIFIED": "false",
     "PUBLIC_SIGNUP_IDS": "",
     "SALES_MAIL_ENABLED": "false",
+    "SALES_RELAY_ENABLED": "false",
+    "SALES_RELAY_WORKSPACES": "[]",
     "SALES_MAIL_DELIVERY_VERIFIED": "false",
     "SALES_EMAIL_FROM": "sales@mail.domains.domains",
     "SALES_MAIL_DAILY_LIMIT": "0",

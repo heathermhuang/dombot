@@ -58,3 +58,37 @@ The managed-host attestations expire within 24 hours. Before extending the pilot
 refresh the exact provider resources, protected DNS and HTTPS observations and
 use the normal host-control workflow. Do not silently convert the bounded pilot
 into permanent customer hosting or expand the hostname allowlist.
+
+## Conversation email relay
+
+Enable `SALES_RELAY_ENABLED` for the operator workspace only after preserving
+protected DNS and confirming the dedicated reply subdomain's literal routing
+rule reaches the gateway email handler. Complete the controlled two-way mailbox
+trial before expanding the workspace allowlist. `SALES_RELAY_ADDRESS` is the base address, with a local part of at
+most five characters; `SALES_RELAY_WORKSPACES` is a strict UUID allowlist. Plus
+address matching is required. Preserve root-domain and sending-domain DNS and all
+other mail rules. Do not enable an apex catch-all or change existing MX records.
+
+Each notification creates a distinct 192-bit private alias. Its hash, participant
+hash, conversation, role and expiry are registered atomically with the one-use
+final send claim. The alias authorizes posting to that conversation only. MIME
+headers and authentication-result strings are not identity proofs or routing
+instructions. Fresh-link recovery, spam, deletion and private restore revoke the
+tenant grants. Workspace suspension/closure is checked at gateway admission and
+again before outbound delivery; already admitted/claimed work cannot be recalled.
+
+Ingress accepts at most 256 KiB raw MIME, 20 MIME parts, nesting depth 8 and 16 KiB
+headers; new reply text is limited to 4,000 characters. Normal top-posted quote
+history is removed. Known quoted relay addresses and capability URLs are redacted;
+this prevents routine quote leakage, not deliberate credential sharing. Inline
+signature images are omitted, other attachments and attached messages rejected.
+Automated/list messages are rejected. Limits are 20 messages/hour per grant and
+conversation, plus 40 valid-alias admissions/10 minutes per workspace. Existing
+outbound budgets, leases, claims and unknown-outcome handling remain authoritative.
+
+A successful email event means the message and opposite-party outbox intent are
+saved. SMTP retries deduplicate by role, participant and Message-ID; changed
+content under the same key is rejected. Normal scheduled dispatch recovers queued
+work. Do not replay an unknown send or record an inbox receipt from provider
+acceptance alone. Never log raw MIME, addresses, private alias tokens or capability
+URLs. Reply addresses are bearer credentials; forwarding them can share access.

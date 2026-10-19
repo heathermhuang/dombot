@@ -1,4 +1,7 @@
 interface HostedEnv {
+  SALES_RELAY_ENABLED?: string;
+  SALES_RELAY_ADDRESS?: string;
+  SALES_RELAY_WORKSPACES?: string;
   SALES_EMAIL?: SendEmail;
   SALES_EMAIL_FROM?: string;
   SALES_MAIL_ENABLED?: string;

@@ -14,6 +14,11 @@ import { saleOutcomeSchema, SALE_RETENTION } from '../shared/sales-events';
 import { SalesStore } from './sales-store';
 import { sha256, toBase64Url, fromBase64Url } from './keys';
 import { salesEmailContextSchema } from '../shared/sales-email';
+import {
+  type EmailRelayGrant,
+  type RelayMessage,
+  redactRelaySecrets,
+} from '../shared/sales-relay';
 
 export const leadPayloadSchema = z
   .object({
@@ -484,6 +489,11 @@ export class SalesInquiryStore {
     id: string,
     value: z.infer<typeof messageSchema>,
     buyer = false,
+    emailGrant?: {
+      tokenHash: string;
+      participantHash: string;
+      purpose: string;
+    },
   ): Promise<{ id: string }> {
     const input = messageSchema.parse(value),
       l = await this.lead(id);
@@ -522,6 +532,19 @@ export class SalesInquiryStore {
       raw = token(),
       now = Date.now();
     const statements = [
+      ...(emailGrant
+        ? this.sales.guard(
+            "EXISTS(SELECT 1 FROM sales_tokens WHERE token_hash=? AND lead_id=? AND purpose=? AND grant_id=? AND revoked_at IS NULL AND expires_at>CAST((julianday('now')-2440587.5)*86400000 AS INTEGER)) AND EXISTS(SELECT 1 FROM sales_leads WHERE id=? AND verification='verified' AND status!='spam') AND NOT EXISTS(SELECT 1 FROM sales_suppression WHERE email_hash=? AND expires_at>CAST((julianday('now')-2440587.5)*86400000 AS INTEGER))",
+            [
+              emailGrant.tokenHash,
+              id,
+              emailGrant.purpose,
+              emailGrant.participantHash,
+              id,
+              await this.sales.hash('suppression-email', l.payload.email),
+            ],
+          )
+        : []),
       ...this.sales.guard(
         'EXISTS(SELECT 1 FROM sales_leads WHERE id=? AND revision=?)',
         [id, input.revision],
@@ -690,6 +713,11 @@ export class SalesInquiryStore {
         )
         .bind(Date.now(), l.id, purpose),
       this.obsoleteLinkMail(l.id, purpose),
+      this.db
+        .prepare(
+          "UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose IN ('email-owner','email-buyer') AND revoked_at IS NULL",
+        )
+        .bind(Date.now(), l.id),
       await this.tokenWrite(next, purpose, l.id, purpose === 'thread' ? 7 : 1),
       await this.outbox(
         crypto.randomUUID(),
@@ -738,6 +766,11 @@ export class SalesInquiryStore {
         'EXISTS(SELECT 1 FROM sales_leads WHERE id=? AND revision=?)',
         [id, l.revision],
       ),
+      this.db
+        .prepare(
+          "UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose IN ('email-owner','email-buyer') AND revoked_at IS NULL",
+        )
+        .bind(Date.now(), id),
       this.db
         .prepare(
           'UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose=?',
@@ -828,19 +861,72 @@ export class SalesInquiryStore {
     });
   }
   /** A cached lease is not permission to send. Claim once at the send boundary. */
-  async claim(id: string, lease: string): Promise<boolean> {
+  async claim(
+    id: string,
+    lease: string,
+    emailRelay?: EmailRelayGrant,
+  ): Promise<boolean> {
     const row = await this.db
       .prepare(
-        "SELECT sealed FROM sales_outbox WHERE id=? AND state='leased' AND lease_token=? AND lease_expires_at>? AND claimed_at IS NULL",
+        "SELECT sealed,lead_id,kind FROM sales_outbox WHERE id=? AND state='leased' AND lease_token=? AND lease_expires_at>? AND claimed_at IS NULL",
       )
       .bind(id, lease, Date.now())
-      .first<{ sealed: string }>();
+      .first<{ sealed: string; lead_id: string; kind: string }>();
     if (!row) return false;
     const mail = await this.sales.open(row.sealed, mailSchema);
     const recipientHash = mail.recipient
       ? await this.sales.hash('suppression-email', mail.recipient)
       : '';
     const now = Date.now();
+    if (emailRelay) {
+      const expectedKind =
+        emailRelay.purpose === 'email-owner' ? 'seller-alert' : 'buyer-reply';
+      const lead = await this.lead(row.lead_id);
+      if (
+        row.kind !== expectedKind ||
+        emailRelay.expiresAt <= now ||
+        (emailRelay.purpose === 'email-buyer' &&
+          emailRelay.participant.toLowerCase() !==
+            lead.payload.email.toLowerCase())
+      )
+        return false;
+      try {
+        await this.sales.atomic([
+          ...this.sales.guard(
+            "EXISTS(SELECT 1 FROM sales_outbox o JOIN sales_leads l ON l.id=o.lead_id WHERE o.id=? AND o.state='leased' AND o.lease_token=? AND o.lease_expires_at>CAST((julianday('now')-2440587.5)*86400000 AS INTEGER) AND o.claimed_at IS NULL AND l.verification='verified' AND l.status!='spam') AND NOT EXISTS(SELECT 1 FROM sales_suppression WHERE email_hash=? AND expires_at>CAST((julianday('now')-2440587.5)*86400000 AS INTEGER))",
+            [
+              id,
+              lease,
+              await this.sales.hash('suppression-email', lead.payload.email),
+            ],
+          ),
+          this.db
+            .prepare(
+              'UPDATE sales_outbox SET claimed_at=?,updated_at=? WHERE id=?',
+            )
+            .bind(now, now, id),
+          this.db
+            .prepare(
+              'INSERT INTO sales_tokens(token_hash,purpose,lead_id,expires_at,grant_id) VALUES(?,?,?,?,?)',
+            )
+            .bind(
+              emailRelay.tokenHash,
+              emailRelay.purpose,
+              row.lead_id,
+              Math.min(emailRelay.expiresAt, now + 7 * 86400_000),
+              await this.sales.hash(
+                'email-relay-participant',
+                emailRelay.participant.toLowerCase(),
+              ),
+            ),
+        ]);
+        return true;
+      } catch (e) {
+        if (e instanceof SalesError && e.code === 'REVISION_CHANGED')
+          return false;
+        throw e;
+      }
+    }
     const granted = await this.db
       .prepare(
         "UPDATE sales_outbox SET claimed_at=?,updated_at=? WHERE id=? AND state='leased' AND lease_token=? AND lease_expires_at>? AND claimed_at IS NULL AND EXISTS(SELECT 1 FROM sales_leads l WHERE l.id=sales_outbox.lead_id AND l.status!='spam' AND ((sales_outbox.kind='verification' AND l.verification IN ('pending','expired')) OR (sales_outbox.kind IN ('seller-alert','buyer-reply') AND l.verification='verified'))) AND NOT EXISTS(SELECT 1 FROM sales_suppression WHERE email_hash=? AND expires_at>?) RETURNING id",
@@ -849,6 +935,119 @@ export class SalesInquiryStore {
       .first();
     return !!granted;
   }
+  async relayAdmission(input: {
+    token: string;
+    from: string;
+    ownerEmail: string;
+  }) {
+    const hash = await tokenHash(input.token);
+    const grant = await this.db
+      .prepare(
+        "SELECT token_hash,lead_id,purpose,grant_id FROM sales_tokens WHERE token_hash=? AND purpose IN ('email-owner','email-buyer') AND revoked_at IS NULL AND expires_at>?",
+      )
+      .bind(hash, Date.now())
+      .first<{
+        token_hash: string;
+        lead_id: string;
+        purpose: string;
+        grant_id: string;
+      }>();
+    if (!grant)
+      throw new SalesError(
+        'REPLY_UNAVAILABLE',
+        'This reply address expired or was revoked. Open the conversation link.',
+        403,
+      );
+    const lead = await this.lead(grant.lead_id);
+    const expected =
+      grant.purpose === 'email-owner' ? input.ownerEmail : lead.payload.email;
+    const participantHash = await this.sales.hash(
+      'email-relay-participant',
+      input.from.toLowerCase(),
+    );
+    if (
+      input.from.toLowerCase() !== expected.toLowerCase() ||
+      participantHash !== grant.grant_id ||
+      lead.verification !== 'verified' ||
+      lead.status === 'spam' ||
+      (await this.suppressed(lead.payload.email))
+    )
+      throw new SalesError(
+        'REPLY_UNAVAILABLE',
+        'This reply address is unavailable.',
+        403,
+      );
+    return { grant, lead, participantHash };
+  }
+  async checkRelay(input: { token: string; from: string; ownerEmail: string }) {
+    const { grant } = await this.relayAdmission(input);
+    await this.reserve(`email-relay-grant:${grant.token_hash}`, 20, 3600_000);
+    await this.reserve(`email-relay-lead:${grant.lead_id}`, 20, 3600_000);
+  }
+  async relayMessage(input: RelayMessage) {
+    input = { ...input, body: redactRelaySecrets(input.body).trim() };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { grant, lead, participantHash } = await this.relayAdmission(input);
+      const digest = [
+        ...(await sha256(
+          `${lead.id}:${grant.purpose}:${input.from.toLowerCase()}:${input.messageId}`,
+        )),
+      ]
+        .map((v) => v.toString(16).padStart(2, '0'))
+        .join('');
+      const key = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+      const buyer = grant.purpose === 'email-buyer';
+      try {
+        return await this.message(
+          lead.id,
+          {
+            direction: 'reply',
+            body: input.body,
+            revision: lead.revision,
+            idempotencyKey: key,
+          },
+          buyer,
+          {
+            tokenHash: grant.token_hash,
+            purpose: grant.purpose,
+            participantHash,
+          },
+        );
+      } catch (e) {
+        if (!(e instanceof SalesError) || e.code !== 'REVISION_CHANGED')
+          throw e;
+        // A competing delivery may already have committed this Message-ID.
+        const old = await this.db
+          .prepare(
+            'SELECT id,payload_hash FROM sales_messages WHERE request_hash=?',
+          )
+          .bind(await this.sales.hash('message-request', `${lead.id}:${key}`))
+          .first<{ id: string; payload_hash: string }>();
+        if (old) {
+          const payloadHash = await this.sales.hash(
+            'message-payload',
+            JSON.stringify([buyer ? 'buyer' : 'reply', input.body]),
+          );
+          if (old.payload_hash !== payloadHash)
+            throw new SalesError(
+              'EMAIL_MESSAGE_CHANGED',
+              'This Message-ID was already received with different content.',
+              409,
+            );
+          await this.relayAdmission(input);
+          return { id: old.id };
+        }
+        // Re-admit on each retry so revocation and participant changes win.
+      }
+    }
+    await this.relayAdmission(input);
+    throw new SalesError(
+      'RELAY_RETRY_LATER',
+      'The conversation is busy. Retry delivery later.',
+      503,
+    );
+  }
+
   async ack(
     id: string,
     lease: string,
@@ -924,6 +1123,11 @@ export class SalesInquiryStore {
       this.db.prepare('DELETE FROM sales_abuse WHERE expires_at<?').bind(now),
       this.db
         .prepare('DELETE FROM sales_suppression WHERE expires_at<?')
+        .bind(now),
+      this.db
+        .prepare(
+          "DELETE FROM sales_tokens WHERE purpose IN ('email-owner','email-buyer') AND (expires_at<? OR revoked_at IS NOT NULL)",
+        )
         .bind(now),
       this.db
         .prepare('DELETE FROM sales_tokens WHERE expires_at<?')

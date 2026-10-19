@@ -5,6 +5,11 @@ import { verifyGatewayRequest } from '../shared/gateway-proof';
 import { deliveryStateSchema } from '../shared/sales';
 import { SalesStore } from './sales-store';
 import { SalesInquiryStore } from './sales-inquiry-store';
+import {
+  emailRelayGrantSchema,
+  relayAdmissionSchema,
+  relayMessageSchema,
+} from '../shared/sales-relay';
 
 /** Not on the gateway's anonymous or owner route allowlist. */
 export function createSalesInternalRoutes() {
@@ -43,8 +48,13 @@ export function createSalesInternalRoutes() {
       .first();
     return c.json({ ok: !!r }, r ? 200 : 409);
   });
-  app.onError((_error, c) =>
-    c.json({ error: 'Sales notification state unavailable' }, 503),
+  app.onError((error, c) =>
+    c.json(
+      { error: 'Sales notification state unavailable' },
+      'status' in error && [403, 404, 409, 429].includes(Number(error.status))
+        ? (Number(error.status) as 403 | 404 | 409 | 429)
+        : 503,
+    ),
   );
   app.get('/due', async (c) => {
     const r = await c.env.DB.prepare(
@@ -64,10 +74,30 @@ export function createSalesInternalRoutes() {
   app.post('/claim', async (c) => {
     if (c.env.SALES_MAIL_ENABLED !== 'true') return c.json({ ok: false });
     const v = z
-      .object({ id: z.string().uuid(), lease: z.string().uuid() })
+      .object({
+        id: z.string().uuid(),
+        lease: z.string().uuid(),
+        emailRelay: emailRelayGrantSchema.optional(),
+      })
       .strict()
       .parse(await c.req.json());
-    return c.json({ ok: await (await inbox(c.env)).claim(v.id, v.lease) });
+    return c.json({
+      ok: await (await inbox(c.env)).claim(v.id, v.lease, v.emailRelay),
+    });
+  });
+  app.post('/relay-check', async (c) => {
+    if (c.env.SALES_MAIL_ENABLED !== 'true') return c.json({ ok: false }, 403);
+    await (
+      await inbox(c.env)
+    ).checkRelay(relayAdmissionSchema.parse(await c.req.json()));
+    return c.json({ ok: true });
+  });
+  app.post('/relay-message', async (c) => {
+    if (c.env.SALES_MAIL_ENABLED !== 'true') return c.json({ ok: false }, 403);
+    await (
+      await inbox(c.env)
+    ).relayMessage(relayMessageSchema.parse(await c.req.json()));
+    return c.json({ ok: true });
   });
   app.post('/ack', async (c) => {
     const v = z

@@ -31,6 +31,7 @@ export function renderSalesEmail(
     context?: SalesEmailContext;
   },
   kind: string,
+  options: { replyByEmail?: boolean } = {},
 ) {
   const c = mail.context;
   const heading =
@@ -92,7 +93,9 @@ export function renderSalesEmail(
   const note =
     kind === 'verification'
       ? 'Confirm your email address to continue this conversation. This does not accept an offer or create a purchase contract.'
-      : 'Keep this email for the inquiry details. The conversation link gives access only to this inquiry; do not forward it.';
+      : options.replyByEmail
+        ? 'Reply to this email to continue. Your new reply text is saved to this conversation and sent to the other participant. This private reply address expires in seven days. Do not forward it. Send text without attachments; inline signature images are omitted.'
+        : 'Keep this email for the inquiry details. The conversation link gives access only to this inquiry; do not forward it.';
   const text = [
     heading,
     c?.snapshot.domain,

@@ -1,4 +1,5 @@
 import { canonicalDomain } from '../shared/publication';
+import { receiveSalesReply } from './sales-relay';
 import {
   salesFormScript,
   salesFormScriptPath,
@@ -1307,6 +1308,7 @@ app.get('*', (c) =>
 
 export default {
   fetch: app.fetch,
+  email: receiveSalesReply,
   async scheduled(event: ScheduledController, env: HostedEnv) {
     await drainSales(env);
     if (event.cron !== '17 * * * *') return;
