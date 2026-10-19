@@ -8,7 +8,7 @@ let requests = 0;
 beforeAll(async () => {
   const bundle = await build({
     stdin: {
-      contents: `import {salesDns} from './src/hosted/sales-hostnames'; export default {async fetch(){try{await salesDns('fixture.example','A');return new Response('observed')}catch{return new Response('unavailable',{status:503})}}};`,
+      contents: `import {salesDns,SalesHostnames} from './src/hosted/sales-hostnames'; export default {async fetch(request){try{const path=new URL(request.url).pathname;const controller=new SalesHostnames({SALES_CF_ZONE_ID:'fixture',SALES_CF_API_TOKEN:'fixture-only'});if(path==='/provider')await controller.provider('/fixture');else if(path==='/probe')await controller.fetcher(new Request('https://fixture.example/',{redirect:'manual'}));else await salesDns('fixture.example','A');return new Response('observed')}catch{return new Response('unavailable',{status:503})}}};`,
       resolveDir: process.cwd(),
       loader: 'ts',
     },
@@ -27,14 +27,16 @@ beforeAll(async () => {
           script: bundle.outputFiles[0].text,
           compatibilityDate: '2026-10-08',
           compatibilityFlags: ['nodejs_compat'],
-          outboundService: async () => {
+          outboundService: async (request) => {
             requests++;
             return redirect
               ? new Response(null, {
                   status: 302,
                   headers: { Location: 'https://other.example/dns' },
                 })
-              : Response.json({ Status: 0, Answer: [] });
+              : new URL(request.url).hostname === 'api.cloudflare.com'
+                ? Response.json({ success: true, result: { observed: true } })
+                : Response.json({ Status: 0, Answer: [] });
           },
         },
       ],
@@ -62,3 +64,13 @@ it('rejects a redirected DNS observation without following it', async () => {
   expect(response.status).toBe(503);
   expect(requests).toBe(1);
 });
+it.each(['/provider', '/probe'])(
+  'uses the native Workers fetch receiver for %s',
+  async (path) => {
+    const response = await runtime.dispatchFetch(
+      'https://runtime.fixture.example' + path,
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(requests).toBe(1);
+  },
+);

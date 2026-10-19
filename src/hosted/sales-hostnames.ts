@@ -94,7 +94,7 @@ async function bindingWrite(
 export class SalesHostnames {
   constructor(
     readonly env: HostedEnv,
-    readonly fetcher: typeof fetch = fetch,
+    readonly fetcher: typeof fetch = (...args) => fetch(...args),
   ) {}
   async list(workspace: string, listing: string) {
     const rows = await this.env.CONTROL_DB.prepare(
