@@ -1,0 +1,244 @@
+{
+  "recordedAt": "2026-10-19T00:11:33.699847+00:00",
+  "codeCommit": "d2c51edb6d0b1f27818b262e33fdcfa4c58e6b08",
+  "pullRequests": [
+    "https://github.com/heathermhuang/dombot/pull/51",
+    "https://github.com/heathermhuang/dombot/pull/52"
+  ],
+  "engine": {
+    "version": "1.5.0-hosted.9",
+    "sourceSha256": "6779c8f0d242c29834a7fdec131467bf8104b2ef31979b1115b05a60ae52d95b",
+    "sha256": "d23c31e920985ede69b69c0d634ce1d582ef4205e5872f31d422df86ccd11305"
+  },
+  "requiredCI": "passed on PRs 51 and 52",
+  "unitTests": {
+    "passed": 1247,
+    "skipped": 1
+  },
+  "gateway": {
+    "sourceCommit": "f13b8728b7c8535001c35527e84237418fd32f6f",
+    "versions": [
+      {
+        "version_id": "0f2b83f8-1d8a-4a25-b924-18b185662656",
+        "percentage": 100
+      }
+    ],
+    "tenServiceBindingsPreserved": true,
+    "ingressSchedulesSecretsPreserved": true,
+    "mailAndHostsOff": true
+  },
+  "fleet": {
+    "totalTenants": 10,
+    "salesFlagsOff": true,
+    "controlIdentitiesAndEnablementPreserved": true,
+    "gatewayPreserved": true,
+    "tenants": [
+      {
+        "service": "domains-staging-qa-3",
+        "versions": [
+          {
+            "version_id": "1550519a-266b-43d8-8086-d260b13782a2",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "369cd37a0c422599c09e35bbdb6ceb93e9d511ef073c17e8d7d21e052f5f8153",
+        "dataHashAfter": "369cd37a0c422599c09e35bbdb6ceb93e9d511ef073c17e8d7d21e052f5f8153",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": false,
+        "disabledRoutingDenied": true
+      },
+      {
+        "service": "domains-staging-tenant-1",
+        "versions": [
+          {
+            "version_id": "ee2a463e-2ddb-44d7-871f-901f0411f0c6",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "ae697ce0de944fe16f878d7b1e90439ed009f7ee587d42627dbcb87419ce6ea1",
+        "dataHashAfter": "ae697ce0de944fe16f878d7b1e90439ed009f7ee587d42627dbcb87419ce6ea1",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-tenant-2",
+        "versions": [
+          {
+            "version_id": "9767e475-60c0-49ba-8154-8fa9605061c8",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "8e512dc238a9678fbec310fdda2abaa7ababfea3cd8859f2fa82e6cff019c1ec",
+        "dataHashAfter": "8e512dc238a9678fbec310fdda2abaa7ababfea3cd8859f2fa82e6cff019c1ec",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-tenant-5",
+        "versions": [
+          {
+            "version_id": "1415487f-352d-4b33-8739-142e344feb6f",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "ef0c767dc1cefe4c9fde3b54c7f13a77cd72deab475cf2a9b9fefbd6618e8979",
+        "dataHashAfter": "ef0c767dc1cefe4c9fde3b54c7f13a77cd72deab475cf2a9b9fefbd6618e8979",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false,
+        "initialRuntimeMismatch": {
+          "observed": "6f6edf3e99bc2b3801d41bbba4d4393af6c2c79bcf90813dcc1460ebd234f8c9",
+          "expected": "6779c8f0d242c29834a7fdec131467bf8104b2ef31979b1115b05a60ae52d95b"
+        },
+        "reconciledWithoutRedeploy": true
+      },
+      {
+        "service": "domains-staging-tenant-6",
+        "versions": [
+          {
+            "version_id": "cf16f913-dd1a-4c3b-bd0c-23a4ce661a43",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "6a4e916fa4977059be03c0b59ab8e4ce3a33e87754de1e6928f689a073272ef1",
+        "dataHashAfter": "6a4e916fa4977059be03c0b59ab8e4ce3a33e87754de1e6928f689a073272ef1",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-tenant-7",
+        "versions": [
+          {
+            "version_id": "e6a99026-bad3-4c6f-b5ec-d499fdcaa57c",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "4c64f087fd0fc2533f153ea13f49e6e28455738c743bbdb13020137343a2d08c",
+        "dataHashAfter": "4c64f087fd0fc2533f153ea13f49e6e28455738c743bbdb13020137343a2d08c",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-tenant-8",
+        "versions": [
+          {
+            "version_id": "7da18cc8-fdf6-490d-ad66-a75e006d2c9a",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "7985069a579a3d6ef9d5d67f1c804c0f655ef38dcfd99a7aaeaa9177b815c8b8",
+        "dataHashAfter": "7985069a579a3d6ef9d5d67f1c804c0f655ef38dcfd99a7aaeaa9177b815c8b8",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-tenant-9",
+        "versions": [
+          {
+            "version_id": "d00b80b5-9e0e-40a8-b7db-ba07d979a902",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "af9559facc7236dddf145902234b1d53bae4415718c9575f115b5f45cfeedb41",
+        "dataHashAfter": "af9559facc7236dddf145902234b1d53bae4415718c9575f115b5f45cfeedb41",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-tenant-0",
+        "versions": [
+          {
+            "version_id": "98a30144-4445-4636-8219-4642ebe334a4",
+            "percentage": 100
+          }
+        ],
+        "dataHashBefore": "0e5af0728799d4b2aeee8d630f22194e5cd663e683d1861204fee71766e9868b",
+        "dataHashAfter": "0e5af0728799d4b2aeee8d630f22194e5cd663e683d1861204fee71766e9868b",
+        "dataBindingsIngressSchedulesPreserved": true,
+        "runtimeEngineMatched": true,
+        "disabledRoutingDenied": false
+      },
+      {
+        "service": "domains-staging-qa-4",
+        "versions": [
+          {
+            "version_id": "7f44fbd5-d187-4b8e-992b-b137d5584998",
+            "percentage": 100
+          }
+        ],
+        "privateDraftAndRecoveryPassed": true,
+        "editingIntakeMailHostsOff": true,
+        "disabled": true
+      }
+    ]
+  },
+  "senderQualification": {
+    "reference": "SALES-SENDER-20261019-281ff080",
+    "sender": "sales@mail.domains.domains",
+    "ownerInboxReceived": true,
+    "spam": false,
+    "authentication": [
+      {
+        "dkimPass": true,
+        "spfPass": true,
+        "dmarcPass": true
+      }
+    ],
+    "scope": "Sender delivery only; not a live inquiry/reply outbox receipt",
+    "realEmailCount": 1,
+    "authSenderUnchanged": true
+  },
+  "browser": {
+    "actualNativeChromeZoom": "200%",
+    "listingAndEditorControlsReachable": true,
+    "savedPreviewOpenedByKeyboard": true,
+    "zoomResetTo100AndTestTabClosed": true,
+    "fixtures": "local synthetic .example; no real buyer collection",
+    "priorLiveQA": [
+      "normal sign-in",
+      "imported long-label and IDN private drafts/previews",
+      "Unicode presentation save",
+      "cross-origin and false-control publication denial",
+      "backup restore and disabled QA"
+    ]
+  },
+  "hostname": {
+    "observedVia": "existing signed-in native Chrome dashboard",
+    "zone": "domains.domains",
+    "page": "SSL/TLS / Custom Hostnames",
+    "stateObserved": "Enable Cloudflare for SaaS",
+    "includedShown": 100,
+    "activationConfirmed": false,
+    "paymentSetupRequiredForNonEnterprise": true,
+    "officialEnablementGuide": "https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/enable/",
+    "browserBlocked": "Mac locked; automatic unlock unavailable",
+    "apiScope": "Wrangler OAuth custom-hostname/fallback-origin reads return 403/10000",
+    "needed": [
+      "operator activation/payment decision",
+      "least-privilege zone SSL and Certificates API credential",
+      "named controlled apex/www fixture"
+    ]
+  },
+  "notPerformed": [
+    "Cloudflare for SaaS activation confirmation",
+    "custom-hostname API credential grant",
+    "domain DNS changes",
+    "external buyer collection",
+    "real inquiry/reply outbox qualification",
+    "provider purchase or transfer",
+    "independent customer acceptance",
+    "formal CSO clearance"
+  ],
+  "remainingOwnerInputs": [
+    "named owner-controlled apex/www DNS fixture",
+    "operator review and publication of proposed buyer policy",
+    "unlock Mac for final SaaS payment/access review"
+  ],
+  "betaComplete": false
+}
