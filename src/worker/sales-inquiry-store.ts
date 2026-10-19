@@ -13,6 +13,7 @@ import { conflict, SalesError } from '../shared/sales-review';
 import { saleOutcomeSchema, SALE_RETENTION } from '../shared/sales-events';
 import { SalesStore } from './sales-store';
 import { sha256, toBase64Url, fromBase64Url } from './keys';
+import { salesEmailContextSchema } from '../shared/sales-email';
 
 export const leadPayloadSchema = z
   .object({
@@ -772,7 +773,7 @@ export class SalesInquiryStore {
     const lease = crypto.randomUUID();
     const r = await this.db
       .prepare(
-        "UPDATE sales_outbox SET state='leased',lease_token=?,lease_expires_at=?,claimed_at=NULL,attempts=attempts+1,updated_at=? WHERE id IN (SELECT id FROM sales_outbox WHERE state IN ('queued','retryable') AND due_at<=? ORDER BY due_at,id LIMIT ?) AND state IN ('queued','retryable') RETURNING id,kind,sealed,attempts,lead_id",
+        "UPDATE sales_outbox SET state='leased',lease_token=?,lease_expires_at=?,claimed_at=NULL,attempts=attempts+1,updated_at=? WHERE id IN (SELECT id FROM sales_outbox WHERE state IN ('queued','retryable') AND due_at<=? ORDER BY due_at,id LIMIT ?) AND state IN ('queued','retryable') RETURNING id,kind,sealed,attempts,lead_id,message_id",
       )
       .bind(lease, now + 60_000, now, now, Math.min(limit, 10))
       .all<{
@@ -781,6 +782,7 @@ export class SalesInquiryStore {
         sealed: string;
         attempts: number;
         lead_id: string;
+        message_id: string | null;
       }>();
     const items = await Promise.all(
       r.results.map(async (r) => ({
@@ -789,7 +791,10 @@ export class SalesInquiryStore {
         leadId: r.lead_id,
         lease,
         attempts: r.attempts,
-        mail: await this.sales.open(r.sealed, mailSchema),
+        mail: {
+          ...(await this.sales.open(r.sealed, mailSchema)),
+          context: await this.emailContext(r.lead_id, r.message_id),
+        },
       })),
     );
     const allowed = [];
@@ -799,6 +804,28 @@ export class SalesInquiryStore {
       else allowed.push(item);
     }
     return allowed;
+  }
+  async emailContext(id: string, messageId: string | null) {
+    const lead = await this.lead(id);
+    const latest = messageId
+      ? await this.db
+          .prepare(
+            "SELECT direction,created_at,sealed FROM sales_messages WHERE id=? AND lead_id=? AND direction IN ('reply','buyer')",
+          )
+          .bind(messageId, id)
+          .first<{ direction: string; created_at: number; sealed: string }>()
+      : null;
+    return salesEmailContextSchema.parse({
+      ...lead.payload,
+      receivedAt: lead.created_at,
+      latest: latest
+        ? {
+            direction: latest.direction,
+            createdAt: latest.created_at,
+            body: (await this.sales.open(latest.sealed, bodySchema)).body,
+          }
+        : null,
+    });
   }
   /** A cached lease is not permission to send. Claim once at the send boundary. */
   async claim(id: string, lease: string): Promise<boolean> {
