@@ -109,7 +109,7 @@ export async function parseRelayEmail(message: ForwardableEmailMessage) {
   // Normal top-posted Gmail/Apple Mail and Outlook replies. Never fetch body URLs.
   text = text.replace(/\r\n?/g, '\n');
   const boundary =
-    /\n(?:On [\s\S]{0,350}?wrote:\s*\n\s*>|On [\s\S]{0,350}?<[^<>\s]+@[^<>\s]+>[ \t]*wrote:[ \t]*\n|_{5,}\s*\nFrom:|From:[^\n]+\nSent:[\s\S]{0,350}?\nTo:|-{2,}\s*Original Message\s*-{2,})/i.exec(
+    /\n(?:On [\s\S]{0,350}?wrote:\s*\n\s*>|On [\s\S]{0,350}?<[^<>@\s]{1,64}@[^<>@\s]{1,253}>[ \t]*wrote:[ \t]*\n|_{5,}\s*\nFrom:|From:[^\n]+\nSent:[\s\S]{0,350}?\nTo:|-{2,}\s*Original Message\s*-{2,})/i.exec(
       text,
     );
   if (boundary) text = text.slice(0, boundary.index);

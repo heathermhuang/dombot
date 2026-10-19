@@ -65,6 +65,16 @@ describe('bounded inbound MIME projection', () => {
     const body = 'My thoughts:\nOn Monday, an author wrote:\nA quoted passage.';
     expect((await parseRelayEmail(incoming(plain(body)))).body).toBe(body);
   });
+  it.each(['a'.repeat(65) + '@example.com', 'a@b@example.com'])(
+    'preserves prose with a malformed sender-like address: %s',
+    async (address) => {
+      const body =
+        'My thoughts:\nOn Monday, someone <' +
+        address +
+        '> wrote:\nA quoted passage.';
+      expect((await parseRelayEmail(incoming(plain(body)))).body).toBe(body);
+    },
+  );
   it('ignores authentication-result, routing and reply headers as authority', async () => {
     const value = await parseRelayEmail(
       incoming(
