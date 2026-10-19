@@ -48,7 +48,7 @@ export async function salesDns(
   url.search = new URLSearchParams({ name: host, type, do: 'true' }).toString();
   const r = await fetcher(url, {
     headers: { Accept: 'application/dns-json' },
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(10_000),
   });
   if (!r.ok) throw new Error('DNS observation unavailable');
@@ -222,9 +222,10 @@ export class SalesHostnames {
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
         signal: AbortSignal.timeout(10_000),
-        redirect: 'error',
+        redirect: 'manual',
       },
     );
+    if (!r.ok) throw new Error('Custom hostname provider refused the request.');
     const result = (await r.json()) as { success?: boolean; result?: unknown };
     if (!r.ok || !result.success)
       throw new Error(
@@ -356,7 +357,7 @@ export class SalesHostnames {
     await bindingWrite(this.env, workspace, hostname, listing, epoch, true);
     // The edge allows checking-page only for a signed controller probe, handled by the registry status below.
     const probe = new Request(`https://${hostname}/`, {
-      redirect: 'error',
+      redirect: 'manual',
       cache: 'no-store',
       signal: AbortSignal.timeout(10_000),
     });
