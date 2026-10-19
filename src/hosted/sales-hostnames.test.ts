@@ -42,6 +42,7 @@ const env = () =>
 const fetcher: typeof fetch = async (input, init) => {
   const request = input instanceof Request ? input : new Request(input, init),
     url = new URL(request.url);
+  expect(request.redirect).toBe('manual');
   if (url.hostname === 'cloudflare-dns.com') {
     const type = url.searchParams.get('type'),
       name = url.searchParams.get('name');
@@ -120,6 +121,54 @@ beforeEach(async () => {
   bindingWrites = [];
   edgeRequest = null;
 });
+it.each(['provider', 'probe'])(
+  'refuses a redirected %s response without activating the hostname',
+  async (stage) => {
+    const h = new SalesHostnames(env(), async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      expect(request.redirect).toBe('manual');
+      const hostname = new URL(request.url).hostname;
+      if (
+        hostname ===
+        (stage === 'provider' ? 'api.cloudflare.com' : 'fixture.example')
+      )
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: 'https://other.example/',
+            'X-Domains-Sales-Revision': 'published-fixture-revision',
+          },
+        });
+      return fetcher(request);
+    });
+    const plan = await h.plan(
+      workspace,
+      listing,
+      'fixture.example',
+      'fixture.example',
+    );
+    challenge = plan.challenge;
+    const activation = h.activate(
+      workspace,
+      listing,
+      'fixture.example',
+      plan.epoch,
+      plan.challenge,
+      'published-fixture-revision',
+    );
+    if (stage === 'provider')
+      await expect(activation).rejects.toThrow(/provider refused/i);
+    else expect((await activation).status).toBe('checking-page');
+    expect(
+      (
+        await db
+          .prepare('SELECT status FROM sales_hostnames')
+          .first<{ status: string }>()
+      )?.status,
+    ).not.toBe('active');
+  },
+);
 describe('controlled hostname lifecycle', () => {
   it('captures mail and CAA, reserves unique hosts, and blocks conflicting claims', async () => {
     const h = new SalesHostnames(env(), fetcher),
