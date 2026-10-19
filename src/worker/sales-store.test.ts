@@ -188,6 +188,42 @@ describe('sales transaction and privacy boundary', () => {
   });
 });
 describe('durable inquiry and outbox', () => {
+  it('projects complete email details without leaking private notes or unrelated messages', async () => {
+    const p = await live();
+    const r = await inbox.intake(
+      { ...input(), observedRevision: p.revision },
+      p,
+    );
+    const [verification] = await inbox.lease();
+    expect(verification.mail.context).toMatchObject({
+      name: 'Sample Buyer',
+      email: 'buyer@example.com',
+      message: 'Sample inquiry',
+      snapshot: { domain: p.domain },
+      latest: null,
+    });
+    await inbox.confirm(verification.mail.url.split('/').at(-1)!);
+    let lead = await inbox.lead(r.id);
+    const note = await inbox.message(r.id, {
+      direction: 'private-note',
+      body: 'PRIVATE_EMAIL_NOTE',
+      revision: lead.revision,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    expect((await inbox.emailContext(r.id, note.id)).latest).toBeNull();
+    lead = await inbox.lead(r.id);
+    await inbox.message(r.id, {
+      direction: 'reply',
+      body: 'Complete public reply',
+      revision: lead.revision,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const reply = (await inbox.lease()).find((v) => v.kind === 'buyer-reply')!;
+    expect(reply.mail.context.latest?.body).toBe('Complete public reply');
+    expect(JSON.stringify(reply.mail.context)).not.toContain(
+      'PRIVATE_EMAIL_NOTE',
+    );
+  });
   it('deduplicates requests, binds their content and seals buyer PII', async () => {
     const p = await live(),
       v = { ...input(), observedRevision: p.revision };

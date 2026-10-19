@@ -1,5 +1,26 @@
 # Sales implementation and release ledger
 
+## Inquiry and email UX follow-up
+
+Engine `.12` adds the full original inquiry, buyer contact details, offer, public
+price and relevant public message to both HTML and plain-text notifications. The
+projection excludes private notes and private portfolio values. Owner alerts set
+Reply-To to the confirmed inquiry email; buyer notifications do not expose the
+owner account address. Legacy tenant mail envelopes remain readable during the
+ordered rollout.
+
+Public pages use “Get in touch” and “Send inquiry”, explicit inbox/confirmation
+steps and a clearer conversation timeline. Submission announces progress and
+focuses the resulting heading. Turnstile uses compact rendering on narrow screens
+and flexible rendering elsewhere, with a fresh check after crossing the breakpoint.
+The 320-pixel browser check has no horizontal overflow.
+
+Automatic capture of direct mailbox replies is **not implemented by this change**.
+A buyer-only Reply-To sends no copy to the application. The owner was asked to
+choose between direct addressing with an additional recording recipient and a
+conversation relay that can record every normal Reply. No inbound email rule,
+mailbox permission or logging claim is enabled while that choice is pending.
+
 ## Current controlled pilot — 19 October 2026
 
 The operator-managed sample is live at `sales-pilot.alternative.domains` and

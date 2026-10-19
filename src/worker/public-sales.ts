@@ -331,7 +331,7 @@ export function createPublicSalesRoutes() {
       : c.html(
           salesPage(
             'Check your email',
-            `<h1>Check your email to confirm this inquiry.</h1><p>Reference ${e(receipt!.id)}</p><p>We saved your message. ${c.env.SALES_MAIL_ENABLED === 'true' ? 'Confirming your email lets the seller reply.' : 'Email delivery is temporarily unavailable; your message is queued.'}</p>`,
+            `<section class="flow"><span class="eyebrow">Inquiry saved</span><h1>Check your inbox.</h1><div class="panel"><p>We saved your inquiry about <strong>${e(s.domain)}</strong>.</p><p>${c.env.SALES_MAIL_ENABLED === 'true' ? `A confirmation email is on its way to <strong>${e(input.email)}</strong>.` : 'Email delivery is temporarily unavailable. Your inquiry is saved and waiting for delivery.'}</p><ol><li>Open the email from domains.domains.</li><li>Choose <strong>Confirm email address</strong>.</li><li>Continue the conversation by email.</li></ol><p class="note">Can’t see it? Check Spam or All Mail. Delivery can take a few minutes.</p></div><p class="receipt">Inquiry reference: ${e(receipt!.id)}</p></section>`,
           ),
           202,
         );
@@ -343,7 +343,7 @@ export function createPublicSalesRoutes() {
       salesPage(
         'Confirm inquiry',
         grant
-          ? `<h1>Confirm your inquiry</h1><p>This verifies your email for this conversation. It gives no access to a seller account.</p><form method="post" action="${e(base(c))}/i/${e(c.req.param('token'))}/confirm"><button>Confirm inquiry</button></form>`
+          ? `<section class="flow"><span class="eyebrow">Email confirmation</span><h1>Ready to start the conversation?</h1><div class="panel"><p>Confirm your email so we can reply to your inquiry. This does not accept an offer or commit you to a purchase.</p><form method="post" action="${e(base(c))}/i/${e(c.req.param('token'))}/confirm"><button>Confirm email address</button></form></div></section>`
           : '<h1>This link expired or was revoked.</h1>',
       ),
       grant ? 200 : 403,
@@ -354,7 +354,7 @@ export function createPublicSalesRoutes() {
     return c.html(
       salesPage(
         'Inquiry confirmed',
-        '<h1>Your inquiry has been confirmed.</h1><p>The seller can now reply. We’ll email a secure conversation link when they do.</p>',
+        '<section class="flow"><span class="eyebrow">Email confirmed</span><h1>You’re all set.</h1><div class="panel"><p>Your inquiry is confirmed. We’ll send any reply to your inbox, with a link to this conversation.</p><p class="note">You can close this page. There’s no account to create and no purchase commitment.</p></div></section>',
       ),
     );
   });
@@ -378,7 +378,7 @@ export function createPublicSalesRoutes() {
     return c.html(
       salesPage(
         'Your inquiry',
-        `<span class="eyebrow">Private conversation</span><h1>${e(thread.original.snapshot.domain)}</h1><p class="note">Forwarding this link shares this conversation until it expires or is revoked.</p><p class="message">${e(thread.original.message)}</p>${thread.messages.map((m) => `<p><strong>${m.direction === 'reply' ? 'Seller reply' : 'Your message'}</strong></p><p class="message">${e(m.body)}</p>`).join('')}${thread.cursor ? `<a href="?cursor=${e(thread.cursor)}">More messages</a>` : ''}<form method="post" action="${e(base(c))}/t/${e(raw)}/messages"><input type="hidden" name="idempotencyKey" value="${crypto.randomUUID()}"><label for="body">Your reply</label><textarea id="body" name="body" maxlength="4000" required></textarea><button>Send message</button></form>`,
+        `<section class="conversation"><span class="eyebrow">Your conversation</span><h1>${e(thread.original.snapshot.domain)}</h1><p class="note">Forwarding this link shares this conversation until it expires or is revoked.</p><p class="message">${e(thread.original.message)}</p>${thread.messages.map((m) => `<article class="message"><div class="message-meta"><strong>${m.direction === 'reply' ? 'Reply' : 'You'}</strong> · <time datetime="${e(new Date(m.createdAt).toISOString())}">${e(new Date(m.createdAt).toUTCString())}</time></div><p>${e(m.body)}</p></article>`).join('')}${thread.cursor ? `<a href="?cursor=${e(thread.cursor)}">More messages</a>` : ''}<form method="post" action="${e(base(c))}/t/${e(raw)}/messages"><input type="hidden" name="idempotencyKey" value="${crypto.randomUUID()}"><label for="body">Your reply</label><textarea id="body" name="body" maxlength="4000" required></textarea><button>Send message</button></form></section>`,
       ),
     );
   });

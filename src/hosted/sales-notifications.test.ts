@@ -129,6 +129,65 @@ async function verified() {
   return e;
 }
 describe('separate sales delivery', () => {
+  it.each(['seller-alert', 'buyer-reply'])(
+    'sends full %s context without exposing the owner email to the buyer',
+    async (kind) => {
+      const e = await verified();
+      let sent: EmailMessageBuilder | undefined;
+      const oldFetch = e.WORKSPACE_0.fetch;
+      e.WORKSPACE_0 = {
+        fetch: async (r: Request) => {
+          const response = await oldFetch(r);
+          if (!new URL(r.url).pathname.endsWith('/lease')) return response;
+          const value = (await response.json()) as {
+            items: { kind: string; mail: Record<string, unknown> }[];
+          };
+          value.items[0].kind = kind;
+          value.items[0].mail.context = {
+            name: 'Sample Buyer',
+            email: 'buyer@example.com',
+            message: 'Please send the details.',
+            offer: { amount: '2500', currency: 'USD' },
+            receivedAt: Date.now(),
+            latest: null,
+            snapshot: {
+              version: 1,
+              id: lead,
+              domain: 'sample.example',
+              displayName: 'sample.example',
+              mode: 'inquiry',
+              description: 'Sample data',
+              categories: [],
+              publicPrice: null,
+              publicMinimumOffer: null,
+              destination: null,
+              allowQuestions: true,
+              sellerDisplayName: '',
+              revision: outbox,
+              publishedAt: Date.now(),
+            },
+          };
+          return Response.json(value);
+        },
+      } as unknown as Fetcher;
+      e.SALES_EMAIL = {
+        send: async (v: EmailMessageBuilder) => {
+          sent = v;
+          return { messageId: 'full-context-fixture' };
+        },
+      } as SendEmail;
+      await drainSalesWorkspace(e, workspace);
+      expect(sent?.to).toBe(
+        kind === 'seller-alert' ? 'seller@example.com' : 'buyer@example.com',
+      );
+      expect(sent?.replyTo).toBe(
+        kind === 'seller-alert' ? 'buyer@example.com' : undefined,
+      );
+      expect(sent?.text).toContain('Please send the details.');
+      expect(sent?.html).toContain('buyer@example.com');
+      expect(sent?.subject).toContain('sample.example');
+    },
+  );
   it('requires a verified account recipient and never enrolls an arbitrary alternate address', async () => {
     await drainSalesWorkspace(env(), workspace);
     expect(sends).toBe(0);

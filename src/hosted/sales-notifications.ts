@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { createHmac } from 'node:crypto';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { workspaceSchema, workspaceService, gatewayKey } from './workspaces';
+import {
+  renderSalesEmail,
+  salesEmailContextSchema,
+} from '../shared/sales-email';
 
 const leasedSchema = z
   .object({
@@ -20,6 +24,7 @@ const leasedSchema = z
                 subject: z.string().max(200),
                 url: z.string().url(),
                 reference: z.string().uuid(),
+                context: salesEmailContextSchema.optional(),
               })
               .strict(),
           })
@@ -179,11 +184,16 @@ export async function drainSalesWorkspace(
         continue;
       }
       try {
+        const content = renderSalesEmail(item.mail, item.kind);
         const result = await env.SALES_EMAIL!.send({
           from: { email: env.SALES_EMAIL_FROM!, name: 'domains.domains' },
           to: item.kind === 'seller-alert' ? owner.email : item.mail.recipient!,
-          subject: item.mail.subject,
-          text: `${item.mail.subject}\n\n${item.mail.url}\n\nReference ${item.mail.reference}\n\nThis link only grants access to this inquiry. Do not forward it. If you did not request this, ignore it.\n\ndomains.domains`,
+          ...(item.mail.context && item.kind === 'seller-alert'
+            ? {
+                replyTo: item.mail.context.email,
+              }
+            : {}),
+          ...content,
         });
         state = 'accepted';
         receipt = result.messageId;
