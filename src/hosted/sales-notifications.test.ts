@@ -147,7 +147,7 @@ async function verified() {
 describe('relay gateway admission', () => {
   const rawToken = 'ab'.repeat(24),
     address = `reply+11111111.${rawToken}@replies.example`;
-  async function setup() {
+  async function setup(participant = 'seller@example.com') {
     const e = await verified();
     e.SALES_RELAY_ENABLED = 'true';
     e.SALES_RELAY_ADDRESS = 'reply@replies.example';
@@ -166,11 +166,11 @@ describe('relay gateway admission', () => {
         if (p.endsWith('/relay-check'))
           return Response.json(
             {
-              ok: body.token === rawToken && body.from === 'seller@example.com',
+              ok: body.token === rawToken && body.from === participant,
             },
             {
               status:
-                body.token === rawToken && body.from === 'seller@example.com'
+                body.token === rawToken && body.from === participant
                   ? 200
                   : 403,
             },
@@ -233,6 +233,56 @@ describe('relay gateway admission', () => {
       'token',
     ]);
   });
+  it('accepts a Gmail plus-address participant when SMTP uses the same Gmail base mailbox', async () => {
+    const f = await setup('buyer+inquiry@gmail.com');
+    expect(
+      await deliver(f.e, {
+        from: 'buyer@gmail.com',
+        headerFrom: 'buyer+inquiry@gmail.com',
+      }),
+    ).toBe('');
+    expect(f.saved).toHaveLength(1);
+    expect(f.saved[0].from).toBe('buyer+inquiry@gmail.com');
+  });
+  it.each([
+    { from: 'other@gmail.com', headerFrom: 'buyer+inquiry@gmail.com' },
+    { from: 'buyer@gmail.com', headerFrom: 'buyer+different@gmail.com' },
+    {
+      from: 'buyer@company.example',
+      headerFrom: 'buyer+inquiry@company.example',
+    },
+    { from: 'buy.er@gmail.com', headerFrom: 'buyer+inquiry@gmail.com' },
+    { from: 'buyer@googlemail.com', headerFrom: 'buyer+inquiry@gmail.com' },
+  ])(
+    'keeps the exact participant grant and unrelated mailbox boundaries: %j',
+    async (options) => {
+      const f = await setup('buyer+inquiry@gmail.com');
+      expect(await deliver(f.e, options)).not.toBe('');
+      expect(f.saved).toHaveLength(0);
+    },
+  );
+  it.each([403, 429, 503])(
+    'preserves an authoritative %s grant rejection for Gmail aliases',
+    async (status) => {
+      const f = await setup('buyer+inquiry@gmail.com');
+      let checks = 0;
+      f.e.WORKSPACE_0 = {
+        fetch: async () => {
+          checks++;
+          return Response.json({ ok: false }, { status });
+        },
+      } as unknown as Fetcher;
+      const attempt = deliver(f.e, {
+        from: 'buyer@gmail.com',
+        headerFrom: 'buyer+inquiry@gmail.com',
+      });
+      if (status >= 500)
+        await expect(attempt).rejects.toThrow('temporarily unavailable');
+      else expect(await attempt).not.toBe('');
+      expect(checks).toBe(status === 403 ? 2 : 1);
+      expect(f.saved).toHaveLength(0);
+    },
+  );
   it.each([
     { to: address.replace('11111111', '22222222') },
     { to: address.replace('replies.example', 'foreign.example') },

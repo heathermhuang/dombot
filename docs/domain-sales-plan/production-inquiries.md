@@ -68,6 +68,14 @@ or binding rejections fail visibly; provider suppression is retained. Transport
 ambiguity and server-side uncertainty remain unknown and are never replayed
 without reconciliation. Raw provider messages are not stored as diagnostic text.
 
+Gmail may use its base mailbox as the SMTP sender for a plus-address message.
+Only that transport discrepancy is supported: after a denied sender check, the
+relay parses once and rechecks the exact MIME From against the original grant.
+It does not merge participant identities, remove dots, normalize other domains,
+or bypass a rate limit or transient error. HTML quote boundaries take precedence
+over a flattened plain alternative; empty or overlong sanitized replies fail
+visibly rather than falling back to old history.
+
 Dispatch checkpoints align with the next cron boundary. A late invocation no
 longer causes the following tick to be skipped. An unavailable tenant does not
 prevent dispatch for other eligible tenants. Independent maintenance tasks still

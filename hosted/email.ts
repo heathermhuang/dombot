@@ -92,20 +92,20 @@ export async function parseRelayEmail(message: ForwardableEmailMessage) {
     throw new RelayInputError(
       'Attachments are not supported. Send your message as text.',
     );
-  let text =
-    mail.text ??
-    (mail.html
-      ? convert(mail.html, {
-          wordwrap: false,
-          selectors: [
-            { selector: 'img', format: 'skip' },
-            { selector: 'script', format: 'skip' },
-            { selector: 'style', format: 'skip' },
-            { selector: 'div.gmail_quote', format: 'skip' },
-            { selector: 'a', options: { ignoreHref: true } },
-          ],
-        })
-      : '');
+  // HTML retains structural quote boundaries that a transport-generated plain
+  // alternative can lose. Never fall back to quoted plaintext after sanitizing.
+  let text = mail.html
+    ? convert(mail.html, {
+        wordwrap: false,
+        selectors: [
+          { selector: 'img', format: 'skip' },
+          { selector: 'script', format: 'skip' },
+          { selector: 'style', format: 'skip' },
+          { selector: 'div.gmail_quote', format: 'skip' },
+          { selector: 'a', options: { ignoreHref: true } },
+        ],
+      })
+    : (mail.text ?? '');
   // Normal top-posted Gmail/Apple Mail and Outlook replies. Never fetch body URLs.
   text = text.replace(/\r\n?/g, '\n');
   const boundary =

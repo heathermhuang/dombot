@@ -11,6 +11,16 @@ import { parseRelayEmail, RelayInputError } from '../../hosted/email';
 import { relayMessageSchema } from '../shared/sales-relay';
 import { relaySettings } from './sales-relay-address';
 
+/** Gmail may use its base mailbox as the SMTP envelope for a plus-address From.
+ * This permits that transport discrepancy only; the exact From still has to
+ * match the original private grant. Other providers and dot aliases stay exact. */
+function gmailBaseMailbox(address: string): string | null {
+  return (
+    /^([^+@]+)(?:\+[^@]+)?@gmail\.com$/i.exec(address)?.[1].toLowerCase() ??
+    null
+  );
+}
+
 /** Alias possession authorizes message posting only; headers are never identity proofs. */
 export async function receiveSalesReply(
   message: ForwardableEmailMessage,
@@ -64,7 +74,26 @@ export async function receiveSalesReply(
     from: envelope.data.toLowerCase(),
     ownerEmail: owner.email,
   };
-  const checked = await salesInternal(env, workspace, 'relay-check', admission);
+  let parsed: Awaited<ReturnType<typeof parseRelayEmail>> | undefined;
+  let checked = await salesInternal(env, workspace, 'relay-check', admission);
+  // A transient failure or rate limit is authoritative. Only retry a denied
+  // participant check for a narrowly equivalent Gmail transport identity.
+  if (checked.status === 403 && gmailBaseMailbox(admission.from)) {
+    try {
+      parsed = await parseRelayEmail(message);
+      if (
+        parsed.from !== admission.from &&
+        gmailBaseMailbox(parsed.from) === gmailBaseMailbox(admission.from)
+      ) {
+        admission.from = parsed.from;
+        checked = await salesInternal(env, workspace, 'relay-check', admission);
+      }
+    } catch (error) {
+      if (!(error instanceof RelayInputError)) throw error;
+      message.setReject(error.message);
+      return;
+    }
+  }
   if (!checked.ok) {
     if (checked.status >= 500)
       throw Error('Reply storage temporarily unavailable');
@@ -85,7 +114,7 @@ export async function receiveSalesReply(
     return;
   }
   try {
-    const parsed = await parseRelayEmail(message);
+    parsed ??= await parseRelayEmail(message);
     if (parsed.from !== admission.from)
       throw new RelayInputError(
         'From must match the address that received this private reply address.',
