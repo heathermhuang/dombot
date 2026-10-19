@@ -216,6 +216,60 @@ it('permits an exact publication review only after verified DNS, without automat
   await publish(saved);
   expect((await readPublicSale(tenant, domain))?.id).toBe(saved.value.id);
 });
+it('accepts a signed DNS observation with a small gateway-to-tenant clock offset', async () => {
+  const saved = await draft(),
+    plan = await controller.plan(workspace, saved.value.id, domain),
+    original = env.WORKSPACE_0.fetch;
+  dns.set(plan.proof!.name, plan.proof!.value);
+  env.WORKSPACE_0 = {
+    fetch: async (request: Request) => {
+      const realNow = Date.now;
+      const clock = vi
+        .spyOn(Date, 'now')
+        .mockImplementation(() => realNow() - 250);
+      try {
+        const response = await original(request);
+        if (response.ok)
+          expect(
+            (await createVerifiedSaleObserver(tenantEnv)(saved.value))
+              .available,
+          ).toBe(true);
+        return response;
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  } as Fetcher;
+  const result = await controller.check(
+    (await controller.read(workspace, saved.value.id))!,
+  );
+  expect(result.status).toBe('verified');
+});
+it('rejects observations beyond the bounded gateway clock tolerance', async () => {
+  const saved = await draft(),
+    plan = await controller.plan(workspace, saved.value.id, domain),
+    original = env.WORKSPACE_0.fetch;
+  dns.set(plan.proof!.name, plan.proof!.value);
+  env.WORKSPACE_0 = {
+    fetch: async (request: Request) => {
+      const realNow = Date.now;
+      const clock = vi
+        .spyOn(Date, 'now')
+        .mockImplementation(() => realNow() - 10000);
+      try {
+        return await original(request);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  } as Fetcher;
+  await expect(
+    controller.check((await controller.read(workspace, saved.value.id))!),
+  ).rejects.toThrow('could not be saved');
+  expect(
+    await tenant.prepare('SELECT 1 FROM sales_control_leases').first(),
+  ).toBeNull();
+});
 it('suppresses an existing publication when the first DNS observation is a loss', async () => {
   const saved = await draft();
   const observe = () => ({
