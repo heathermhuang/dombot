@@ -3,6 +3,8 @@ import { opaqueToken, tokenHash } from './crypto';
 import { Accounts, type SessionUser } from './accounts';
 import {
   registrationIds,
+  registrationPool,
+  registrationPoolIds,
   registrationReady,
   sendAuthEmail,
   reserveAuthEmail,
@@ -190,9 +192,9 @@ export class EmailAuth {
       statements.push(
         db
           .prepare(
-            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM email_signins p CROSS JOIN workspaces w WHERE p.consumption_id=?4 AND w.id IN (${ids.map((_, i) => `?${i + 5}`).join(',')}) AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM users u WHERE u.workspace_id=w.id OR u.email=p.email) AND NOT EXISTS(SELECT 1 FROM invitations i WHERE i.workspace_id=w.id) AND NOT EXISTS(SELECT 1 FROM closure_requests r WHERE r.workspace_id=w.id) ORDER BY w.id LIMIT 1`,
+            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM email_signins p CROSS JOIN workspaces w WHERE p.consumption_id=?4 AND ${registrationPool(ids, 5)} AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM users u WHERE u.workspace_id=w.id OR u.email=p.email) AND NOT EXISTS(SELECT 1 FROM invitations i WHERE i.workspace_id=w.id) AND NOT EXISTS(SELECT 1 FROM closure_requests r WHERE r.workspace_id=w.id) ORDER BY w.id LIMIT 1`,
           )
-          .bind(newId, encoded, now, consumption, ...ids),
+          .bind(newId, encoded, now, consumption, registrationPoolIds(ids)),
       );
       statements.push(
         db

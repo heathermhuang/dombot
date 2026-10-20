@@ -140,6 +140,8 @@ beforeAll(async () => {
             DOMBOT_GATEWAY_SECRET: keys[i],
             DOMBOT_WORKSPACE_ID: id,
             DOMBOT_PUBLIC_BASE_PATH: `/w/${id}`,
+            DOMBOT_PLATFORM_ALARMS: i === 0 ? 'true' : 'false',
+            DOMBOT_SALES_EDGE_SECRET: 'test-only-anonymous-edge-key'.repeat(3),
           },
         })),
       ],
@@ -247,6 +249,63 @@ describe('owner site routing and isolation', () => {
 });
 
 describe('real gateway and isolated Worker instances', () => {
+  it('starts and pauses platform alarms through private main-key admission and rejects anonymous edge authority', async () => {
+    expect((await api(0, 'getSettings')).status).toBe(200);
+    const tenant = await mf.getWorker('tenant0');
+    const health = new Request('http://localhost/platform-internal/health');
+    health.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(keys[0], ids[0], null, health),
+    );
+    const current = (await (await tenant.fetch(health)).json()) as {
+      workspace: string;
+      alarmAt: number;
+    };
+    expect(current.workspace).toBe(ids[0]);
+    expect(current.alarmAt).toBeGreaterThan(Date.now());
+    const edge = new Request(health.url);
+    edge.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(
+        'test-only-anonymous-edge-key'.repeat(3),
+        ids[0],
+        null,
+        edge,
+        {
+          purpose: 'sales-public',
+          host: 'example.test',
+          listing: null,
+          epoch: 0,
+        },
+      ),
+    );
+    expect((await tenant.fetch(edge)).status).toBe(403);
+    const pause = new Request('http://localhost/platform-internal/pause', {
+      method: 'POST',
+    });
+    pause.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(keys[0], ids[0], null, pause),
+    );
+    expect(
+      ((await (await tenant.fetch(pause)).json()) as { alarmAt: number | null })
+        .alarmAt,
+    ).toBeNull();
+  });
+  it('keeps platform operator endpoints outside public and customer routes', async () => {
+    for (const suffix of ['health', 'pause'])
+      for (const session of [undefined, cookies[0], cookies[1]])
+        expect(
+          (
+            await request(
+              `/w/${ids[0]}/platform-internal/${suffix}`,
+              'POST',
+              { args: [] },
+              session,
+            )
+          ).status,
+        ).toBe(404);
+  });
   it('preserves the origin signal for native login forms', async () => {
     const response = await request('/login');
     expect(response.headers.get('Referrer-Policy')).toBe('same-origin');

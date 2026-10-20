@@ -17,7 +17,16 @@ export function registrationIds(env: HostedEnv): string[] {
     ids.some((id) => !configured.some((w) => w.id === id))
   )
     return [];
-  return ids;
+  return env.PLATFORM_ENABLED === 'true' && env.DISPATCHER
+    ? [...ids, PLATFORM_POOL]
+    : ids;
+}
+export const PLATFORM_POOL = '@qualified-platform-pool';
+export function registrationPool(ids: string[], parameter: number) {
+  return `(w.id IN (SELECT value FROM json_each(?${parameter}))${ids.includes(PLATFORM_POOL) ? ' OR EXISTS(SELECT 1 FROM platform_workspaces p WHERE p.workspace_id=w.id AND p.qualified_at>0 AND p.signup_enabled=1)' : ''})`;
+}
+export function registrationPoolIds(ids: string[]) {
+  return JSON.stringify(ids.filter((id) => id !== PLATFORM_POOL));
 }
 export function emailReady(env: HostedEnv): boolean {
   return Boolean(
@@ -42,17 +51,14 @@ export class Registration {
     private readonly pepper: string,
     private readonly ids: string[],
   ) {}
-  private slots() {
-    return this.ids.map(() => '?').join(',');
-  }
   async hasCapacity(): Promise<boolean> {
     if (!this.ids.length) return false;
     return Boolean(
       await this.db
         .prepare(
-          `SELECT w.id FROM workspaces w WHERE w.id IN (${this.slots()}) AND ${eligible} LIMIT 1`,
+          `SELECT w.id FROM workspaces w WHERE ${registrationPool(this.ids, 1)} AND ${eligible} LIMIT 1`,
         )
-        .bind(...this.ids)
+        .bind(registrationPoolIds(this.ids))
         .first(),
     );
   }
@@ -99,9 +105,9 @@ export class Registration {
       const results = await this.db.batch([
         this.db
           .prepare(
-            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM signup_proofs p CROSS JOIN workspaces w WHERE p.token_hash=?4 AND p.consumed_at IS NULL AND p.expires_at>?3 AND w.id IN (${this.ids.map((_, i) => `?${i + 5}`).join(',')}) AND ${eligible} ORDER BY w.id LIMIT 1 RETURNING id`,
+            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM signup_proofs p CROSS JOIN workspaces w WHERE p.token_hash=?4 AND p.consumed_at IS NULL AND p.expires_at>?3 AND ${registrationPool(this.ids, 5)} AND ${eligible} ORDER BY w.id LIMIT 1 RETURNING id`,
           )
-          .bind(id, encoded, now, hash, ...this.ids),
+          .bind(id, encoded, now, hash, registrationPoolIds(this.ids)),
         this.db
           .prepare(
             'UPDATE signup_proofs SET consumed_at=?1 WHERE token_hash=?2 AND EXISTS(SELECT 1 FROM users WHERE id=?3)',

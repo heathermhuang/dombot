@@ -1,4 +1,7 @@
-import { verifyTenantAdmission } from '../shared/gateway-proof';
+import {
+  verifyTenantAdmission,
+  verifyGatewayRequest,
+} from '../shared/gateway-proof';
 import { mcpPreflight } from '@domains-domains/dombot-engine';
 import engineManifest from '@domains-domains/dombot-engine/manifest';
 import { WorkspaceCoordinator } from './workspace-coordinator';
@@ -25,6 +28,32 @@ export default {
         { error: 'Trusted gateway request required' },
         { status: 403, headers: { 'Cache-Control': 'no-store' } },
       );
+    }
+    const platformPath = new URL(request.url).pathname;
+    if (
+      ['/platform-internal/health', '/platform-internal/pause'].includes(
+        platformPath,
+      )
+    ) {
+      // Anonymous lander admission cannot operate platform lifecycle controls.
+      if (
+        !(await verifyGatewayRequest(
+          env.DOMBOT_GATEWAY_SECRET ?? '',
+          env.DOMBOT_WORKSPACE_ID ?? '',
+          request,
+        ))
+      )
+        return new Response('Forbidden', { status: 403 });
+      if (Reflect.get(env, 'DOMBOT_PLATFORM_ALARMS') !== 'true')
+        return new Response('Not found', { status: 404 });
+      if (platformPath.endsWith('/pause')) {
+        if (request.method !== 'POST')
+          return new Response('Method not allowed', { status: 405 });
+        await coordinator(env).pausePlatformAlarm();
+      }
+      return Response.json(await coordinator(env).platformHealth(), {
+        headers: { 'Cache-Control': 'no-store' },
+      });
     }
     const denied = await mcpPreflight(request, env);
     const response = denied ?? (await coordinator(env).fetch(request));
