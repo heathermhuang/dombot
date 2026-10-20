@@ -29,6 +29,11 @@ interface HostedEnv {
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
   EMAIL_DELIVERY_VERIFIED?: string;
+  AUTH_EMAIL_DAILY_LIMIT?: string;
+  AUTH_EMAIL_MONTHLY_LIMIT?: string;
+  AUTH_EMAIL_IP_LIMIT?: string;
+  AUTH_EMAIL_GLOBAL_LIMIT?: string;
+  AUTH_EMAIL_VERIFY_LIMIT?: string;
   PUBLIC_REGISTRATION_ENABLED?: string;
   PUBLIC_SIGNUP_IDS?: string;
   LEGAL_OPERATOR_NAME?: string;

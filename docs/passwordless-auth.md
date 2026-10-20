@@ -79,9 +79,16 @@ prefer a fix forward or retained `/login/password` fallback for password users.
 
 Cloudflare's account API reported a 1,000/day provider quota on 18 October 2026.
 Its published Workers Paid allowance is 3,000 emails per billing month, shared
-across the account; usage above that is chargeable. The app retains its durable
-30/day and 300/calendar-month attempted-send budgets while the early-access pool
-is small. Failed sends remain charged. No paid upgrade or quota increase is part
+across the account; usage above that is chargeable. The app defaults to durable 30/day and 300/calendar-month request budgets.
+Operators can set `AUTH_EMAIL_DAILY_LIMIT` and `AUTH_EMAIL_MONTHLY_LIMIT` after
+checking provider usage; ceilings are 10,000/day and 100,000/month, not prepaid
+allowances. Email-first requests reserve before identity lookup, including
+unknown addresses, so global exhaustion returns the same branded 503 and
+Retry-After to everyone. The code screen is not shown when this reservation fails.
+Shared-network defaults are 200 requests per IP and 400 globally per ten minutes,
+configurable with `AUTH_EMAIL_IP_LIMIT` and `AUTH_EMAIL_GLOBAL_LIMIT`. Two requests
+per address remain enforced. Verification allows 600 per IP per ten minutes
+(`AUTH_EMAIL_VERIFY_LIMIT`), while each proof still permits only five attempts. Failed sends remain charged. No paid upgrade or quota increase is part
 of this release. These app budgets do not reserve a provider-wide free allowance.
 
 Before expanding signup capacity, reconcile the provider's current subscription

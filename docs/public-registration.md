@@ -57,8 +57,12 @@ versions and time are recorded with the account creation transaction. Resending
 invalidates the previous link. Password recovery revokes browser sessions;
 paired assistants remain separately revocable in MCP settings.
 
-Shared durable app budgets permit at most 30 attempted messages per UTC day and
-300 per UTC month, with additional IP and address limits. Failed sends consume
+Shared durable app budgets default to 30 reserved requests per UTC day and
+300 per UTC month; the operator may configure bounded overrides using
+`AUTH_EMAIL_DAILY_LIMIT` and `AUTH_EMAIL_MONTHLY_LIMIT`. Email-first requests
+reserve before identity lookup, including unknown addresses, and exhausted
+capacity returns a branded retry page. Additional IP, global and per-address
+limits remain; see passwordless-auth.md for their configuration. Failed sends consume
 budget to prevent retry storms. These limits do not reserve the provider's
 account-wide free allowance, which may be used by other applications; no plan
 upgrade or unlimited free-delivery claim is implied. Provider acceptance does

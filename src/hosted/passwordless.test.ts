@@ -8,7 +8,7 @@ import {
   sign,
 } from 'node:crypto';
 import { isoCBOR } from '../../hosted/webauthn';
-import { EmailAuth } from './email-auth';
+import { EmailAuth, TermsAcceptanceRequired } from './email-auth';
 import { Passkeys } from './passkeys';
 import { Accounts } from './accounts';
 import { passwordHash, tokenHash } from './crypto';
@@ -226,6 +226,74 @@ beforeEach(async () => {
   } as HostedEnv;
 });
 describe('one email flow for sign-in and signup', () => {
+  it('supports a shared conference network while retaining per-address throttling and retry guidance', async () => {
+    env.AUTH_EMAIL_DAILY_LIMIT = '150';
+    for (let i = 0; i < 100; i++) {
+      const response = await post('/auth/email/request', {
+        email: `attendee${i}@example.test`,
+      });
+      expect(response.status).toBe(202);
+    }
+    expect(messages).toHaveLength(100);
+    expect(
+      (await post('/auth/email/request', { email: 'attendee0@example.test' }))
+        .status,
+    ).toBe(202);
+    const denied = await post('/auth/email/request', {
+      email: 'attendee0@example.test',
+    });
+    expect(denied.status).toBe(429);
+    expect(Number(denied.headers.get('Retry-After'))).toBeGreaterThan(0);
+    const html = await denied.text();
+    expect(html).toContain('Back to email sign-in');
+    expect(html).not.toContain('Check your email.');
+  }, 30_000);
+  it('reports exhausted global email capacity equally for known and unknown addresses before creating proofs', async () => {
+    await owner();
+    await db
+      .prepare('INSERT INTO email_budgets VALUES(?1,30,?2)')
+      .bind(
+        'day:' + new Date().toISOString().slice(0, 10),
+        Date.now() + 86400_000,
+      )
+      .run();
+    for (const email of ['owner@example.test', 'unknown@example.test']) {
+      const response = await post('/auth/email/request', { email });
+      expect(response.status).toBe(503);
+      expect(Number(response.headers.get('Retry-After'))).toBeGreaterThan(0);
+      expect(await response.text()).toContain('temporarily at capacity');
+    }
+    expect(messages).toHaveLength(0);
+    expect(
+      (await db.prepare('SELECT count(*) n FROM email_signins').first())?.n,
+    ).toBe(0);
+  });
+  it.each(['code', 'token'])(
+    'keeps a valid %s correctable when Terms acceptance is omitted',
+    async (kind) => {
+      await new EmailAuth(env).issue('consent@example.test', '/app');
+      const p = delivered();
+      const body = { id: p.id, [kind]: p[kind as 'code' | 'token'] };
+      const rejected = await post('/auth/email/confirm', body);
+      expect(rejected.status).toBe(400);
+      const html = await rejected.text();
+      expect(html).toContain('Accept the Terms');
+      expect(html).toContain(`value="${p.id}"`);
+      expect(html).toContain('name="accept" value="yes" required');
+      expect(html).not.toContain('This link or code is unavailable');
+      expect(
+        (
+          await post('/auth/email/confirm', {
+            ...body,
+            accept: 'yes',
+            legalVersion,
+          })
+        ).status,
+      ).toBe(303);
+      expect(messages).toHaveLength(1);
+    },
+  );
+
   it('keeps login email-first with self-hosted passkeys and an explicit password fallback', async () => {
     const r = await gateway.fetch(
         new Request('https://domains.domains/login'),
@@ -253,7 +321,9 @@ describe('one email flow for sign-in and signup', () => {
       expect((await gateway.fetch(new Request(proof.url), env)).status).toBe(
         200,
       );
-    expect(await auth.consume(proof.id, proof.code, false, false)).toBeNull();
+    await expect(
+      auth.consume(proof.id, proof.code, false, false),
+    ).rejects.toBeInstanceOf(TermsAcceptanceRequired);
     const response = await post('/auth/email/confirm', {
       id: proof.id,
       code: proof.code,

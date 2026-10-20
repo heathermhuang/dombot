@@ -11,11 +11,17 @@ import {
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import { EmailAuth } from './email-auth';
+import { EmailAuth, TermsAcceptanceRequired } from './email-auth';
+import {
+  authLimit,
+  authRetrySeconds,
+  AuthEmailUnavailable,
+} from './auth-policy';
 import { Passkeys } from './passkeys';
 import { authScript } from '../../hosted/generated-auth';
 import {
   emailStart,
+  authRetry,
   emailCode,
   emailConfirm,
   authUnavailable,
@@ -200,11 +206,13 @@ app.get('/auth/browser.js', (c) => {
 });
 app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
-  if (!emailReady(c.env))
-    return c.text(
-      'Email sign-in is temporarily unavailable. Use an existing password.',
+  if (!emailReady(c.env)) {
+    c.header('Retry-After', '300');
+    return c.html(
+      authRetry('Email sign-in is temporarily unavailable.', 300),
       503,
     );
+  }
   const accounts = account(c.env),
     form = await c.req.parseBody();
   const sessionUser =
@@ -230,14 +238,27 @@ app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
       303,
     );
   if (
-    !(await accounts.rateLimit('email-auth:global', 20)) ||
+    !(await accounts.rateLimit('email-auth:email:' + email.data, 2)) ||
     !(await accounts.rateLimit(
       'email-auth:ip:' + (c.req.header('cf-connecting-ip') ?? 'local'),
-      4,
+      authLimit(c.env.AUTH_EMAIL_IP_LIMIT, 200, 2000),
     )) ||
-    !(await accounts.rateLimit('email-auth:email:' + email.data, 2))
-  )
-    return c.text('Please wait before requesting another email.', 429);
+    !(await accounts.rateLimit(
+      'email-auth:global',
+      authLimit(c.env.AUTH_EMAIL_GLOBAL_LIMIT, 400, 5000),
+    ))
+  ) {
+    const retry = authRetrySeconds();
+    c.header('Retry-After', String(retry));
+    return c.html(
+      authRetry(
+        'Please wait before requesting another email. If you already received a link or code, use that one.',
+        retry,
+        safeNext(form.next),
+      ),
+      429,
+    );
+  }
   let waitUntil: ((promise: Promise<unknown>) => void) | undefined;
   try {
     const ctx = c.executionCtx;
@@ -245,14 +266,23 @@ app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
   } catch {
     /* Direct unit-test invocation has no Worker context. */
   }
-  const id = await new EmailAuth(c.env).issue(
-    user?.email ?? email.data,
-    safeNext(form.next),
-    user ?? undefined,
-    readSession(c.req.raw),
-    waitUntil,
-  );
-  return c.html(emailCode(id), 202);
+  try {
+    const id = await new EmailAuth(c.env).issue(
+      user?.email ?? email.data,
+      safeNext(form.next),
+      user ?? undefined,
+      readSession(c.req.raw),
+      waitUntil,
+    );
+    return c.html(emailCode(id), 202);
+  } catch (error) {
+    if (!(error instanceof AuthEmailUnavailable)) throw error;
+    c.header('Retry-After', String(error.retryAfter));
+    return c.html(
+      authRetry(error.message, error.retryAfter, safeNext(form.next)),
+      503,
+    );
+  }
 });
 app.get('/auth/email/confirm', async (c) => {
   const id = c.req.query('id') ?? '',
@@ -267,7 +297,7 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
   if (
     !(await account(c.env).rateLimit(
       'email-auth:verify:' + (c.req.header('cf-connecting-ip') ?? 'local'),
-      30,
+      authLimit(c.env.AUTH_EMAIL_VERIFY_LIMIT, 600, 5000),
     ))
   )
     return c.text('Too many attempts. Try later.', 429);
@@ -275,16 +305,27 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
   const id = typeof form.id === 'string' ? form.id : '';
   const link = typeof form.token === 'string';
   const proof = link ? form.token : form.code;
-  const result =
-    typeof proof === 'string'
-      ? await new EmailAuth(c.env).consume(
-          id,
-          proof,
-          link,
-          form.accept === 'yes' && form.legalVersion === legalVersion,
-          readSession(c.req.raw),
-        )
-      : null;
+  let result;
+  try {
+    result =
+      typeof proof === 'string'
+        ? await new EmailAuth(c.env).consume(
+            id,
+            proof,
+            link,
+            form.accept === 'yes' && form.legalVersion === legalVersion,
+            readSession(c.req.raw),
+          )
+        : null;
+  } catch (error) {
+    if (!(error instanceof TermsAcceptanceRequired)) throw error;
+    return c.html(
+      link
+        ? emailConfirm(id, String(proof), error.email, true, error.message)
+        : emailCode(id, error.message, String(proof)),
+      400,
+    );
+  }
   if (!result) return c.html(authUnavailable(), 400);
   c.header('Set-Cookie', sessionCookie(c.req.url, result.token));
   return c.redirect(safeNext(result.next), 303);
