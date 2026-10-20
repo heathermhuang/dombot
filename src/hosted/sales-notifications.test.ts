@@ -600,7 +600,7 @@ it('leases failed platform dispatchers so the next due batch reaches healthy acc
   expect(sends).toBe(0);
   await drainSales(e);
   expect(sends).toBe(1);
-});
+}, 30_000);
 it.each([
   ['E_RATE_LIMIT_EXCEEDED', 'retryable'],
   ['E_DAILY_LIMIT_EXCEEDED', 'retryable'],

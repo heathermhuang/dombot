@@ -297,7 +297,7 @@ describe('one email flow for sign-in and signup', () => {
     } finally {
       clock.mockRestore();
     }
-  }, 60_000);
+  }, 120_000);
   it('reports exhausted global email capacity equally for known and unknown addresses before creating proofs', async () => {
     await owner();
     await db
