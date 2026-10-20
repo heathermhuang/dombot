@@ -25,11 +25,17 @@ Public signup opens only when all of these settings are complete:
   a received message with passing sender authentication. An enabled sender or
   DNS records alone are insufficient. Do not send a test message without the
   owner's authorization for its sender, recipient and purpose.
-- `PUBLIC_SIGNUP_IDS` is a comma-separated list of prequalified, physically
+- Legacy slots use `PUBLIC_SIGNUP_IDS`, a comma-separated list of prequalified, physically
   isolated, unused tenant IDs already present in the gateway's `WORKSPACES`
   configuration. Never include a customer's old or closed identity or a QA slot.
   Check owning control rows, unique root keys, private ingress and signed gateway
   admission against the established deployment receipts.
+- Platform slots use `PLATFORM_ENABLED=true`, the private `DISPATCHER` namespace
+  binding, and operator-owned `platform_workspaces` records. A record must have
+  `qualified_at>0` and `signup_enabled=1`, with an enabled, unused, uninvited and
+  unclosed workspace. Do not put hundreds of platform IDs into the legacy
+  environment list. Provisioning is separate from runtime qualification and
+  public eligibility; see [Workers for Platforms](workers-for-platforms.md).
 - Set `PUBLIC_REGISTRATION_ENABLED=true` only after the preceding checks pass.
 
 Until then the bounded access-request form remains available and the landing
