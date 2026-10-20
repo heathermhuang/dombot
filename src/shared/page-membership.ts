@@ -20,7 +20,11 @@ export function matchesPageScope(
   item: PortfolioListing,
   live: PublicListing | undefined,
   scope: string,
+  hasInventoryRecord = true,
 ): boolean {
+  // Private draft imports remain visible before any registrar is connected.
+  // Only the inventory view requires a physical inventory record.
+  if (scope === 'registered') return hasInventoryRecord;
   if (scope === 'listed') return item.visibility !== 'private' || !!live;
   if (scope === 'private') return item.visibility === 'private' && !live;
   return true;

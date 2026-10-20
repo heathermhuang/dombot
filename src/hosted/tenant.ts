@@ -58,8 +58,12 @@ export default {
     const denied = await mcpPreflight(request, env);
     const response = denied ?? (await coordinator(env).fetch(request));
     const headers = new Headers(response.headers);
-    headers.set('X-DomBot-Engine', engineManifest.version);
-    headers.set('X-DomBot-Engine-Source', engineManifest.sourceSha256);
+    // During deployment the coordinator can still run its previous release.
+    // Preserve its provenance; only local preflight responses use this wrapper's.
+    if (denied) {
+      headers.set('X-DomBot-Engine', engineManifest.version);
+      headers.set('X-DomBot-Engine-Source', engineManifest.sourceSha256);
+    }
     return new Response(response.body, { status: response.status, headers });
   },
   async scheduled(event, env) {

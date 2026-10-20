@@ -253,9 +253,8 @@ export default function DomainWorkspace({
             (entry) => entry.domain === item.domain,
           ),
           scope,
+          !!catalog.get(item.domain)?.records.length,
         ) &&
-        ((scope !== 'registered' && scope !== 'private') ||
-          !!catalog.get(item.domain)?.records.length) &&
         matchesRegistrarFilters(
           catalog.get(item.domain)!,
           {
@@ -372,11 +371,8 @@ export default function DomainWorkspace({
   const history = draft.listings.filter(
     (item) => item.visibility === 'historical',
   );
-  const privateNames = draft.listings.filter(
-    (item) =>
-      item.visibility === 'private' &&
-      !liveItems.has(item.domain) &&
-      !!catalog.get(item.domain)?.records.length,
+  const privateNames = draft.listings.filter((item) =>
+    matchesPageScope(item, liveItems.get(item.domain), 'private'),
   );
   const blockers = current.filter(
     (item) => checks.get(item.domain)?.ownership !== 'owned',
@@ -1197,7 +1193,7 @@ export default function DomainWorkspace({
                 {scope === 'listed'
                   ? `${pageListCount} selected or live, including ${history.length} historical`
                   : scope === 'private'
-                    ? `${privateNames.length} inventory names not added`
+                    ? `${privateNames.length} private names not added`
                     : `${new Set(inventory.map((item) => item.domainName)).size} inventory names`}
               </span>
               {(

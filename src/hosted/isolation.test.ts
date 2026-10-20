@@ -250,7 +250,15 @@ describe('owner site routing and isolation', () => {
 
 describe('real gateway and isolated Worker instances', () => {
   it('starts and pauses platform alarms through private main-key admission and rejects anonymous edge authority', async () => {
-    expect((await api(0, 'getSettings')).status).toBe(200);
+    const response = await api(0, 'getSettings');
+    expect(response.status).toBe(200);
+    const manifest = JSON.parse(
+      readFileSync('hosted/dombot-engine.lock.json', 'utf8'),
+    );
+    expect(response.headers.get('X-DomBot-Engine')).toBe(manifest.version);
+    expect(response.headers.get('X-DomBot-Engine-Source')).toBe(
+      manifest.sourceSha256,
+    );
     const tenant = await mf.getWorker('tenant0');
     const health = new Request('http://localhost/platform-internal/health');
     health.headers.set(
