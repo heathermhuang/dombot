@@ -3,7 +3,12 @@ import { reserveCampaignEmail } from './email-campaign';
 import { createHmac, createHash } from 'node:crypto';
 import { newReplyAddress, relayDisplayName } from './sales-relay-address';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
-import { workspaceSchema, workspaceService, gatewayKey } from './workspaces';
+import {
+  workspaceFor,
+  workspaceSchema,
+  workspaceService,
+  workspaceKey,
+} from './workspaces';
 import {
   renderSalesEmail,
   salesEmailContextSchema,
@@ -58,9 +63,7 @@ export async function salesInternal(
   path: string,
   body?: unknown,
 ): Promise<Response> {
-  const configured = workspaceSchema
-    .parse(JSON.parse(env.WORKSPACES))
-    .find((w) => w.id === workspace);
+  const configured = await workspaceFor(env, workspace);
   if (!configured) throw new Error('Unknown sales workspace');
   const r = new Request(
     new URL(`/sales-internal/${path}`, env.CANONICAL_ORIGIN),
@@ -76,9 +79,15 @@ export async function salesInternal(
   );
   r.headers.set(
     PROOF_HEADER,
-    await signGatewayRequest(gatewayKey(env, workspace), workspace, null, r, {
-      purpose: 'sales-notifications',
-    }),
+    await signGatewayRequest(
+      await workspaceKey(env, workspace),
+      workspace,
+      null,
+      r,
+      {
+        purpose: 'sales-notifications',
+      },
+    ),
   );
   return workspaceService(env, configured.binding).fetch(r);
 }
@@ -298,9 +307,18 @@ export async function drainSalesWorkspace(
 /** Deterministic bounded scan: due checkpoints first; no model or full audit. */
 export async function drainSales(env: HostedEnv): Promise<void> {
   if (!salesMailReady(env)) return;
-  const workspaces = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
+  const workspaces =
+    env.PLATFORM_ENABLED === 'true'
+      ? (
+          await env.CONTROL_DB.prepare(
+            'SELECT w.id FROM workspaces w JOIN users u ON u.workspace_id=w.id LEFT JOIN sales_dispatch_checkpoints c ON c.workspace_id=w.id WHERE w.enabled=1 AND COALESCE(c.next_check_at,0)<=?1 ORDER BY COALESCE(c.next_check_at,0),w.id LIMIT 50',
+          )
+            .bind(Date.now())
+            .all<{ id: string }>()
+        ).results
+      : workspaceSchema.parse(JSON.parse(env.WORKSPACES));
   let failed = false;
-  for (const w of workspaces.slice(0, 32)) {
+  for (const w of workspaces.slice(0, 50)) {
     try {
       const checkpoint = await env.CONTROL_DB.prepare(
         'SELECT next_check_at FROM sales_dispatch_checkpoints WHERE workspace_id=?',
@@ -308,16 +326,18 @@ export async function drainSales(env: HostedEnv): Promise<void> {
         .bind(w.id)
         .first<{ next_check_at: number }>();
       if (checkpoint && checkpoint.next_check_at > Date.now()) continue;
-      await drainSalesWorkspace(env, w.id);
-      await env.CONTROL_DB.prepare(
+      const lease = env.CONTROL_DB.prepare(
         'INSERT INTO sales_dispatch_checkpoints(workspace_id,next_check_at,updated_at) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET next_check_at=excluded.next_check_at,updated_at=excluded.updated_at',
-      )
-        .bind(
-          w.id,
-          Math.floor(Date.now() / 120_000) * 120_000 + 120_000,
-          Date.now(),
-        )
-        .run();
+      ).bind(
+        w.id,
+        Math.floor(Date.now() / 120_000) * 120_000 + 120_000,
+        Date.now(),
+      );
+      // Lease before dispatch so repeatedly failing accounts cannot starve the
+      // remaining portfolios in a large pool. Delivery receipts prevent repeats.
+      if (env.PLATFORM_ENABLED === 'true') await lease.run();
+      await drainSalesWorkspace(env, w.id);
+      if (env.PLATFORM_ENABLED !== 'true') await lease.run();
     } catch {
       failed = true;
     }

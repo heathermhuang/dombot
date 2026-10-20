@@ -54,7 +54,7 @@ import {
 } from './views';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { canonicalRedirect, portfolioAlias } from './launch';
-import { gatewayKey, workspaceSchema, workspaceService } from './workspaces';
+import { workspaceKey, workspaceFor, workspaceService } from './workspaces';
 import { salesPublicPath } from '../shared/sales-admission';
 import {
   drainSales,
@@ -695,9 +695,7 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
       'Your password was not recognized. Return to account settings and try again.',
       401,
     );
-  const configured = workspaceSchema
-    .parse(JSON.parse(c.env.WORKSPACES))
-    .find((w) => w.id === user.workspace_id);
+  const configured = await workspaceFor(c.env, user.workspace_id);
   if (!configured)
     return c.text('Account is unavailable. Contact support.', 503);
   // Serialize behind current tenant operations and pause scheduled sync before
@@ -715,7 +713,7 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
   pause.headers.set(
     PROOF_HEADER,
     await signGatewayRequest(
-      gatewayKey(c.env, user.workspace_id),
+      await workspaceKey(c.env, user.workspace_id),
       user.workspace_id,
       user.id,
       pause,
@@ -1023,9 +1021,7 @@ app.get('/.well-known/:kind/w/:workspace/*', (c) => {
 
 app.all('/w/:workspace/*', async (c) => {
   const id = c.req.param('workspace');
-  const configured = workspaceSchema
-    .parse(JSON.parse(c.env.WORKSPACES))
-    .find((w) => w.id === id);
+  const configured = await workspaceFor(c.env, id);
   if (!configured) return c.json({ error: 'Portfolio not found' }, 404);
   const workspace = await c.env.CONTROL_DB.prepare(
     'SELECT id FROM workspaces WHERE id=?1 AND enabled=1',
@@ -1040,7 +1036,10 @@ app.all('/w/:workspace/*', async (c) => {
     mcpPath(path) ||
     /^\/p\/[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?$/.test(path) ||
     salesPublicPath(path, c.req.method);
-  if (path.startsWith('/sales-internal'))
+  if (
+    path.startsWith('/sales-internal') ||
+    path.startsWith('/platform-internal')
+  )
     return c.json({ error: 'Not found' }, 404);
   // Polls have their own allowance, separate from registration/issuance.
   // Bound public metadata/status traffic before it can enter the tenant.
@@ -1279,7 +1278,7 @@ app.all('/w/:workspace/*', async (c) => {
   request.headers.set(
     PROOF_HEADER,
     await signGatewayRequest(
-      gatewayKey(c.env, id),
+      await workspaceKey(c.env, id),
       id,
       owner,
       request,

@@ -4,7 +4,7 @@ import { canonicalDomain } from '../shared/publication';
 import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
 import { domainControlLeaseSchema } from '../shared/sales-domain-control';
 import { salesDns } from './sales-hostnames';
-import { gatewayKey, workspaceSchema, workspaceService } from './workspaces';
+import { workspaceKey, workspaceFor, workspaceService } from './workspaces';
 import type { SalesListingDetail } from '../shared/sales-api';
 
 interface Control {
@@ -45,10 +45,8 @@ export class SalesDomainControl {
     readonly env: HostedEnv,
     readonly fetcher: typeof fetch = (...a) => fetch(...a),
   ) {}
-  private service(workspace: string) {
-    const configured = workspaceSchema
-      .parse(JSON.parse(this.env.WORKSPACES))
-      .find((w) => w.id === workspace);
+  private async service(workspace: string) {
+    const configured = await workspaceFor(this.env, workspace);
     if (!configured) throw Error('Account unavailable');
     return workspaceService(this.env, configured.binding);
   }
@@ -74,14 +72,16 @@ export class SalesDomainControl {
     request.headers.set(
       PROOF_HEADER,
       await signGatewayRequest(
-        gatewayKey(this.env, row.workspace_id),
+        await workspaceKey(this.env, row.workspace_id),
         row.workspace_id,
         null,
         request,
         { purpose: 'sales-hostnames' },
       ),
     );
-    const response = await this.service(row.workspace_id).fetch(request);
+    const response = await (
+      await this.service(row.workspace_id)
+    ).fetch(request);
     if (response.status === 404)
       throw new ListingUnavailable(row.epoch, row.revision);
     if (!response.ok || !((await response.json()) as { ok: boolean }).ok)
@@ -240,14 +240,14 @@ export class SalesDomainControl {
     request.headers.set(
       PROOF_HEADER,
       await signGatewayRequest(
-        gatewayKey(this.env, workspace),
+        await workspaceKey(this.env, workspace),
         workspace,
         owner,
         request,
         { purpose: 'sales-owner', recipientVerified: false },
       ),
     );
-    const r = await this.service(workspace).fetch(request);
+    const r = await (await this.service(workspace)).fetch(request);
     if (!r.ok) throw Error('Listing unavailable.');
     return r.json() as Promise<SalesListingDetail>;
   }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { SalesHostnames } from './sales-hostnames';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
-import { gatewayKey, workspaceSchema, workspaceService } from './workspaces';
+import { workspaceKey, workspaceFor, workspaceService } from './workspaces';
 import type { SalesListingDetail } from '../shared/sales-api';
 
 export async function salesHostRequest(
@@ -45,9 +45,7 @@ export async function salesHostRequest(
             })
             .strict()
             .parse(raw);
-    const configured = workspaceSchema
-      .parse(JSON.parse(env.WORKSPACES))
-      .find((w) => w.id === workspace);
+    const configured = await workspaceFor(env, workspace);
     if (!configured) throw new Error('Account unavailable');
     const read = new Request(
       new URL(`/sales/listings/${body.listingId}`, env.CANONICAL_ORIGIN),
@@ -55,7 +53,7 @@ export async function salesHostRequest(
     read.headers.set(
       PROOF_HEADER,
       await signGatewayRequest(
-        gatewayKey(env, workspace),
+        await workspaceKey(env, workspace),
         workspace,
         owner,
         read,

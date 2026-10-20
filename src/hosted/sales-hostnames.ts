@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createHash, randomBytes } from 'node:crypto';
 import { canonicalDomain } from '../shared/publication';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
-import { gatewayKey, workspaceSchema, workspaceService } from './workspaces';
+import { workspaceKey, workspaceFor, workspaceService } from './workspaces';
 
 export interface HostBinding {
   hostname: string;
@@ -54,9 +54,7 @@ export async function refreshSalesHostnames(
       .first();
     if (!claimed) continue;
     try {
-      const configured = workspaceSchema
-        .parse(JSON.parse(env.WORKSPACES))
-        .find((w) => w.id === row.workspace_id);
+      const configured = await workspaceFor(env, row.workspace_id);
       if (!configured) throw Error('Account unavailable');
       const request = new Request(
         new URL(
@@ -67,7 +65,7 @@ export async function refreshSalesHostnames(
       request.headers.set(
         PROOF_HEADER,
         await signGatewayRequest(
-          gatewayKey(env, row.workspace_id),
+          await workspaceKey(env, row.workspace_id),
           row.workspace_id,
           null,
           request,
@@ -168,9 +166,7 @@ async function bindingWrite(
   epoch: number,
   enabled: boolean,
 ) {
-  const configured = workspaceSchema
-    .parse(JSON.parse(env.WORKSPACES))
-    .find((w) => w.id === workspace);
+  const configured = await workspaceFor(env, workspace);
   if (!configured) throw new Error('Workspace not configured');
   const r = new Request(
     new URL('/sales-internal/host-binding', env.CANONICAL_ORIGIN),
@@ -182,9 +178,15 @@ async function bindingWrite(
   );
   r.headers.set(
     PROOF_HEADER,
-    await signGatewayRequest(gatewayKey(env, workspace), workspace, null, r, {
-      purpose: 'sales-hostnames',
-    }),
+    await signGatewayRequest(
+      await workspaceKey(env, workspace),
+      workspace,
+      null,
+      r,
+      {
+        purpose: 'sales-hostnames',
+      },
+    ),
   );
   if (!(await workspaceService(env, configured.binding).fetch(r)).ok)
     throw new Error('Tenant binding update failed');

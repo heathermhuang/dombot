@@ -1,4 +1,6 @@
 interface HostedEnv {
+  PLATFORM_ENABLED?: string;
+  DISPATCHER?: DispatchNamespace;
   EMAIL_CAMPAIGN_ID?: string;
   EMAIL_CAMPAIGN_LIMIT?: string;
   EMAIL_CAMPAIGN_DAILY_LIMIT?: string;
