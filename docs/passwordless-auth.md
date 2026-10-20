@@ -96,3 +96,14 @@ usage and app send demand, then set an explicit budget and measure inbox receipt
 QQ, 163/126 and mainland network checks require owner-controlled recipients and a
 mainland test endpoint. Record delivered/accepted/unknown separately. Never use
 invented mailboxes or treat a Google mailbox receipt as China qualification.
+
+## Conference campaign allowance
+
+The optional
+`EMAIL_CAMPAIGN_ID`, `EMAIL_CAMPAIGN_LIMIT` and `EMAIL_CAMPAIGN_DAILY_LIMIT`
+configure one non-resetting total and one shared daily allowance across auth and
+inquiry email. All three must be valid when configured. The lifetime row is not
+removed by hourly expiry cleanup and must not be reset across billing periods.
+Provider failures and unknown-address reservations remain charged. Set the total only after recording an explicit usage budget and checking current
+provider pricing. A reservation ceiling is a conservative send cap, not a claim
+about account-wide billing or inbox delivery.

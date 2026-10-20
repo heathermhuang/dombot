@@ -3,6 +3,7 @@ import { opaqueToken, passwordHash, tokenHash } from './crypto';
 import { legalReady, legalVersion } from './legal';
 import { workspaceSchema } from './workspaces';
 import { authLimit, AuthEmailUnavailable } from './auth-policy';
+import { reserveCampaignEmail } from './email-campaign';
 
 export function registrationIds(env: HostedEnv): string[] {
   const configured = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
@@ -191,6 +192,8 @@ export async function reserveAuthEmail(env: HostedEnv): Promise<void> {
         ),
       ),
     );
+  const campaign = await reserveCampaignEmail(env);
+  if (!campaign.allowed) throw new AuthEmailUnavailable(campaign.retryAfter);
 }
 
 /** A reserved send is internal to EmailAuth.issue, never selected by a client. */

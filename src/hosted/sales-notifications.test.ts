@@ -144,6 +144,20 @@ async function verified() {
     .run();
   return e;
 }
+it('shares the auth campaign ceiling before sending inquiry mail', async () => {
+  const e = await verified();
+  e.EMAIL_CAMPAIGN_ID = 'conference-test';
+  e.EMAIL_CAMPAIGN_LIMIT = '1';
+  e.EMAIL_CAMPAIGN_DAILY_LIMIT = '10';
+  await db
+    .prepare(
+      "INSERT INTO email_budgets(bucket,count,expires_at) VALUES('campaign:conference-test',1,253402300799000)",
+    )
+    .run();
+  await drainSalesWorkspace(e, workspace);
+  expect(sends).toBe(0);
+  expect(acks.some((ack) => ack.state === 'retryable')).toBe(true);
+});
 describe('relay gateway admission', () => {
   const rawToken = 'ab'.repeat(24),
     address = `reply+11111111.${rawToken}@replies.example`;

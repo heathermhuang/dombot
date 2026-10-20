@@ -226,15 +226,47 @@ beforeEach(async () => {
   } as HostedEnv;
 });
 describe('one email flow for sign-in and signup', () => {
-  it('supports a shared conference network while retaining per-address throttling and retry guidance', async () => {
-    env.AUTH_EMAIL_DAILY_LIMIT = '150';
-    for (let i = 0; i < 100; i++) {
-      const response = await post('/auth/email/request', {
-        email: `attendee${i}@example.test`,
-      });
-      expect(response.status).toBe(202);
+  it('supports 500 shared-network attendees despite expired proofs, without bypassing address limits', async () => {
+    env.AUTH_EMAIL_DAILY_LIMIT = '1000';
+    env.AUTH_EMAIL_MONTHLY_LIMIT = '10000';
+    env.AUTH_EMAIL_IP_LIMIT = '1000';
+    env.AUTH_EMAIL_GLOBAL_LIMIT = '1500';
+    env.EMAIL_CAMPAIGN_ID = 'world-domain-conference-2026';
+    env.EMAIL_CAMPAIGN_LIMIT = '10000';
+    env.EMAIL_CAMPAIGN_DAILY_LIMIT = '1000';
+    await db.exec(
+      "WITH RECURSIVE old(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM old WHERE x<500) INSERT INTO email_signins(id,token_hash,code_hash,email,intent,next_path,expires_at) SELECT printf('%064x',x),printf('%064x',x),printf('%064x',x),'expired'||x||'@example.test','login','/app',0 FROM old",
+    );
+    for (let offset = 0; offset < 500; offset += 25) {
+      const responses = await Promise.all(
+        Array.from({ length: 25 }, (_, i) =>
+          post('/auth/email/request', {
+            email: `attendee${offset + i}@example.test`,
+          }),
+        ),
+      );
+      expect(responses.every((response) => response.status === 202)).toBe(true);
     }
-    expect(messages).toHaveLength(100);
+    expect(messages).toHaveLength(500);
+    expect(
+      (
+        await db
+          .prepare(
+            'SELECT count(*) n FROM email_signins WHERE expires_at>? AND consumed_at IS NULL',
+          )
+          .bind(Date.now())
+          .first()
+      )?.n,
+    ).toBe(500);
+    expect(
+      (
+        await db
+          .prepare(
+            "SELECT count FROM email_budgets WHERE bucket='campaign:world-domain-conference-2026'",
+          )
+          .first()
+      )?.count,
+    ).toBe(500);
     expect(
       (await post('/auth/email/request', { email: 'attendee0@example.test' }))
         .status,
@@ -247,7 +279,7 @@ describe('one email flow for sign-in and signup', () => {
     const html = await denied.text();
     expect(html).toContain('Back to email sign-in');
     expect(html).not.toContain('Check your email.');
-  }, 30_000);
+  }, 60_000);
   it('reports exhausted global email capacity equally for known and unknown addresses before creating proofs', async () => {
     await owner();
     await db
@@ -267,6 +299,22 @@ describe('one email flow for sign-in and signup', () => {
     expect(
       (await db.prepare('SELECT count(*) n FROM email_signins').first())?.n,
     ).toBe(0);
+  });
+  it('does not promise an automatic retry when the non-resetting campaign allowance is exhausted', async () => {
+    env.EMAIL_CAMPAIGN_ID = 'conference-test';
+    env.EMAIL_CAMPAIGN_LIMIT = '1';
+    env.EMAIL_CAMPAIGN_DAILY_LIMIT = '10';
+    expect(
+      (await post('/auth/email/request', { email: 'first@example.test' }))
+        .status,
+    ).toBe(202);
+    const exhausted = await post('/auth/email/request', {
+      email: 'second@example.test',
+    });
+    expect(exhausted.status).toBe(503);
+    expect(exhausted.headers.get('Retry-After')).toBeNull();
+    expect(await exhausted.text()).toContain('needs attention from support');
+    expect(messages).toHaveLength(1);
   });
   it.each(['code', 'token'])(
     'keeps a valid %s correctable when Terms acceptance is omitted',

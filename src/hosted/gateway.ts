@@ -277,7 +277,7 @@ app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
     return c.html(emailCode(id), 202);
   } catch (error) {
     if (!(error instanceof AuthEmailUnavailable)) throw error;
-    c.header('Retry-After', String(error.retryAfter));
+    if (error.retryAfter > 0) c.header('Retry-After', String(error.retryAfter));
     return c.html(
       authRetry(error.message, error.retryAfter, safeNext(form.next)),
       503,
