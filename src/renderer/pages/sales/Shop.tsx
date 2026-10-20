@@ -1,3 +1,4 @@
+import { useShopDraft } from '../../lib/sales-drafts';
 import { useEffect, useState } from 'react';
 import type { SaleShop } from '../../../shared/sales';
 import type {
@@ -14,18 +15,30 @@ import { hostPath } from '../../lib/platform';
 import { SalesShell, SalesFeedback, Field } from './shared';
 
 export default function Shop() {
+  const [search, setSearch] = useState(''),
+    [query, setQuery] = useState(''),
+    [cursors, setCursors] = useState<string[]>(['']);
+  const { editor, state } = useShopDraft();
+  const draft = state?.draft ?? null;
+  const setDraft = (value: SaleShop) => {
+    editor.update(value);
+    setReview(null);
+  };
   const remote = useSalesData<SalesShopState>('/shop'),
-    rows = useSalesData<SalesPage<SalesListing>>('/listings'),
+    rows = useSalesData<SalesPage<SalesListing>>(
+      `/listings?q=${encodeURIComponent(query)}&cursor=${encodeURIComponent(cursors.at(-1) ?? '')}`,
+    ),
     action = useSalesAction();
-  const [draft, setDraft] = useState<SaleShop | null>(null),
-    [review, setReview] = useState<{
-      id: string;
-      draft: SaleShop;
-      before: SaleShop | null;
-    } | null>(null);
+  const [review, setReview] = useState<{
+    id: string;
+    draft: SaleShop;
+    before: SaleShop | null;
+    terms: { id: string; domain: string }[];
+    removed: { id: string; domain: string }[];
+  } | null>(null);
   useEffect(() => {
-    if (remote.data && !draft) setDraft(remote.data.draft);
-  }, [remote.data, draft]);
+    if (remote.data) editor.initialize(remote.data.draft, remote.data.revision);
+  }, [remote.data, editor]);
   return (
     <SalesShell>
       <div className="sales-heading">
@@ -52,7 +65,10 @@ export default function Shop() {
         error={remote.error || rows.error || action.error}
         notice={action.notice}
         loading={action.busy}
-        retry={() => void remote.reload()}
+        retry={() => {
+          void remote.reload();
+          void rows.reload();
+        }}
       />
       {draft && (
         <form
@@ -63,12 +79,15 @@ export default function Shop() {
               const saved = await salesRequest<{ revision: string }>(
                 '/shop',
                 'PUT',
-                { draft, revision: remote.data?.revision ?? null },
+                { draft, revision: state?.revision ?? null },
               );
+              editor.saved(draft, saved.revision);
               const value = await salesRequest<{
                 id: string;
                 draft: SaleShop;
                 before: SaleShop | null;
+                terms: { id: string; domain: string }[];
+                removed: { id: string; domain: string }[];
               }>('/shop/reviews', 'POST', { revision: saved.revision });
               setReview(value);
               await remote.reload();
@@ -98,10 +117,7 @@ export default function Shop() {
           </Field>
           <button
             type="button"
-            disabled={
-              action.busy ||
-              JSON.stringify(draft) !== JSON.stringify(remote.data?.draft)
-            }
+            disabled={action.busy || editor.isDirty()}
             title="Save your current draft before copying another presentation."
             onClick={() =>
               void action.run(async () => {
@@ -122,8 +138,47 @@ export default function Shop() {
           <h2>Selected public listings</h2>
           <p className="small">
             Only currently published, available listings can appear in search.
-            Showing this page of up to 100 listings.
+            {draft.listingIds.length} selected across all pages. Page{' '}
+            {cursors.length}.
           </p>
+          <div className="sales-toolbar">
+            <Field label="Find a domain">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </Field>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery(search.trim());
+                setCursors(['']);
+              }}
+            >
+              Search listings
+            </button>
+            <button
+              type="button"
+              disabled={cursors.length === 1 || rows.loading}
+              onClick={() => setCursors((value) => value.slice(0, -1))}
+            >
+              Previous listings
+            </button>
+            <button
+              type="button"
+              disabled={!rows.data?.cursor || rows.loading}
+              onClick={() =>
+                setCursors((value) => [...value, rows.data!.cursor!])
+              }
+            >
+              Next listings
+            </button>
+          </div>
+          {rows.loading && <p role="status">Loading listings…</p>}
+          {!rows.loading && !rows.error && !rows.data?.items.length && (
+            <p>No listings match. Try another search.</p>
+          )}
           {rows.data?.items.map((r) => (
             <label key={r.draft.id} className="checkbox-label">
               <input
@@ -162,20 +217,43 @@ export default function Shop() {
             {review.draft.handle}
           </p>
           <p>
-            Selected listing IDs: {review.draft.listingIds.join(', ') || 'None'}
+            {review.terms.length} domains will be included. Review the names
+            below before publishing.
           </p>
+          <ul aria-label="Domains in this publication">
+            {review.terms.map((term) => (
+              <li key={term.id}>
+                {term.domain}
+                {review.before?.listingIds.includes(term.id)
+                  ? ' · Kept'
+                  : ' · Added'}
+              </li>
+            ))}
+          </ul>
+          {!!review.removed.length && (
+            <>
+              <h3>Removed from the shop</h3>
+              <ul>
+                {review.removed.map((term) => (
+                  <li key={term.id}>{term.domain}</li>
+                ))}
+              </ul>
+            </>
+          )}
           <p className="small">
             No email address, floors, costs or private notes are included.
           </p>
           <button
             className="primary"
-            disabled={action.busy}
+            disabled={action.busy || editor.isDirty()}
             onClick={() =>
               void action.run(async () => {
                 await salesRequest('/shop/publications', 'POST', {
                   reviewId: review.id,
                 });
                 setReview(null);
+                const latest = await salesRequest<SalesShopState>('/shop');
+                editor.saved(draft!, latest.revision);
                 await remote.reload();
                 action.setNotice(
                   'Selected shop published. Domain availability is rechecked for each public result.',

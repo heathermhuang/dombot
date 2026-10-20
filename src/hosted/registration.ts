@@ -2,6 +2,7 @@ import { Accounts, AccountError, type VerifiedUser } from './accounts';
 import { opaqueToken, passwordHash, tokenHash } from './crypto';
 import { legalReady, legalVersion } from './legal';
 import { workspaceSchema } from './workspaces';
+import { authLimit, AuthEmailUnavailable } from './auth-policy';
 
 export function registrationIds(env: HostedEnv): string[] {
   const configured = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
@@ -147,23 +148,25 @@ export async function sendAccountEmail(
   });
 }
 
-/** Reserve the shared transactional quota before every auth email. */
-export async function sendAuthEmail(
-  env: HostedEnv,
-  email: string,
-  content: { subject: string; text: string; html?: string },
-): Promise<boolean> {
-  if (!emailReady(env)) return false;
+/** Reserve before identity lookup in email-first auth, including unknown accounts. */
+export async function reserveAuthEmail(env: HostedEnv): Promise<void> {
+  if (!emailReady(env)) throw new AuthEmailUnavailable(300);
   const now = new Date();
   const buckets = [
     {
       key: `day:${now.toISOString().slice(0, 10)}`,
-      limit: 30,
+      limit: authLimit(env.AUTH_EMAIL_DAILY_LIMIT, 30, 10_000),
+      retryAt: Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+      ),
       expires: Date.now() + 2 * 86400_000,
     },
     {
       key: `month:${now.toISOString().slice(0, 7)}`,
-      limit: 300,
+      limit: authLimit(env.AUTH_EMAIL_MONTHLY_LIMIT, 300, 100_000),
+      retryAt: Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
       expires: Date.now() + 32 * 86400_000,
     },
   ];
@@ -176,14 +179,29 @@ export async function sendAuthEmail(
       ).bind(b.key, b.expires),
     ),
   );
-  if (
-    limits.some(
-      (r, i) =>
-        Number((r.results[0] as { count: number }).count) > buckets[i].limit,
-    )
-  )
-    return false;
+  const exhausted = buckets.filter(
+    (bucket, i) =>
+      Number((limits[i].results[0] as { count: number }).count) > bucket.limit,
+  );
+  if (exhausted.length)
+    throw new AuthEmailUnavailable(
+      Math.max(
+        ...exhausted.map((bucket) =>
+          Math.max(1, Math.ceil((bucket.retryAt - Date.now()) / 1000)),
+        ),
+      ),
+    );
+}
+
+/** A reserved send is internal to EmailAuth.issue, never selected by a client. */
+export async function sendAuthEmail(
+  env: HostedEnv,
+  email: string,
+  content: { subject: string; text: string; html?: string },
+  reserved = false,
+): Promise<boolean> {
   try {
+    if (!reserved) await reserveAuthEmail(env);
     await env.EMAIL!.send({
       from: { email: env.EMAIL_FROM!, name: 'domains.domains' },
       to: email,

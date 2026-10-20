@@ -1,3 +1,4 @@
+import { useListingDraft } from '../../lib/sales-drafts';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { SaleDraft, SaleDestination } from '../../../shared/sales';
@@ -20,32 +21,31 @@ function ListingEditorView() {
   const { id = '' } = useParams(),
     remote = useSalesData<SalesListingDetail>(`/listings/${id}`),
     navigate = useNavigate();
-  const [workingDraft, setDraft] = useState<SaleDraft | null>(null),
-    [revision, setRevision] = useState(''),
-    [tab, setTab] = useState('settings'),
-    [savedText, setSavedText] = useState(''),
-    [categoryText, setCategoryText] = useState(''),
+  const { editor, state } = useListingDraft(id);
+  const draft = state?.draft ?? null;
+  const revision = state?.revision ?? '';
+  const setDraft = (
+    value: SaleDraft | ((previous: SaleDraft | null) => SaleDraft | null),
+  ) => {
+    const next =
+      typeof value === 'function'
+        ? value(editor.getSnapshot()?.draft ?? null)
+        : value;
+    if (next) editor.update(next);
+  };
+  const [tab, setTab] = useState('settings'),
+    [categoryText, setCategoryText] = useState(
+      draft?.categories.join(', ') ?? '',
+    ),
     [comparison, setComparison] = useState(false);
-  const draft = workingDraft?.id === id ? workingDraft : null;
   const action = useSalesAction();
   useEffect(() => {
-    if (remote.data?.draft.id === id && !draft) {
-      setDraft(remote.data.draft);
+    if (remote.data?.draft.id === id && !editor.getSnapshot()) {
+      editor.initialize(remote.data.draft, remote.data.revision);
       setCategoryText(remote.data.draft.categories.join(', '));
-      setRevision(remote.data.revision);
-      setSavedText(JSON.stringify(remote.data.draft));
     }
-  }, [remote.data, draft, id]);
-  const dirty = !!draft && JSON.stringify(draft) !== savedText;
-  useEffect(() => {
-    if (!dirty) return;
-    const listener = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', listener);
-    return () => window.removeEventListener('beforeunload', listener);
-  }, [dirty]);
+  }, [remote.data, editor, id]);
+  const dirty = editor.isDirty();
   const update = <K extends keyof SaleDraft>(key: K, value: SaleDraft[K]) =>
     setDraft((d) => (d ? { ...d, [key]: value } : null));
   const save = async () => {
@@ -55,8 +55,7 @@ function ListingEditorView() {
       'PUT',
       { draft, revision },
     );
-    setRevision(r.revision);
-    setSavedText(JSON.stringify(draft));
+    editor.saved(draft, r.revision);
     action.setNotice('Draft saved. Public page unchanged.');
     return r.revision;
   };
@@ -124,13 +123,17 @@ function ListingEditorView() {
           </button>{' '}
           <button
             onClick={() => {
+              if (
+                !window.confirm(
+                  'Discard your unsaved edits and load the saved draft?',
+                )
+              )
+                return;
               void action.run(async () => {
                 const latest = await salesRequest<SalesListingDetail>(
                   `/listings/${id}`,
                 );
-                setDraft(latest.draft);
-                setRevision(latest.revision);
-                setSavedText(JSON.stringify(latest.draft));
+                editor.reset(latest.draft, latest.revision);
                 setCategoryText(latest.draft.categories.join(', '));
                 await remote.reload();
               });
@@ -509,7 +512,10 @@ function ListingEditorView() {
                           'POST',
                           { revision },
                         );
-                        setDraft(null);
+                        const latest = await salesRequest<SalesListingDetail>(
+                          `/listings/${id}`,
+                        );
+                        editor.saved(latest.draft, latest.revision);
                         await remote.reload();
                         action.setNotice(
                           'Public sales page removed. Private draft retained.',

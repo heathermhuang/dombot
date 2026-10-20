@@ -984,6 +984,74 @@ describe('sales recovery and isolation regressions', () => {
     expect((await app.request(owner, undefined, env)).status).toBe(200);
     expect(hydrations).toBe(1);
   });
+  it('returns recognizable kept, added and removed names in the exact shop review', async () => {
+    const kept = await live('kept.example'),
+      added = await live('added.example'),
+      removed = await live('removed.example');
+    const prior = {
+      version: 1 as const,
+      handle: 'sample',
+      title: 'Sample',
+      intro: '',
+      listingIds: [kept.id, removed.id],
+    };
+    const first = await store.saveShop(prior, null);
+    await db
+      .prepare("UPDATE sales_shop SET published=? WHERE id='main'")
+      .bind(JSON.stringify(prior))
+      .run();
+    const revision = await store.saveShop(
+      { ...prior, listingIds: [kept.id, added.id] },
+      first,
+    );
+    const key = 'shop-review-fixture'.repeat(3),
+      workspace = crypto.randomUUID();
+    const env = {
+      DB: db,
+      DOMBOT_AUTH: 'gateway',
+      DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+      DOMBOT_GATEWAY_SECRET: key,
+      DOMBOT_WORKSPACE_ID: workspace,
+      DOMBOT_SALES_V1: 'true',
+    } as Env;
+    const auth = await buildAuthConfig(env, root),
+      app = new Hono<{ Bindings: Env; Variables: { auth: AuthConfig } }>();
+    app.use('*', async (c, next) => {
+      c.set('auth', auth);
+      await next();
+    });
+    app.route(
+      '/sales',
+      createSalesRoutes(async (_c, next) => {
+        await next();
+      }),
+    );
+    const request = new Request('https://fixture.example/sales/shop/reviews', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://fixture.example',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ revision }),
+    });
+    request.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(key, workspace, 'seller', request, {
+        purpose: 'sales-owner',
+        recipientVerified: true,
+      }),
+    );
+    const response = await app.request(request, undefined, env);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const review = await response.json();
+    expect(review.terms.map((term: { domain: string }) => term.domain)).toEqual(
+      ['kept.example', 'added.example'],
+    );
+    expect(review.removed).toEqual([
+      { id: removed.id, domain: 'removed.example' },
+    ]);
+    expect(JSON.stringify(review)).not.toContain('SECRET_FLOOR');
+  });
   it('shop filters and CSV recheck availability and exclude unpublished names', async () => {
     const a = await live('one.example'),
       b = await live('two.example'),

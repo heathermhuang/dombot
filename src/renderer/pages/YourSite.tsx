@@ -42,6 +42,16 @@ export default function YourSite({
   useEffect(() => {
     reload();
   }, []);
+  if (inventory && error && !state)
+    return (
+      <>
+        <div className="pf-alert" role="alert">
+          Public-site information is unavailable. Your private domains remain
+          available. <button onClick={reload}>Retry site information</button>
+        </div>
+        <Domains hidePublication />
+      </>
+    );
   if (!state)
     return (
       <section className="os-editor">

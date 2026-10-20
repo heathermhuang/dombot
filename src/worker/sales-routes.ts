@@ -593,7 +593,14 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       )
       .bind(review.id, v.revision, await db.seal(review), Date.now() + 900_000)
       .run();
-    return c.json(review);
+    const removed = [];
+    for (const id of shop.published?.listingIds ?? []) {
+      if (!shop.draft.listingIds.includes(id)) {
+        const item = await db.get(id);
+        removed.push({ id, domain: item.draft.domain });
+      }
+    }
+    return c.json({ ...review, removed });
   });
   app.post('/shop/publications', async (c) => {
     const v = z

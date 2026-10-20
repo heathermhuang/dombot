@@ -5,6 +5,7 @@ import {
   registrationIds,
   registrationReady,
   sendAuthEmail,
+  reserveAuthEmail,
 } from './registration';
 import { legalVersion } from './legal';
 import { escapeHtml } from './views';
@@ -20,6 +21,13 @@ interface EmailProof {
   next_path: string;
   token_hash: string;
   code_hash: string;
+}
+export class TermsAcceptanceRequired extends Error {
+  constructor(readonly email: string) {
+    super(
+      'Accept the Terms and acknowledge the Privacy Policy to create your account.',
+    );
+  }
 }
 export class EmailAuth {
   constructor(private readonly env: HostedEnv) {}
@@ -37,6 +45,8 @@ export class EmailAuth {
     session?: string,
     waitUntil?: (promise: Promise<unknown>) => void,
   ) {
+    // A service-wide capacity result must be identical for known/unknown emails.
+    await reserveAuthEmail(this.env);
     const db = this.env.CONTROL_DB,
       id = opaqueToken(),
       token = opaqueToken();
@@ -87,13 +97,18 @@ export class EmailAuth {
     const intro = user
       ? 'Confirm it’s you to continue on domains.domains.'
       : 'Sign in or create your domains.domains account.';
-    const delivery = sendAuthEmail(this.env, email, {
-      subject: user
-        ? 'Confirm your domains.domains sign-in'
-        : 'Your domains.domains sign-in link and code',
-      text: `${intro}\n\n${url.href}\n\nOr enter this six-digit code in the browser where you requested it: ${code}\n\nThe link and code expire in 10 minutes. Using either invalidates both. Do not share or forward this email. If you did not request this, ignore it.\n\ndomains.domains`,
-      html: `<p>${intro}</p><p><a href="${escapeHtml(url.href)}">Continue to domains.domains</a></p><p>Or enter this six-digit code in your original browser: <strong>${code}</strong></p><p>Expires in 10 minutes. Using the link or code invalidates both. Never share or forward this email. If you did not request this, ignore it.</p>`,
-    }).then(async (sent) => {
+    const delivery = sendAuthEmail(
+      this.env,
+      email,
+      {
+        subject: user
+          ? 'Confirm your domains.domains sign-in'
+          : 'Your domains.domains sign-in link and code',
+        text: `${intro}\n\n${url.href}\n\nOr enter this six-digit code in the browser where you requested it: ${code}\n\nThe link and code expire in 10 minutes. Using either invalidates both. Do not share or forward this email. If you did not request this, ignore it.\n\ndomains.domains`,
+        html: `<p>${intro}</p><p><a href="${escapeHtml(url.href)}">Continue to domains.domains</a></p><p>Or enter this six-digit code in your original browser: <strong>${code}</strong></p><p>Expires in 10 minutes. Using the link or code invalidates both. Never share or forward this email. If you did not request this, ignore it.</p>`,
+      },
+      true,
+    ).then(async (sent) => {
       // Failed sends must not leave a usable proof; responses still match unknown
       // accounts. The durable email budget remains charged on provider failures.
       if (!sent)
@@ -147,7 +162,8 @@ export class EmailAuth {
       (!sessionHash || row.session_hash !== sessionHash)
     )
       return null;
-    if (!row.user_id && (!accept || !registrationReady(this.env))) return null;
+    if (!row.user_id && !accept) throw new TermsAcceptanceRequired(row.email);
+    if (!row.user_id && !registrationReady(this.env)) return null;
     if (
       row.intent === 'reauth' &&
       (await db
