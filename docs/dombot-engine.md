@@ -17,6 +17,12 @@ archive/npm integrity, installed package exports/types, manifest, Worker and web
 assets. A direct SaaS import of an engine internal is rejected. Engine requests
 report `X-DomBot-Engine` and `X-DomBot-Engine-Source` headers.
 
+These headers identify the serving coordinator's engine. An outer Worker and its
+Durable Object can temporarily serve different releases during propagation.
+Preserve an older coordinator's headers, and leave them absent when it supplies
+none; do not stamp the outer Worker's version onto that response. Qualification
+waits for the actual runtime headers and platform release marker to agree.
+
 To update the maintained engine:
 
 1. Change the engine package version in `scripts/dombot-engine.mjs` and the file
