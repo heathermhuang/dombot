@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reserveCampaignEmail } from './email-campaign';
 import { createHmac, createHash } from 'node:crypto';
 import { newReplyAddress, relayDisplayName } from './sales-relay-address';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
@@ -122,11 +123,12 @@ async function reserveBudget(
       ).bind(b.id, b.expires),
     ),
   );
-  return r.every(
+  const available = r.every(
     (result, i) =>
       Number((result.results[0] as { count: number }).count) <=
       buckets[i].limit,
   );
+  return available && (await reserveCampaignEmail(env)).allowed;
 }
 export async function drainSalesWorkspace(
   env: HostedEnv,

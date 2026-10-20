@@ -270,6 +270,50 @@ describe('verified public account creation', () => {
     expect(replacement).toMatch(/^[a-f0-9]{64}$/);
     expect(await issueRecovery(db, 'unknown@example.test')).toBeNull();
   });
+  it('enforces a non-resetting campaign allowance across concurrent sends and calendar buckets', async () => {
+    env.EMAIL_CAMPAIGN_ID = 'conference-test';
+    env.EMAIL_CAMPAIGN_LIMIT = '5';
+    env.EMAIL_CAMPAIGN_DAILY_LIMIT = '20';
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () =>
+        sendAccountEmail(env, 'owner@example.test', 'a'.repeat(64), 'signup'),
+      ),
+    );
+    expect(results.filter(Boolean)).toHaveLength(5);
+    expect(messages).toHaveLength(5);
+    await db
+      .prepare("DELETE FROM email_budgets WHERE bucket NOT LIKE 'campaign:%'")
+      .run();
+    expect(
+      await sendAccountEmail(
+        env,
+        'owner@example.test',
+        'b'.repeat(64),
+        'signup',
+      ),
+    ).toBe(false);
+    expect(messages).toHaveLength(5);
+    const budget = await db
+      .prepare(
+        "SELECT expires_at FROM email_budgets WHERE bucket='campaign:conference-test'",
+      )
+      .first();
+    expect(Number(budget?.expires_at)).toBeGreaterThan(
+      Date.now() + 365 * 86400_000,
+    );
+  });
+  it('fails closed on partial campaign configuration', async () => {
+    env.EMAIL_CAMPAIGN_ID = 'conference-test';
+    expect(
+      await sendAccountEmail(
+        env,
+        'owner@example.test',
+        'a'.repeat(64),
+        'signup',
+      ),
+    ).toBe(false);
+    expect(messages).toHaveLength(0);
+  });
   it('fails closed on mail errors and reserves atomic daily/monthly budgets before concurrent sends', async () => {
     env.EMAIL = {
       async send() {

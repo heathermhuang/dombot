@@ -75,7 +75,7 @@ export class EmailAuth {
         .bind(email, intent),
       db
         .prepare(
-          'INSERT INTO email_signins(id,token_hash,code_hash,email,user_id,credential_hash,intent,session_hash,next_path,expires_at) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10 WHERE (SELECT count(*) FROM email_signins)<500 RETURNING id',
+          'INSERT INTO email_signins(id,token_hash,code_hash,email,user_id,credential_hash,intent,session_hash,next_path,expires_at) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10 WHERE (SELECT count(*) FROM email_signins WHERE consumed_at IS NULL AND expires_at>?11)<5000 RETURNING id',
         )
         .bind(
           id,
@@ -88,6 +88,7 @@ export class EmailAuth {
           user && session ? await tokenHash(session) : null,
           next,
           Date.now() + 600_000,
+          Date.now(),
         ),
     ]);
     if (!inserted[1].results.length) return id;
