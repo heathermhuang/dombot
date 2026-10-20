@@ -43,6 +43,9 @@ beforeAll(async () => {
           modules: true,
           script: `import {DurableObject} from 'cloudflare:workers';export class OldCoordinator extends DurableObject{async fetch(request){return new Response('Previous coordinator body',{headers:new URL(request.url).searchParams.has('unversioned')?{}:{'X-DomBot-Engine':'previous-engine','X-DomBot-Engine-Source':'previous-source'}})}};export default{fetch(){return new Response('not public',{status:404})}}`,
           compatibilityDate: '2026-09-09',
+          durableObjects: {
+            OLD: { className: 'OldCoordinator', useSQLite: true },
+          },
         },
       ],
     }),
