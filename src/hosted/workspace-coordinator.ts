@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import worker from '@domains-domains/dombot-engine';
+import engineManifest from '@domains-domains/dombot-engine/manifest';
 import { verifyTenantAdmission } from '../shared/gateway-proof';
 
 /** One coordinator per tenant deployment. DomBot owns a single-instance,
@@ -35,9 +36,13 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
       !(await this.ctx.storage.getAlarm())
     )
       await this.ctx.storage.setAlarm(Date.now() + 300_000);
-    return worker.fetch(request, this.env, {
+    const response = await worker.fetch(request, this.env, {
       waitUntil: (work: Promise<unknown>) => this.ctx.waitUntil(work),
     });
+    const headers = new Headers(response.headers);
+    headers.set('X-DomBot-Engine', engineManifest.version);
+    headers.set('X-DomBot-Engine-Source', engineManifest.sourceSha256);
+    return new Response(response.body, { status: response.status, headers });
   }
 
   async alarm(): Promise<void> {

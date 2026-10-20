@@ -6,6 +6,8 @@ import {
   matchesPageScope,
 } from './page-membership';
 import { editPortfolioSelection } from './portfolio-management';
+import { importPublication } from './publication-import';
+import { buildDomainCatalog, selectedRegistrarTargets } from './domain-catalog';
 describe('clear public-page membership states', () => {
   const unlisted = privateListing('name.example');
   const listed = { ...unlisted, visibility: 'inquiry' as const };
@@ -48,5 +50,43 @@ describe('clear public-page membership states', () => {
     expect(matchesPageScope(unlisted, listed, 'listed')).toBe(true);
     expect(matchesPageScope(unlisted, listed, 'private')).toBe(false);
     expect(matchesPageScope(unlisted, undefined, 'private')).toBe(true);
+  });
+  it('keeps a new account collection import visible without claiming inventory or registrar authority', () => {
+    const imported = importPublication(
+      'conference-sample.example\nplatform-sample.example',
+      [],
+    );
+    const catalog = buildDomainCatalog(imported.listings, [], []);
+    const visible = imported.listings.filter((item) =>
+      matchesPageScope(
+        item,
+        undefined,
+        'private',
+        !!catalog.get(item.domain)?.records.length,
+      ),
+    );
+    expect(visible.map((item) => item.domain)).toEqual([
+      'conference-sample.example',
+      'platform-sample.example',
+    ]);
+    expect(
+      imported.listings.every((item) => item.visibility === 'private'),
+    ).toBe(true);
+    expect(
+      imported.listings.filter((item) =>
+        matchesPageScope(
+          item,
+          undefined,
+          'registered',
+          !!catalog.get(item.domain)?.records.length,
+        ),
+      ),
+    ).toEqual([]);
+    expect(
+      selectedRegistrarTargets(
+        catalog,
+        new Set(visible.map((item) => item.domain)),
+      ),
+    ).toEqual({ targets: [], blocked: 2 });
   });
 });
