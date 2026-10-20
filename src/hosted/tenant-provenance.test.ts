@@ -23,7 +23,7 @@ beforeAll(async () => {
           name: 'current-wrapper',
           modules: true,
           script: result.outputFiles[0].text,
-          compatibilityDate: '2026-10-20',
+          compatibilityDate: '2026-09-09',
           compatibilityFlags: ['nodejs_compat'],
           bindings: {
             DOMBOT_AUTH: 'gateway',
@@ -42,7 +42,7 @@ beforeAll(async () => {
           name: 'previous-coordinator',
           modules: true,
           script: `import {DurableObject} from 'cloudflare:workers';export class OldCoordinator extends DurableObject{async fetch(request){return new Response('Previous coordinator body',{headers:new URL(request.url).searchParams.has('unversioned')?{}:{'X-DomBot-Engine':'previous-engine','X-DomBot-Engine-Source':'previous-source'}})}};export default{fetch(){return new Response('not public',{status:404})}}`,
-          compatibilityDate: '2026-10-20',
+          compatibilityDate: '2026-09-09',
         },
       ],
     }),
