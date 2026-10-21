@@ -36,16 +36,31 @@ function csvRows(text: string): string[][] {
 export function importPublication(
   text: string,
   existing: PortfolioListing[],
-): { listings: PortfolioListing[]; added: number; duplicates: number } {
+): {
+  listings: PortfolioListing[];
+  added: number;
+  duplicates: number;
+  fields: string[];
+} {
   if (text.length > 4 * 1024 * 1024)
     throw new Error('Choose a file smaller than 4 MB.');
   const source = text.replace(/^\uFEFF/, '').trim();
   if (!source) throw new Error('Add domain names or a CSV file first.');
   let candidates: unknown[];
+  let fields = ['domain'];
   if (source.startsWith('[')) {
     const parsed: unknown = JSON.parse(source);
     if (!Array.isArray(parsed)) throw new Error('Expected a JSON array.');
     candidates = parsed;
+    fields = [
+      'domain',
+      'collection',
+      'description',
+      'askingPrice',
+      'currency',
+    ].filter((key) =>
+      parsed.some((row) => row && typeof row === 'object' && key in row),
+    );
   } else {
     const rows = csvRows(source);
     const headers = rows[0].map((v) =>
@@ -55,6 +70,12 @@ export function importPublication(
       ['domain', 'domainname', 'name'].includes(v),
     );
     if (domainIndex >= 0) {
+      fields = [
+        'domain',
+        ...['collection', 'description', 'askingprice', 'currency'].filter(
+          (key) => headers.includes(key),
+        ),
+      ];
       const at = (row: string[], key: string) =>
         row[headers.indexOf(key)]?.trim() ?? '';
       candidates = rows.slice(1).map((row) => ({
@@ -103,5 +124,6 @@ export function importPublication(
     listings: [...result.values()],
     added: result.size - existing.length,
     duplicates,
+    fields,
   };
 }

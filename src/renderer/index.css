@@ -239,3 +239,35 @@
     cursor: pointer;
   }
 }
+
+/* Keep desktop density while giving touch controls a usable hit region. */
+@media (pointer: coarse), (max-width: 640px) {
+  button:not([role='checkbox']):not([role='switch']),
+  [data-slot='select-trigger'],
+  [role='menuitem'],
+  [role='menuitemcheckbox'],
+  [role='menuitemradio'],
+  [role='option'],
+  nav a,
+  summary,
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  [data-slot='button'],
+  [data-slot='dialog-close'] {
+    min-width: 44px;
+  }
+  [data-slot='dialog-close'] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 4px;
+    right: 4px;
+  }
+  [data-slot='dialog-content'] {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+  }
+}

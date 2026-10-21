@@ -334,6 +334,60 @@ describe('one email flow for sign-in and signup', () => {
     expect(await exhausted.text()).toContain('needs attention from support');
     expect(messages).toHaveLength(1);
   });
+  it('keeps mistyped codes correctable without exposing challenge availability', async () => {
+    await new EmailAuth(env).issue('typo@example.test', '/app');
+    const p = delivered();
+    const wrong = p.code === '999999' ? '000000' : '999999';
+    const body = { id: p.id, code: wrong, accept: 'yes', legalVersion };
+    const rejected = await post('/auth/email/confirm', body);
+    expect(rejected.status).toBe(400);
+    const html = await rejected.text();
+    expect(html).toContain('name="code"');
+    expect(html).toContain(`value="${p.id}"`);
+    expect(html).not.toContain('name="accept" value="yes" required');
+    const absent = await post('/auth/email/confirm', {
+      ...body,
+      id: 'a'.repeat(64),
+    });
+    expect(await absent.text()).toBe(html.replaceAll(p.id, 'a'.repeat(64)));
+    expect(
+      (await post('/auth/email/confirm', { ...body, code: p.code })).status,
+    ).toBe(303);
+    expect(
+      (await post('/auth/email/confirm', { ...body, code: p.code })).status,
+    ).toBe(400);
+    expect(messages).toHaveLength(1);
+  });
+
+  it('does not extend five attempts through the code correction form', async () => {
+    await new EmailAuth(env).issue('attempts@example.test', '/app');
+    const p = delivered();
+    const wrong = p.code === '999999' ? '000000' : '999999';
+    for (let i = 0; i < 5; i++) {
+      expect(
+        (await post('/auth/email/confirm', { id: p.id, code: wrong })).status,
+      ).toBe(400);
+    }
+    expect(
+      (
+        await post('/auth/email/confirm', {
+          id: p.id,
+          code: p.code,
+          accept: 'yes',
+          legalVersion,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await db
+          .prepare('SELECT attempts FROM email_signins WHERE id=?1')
+          .bind(p.id)
+          .first<{ attempts: number }>()
+      )?.attempts,
+    ).toBe(5);
+  });
+
   it.each(['code', 'token'])(
     'keeps a valid %s correctable when Terms acceptance is omitted',
     async (kind) => {

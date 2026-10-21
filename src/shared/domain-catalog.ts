@@ -84,6 +84,22 @@ export function buildDomainCatalog(
     }),
   );
 }
+/** Count current names once; imported registrar hints are not ownership proof. */
+export function portfolioTotals(catalog: Map<string, CatalogEntry>) {
+  let imported = 0,
+    registrarVerified = 0;
+  for (const entry of catalog.values()) {
+    if (
+      entry.records.some(
+        (record) => record.source === 'registrar' && !record.deleted,
+      )
+    )
+      registrarVerified++;
+    else if (entry.listing.visibility !== 'historical') imported++;
+  }
+  return { total: imported + registrarVerified, imported, registrarVerified };
+}
+
 /** Display metadata never grants authority to change registrar settings. */
 export function catalogDisplayRecord(
   entry: CatalogEntry | undefined,
