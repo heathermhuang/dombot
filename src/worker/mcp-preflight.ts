@@ -3,6 +3,7 @@ import { hashToken } from '../core/mcp/oauth';
 import { EncryptedDocStore, aesGcmCipher } from '../core/storage/encrypted';
 import { deriveEncryptionKey, parseRootSecret } from './keys';
 import { D1DocStore } from './storage/d1-doc-store';
+import { delegatedMcpAuth } from '../shared/gateway-proof';
 
 /** Reject unpaired callers before the coordinator's stateful request queue.
  * Read at most the enable flag and one hashed token row, never the portfolio
@@ -44,7 +45,8 @@ export async function mcpPreflight(
   const match = /^Bearer ([a-f0-9]{64})$/i.exec(
     request.headers.get('authorization') ?? '',
   );
-  if (!match) return fail();
+  const delegated = await delegatedMcpAuth(request, env);
+  if (!match && !delegated) return fail();
   const store = new EncryptedDocStore(
     new D1DocStore(env.DB),
     await aesGcmCipher(
@@ -56,9 +58,10 @@ export async function mcpPreflight(
       { error: 'MCP server is disabled' },
       { status: 404, headers: cors },
     );
+  if (delegated) return null;
   const token = z
     .object({ expiresAt: z.number(), resource: z.string() })
-    .safeParse(await store.get('mcp', 'token:' + (await hashToken(match[1]))));
+    .safeParse(await store.get('mcp', 'token:' + (await hashToken(match![1]))));
   if (
     !token.success ||
     token.data.expiresAt < Math.floor(Date.now() / 1000) ||

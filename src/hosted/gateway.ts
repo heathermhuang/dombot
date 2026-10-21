@@ -46,6 +46,12 @@ import {
 import { signupFinish, recoveryStart, checkEmail } from './registration-views';
 import { mcpPolicyDenial } from './mcp-policy';
 import {
+  sharedMcpRoutes,
+  sharedMcpNext,
+  sharedMcpClients,
+  revokeSharedMcpClient,
+} from './shared-mcp';
+import {
   accountForm,
   accountSecurity,
   home,
@@ -93,7 +99,7 @@ const safeNext = (value: unknown) =>
   /^\/w\/[a-f0-9-]{36}\//.test(value) &&
   !/[\r\n\\]/.test(value)
     ? value
-    : value === '/account' || value === '/account/close'
+    : value === '/account' || value === '/account/close' || sharedMcpNext(value)
       ? value
       : '/app';
 const mcpPath = (path: string) =>
@@ -1016,6 +1022,21 @@ app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
 });
 
 // RFC 8414 and RFC 9728 issuer-path discovery forms.
+const sharedMcp = sharedMcpRoutes();
+for (const path of [
+  '/mcp',
+  '/authorize',
+  '/register',
+  '/token',
+  '/revoke',
+  '/oauth/consent',
+  '/.well-known/oauth-authorization-server',
+  '/.well-known/oauth-authorization-server/mcp',
+  '/.well-known/oauth-protected-resource',
+  '/.well-known/oauth-protected-resource/mcp',
+])
+  app.all(path, (c) => sharedMcp.fetch(c.req.raw, c.env));
+
 app.get('/.well-known/:kind/w/:workspace/*', (c) => {
   const kind = c.req.param('kind');
   if (
@@ -1270,6 +1291,17 @@ app.all('/w/:workspace/*', async (c) => {
     apiMethod === 'deleteDomains' && c.env.SALES_CUSTOM_HOSTS_ENABLED === 'true'
       ? ((await c.req.raw.clone().json()) as { args?: unknown[] }).args?.[0]
       : null;
+  if (apiMethod === 'revokeMcpClient' && c.req.method === 'POST' && user) {
+    if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    const body = (await c.req.raw.clone().json()) as { args?: unknown[] };
+    if (
+      typeof body.args?.[0] === 'string' &&
+      body.args[0].startsWith('shared:')
+    ) {
+      await revokeSharedMcpClient(c.env, user, body.args[0]);
+      return c.json({ result: null });
+    }
+  }
   const headers = new Headers(c.req.raw.headers);
   for (const key of [...headers.keys()])
     if (
@@ -1311,6 +1343,24 @@ app.all('/w/:workspace/*', async (c) => {
   const response = await workspaceService(c.env, configured.binding).fetch(
     request,
   );
+  if (
+    response.ok &&
+    user &&
+    ['getMcpInfo', 'listMcpClients'].includes(apiMethod)
+  ) {
+    const json = (await response.json()) as { result: unknown };
+    if (apiMethod === 'getMcpInfo')
+      json.result = {
+        ...(json.result as Record<string, unknown>),
+        url: url.origin + '/mcp',
+      };
+    else
+      json.result = [
+        ...(json.result as unknown[]),
+        ...(await sharedMcpClients(c.env, user)),
+      ];
+    return c.json(json);
+  }
   if (response.ok && Array.isArray(deletedSalesNames))
     await c.env.CONTROL_DB.prepare(
       "UPDATE sales_hostnames SET status='detached',epoch=epoch+1,control_expires_at=0,updated_at=? WHERE workspace_id=? AND domain IN (SELECT value FROM json_each(?))",

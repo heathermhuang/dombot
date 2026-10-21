@@ -156,6 +156,7 @@ beforeAll(async () => {
   await control.exec(sql('hosted/migrations/0005_passwordless_passkeys.sql'));
   await control.exec(sql('hosted/migrations/0002_password_recovery.sql'));
   await control.exec(sql('hosted/migrations/0003_lifecycle.sql'));
+  await control.exec(sql('hosted/migrations/0010_shared_mcp.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
     await db.exec(sql('migrations/0001_docs.sql'));
@@ -643,6 +644,227 @@ describe('real gateway and isolated Worker instances', () => {
     );
     expect(attack.status).toBe(403);
   });
+  it('connects two accounts through one MCP URL with isolated, revocable read-only grants', async () => {
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const verifier = 'shared-pkce-'.repeat(6);
+    const challenge = Buffer.from(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
+    ).toString('base64url');
+    const registered = await request('/register', 'POST', {
+      client_name: 'Shared test assistant',
+      redirect_uris: ['http://127.0.0.1:4567/callback'],
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+    });
+    expect(registered.status).toBe(201);
+    const client = (await registered.json()) as {
+      client_id: string;
+      grant_types: string[];
+    };
+    expect(client.grant_types).toEqual(['authorization_code']);
+    const params = new URLSearchParams({
+      client_id: client.client_id,
+      redirect_uri: 'http://127.0.0.1:4567/callback',
+      response_type: 'code',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      resource: 'http://localhost/mcp',
+      state: 'client-state',
+    });
+    expect((await request('/mcp')).status).toBe(401);
+    expect(
+      await (await request('/.well-known/oauth-protected-resource/mcp')).json(),
+    ).toMatchObject({
+      resource: 'http://localhost/mcp',
+      scopes_supported: ['portfolio:read'],
+    });
+    const invalidScope = new URLSearchParams(params);
+    invalidScope.set('scope', 'domains:write');
+    expect((await request('/authorize?' + invalidScope)).status).toBe(400);
+    const sharedTokens: string[] = [];
+    const mcp = (
+      token: string,
+      method: string,
+      rpcParams?: unknown,
+      extra: Record<string, string> = {},
+      path = '/mcp',
+    ) =>
+      gateway.fetch(
+        new Request('http://localhost' + path, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + token,
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            ...extra,
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method,
+            params: rpcParams,
+          }),
+        }),
+      );
+    for (let i = 0; i < 2; i++) {
+      await api(i, 'updateSettings', [{ mcpEnabled: true }]);
+      await api(i, 'createFolder', [
+        { name: 'Shared sentinel ' + i, description: '', color: 'blue' },
+      ]);
+      const authorization = await request('/authorize?' + params);
+      const consentPath = authorization.headers.get('location')!;
+      expect((await request(consentPath)).headers.get('location')).toBe(
+        '/login?next=' + encodeURIComponent(consentPath),
+      );
+      const consent = await request(consentPath, 'GET', undefined, cookies[i]);
+      const html = await consent.text();
+      expect(html).toContain('Shared test assistant');
+      const id = html.match(/name="id" value="([a-f0-9]+)"/)![1];
+      const csrf = html.match(/name="csrf" value="([a-f0-9]+)"/)![1];
+      const form = { id, csrf, decision: 'approve' };
+      expect(
+        (await request('/oauth/consent', 'POST', form, cookies[1 - i])).status,
+      ).toBe(403);
+      expect(
+        (
+          await request(
+            '/oauth/consent',
+            'POST',
+            { ...form, csrf: 'bad' },
+            cookies[i],
+          )
+        ).status,
+      ).toBe(403);
+      const approved = await request(
+        '/oauth/consent',
+        'POST',
+        form,
+        cookies[i],
+      );
+      expect(approved.status, await approved.clone().text()).toBe(303);
+      const callback = new URL(approved.headers.get('location')!);
+      expect(callback.searchParams.get('state')).toBe('client-state');
+      expect(callback.searchParams.get('iss')).toBe('http://localhost');
+      expect(
+        (await request('/oauth/consent', 'POST', form, cookies[i])).status,
+      ).toBe(403);
+      const exchange = {
+        grant_type: 'authorization_code',
+        client_id: client.client_id,
+        code: callback.searchParams.get('code'),
+        code_verifier: verifier,
+        redirect_uri: 'http://127.0.0.1:4567/callback',
+        resource: 'http://localhost/mcp',
+      };
+      expect(
+        (
+          await request('/token', 'POST', {
+            ...exchange,
+            code_verifier: 'wrong'.repeat(12),
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await request('/token', 'POST', {
+            ...exchange,
+            resource: 'http://localhost/w/' + ids[i] + '/mcp',
+          })
+        ).status,
+      ).toBe(400);
+      const issued = await Promise.all([
+        request('/token', 'POST', exchange),
+        request('/token', 'POST', exchange),
+      ]);
+      expect(issued.map((r) => r.status).sort()).toEqual([200, 400]);
+      const token = (
+        (await issued.find((r) => r.status === 200)!.json()) as {
+          access_token: string;
+        }
+      ).access_token;
+      sharedTokens.push(token);
+      expect(
+        await control
+          .prepare('SELECT token_hash FROM mcp_grants WHERE token_hash=?')
+          .bind(token)
+          .first(),
+      ).toBeNull();
+      const tools = (await (await mcp(token, 'tools/list')).json()) as {
+        result: { tools: { name: string }[] };
+      };
+      expect(tools.result.tools.some((t) => t.name === 'portfolio_query')).toBe(
+        true,
+      );
+      expect(tools.result.tools.some((t) => t.name === 'domain_dns_set')).toBe(
+        false,
+      );
+      const folders = await (
+        await mcp(
+          token,
+          'tools/call',
+          { name: 'folder_list', arguments: {} },
+          {
+            Cookie: cookies[1 - i],
+            'x-dombot-workspace': ids[1 - i],
+            'x-dombot-gateway-proof': 'forged',
+          },
+          '/mcp?workspace=' + ids[1 - i],
+        )
+      ).text();
+      expect(folders).toContain('Shared sentinel ' + i);
+      expect(folders).not.toContain('Shared sentinel ' + (1 - i));
+      const denied = await (
+        await mcp(token, 'tools/call', {
+          name: 'domain_dns_set',
+          arguments: {},
+        })
+      ).text();
+      expect(denied).toMatch(/not found|Unknown tool/i);
+      expect(
+        (
+          await mcp(token, 'tools/call', {
+            name: 'domain_renew',
+            arguments: {},
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (await mcp(token, 'tools/list', undefined, {}, '/w/' + ids[i] + '/mcp'))
+          .status,
+      ).toBe(401);
+      expect(await (await api(i, 'getMcpInfo')).json()).toMatchObject({
+        result: { url: 'http://localhost/mcp' },
+      });
+    }
+    await api(0, 'updateSettings', [{ mcpEnabled: false }]);
+    expect((await mcp(sharedTokens[0], 'tools/list')).status).toBe(404);
+    await api(0, 'updateSettings', [{ mcpEnabled: true }]);
+    const pairs = (await (await api(0, 'listMcpClients')).json()) as {
+      result: { clientId: string }[];
+    };
+    const sharedId = pairs.result.find((r) =>
+      r.clientId.startsWith('shared:'),
+    )!.clientId;
+    await api(1, 'revokeMcpClient', [sharedId]);
+    expect((await mcp(sharedTokens[0], 'tools/list')).status).toBe(200);
+    await api(0, 'revokeMcpClient', [sharedId]);
+    expect((await mcp(sharedTokens[0], 'tools/list')).status).toBe(401);
+    expect((await mcp(sharedTokens[1], 'tools/list')).status).toBe(200);
+    await control
+      .prepare('UPDATE workspaces SET enabled=0 WHERE id=?')
+      .bind(ids[1])
+      .run();
+    expect((await mcp(sharedTokens[1], 'tools/list')).status).toBe(401);
+    await control
+      .prepare('UPDATE workspaces SET enabled=1 WHERE id=?')
+      .bind(ids[1])
+      .run();
+    await control
+      .prepare('UPDATE mcp_grants SET expires_at=1 WHERE token_hash=?')
+      .bind(await tokenHash(sharedTokens[1]))
+      .run();
+    expect((await mcp(sharedTokens[1], 'tools/list')).status).toBe(401);
+  }, 30_000);
   it('runs workspace-specific MCP approval and refuses token reuse in another workspace', async () => {
     tokens = [];
     const clientIds: string[] = [];
