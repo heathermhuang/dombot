@@ -912,7 +912,7 @@
   color: var(--foreground);
   box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent);
 }
-.domain-table-scroll {
+.pf-workspace .domain-table-scroll {
   position: relative;
   max-width: 100%;
   overflow-x: auto;

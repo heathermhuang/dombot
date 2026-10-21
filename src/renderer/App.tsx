@@ -233,6 +233,11 @@ export default function App() {
                 to={to}
                 end={to === '/'}
                 label={label}
+                className={
+                  supportsPublishing()
+                    ? 'px-2 text-sm xl:px-2 xl:pr-2 2xl:px-4'
+                    : undefined
+                }
                 icon={icon}
                 metric={metric ? metrics[metric] : null}
                 {...options}

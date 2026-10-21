@@ -8,14 +8,19 @@ import {
   useSalesData,
 } from '../../lib/sales-client';
 import { hostPath } from '../../lib/platform';
-import { SalesShell, SalesFeedback, salePriceLabel } from './shared';
+import {
+  SalesShell,
+  SalesFeedback,
+  salePriceLabel,
+  saleModeLabel,
+} from './shared';
 
 const terms = (s: PublishedSale | null) =>
   s
     ? [
         s.domain,
         salePriceLabel(s.publicPrice),
-        s.mode,
+        saleModeLabel(s.mode),
         s.description || '—',
         s.sellerDisplayName || '—',
         s.destination

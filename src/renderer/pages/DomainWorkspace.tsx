@@ -4,6 +4,7 @@ import {
   matchesPageScope,
 } from '../../shared/page-membership';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { portfolioPagePath } from '../lib/portfolio-navigation';
 import { useDomainList, type DomainScope } from '../store/domain-list';
 import {
   buildDomainCatalog,
@@ -554,13 +555,7 @@ export default function DomainWorkspace({
   const navigateView = (
     next: 'domains' | 'settings' | 'preview' | 'review',
   ) => {
-    navigate(
-      next === 'domains'
-        ? '/'
-        : next === 'settings'
-          ? '/public-page'
-          : `/public-page?view=${next}`,
-    );
+    navigate(portfolioPagePath(next, location.search));
     setNotice('');
     setUndo(null);
     window.scrollTo(0, 0);

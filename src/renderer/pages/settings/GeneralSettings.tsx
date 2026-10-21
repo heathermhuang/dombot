@@ -6,7 +6,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ModeToggle } from '@/components/mode-toggle';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { loadSite } from '../../lib/owner-site-client';
+import { isOwnerSite } from '../../../shared/owner-site';
 import {
   PAGE_SIZES,
   SORT_COLUMNS,
@@ -35,6 +37,19 @@ const DIRECTION_OPTIONS: { value: Preferences['sortDir']; label: string }[] = [
  * Stored per device (see lib/preferences), applied immediately — no save step.
  */
 export default function GeneralSettings() {
+  const [legacyInventory, setLegacyInventory] = useState(supportsPublishing());
+  useEffect(() => {
+    if (!supportsPublishing()) return;
+    let active = true;
+    void loadSite()
+      .then((site) => {
+        if (active) setLegacyInventory(!isOwnerSite(site.draft));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const pageSize = usePreferences((s) => s.pageSize);
   const sortKey = usePreferences((s) => s.sortKey);
   const sortDir = usePreferences((s) => s.sortDir);
@@ -138,14 +153,13 @@ export default function GeneralSettings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(supportsPublishing()
-                  ? WORKSPACE_SORT_COLUMNS
-                  : SORT_COLUMNS
-                ).map((c) => (
-                  <SelectItem key={c.key} value={c.key}>
-                    {c.label}
-                  </SelectItem>
-                ))}
+                {(legacyInventory ? WORKSPACE_SORT_COLUMNS : SORT_COLUMNS).map(
+                  (c) => (
+                    <SelectItem key={c.key} value={c.key}>
+                      {c.label}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
             <Select

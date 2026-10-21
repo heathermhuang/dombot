@@ -62,13 +62,7 @@ export default function YourSite({
     );
   if (inventory)
     return isOwnerSite(state.draft) ? (
-      <>
-        <p>
-          <Link to="/public-page">Edit your site →</Link> · Domain selections
-          are made in Collections or Catalogue.
-        </p>
-        <Domains hidePublication />
-      </>
+      <Domains hidePublication />
     ) : (
       <DomainWorkspace area="domains" />
     );
@@ -308,19 +302,6 @@ function SiteAuthor() {
           >
             Save draft
           </button>
-          <button onClick={() => setView('preview')}>Preview</button>
-          <button
-            onClick={() =>
-              void run(async () => {
-                await siteEditor.flush();
-                await siteEditor.refreshReview();
-                setView('review');
-              })
-            }
-            disabled={busy || !state.enabled || !projection.site}
-          >
-            Review changes
-          </button>
         </div>
       </header>
       {!state.enabled && (
@@ -419,6 +400,8 @@ function SiteAuthor() {
         </button>
         <button
           aria-pressed={view === 'review'}
+          disabled={busy || !state.enabled || !projection.site}
+          className={view === 'edit' ? 'os-primary' : undefined}
           onClick={() =>
             void run(async () => {
               await siteEditor.flush();

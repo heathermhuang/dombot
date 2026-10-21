@@ -87,3 +87,30 @@ export function Field({
     </label>
   );
 }
+
+export function saleModeLabel(mode: string): string {
+  return (
+    (
+      {
+        inquiry: 'Inquiry',
+        offer: 'Make an offer',
+        'buy-now': 'Buy now',
+        external: 'Marketplace link',
+      } as Record<string, string>
+    )[mode] ?? mode
+  );
+}
+export function conversationStatusLabel(status: string): string {
+  return (
+    (
+      {
+        new: 'New',
+        negotiating: 'Negotiating',
+        'awaiting-buyer': 'Awaiting buyer',
+        agreed: 'Agreed',
+        closed: 'Closed',
+        spam: 'Spam',
+      } as Record<string, string>
+    )[status] ?? status
+  );
+}

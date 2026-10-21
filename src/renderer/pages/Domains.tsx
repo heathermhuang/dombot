@@ -1654,39 +1654,98 @@ export default function Domains({
       // with the name's sticky note (when it has one) just before it.
       const key = domainKey(d);
       return (
-        <div className="flex items-center justify-between gap-2">
-          {col.render(d, portfolioRegistrarLabels)}
-          <div className="flex items-center">
-            <NotesButton
-              domainName={d.domainName}
-              notes={purchases[toAscii(d.domainName)]?.notes ?? ''}
-              editing={notesFor === key}
-              onEditingChange={(open) => setNotesFor(open ? key : null)}
-            />
-            <RowActionsMenu
-              domain={d}
-              folders={folders}
-              folderId={folderAssignments[toAscii(d.domainName)]}
-              onRefresh={() => refreshDomain(d)}
-              onUrlForwarding={() => setUrlForwardingFor(d)}
-              onEmailForwarding={() => setEmailForwardingFor(d)}
-              onAuthCode={() => setAuthCodeFor(d)}
-              onRenew={() => setRenewFor(d)}
-              onNotes={() => setNotesFor(key)}
-              onEditPurchase={() => setPurchaseFor(d)}
-              onEditSale={() => setSaleFor(d)}
-              onEditListPrice={() => setListPriceFor([d])}
-              onEditDetails={() => setDetailsFor(d)}
-              onAssignFolder={(folderId) => applyFolders([d], folderId)}
-              archive={archiveLabelOf(d)}
-              onMarkSold={() => openOwnership('sold', [d])}
-              onMarkDropped={() => openOwnership('dropped', [d])}
-              onMarkArchived={() => openOwnership('archived', [d])}
-              onRestoreOwned={() => moveBackToOwned(d)}
-              onDelete={() => openOwnership('delete', [d])}
-            />
+        <>
+          <div className="flex items-center justify-between gap-2">
+            {col.render(d, portfolioRegistrarLabels)}
+            <div className="flex items-center">
+              <NotesButton
+                domainName={d.domainName}
+                notes={purchases[toAscii(d.domainName)]?.notes ?? ''}
+                editing={notesFor === key}
+                onEditingChange={(open) => setNotesFor(open ? key : null)}
+              />
+              <RowActionsMenu
+                domain={d}
+                folders={folders}
+                folderId={folderAssignments[toAscii(d.domainName)]}
+                onRefresh={() => refreshDomain(d)}
+                onUrlForwarding={() => setUrlForwardingFor(d)}
+                onEmailForwarding={() => setEmailForwardingFor(d)}
+                onAuthCode={() => setAuthCodeFor(d)}
+                onRenew={() => setRenewFor(d)}
+                onNotes={() => setNotesFor(key)}
+                onEditPurchase={() => setPurchaseFor(d)}
+                onEditSale={() => setSaleFor(d)}
+                onEditListPrice={() => setListPriceFor([d])}
+                onEditDetails={() => setDetailsFor(d)}
+                onAssignFolder={(folderId) => applyFolders([d], folderId)}
+                archive={archiveLabelOf(d)}
+                onMarkSold={() => openOwnership('sold', [d])}
+                onMarkDropped={() => openOwnership('dropped', [d])}
+                onMarkArchived={() => openOwnership('archived', [d])}
+                onRestoreOwned={() => moveBackToOwned(d)}
+                onDelete={() => openOwnership('delete', [d])}
+              />
+            </div>
           </div>
-        </div>
+          {supportsPublishing() && (
+            <div className="inventory-mobile-facts lg:hidden">
+              <dl>
+                {dataColumns
+                  .filter((c) =>
+                    ['registrar', 'expirationDate', 'autoRenew'].includes(
+                      c.key,
+                    ),
+                  )
+                  .map((c) => (
+                    <div key={c.key}>
+                      <dt>{c.key === 'autoRenew' ? 'Auto-renew' : c.label}</dt>
+                      <dd>
+                        {c.cell(d)}
+                        {c.key === 'autoRenew' && (
+                          <span className="ml-2">
+                            {d.autoRenewUnknown
+                              ? 'Not reported'
+                              : d.autoRenew
+                                ? 'On'
+                                : 'Off'}
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                <div>
+                  <dt>Status</dt>
+                  <dd>{d.status || 'Not reported'}</dd>
+                </div>
+              </dl>
+              <details>
+                <summary>
+                  More details{' '}
+                  <span className="sr-only">for {d.domainName}</span>
+                </summary>
+                <dl>
+                  {dataColumns
+                    .filter(
+                      (c) =>
+                        ![
+                          'domainName',
+                          'registrar',
+                          'expirationDate',
+                          'autoRenew',
+                        ].includes(c.key),
+                    )
+                    .map((c) => (
+                      <div key={c.key}>
+                        <dt>{c.label}</dt>
+                        <dd>{c.cell(d)}</dd>
+                      </div>
+                    ))}
+                </dl>
+              </details>
+            </div>
+          )}
+        </>
       );
     }
     if (d.registrationPending && registration)
@@ -1917,7 +1976,7 @@ export default function Domains({
       </div>
 
       <DataTable
-        className="mt-[13px]"
+        className={cn('mt-[13px]', supportsPublishing() && 'mobile-inventory')}
         rows={filtered}
         columns={dataColumns}
         rowKey={domainKey}

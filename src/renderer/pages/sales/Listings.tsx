@@ -19,6 +19,7 @@ import {
   SalesFeedback,
   listingState,
   salePriceLabel,
+  saleModeLabel,
 } from './shared';
 import BulkActions from './BulkActions';
 import BulkJobs from './BulkJobs';
@@ -31,6 +32,7 @@ export default function Listings() {
     [mode, setMode] = useState(''),
     [create, setCreate] = useState(false),
     [inventoryQuery, setInventoryQuery] = useState('');
+  const [jobsRevision, setJobsRevision] = useState(0);
   const [selection, setSelection] = useState<Set<string>>(new Set()),
     [domains, setDomains] = useState<Set<string>>(new Set()),
     [matchingSelection, setMatchingSelection] = useState<SalesListing[] | null>(
@@ -50,6 +52,7 @@ export default function Listings() {
     return () => clearTimeout(timer);
   }, [q]);
   const visible = rows.data?.items ?? [];
+  const hasFilters = !!q.trim() || !!mode || filter !== 'All';
   const picked =
     matchingSelection ??
     rows.data?.items.filter((r) => selection.has(r.draft.id)) ??
@@ -219,7 +222,9 @@ export default function Listings() {
         >
           <option value="">All sale modes</option>
           {['inquiry', 'offer', 'buy-now', 'external'].map((v) => (
-            <option key={v}>{v}</option>
+            <option key={v} value={v}>
+              {saleModeLabel(v)}
+            </option>
           ))}
         </select>
         <span className="small">{visible.length} on this page</span>
@@ -348,9 +353,33 @@ export default function Listings() {
         </div>
       )}
       {!!picked.length && (
-        <BulkActions items={picked} onChange={() => void rows.reload()} />
+        <BulkActions
+          items={picked}
+          disabled={rows.loading || !!rows.error}
+          onChange={async (finished) => {
+            await rows.reload();
+            setJobsRevision((value) => value + 1);
+            if (finished && matchingSelection) {
+              setMatchingSelection(null);
+              setSelection(new Set());
+              action.setNotice(
+                'Bulk changes finished. Select listings again to review their updated terms or make another change.',
+              );
+            }
+          }}
+        />
       )}
-      <BulkJobs onChange={() => void rows.reload()} />
+      <BulkJobs
+        key={jobsRevision}
+        onChange={() => {
+          setMatchingSelection(null);
+          setSelection(new Set());
+          action.setNotice(
+            'Job updated. Select listings again to review their current terms or make another change.',
+          );
+          void rows.reload();
+        }}
+      />
       <div
         className="sales-table-region"
         role="region"
@@ -419,7 +448,7 @@ export default function Listings() {
                 </td>
                 <td>
                   {salePriceLabel(r.published?.publicPrice ?? null)}
-                  <p className="small">{r.draft.mode}</p>
+                  <p className="small">{saleModeLabel(r.draft.mode)}</p>
                 </td>
                 <td>
                   <span className="badge">{listingState(r)}</span>
@@ -454,18 +483,33 @@ export default function Listings() {
           </tbody>
         </table>
       </div>
-      {!visible.length && !rows.loading && (
+      {!visible.length && !rows.loading && !rows.error && (
         <div className="sales-empty">
           <h2>
-            {rows.data?.items.length
+            {hasFilters
               ? 'No matching listings'
               : 'Start with the names you want to sell.'}
           </h2>
           <p>
-            {rows.data?.items.length
+            {hasFilters
               ? 'Clear the filters to see your other listings.'
               : 'Create sales drafts from your existing inventory. Prices, floors and registrar details stay in Domains.'}
           </p>
+          {hasFilters && (
+            <button
+              onClick={() => {
+                setQ('');
+                setSearchQ('');
+                setMode('');
+                setFilter('All');
+                setCursor('');
+                setSelection(new Set());
+                setMatchingSelection(null);
+              }}
+            >
+              Clear filters
+            </button>
+          )}
           <Link className="link" to="/">
             Open inventory
           </Link>

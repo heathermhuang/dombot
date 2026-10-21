@@ -7,7 +7,7 @@ import {
   useSalesData,
   downloadSales,
 } from '../../lib/sales-client';
-import { SalesFeedback } from './shared';
+import { SalesFeedback, saleModeLabel } from './shared';
 
 interface Job {
   id: string;
@@ -19,9 +19,11 @@ interface Job {
 export default function BulkActions({
   items,
   onChange,
+  disabled = false,
 }: {
   items: SalesListing[];
-  onChange: () => void;
+  onChange: (finished: boolean) => Promise<void>;
+  disabled?: boolean;
 }) {
   const [kind, setKind] = useState('portfolio-price'),
     [mode, setMode] = useState('inquiry'),
@@ -38,9 +40,12 @@ export default function BulkActions({
     for (let n = 0; n < 5; n++) {
       result = await salesRequest<Job>(`/jobs/${id}/step`, 'POST', {});
       setJob(result);
-      if (result.status === 'finished') break;
+      if (result.status === 'finished') {
+        requestKey.current = crypto.randomUUID();
+        break;
+      }
     }
-    onChange();
+    await onChange(result?.status === 'finished');
   };
   return (
     <details className="sales-section">
@@ -73,7 +78,9 @@ export default function BulkActions({
             onChange={(e) => setMode(e.target.value)}
           >
             {['inquiry', 'offer', 'buy-now', 'external'].map((v) => (
-              <option key={v}>{v}</option>
+              <option key={v} value={v}>
+                {saleModeLabel(v)}
+              </option>
             ))}
           </select>
         )}
@@ -93,7 +100,7 @@ export default function BulkActions({
           </select>
         )}
         <button
-          disabled={!items.length || action.busy}
+          disabled={disabled || !items.length || action.busy}
           onClick={() =>
             void action.run(async () => {
               const actionValue =
@@ -104,6 +111,7 @@ export default function BulkActions({
                     : kind.startsWith('shop-')
                       ? { kind: 'shop', include: kind === 'shop-include' }
                       : { kind: 'portfolio-price' };
+              setJob(null);
               setJobId(requestKey.current);
               const r = await salesRequest<{ id: string }>('/jobs', 'POST', {
                 items: items.map((v) => ({
