@@ -271,3 +271,77 @@
     overflow-y: auto;
   }
 }
+
+/* Hosted inventory: critical facts stay alongside each domain on phones. */
+@media (width < 64rem) {
+  .mobile-inventory {
+    min-height: 28rem;
+  }
+  .mobile-inventory tr > td:first-child {
+    vertical-align: top;
+    padding-top: 20px;
+  }
+  .mobile-inventory table {
+    width: 100%;
+    table-layout: fixed;
+  }
+  .mobile-inventory tr > :nth-child(n + 3) {
+    display: none;
+  }
+  .mobile-inventory tr > :nth-child(2) {
+    white-space: normal;
+    width: auto;
+  }
+  .mobile-inventory td:nth-child(2) > div:first-child {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .mobile-inventory td:nth-child(2) > div:first-child > span {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .mobile-inventory td a {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .mobile-inventory td:nth-child(2) button[aria-haspopup='menu'] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .inventory-mobile-facts {
+    padding-top: 8px;
+    font-size: 13px;
+  }
+  .inventory-mobile-facts dl {
+    display: grid;
+    gap: 10px;
+  }
+  .inventory-mobile-facts dl > div {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+  }
+  .inventory-mobile-facts dt {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .inventory-mobile-facts dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .inventory-mobile-facts dd > span {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .inventory-mobile-facts summary {
+    cursor: pointer;
+    min-height: 44px;
+    padding: 12px 0;
+    color: var(--primary);
+  }
+  .inventory-mobile-facts details[open] {
+    padding-bottom: 10px;
+  }
+}

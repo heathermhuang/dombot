@@ -59,7 +59,7 @@ export default function DomainSetup() {
         error={remote.error || control.error || action.error}
         notice={action.notice}
         loading={action.busy}
-        retry={() => void remote.reload()}
+        retry={() => void Promise.all([remote.reload(), control.reload()])}
       />
       {action.reauth && (
         <p>

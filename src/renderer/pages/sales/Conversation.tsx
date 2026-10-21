@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { SalesThread } from '../../../shared/sales-api';
 import {
@@ -7,7 +7,16 @@ import {
   useSalesAction,
   downloadSales,
 } from '../../lib/sales-client';
-import { SalesFeedback, Field, salePriceLabel } from './shared';
+import {
+  SalesFeedback,
+  Field,
+  salePriceLabel,
+  saleModeLabel,
+  conversationStatusLabel,
+} from './shared';
+
+import { useInquiryDraft } from '../../lib/sales-drafts';
+import { localDateTime, type ComposeMode } from '../../lib/inquiry-draft';
 
 const deliveryLabel: Record<string, string> = {
   queued: 'Saved · queued for email',
@@ -30,9 +39,10 @@ export default function Conversation({
   const remote = useSalesData<SalesThread>(`/inbox/${id}`),
     action = useSalesAction(),
     navigate = useNavigate();
-  const [body, setBody] = useState(''),
-    [direction, setDirection] = useState('reply'),
-    [followup, setFollowup] = useState(''),
+  const { editor: compose, state: composeState } = useInquiryDraft(id);
+  const direction = composeState.mode;
+  const { body, key } = composeState[direction];
+  const [followup, setFollowup] = useState<string | null>(null),
     [deleting, setDeleting] = useState(false),
     [outcome, setOutcome] = useState('handed-off'),
     [evidence, setEvidence] = useState(''),
@@ -42,7 +52,6 @@ export default function Conversation({
     [olderCursor, setOlderCursor] = useState<string | null | undefined>(
       undefined,
     );
-  const key = useRef(crypto.randomUUID());
   const thread = remote.data;
   useEffect(() => {
     setOlder([]);
@@ -70,7 +79,7 @@ export default function Conversation({
           <p className="small">
             Original public terms:{' '}
             {salePriceLabel(thread.original.snapshot.publicPrice)} ·{' '}
-            {thread.original.snapshot.mode}
+            {saleModeLabel(thread.original.snapshot.mode)}
             {thread.original.offer &&
               ` · Buyer offer ${salePriceLabel(thread.original.offer)}`}
           </p>
@@ -101,7 +110,9 @@ export default function Conversation({
                 'closed',
                 'spam',
               ].map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s} value={s}>
+                  {conversationStatusLabel(s)}
+                </option>
               ))}
             </select>
             <button onClick={() => downloadSales(`inquiry-${id}.json`, thread)}>
@@ -193,6 +204,11 @@ export default function Conversation({
               Email a fresh link to this buyer
             </button>
           </details>
+          <p className="small" role="status">
+            {compose.isDirty()
+              ? 'Unsent draft kept while you browse this portfolio. Leave this tab open until you save or send.'
+              : 'Replies and private notes have separate drafts.'}
+          </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -201,10 +217,9 @@ export default function Conversation({
                   body,
                   direction,
                   revision: thread.revision,
-                  idempotencyKey: key.current,
+                  idempotencyKey: key,
                 });
-                setBody('');
-                key.current = crypto.randomUUID();
+                compose.sent(direction, key);
                 await remote.reload();
                 onChange();
                 action.setNotice(
@@ -219,8 +234,7 @@ export default function Conversation({
               <select
                 value={direction}
                 onChange={(e) => {
-                  setDirection(e.target.value);
-                  key.current = crypto.randomUUID();
+                  compose.setMode(e.target.value as ComposeMode);
                 }}
               >
                 <option value="reply">Reply to buyer</option>
@@ -240,8 +254,7 @@ export default function Conversation({
                 value={body}
                 maxLength={4000}
                 onChange={(e) => {
-                  setBody(e.target.value);
-                  key.current = crypto.randomUUID();
+                  compose.setBody(direction, e.target.value);
                 }}
               />
             </Field>
@@ -263,7 +276,7 @@ export default function Conversation({
             <Field label="Follow-up date">
               <input
                 type="datetime-local"
-                value={followup}
+                value={followup ?? localDateTime(thread.followUpAt)}
                 onChange={(e) => setFollowup(e.target.value)}
               />
             </Field>
@@ -273,21 +286,43 @@ export default function Conversation({
               </p>
             )}
             <button
-              disabled={action.busy}
+              disabled={action.busy || followup === null || !followup}
               onClick={() =>
                 void action.run(async () => {
                   await salesRequest(`/inbox/${id}`, 'PATCH', {
                     revision: thread.revision,
                     status: thread.status,
-                    followUpAt: followup ? new Date(followup).getTime() : null,
+                    followUpAt: new Date(followup!).getTime(),
                   });
                   await remote.reload();
+                  setFollowup(null);
+                  onChange();
                   action.setNotice('Follow-up date saved.');
                 })
               }
             >
               Save follow-up
             </button>
+            {thread.followUpAt !== null && (
+              <button
+                disabled={action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    await salesRequest(`/inbox/${id}`, 'PATCH', {
+                      revision: thread.revision,
+                      status: thread.status,
+                      followUpAt: null,
+                    });
+                    await remote.reload();
+                    setFollowup(null);
+                    onChange();
+                    action.setNotice('Reminder removed.');
+                  })
+                }
+              >
+                Remove reminder
+              </button>
+            )}
           </section>
           <details className="sales-section">
             <summary>
@@ -391,6 +426,7 @@ export default function Conversation({
                       await salesRequest(`/inbox/${id}`, 'DELETE', {
                         revision: thread.revision,
                       });
+                      compose.clear();
                       onChange();
                       navigate('/sales/inbox');
                     })

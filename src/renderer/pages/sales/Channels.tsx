@@ -18,8 +18,8 @@ export default function Channels() {
       <p className="sales-kicker">SALES / CHANNELS</p>
       <h1>Sales channels</h1>
       <p className="small">
-        Manual links and exports keep the handoff explicit. API connections
-        require separate qualification.
+        Add a checkout or marketplace link, then select it in a listing. Buyers
+        complete payment and transfer with that provider.
       </p>
       <SalesFeedback
         error={remote.error || action.error}
@@ -115,10 +115,9 @@ export default function Channels() {
       <section className="sales-section">
         <h2>API connections</h2>
         <p className="small">
-          Spaceship API reads, generated checkouts and listing writes are
-          disabled pending request/response and account-access qualification.
-          Exported settings are for manual review and upload; they are not
-          automatic synchronization.
+          Automatic marketplace connections are not available yet. Add a manual
+          link above and review it before publishing. Exports can be uploaded to
+          your provider; they do not keep listings synchronized.
         </p>
       </section>
     </SalesShell>
