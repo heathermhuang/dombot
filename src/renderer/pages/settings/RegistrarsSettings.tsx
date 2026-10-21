@@ -964,7 +964,7 @@ function RegistrarHelp({ provider }: { provider: RegistrarDefinition }) {
       <p className="text-[13px] leading-relaxed text-muted-foreground">
         <HelpText text={help.summary} />
       </p>
-      {isWeb() && help.hostedNotice && (
+      {isWeb() && help.hostedNotice && !provider.managedProxyEgressIp && (
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           {help.hostedNotice}
         </p>
