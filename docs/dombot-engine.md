@@ -41,3 +41,24 @@ manifest/lock. From its `source` directory, run `npm ci --ignore-scripts` then
 `npm run engine:pack` to rebuild. The repository remains the source-maintenance
 location; this package is not published to npm. Do not conflate a package rebuild,
 green tests or a local UI check with deployment or fresh provider qualification.
+
+## Managed Namecheap connection
+
+Hosted tenants can provide a default Namecheap connection with the Worker secret
+`DOMBOT_MANAGED_PROXY_URL` and the outgoing IPv4 variable
+`DOMBOT_MANAGED_PROXY_IP`. The current SaaS default is `194.153.254.242`.
+Configure both on every legacy tenant and Workers for Platforms deployment,
+including reserve slots and future provisioning templates. Do not put the URL
+or proxy credentials in source, public variables, customer stores or exports.
+
+With `DOMBOT_AUTH=gateway`, Namecheap uses this route automatically unless the
+account explicitly selects a customer-owned proxy. Its requests use the outgoing
+IP as `ClientIp`; customers only enter their Namecheap credentials and whitelist
+the displayed IP in Namecheap. The managed route applies to connection tests,
+sync, scheduled jobs and MCP. Failures never fall back to direct Worker traffic.
+Other registrars and non-hosted installations retain their existing routing.
+
+Verify a real Namecheap read through a hosted tenant before rollout, verify that
+owner API responses and exports contain no managed credentials, then preserve
+live tenant bindings, keys, data, alarms and registration eligibility during the
+staged release. A replacement IP must be allowlisted by customers before cutover.

@@ -39,6 +39,7 @@ import { Namespace } from '../storage/namespace';
 import { broadcastPortfolioChanged } from '../events';
 import { isBulkRunning } from './bulk-jobs';
 import { accountProxyRoute, getProxyProfile } from './proxies';
+import { managedProxyFor } from './managed-proxy';
 import {
   DEFAULT_PROXY_ID,
   proxySecrets,
@@ -1223,6 +1224,7 @@ export function getRegistrarCatalog(): RegistrarDefinition[] {
     return {
       name,
       displayName: R.displayName,
+      managedProxyEgressIp: managedProxyFor(name)?.ip,
       supportsSandbox: R.supportsSandbox,
       configFields: orderConfigFields(name, R.configFields).map((f) => ({
         name: f.name,
@@ -1249,10 +1251,12 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
       accountId: account.id,
       accountLabel: account.label,
       saved: isSavedAccount(account.id),
-      proxy: Boolean(account.proxyId),
+      proxy: Boolean(account.proxyId || managedProxyFor(account.registrar)),
+      proxyManaged:
+        !account.proxyId && Boolean(managedProxyFor(account.registrar)),
       proxyEgressIp: account.proxyId
         ? getProxyProfile(account.proxyId)?.egressIp
-        : undefined,
+        : managedProxyFor(account.registrar)?.ip,
       configured: isConfigured(account.registrar, account.id),
       enabled: isRegistrarEnabled(account.id),
       sync: {
@@ -1280,7 +1284,7 @@ export async function connectRegistrarAccount(
   const provider = getRegistrarCatalog().find((r) => r.name === name);
   if (!provider) throw new Error('Unknown registrar.');
   const clean: RegistrarCredentials = {};
-  const proxy = useProxy ? requireProxy() : null;
+  const proxy = useProxy ? requireProxy() : managedProxyFor(name);
   // Through the proxy, its outgoing address is the Client IP Namecheap sees, so
   // a proxy-only account needs no direct one. It is supplied when the client is
   // built, never stored as if it were the user's own address.
@@ -1340,7 +1344,7 @@ export async function connectRegistrarAccount(
       name,
       label?.trim() || nextAccountLabel(name),
       clean,
-      proxy ? DEFAULT_PROXY_ID : undefined,
+      useProxy ? DEFAULT_PROXY_ID : undefined,
     );
   });
 }
@@ -1383,7 +1387,10 @@ export async function saveRegistrarCredentials(
       (field) => previous[field]?.trim() === creds[field]?.trim(),
     );
   // Check the route exists before persisting anything.
-  if (useProxy && !accountProxyRoute(account)) requireProxy();
+  if (useProxy) {
+    if (account.proxyId) accountProxyRoute(account);
+    else requireProxy();
+  }
   invalidateAccount(account.id);
   // The proxy no longer lives in the credentials; never let it back in.
   const clean = { ...creds };
