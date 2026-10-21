@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import { timingSafeEqual } from 'node:crypto';
 import { Accounts, type SessionUser } from './accounts';
 import { opaqueToken, tokenHash } from './crypto';
 import { Passkeys } from './passkeys';
@@ -42,8 +43,12 @@ const registration = z.object({
     .enum(['none', 'client_secret_post'])
     .default('none'),
   grant_types: z
-    .array(z.literal('authorization_code'))
-    .default(['authorization_code']),
+    .array(z.enum(['authorization_code', 'refresh_token']))
+    .default(['authorization_code'])
+    .refine((types) => types.includes('authorization_code'))
+    // Some clients request refresh tokens at registration even when discovery
+    // offers only authorization_code. Return the grant type actually supported.
+    .transform(() => ['authorization_code'] as const),
   response_types: z.array(z.literal('code')).default(['code']),
 });
 type Metadata = z.infer<typeof registration>;
@@ -144,7 +149,10 @@ async function authenticate(env: HostedEnv, body: Record<string, string>) {
     !client ||
     (client.secret_hash &&
       (!body.client_secret ||
-        (await tokenHash(body.client_secret)) !== client.secret_hash))
+        !timingSafeEqual(
+          Buffer.from(await tokenHash(body.client_secret)),
+          Buffer.from(client.secret_hash),
+        )))
   )
     return null;
   return client;

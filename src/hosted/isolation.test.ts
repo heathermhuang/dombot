@@ -654,9 +654,14 @@ describe('real gateway and isolated Worker instances', () => {
       client_name: 'Shared test assistant',
       redirect_uris: ['http://127.0.0.1:4567/callback'],
       token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
     });
     expect(registered.status).toBe(201);
-    const client = (await registered.json()) as { client_id: string };
+    const client = (await registered.json()) as {
+      client_id: string;
+      grant_types: string[];
+    };
+    expect(client.grant_types).toEqual(['authorization_code']);
     const params = new URLSearchParams({
       client_id: client.client_id,
       redirect_uri: 'http://127.0.0.1:4567/callback',
