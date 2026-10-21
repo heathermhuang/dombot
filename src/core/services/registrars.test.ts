@@ -304,6 +304,25 @@ describe('getCachedPortfolio / assemblePortfolio', () => {
     }
   });
 
+  it('keeps the actual proxy refusal in cached portfolio and account diagnostics', () => {
+    storedCredentials.dynadot = { apiKey: 'test-secret' };
+    seedSlice('dynadot', [], {
+      lastSyncedAt: null,
+      lastError:
+        "Failed to reach 'https://api.dynadot.com/restful/v2/domains?key=test-secret': private transport text [proxy:PROXY_CONNECT_REFUSED:403]",
+    });
+    for (const message of [
+      getCachedPortfolio()!.errors[0].message,
+      getRegistrarMetadata().find((a) => a.accountId === 'dynadot')!.sync
+        .lastError,
+    ]) {
+      expect(message).toBe(
+        'The fixed-IP proxy refused the connection (HTTP 403). The registrar was not contacted.',
+      );
+      expect(message).not.toMatch(/test-secret|private transport/);
+    }
+  });
+
   it('hides cached rows that have no domain name', () => {
     seedSlice('dynadot', [
       domain({ domainName: 'a.com', registrar: 'dynadot' }),

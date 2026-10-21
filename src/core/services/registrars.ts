@@ -33,7 +33,7 @@ import { expiryDay, type AccountHoldings } from '../../shared/sync-diff';
 import { recordSync } from './domain-history';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
-import { createProxiedRegistrar } from './proxy-transport';
+import { createProxiedRegistrar, proxyFailureMessage } from './proxy-transport';
 import { createDynadotFetch } from './dynadot-transport';
 import { Namespace } from '../storage/namespace';
 import { broadcastPortfolioChanged } from '../events';
@@ -130,6 +130,10 @@ function registrarErrorMessage(error: unknown): string {
     /^(Request to|Failed to reach|Failed to parse JSON response from) '([^']+)'(?: failed with (?:HTTP )?(\d{3})| timed out after (\d+)ms)?/,
   );
   if (!transport) return message;
+  if (transport[1] === 'Failed to reach') {
+    const proxy = proxyFailureMessage(message);
+    if (proxy) return proxy;
+  }
   try {
     const url = new URL(transport[2]);
     const endpoint = `${url.origin}${url.pathname}`;
