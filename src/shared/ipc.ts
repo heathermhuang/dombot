@@ -105,6 +105,8 @@ export interface ImportedDomainFields {
 
 /** The one proxy the app manages, and the saved accounts routed through it. */
 export interface ProxySettings {
+  /** Public connection information only; host credentials are never returned. */
+  managed?: { egressIp: string } | null;
   proxy: { url: string; egressIp: string } | null;
   users: {
     accountId: string;
@@ -547,10 +549,18 @@ export interface RegistrarSync {
  *  carried here — the renderer reads it from `registrar-help.ts`. */
 export type RegistrarDefinition = Pick<
   RegistrarMeta,
-  'name' | 'displayName' | 'supportsSandbox' | 'configFields' | 'features'
+  | 'name'
+  | 'displayName'
+  | 'supportsSandbox'
+  | 'configFields'
+  | 'features'
+  | 'managedProxyEgressIp'
 >;
 
 export interface RegistrarMeta {
+  /** Host-provided default, used when no customer proxy is selected. */
+  managedProxyEgressIp?: string;
+  proxyManaged?: boolean;
   /** An actual saved account, rather than an implicit migration placeholder. */
   saved?: boolean;
   accountId?: string;

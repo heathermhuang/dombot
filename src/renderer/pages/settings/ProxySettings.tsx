@@ -150,7 +150,23 @@ export default function ProxySettings() {
         </p>
       </div>
 
-      <SettingsCard title="Fixed IP proxy">
+      {settings?.managed && (
+        <SettingsCard title="Managed Namecheap connection">
+          <p className="text-sm text-muted-foreground">
+            domains.domains provides a fixed IP for Namecheap automatically. Add{' '}
+            <strong className="font-mono text-foreground">
+              {settings.managed.egressIp}
+            </strong>{' '}
+            to your Namecheap API whitelist. No proxy setup is needed. The
+            settings below are an optional connection you manage yourself.
+          </p>
+        </SettingsCard>
+      )}
+      <SettingsCard
+        title={
+          settings?.managed ? 'Your own proxy (optional)' : 'Fixed IP proxy'
+        }
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();

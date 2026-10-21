@@ -21,6 +21,7 @@ import { aesGcmCipher, EncryptedDocStore } from '../storage/encrypted';
 import { exportBundle, importBundle } from '../storage/bundle';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { listAccounts } from './accounts';
+import { configureManagedProxy } from './managed-proxy';
 import {
   getProxyProfile,
   getProxySettings,
@@ -54,6 +55,7 @@ const xml =
   '<ApiResponse Status="OK"><CommandResponse><DomainGetListResult><Domain ID="1" Name="example.test" Created="01/01/2020" Expires="01/01/2030" /></DomainGetListResult><Paging><TotalItems>1</TotalItems><CurrentPage>1</CurrentPage><PageSize>100</PageSize></Paging></CommandResponse></ApiResponse>';
 const transport = vi.fn<ProxyFetch>();
 beforeEach(async () => {
+  configureManagedProxy();
   configureStore(new MemoryDocStore());
   await hydrateStores();
   resetRegistrarClients();
@@ -61,6 +63,7 @@ beforeEach(async () => {
   configureProxyTransport(transport);
 });
 afterEach(() => {
+  configureManagedProxy();
   configureProxyTransport();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -300,6 +303,117 @@ const proxyOnly = {
 const namecheapMeta = () =>
   getRegistrarMetadata().find((r) => r.name === 'namecheap')!;
 
+describe('host-managed Namecheap default', () => {
+  beforeEach(() => {
+    configureManagedProxy(proxy.url, proxy.ip);
+    transport.mockImplementation(ok);
+  });
+
+  it('connects without a client IP or customer proxy and keeps host credentials out of exports', async () => {
+    const account = await connectRegistrarAccount('namecheap', {
+      username: credentials.username,
+      apiKey: credentials.apiKey,
+    });
+    expect(account.proxyId).toBeUndefined();
+    expect(transport).toHaveBeenCalled();
+    expect(transport.mock.calls[0][0]).toEqual(proxy);
+    expect(
+      new URL(String(transport.mock.calls[0][1])).searchParams.get('ClientIp'),
+    ).toBe(proxy.ip);
+    const meta = getRegistrarMetadata().find(
+      (r) => r.accountId === account.id,
+    )!;
+    expect(meta).toMatchObject({
+      configured: true,
+      proxy: true,
+      proxyManaged: true,
+      proxyEgressIp: proxy.ip,
+    });
+    expect(getProxySettings()).toMatchObject({
+      proxy: null,
+      managed: { egressIp: proxy.ip },
+      users: [],
+    });
+    const publicData = JSON.stringify([
+      getProxySettings(),
+      getRegistrarMetadata(),
+      getStoredCredentials(account.id),
+    ]);
+    const backup = exportBundle({ version: 'test', platform: 'web' });
+    for (const data of [publicData, backup])
+      expect(data).not.toMatch(/proxy-secret|proxy-user/);
+    expect(backup).not.toContain(proxy.url);
+  });
+
+  it('uses a customer override, and returns to the managed default when it is removed', async () => {
+    const custom = {
+      url: 'https://own:password@1.1.1.1:8080/',
+      egressIp: '1.0.0.1',
+    };
+    await saveProxyProfile(custom);
+    await saveRegistrarCredentials('namecheap', credentials, undefined, true);
+    await getRegistrarClient('namecheap').listDomains();
+    expect(transport.mock.calls.at(-1)?.[0].ip).toBe(custom.egressIp);
+    expect(namecheapMeta().proxyManaged).toBe(false);
+    await removeProxyProfile();
+    await getRegistrarClient('namecheap').listDomains();
+    expect(transport.mock.calls.at(-1)?.[0].ip).toBe(proxy.ip);
+    expect(namecheapMeta().proxyManaged).toBe(true);
+  });
+
+  it('does not route other providers or create an empty customer proxy reference', async () => {
+    expect(
+      getRegistrarMetadata().find((r) => r.name === 'porkbun')?.proxy,
+    ).toBe(false);
+    await expect(
+      saveRegistrarCredentials('namecheap', credentials, undefined, true),
+    ).rejects.toThrow(/Settings → Proxy/);
+    expect(listProxyProfiles()).toEqual([]);
+  });
+
+  it('redacts managed credentials and never falls back to direct traffic after a proxy failure', async () => {
+    const direct = vi.fn();
+    vi.stubGlobal('fetch', direct);
+    transport.mockRejectedValue(
+      new ProxyStageError('PROXY_AUTH_FAILED', proxy.url),
+    );
+    await saveRegistrarCredentials('namecheap', credentials);
+    const result = await getRegistrarClient('namecheap').testConnection({
+      retries: 0,
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(/proxy-secret|proxy-user/);
+    expect(direct).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds cached clients after host rotation and leaves self-hosted routing unchanged when disabled', async () => {
+    await saveRegistrarCredentials('namecheap', credentials);
+    const client = getRegistrarClient('namecheap');
+    configureManagedProxy(proxy.url, '1.0.0.1');
+    expect(getRegistrarClient('namecheap')).not.toBe(client);
+    await getRegistrarClient('namecheap').listDomains();
+    expect(transport.mock.calls.at(-1)?.[0].ip).toBe('1.0.0.1');
+    configureManagedProxy();
+    expect(namecheapMeta()).toMatchObject({
+      proxy: false,
+      proxyManaged: false,
+    });
+    expect(getProxySettings().managed).toBeNull();
+  });
+
+  it('fails with a safe error for partial or invalid host configuration', () => {
+    for (const [url, ip] of [
+      [proxy.url, ''],
+      ['', proxy.ip],
+      ['https://private:secret@127.0.0.1:80', proxy.ip],
+    ]) {
+      expect(() => configureManagedProxy(url, ip)).toThrow(
+        'The managed registrar connection is not configured correctly.',
+      );
+    }
+  });
+});
+
 describe('central proxy settings', () => {
   it('validates before saving and switches the proxy off for its accounts on removal', async () => {
     await expect(
@@ -307,7 +421,11 @@ describe('central proxy settings', () => {
     ).rejects.toThrow(/public/);
     expect(getProxyProfile()).toBeNull();
     await saveProxyProfile(profile);
-    expect(getProxySettings()).toEqual({ proxy: profile, users: [] });
+    expect(getProxySettings()).toEqual({
+      proxy: profile,
+      managed: null,
+      users: [],
+    });
 
     await saveRegistrarCredentials('namecheap', credentials, undefined, true);
     expect(getProxySettings().users).toEqual([

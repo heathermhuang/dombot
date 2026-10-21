@@ -352,7 +352,7 @@ function AccountCard({
   // The remove confirmation dialog is open.
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
-  const usesProxy = Boolean(account.proxy);
+  const usesProxy = Boolean(account.proxy && !account.proxyManaged);
   const [proxyEnabled, setProxyEnabled] = useState(usesProxy);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -504,7 +504,9 @@ function AccountCard({
   const hasCredentials = Object.values(values).some((v) => v.trim());
   // A Namecheap proxy supplies the outgoing ClientIp, so it isn't required in the
   // form when the proxy is on (the URL/IP live in the proxy section below).
-  const proxySuppliesIp = provider.name === 'namecheap' && proxyEnabled;
+  const proxySuppliesIp =
+    provider.name === 'namecheap' &&
+    (proxyEnabled || Boolean(provider.managedProxyEgressIp));
   const missingRequired =
     hasCredentials &&
     provider.configFields.some(
@@ -713,7 +715,7 @@ function AccountCard({
               id={`${id}-proxy`}
               provider={provider}
               proxy={
-                account.proxy && account.proxyEgressIp
+                account.proxy && !account.proxyManaged && account.proxyEgressIp
                   ? { egressIp: account.proxyEgressIp }
                   : proxy
               }
@@ -838,7 +840,9 @@ function DraftAccountCard({
   const [nickname, setNickname] = useState('');
   // With the Namecheap proxy on, its outgoing IP supplies the required ClientIp,
   // so the direct field isn't needed; the proxy URL/IP are required instead.
-  const proxySuppliesIp = provider.name === 'namecheap' && proxyEnabled;
+  const proxySuppliesIp =
+    provider.name === 'namecheap' &&
+    (proxyEnabled || Boolean(provider.managedProxyEgressIp));
   const ready =
     Object.values(values).some((value) => value.trim()) &&
     provider.configFields.every(
@@ -960,7 +964,7 @@ function RegistrarHelp({ provider }: { provider: RegistrarDefinition }) {
       <p className="text-[13px] leading-relaxed text-muted-foreground">
         <HelpText text={help.summary} />
       </p>
-      {isWeb() && help.hostedNotice && (
+      {isWeb() && help.hostedNotice && !provider.managedProxyEgressIp && (
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           {help.hostedNotice}
         </p>
@@ -994,6 +998,8 @@ function ProxyToggle({
   onChange: (enabled: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const managedIp = !enabled ? provider.managedProxyEgressIp : undefined;
+  const displayedIp = managedIp ?? (enabled ? proxy?.egressIp : undefined);
   const proxyLink = (
     <Link to="/settings?tab=proxy" className="underline underline-offset-4">
       configured proxy
@@ -1001,9 +1007,9 @@ function ProxyToggle({
   );
 
   const copyEgressIp = async () => {
-    if (!proxy) return;
+    if (!displayedIp) return;
     try {
-      await navigator.clipboard.writeText(proxy.egressIp);
+      await navigator.clipboard.writeText(displayedIp);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -1014,20 +1020,28 @@ function ProxyToggle({
   return (
     <div className="mt-5 border-t pt-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Switch
-          id={id}
-          checked={enabled}
-          onCheckedChange={onChange}
-          // Always allow switching it off; switching it on needs a proxy.
-          disabled={disabled || (!proxy && !enabled)}
-        />
-        <FieldLabel htmlFor={id}>Use fixed IP proxy</FieldLabel>
-        {proxy && enabled && (
+        {(!managedIp || proxy) && (
+          <Switch
+            id={id}
+            checked={enabled}
+            onCheckedChange={onChange}
+            // Always allow switching it off; switching it on needs a proxy.
+            disabled={disabled || (!proxy && !enabled)}
+          />
+        )}
+        <FieldLabel htmlFor={id}>
+          {provider.managedProxyEgressIp
+            ? managedIp && !proxy
+              ? 'Managed Namecheap connection'
+              : 'Use my own proxy'
+            : 'Use fixed IP proxy'}
+        </FieldLabel>
+        {displayedIp && (
           <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded border border-border/60 bg-muted/30 py-0.5 pr-0.5 pl-2">
             <input
               readOnly
-              value={proxy.egressIp}
-              size={Math.max(proxy.egressIp.length, 7)}
+              value={displayedIp}
+              size={Math.max(displayedIp.length, 7)}
               aria-label="Outgoing IP address"
               onFocus={(e) => e.currentTarget.select()}
               // It sits inside the credentials form; Enter here must not submit.
@@ -1057,7 +1071,13 @@ function ProxyToggle({
         )}
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-        {!proxy ? (
+        {managedIp ? (
+          <>
+            domains.domains provides this fixed IP automatically. Add{' '}
+            <strong>{managedIp}</strong> to your Namecheap API whitelist before
+            connecting. You do not need your own proxy.
+          </>
+        ) : !proxy ? (
           <>
             Set up a{' '}
             <Link

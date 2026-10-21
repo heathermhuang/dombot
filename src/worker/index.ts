@@ -42,6 +42,7 @@ import { runMigrations } from '../core/storage/migrations';
 import { configureProxyTransport } from '../core/services/proxy-transport';
 import { migrateLegacyProxies } from '../core/services/proxies';
 import { workerProxyFetch } from './proxy-transport';
+import { configureManagedProxy } from '../core/services/managed-proxy';
 import { createPublicPortfolioRoutes } from './public-portfolio';
 import { createPublicationRoutes } from './publication-routes';
 import { PublicationStore } from './publication-store';
@@ -88,6 +89,8 @@ function bootFingerprint(env: Env): string {
     env.DOMBOT_WORKSPACE_ID,
     env.DOMBOT_PASSWORD,
     env.DOMBOT_AUTH,
+    env.DOMBOT_MANAGED_PROXY_URL,
+    env.DOMBOT_MANAGED_PROXY_IP,
     env.CF_ACCESS_TEAM_DOMAIN,
     env.CF_ACCESS_AUD,
   ].join('\u0000');
@@ -110,6 +113,10 @@ async function bootOnce(env: Env): Promise<Boot> {
     // so values move still sealed.
     await runMigrations(raw, store);
     configureProxyTransport(workerProxyFetch);
+    configureManagedProxy(
+      env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_URL : undefined,
+      env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_IP : undefined,
+    );
     configureIncrementalRenewalPricing(true);
     return { auth: await buildAuthConfig(env, root) };
   })();

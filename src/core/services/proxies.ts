@@ -19,6 +19,7 @@ import { redactRegistrarMessage } from './registrar-errors';
 import { Namespace } from '../storage/namespace';
 import { isSavedAccount, listAccounts, setAccountProxy } from './accounts';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
+import { managedProxyFor, managedProxyInfo } from './managed-proxy';
 
 // The fixed IP proxy, configured once and switched on per account. Stored like
 // credentials (the URL carries a password): sealed at rest, included in data
@@ -41,7 +42,7 @@ export function listProxyProfiles(): ProxyProfile[] {
 export function accountProxyRoute(
   account: RegistrarAccount,
 ): ProxyRoute | null {
-  if (!account.proxyId) return null;
+  if (!account.proxyId) return managedProxyFor(account.registrar);
   const profile = getProxyProfile(account.proxyId);
   if (!profile)
     throw new Error(
@@ -141,6 +142,7 @@ export async function migrateLegacyProxies(): Promise<number> {
 export function getProxySettings(): ProxySettings {
   const profile = getProxyProfile();
   return {
+    managed: managedProxyInfo(),
     proxy: profile ? { url: profile.url, egressIp: profile.egressIp } : null,
     users: proxyUsers().map((a) => ({
       accountId: a.id,

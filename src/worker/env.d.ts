@@ -2,6 +2,9 @@
 // plain vars present in wrangler.jsonc, so the rest is declared here. All
 // optional: boot fails with a clear message when a required one is missing.
 interface Env {
+  /** SaaS-only default; URL is a Worker secret, never customer data. */
+  DOMBOT_MANAGED_PROXY_URL?: string;
+  DOMBOT_MANAGED_PROXY_IP?: string;
   DOMBOT_SALES_DNS_CONTROL?: string;
   SALES_DNS_CONTROL_ENABLED?: string;
   DOMBOT_SALES_V1?: string;
