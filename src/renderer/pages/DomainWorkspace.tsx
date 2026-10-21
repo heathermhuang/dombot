@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useDomainList, type DomainScope } from '../store/domain-list';
 import {
   buildDomainCatalog,
+  portfolioTotals,
   withInventory,
   matchesRegistrarFilters,
   sortManagementRows,
@@ -175,6 +176,17 @@ export default function DomainWorkspace({
   const [undo, setUndo] = useState<PortfolioDraft | null>(null);
   const [importing, setImporting] = useState(false);
   const [importText, setImportText] = useState('');
+  const importPreview = useMemo(() => {
+    if (!importing || !importText.trim() || !draft) return null;
+    try {
+      return {
+        result: importPublication(importText, draft.listings),
+        error: '',
+      };
+    } catch (error) {
+      return { result: null, error: (error as Error).message };
+    }
+  }, [importing, importText, draft]);
   const [collectionAction, setCollectionAction] = useState(false);
   const [collectionMode, setCollectionMode] = useState<
     'add' | 'remove' | 'replace'
@@ -367,6 +379,8 @@ export default function DomainWorkspace({
   const liveItems = new Map(
     state.publishedSnapshot?.listings.map((item) => [item.domain, item]) ?? [],
   );
+  const totals = portfolioTotals(catalog);
+  const emptyPortfolio = draft.listings.length === 0 && totals.total === 0;
   const current = draft.listings.filter(isCurrent);
   const history = draft.listings.filter(
     (item) => item.visibility === 'historical',
@@ -603,12 +617,8 @@ export default function DomainWorkspace({
           <div className="pf-status">
             {area === 'domains' && (
               <span>
-                {
-                  new Set(
-                    inventory.map((item) => item.domainName.toLowerCase()),
-                  ).size
-                }{' '}
-                domains in inventory
+                {totals.total} domains in portfolio · {totals.imported} imported
+                · {totals.registrarVerified} registrar verified
               </span>
             )}
             {(area === 'page' || mode === 'publish') && (
@@ -639,7 +649,7 @@ export default function DomainWorkspace({
           </div>
         </div>
         <div className="pf-actions">
-          {view === 'domains' && (
+          {view === 'domains' && !emptyPortfolio && (
             <>
               <Button
                 variant="outline"
@@ -1160,6 +1170,31 @@ export default function DomainWorkspace({
             })
           }
         />
+      ) : emptyPortfolio ? (
+        <div className="pf-shell pf-empty">
+          <Globe />
+          <h2>Bring your domains together</h2>
+          <p>
+            Import a list of names, or connect a registrar to see your verified
+            inventory.
+          </p>
+          <div className="pf-actions justify-center">
+            <Button onClick={() => setImporting(true)}>
+              <Upload />
+              Import domains
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/settings?tab=registrars')}
+            >
+              Connect a registrar
+            </Button>
+          </div>
+          <p className="pf-onboarding-note">
+            Private until you publish. Importing does not grant registrar access
+            or verify ownership.
+          </p>
+        </div>
       ) : (
         <>
           <div className="pf-shell">
@@ -1174,7 +1209,7 @@ export default function DomainWorkspace({
                     ).size,
                   ],
                   ['listed', 'Manage listings', pageListCount],
-                  ['private', 'Add domains', privateNames.length],
+                  ['private', 'Private domains', privateNames.length],
                 ] as [DomainScope, string, number][]
               ).map(([key, label, count]) => (
                 <button
@@ -1193,7 +1228,7 @@ export default function DomainWorkspace({
                 {scope === 'listed'
                   ? `${pageListCount} selected or live, including ${history.length} historical`
                   : scope === 'private'
-                    ? `${privateNames.length} private names not added`
+                    ? `${privateNames.length} private names`
                     : `${new Set(inventory.map((item) => item.domainName)).size} inventory names`}
               </span>
               {(
@@ -2025,15 +2060,32 @@ export default function DomainWorkspace({
       </Dialog>
       <Dialog open={importing} onOpenChange={setImporting}>
         <DialogContent>
-          <DialogTitle>Import a collection</DialogTitle>
+          <DialogTitle>Import domains</DialogTitle>
           <DialogDescription>
             Imported names start private. Existing edits and public selections
             are preserved.
           </DialogDescription>
+          <p className="text-sm text-muted-foreground">
+            Paste one domain per line, or upload CSV, TSV, JSON or text. CSV
+            fields: domain, collection, description, askingPrice, currency.
+          </p>
+          <a
+            className="text-sm underline"
+            download="domains-template.csv"
+            href={
+              'data:text/csv;charset=utf-8,' +
+              encodeURIComponent(
+                'domain,collection,description,askingPrice,currency\nsample.example,Examples,Sample domain,,USD\n',
+              )
+            }
+          >
+            Download CSV template
+          </a>
           <input
             type="file"
             accept=".csv,.tsv,.json,.txt"
             aria-label="Import collection file"
+            className="min-w-0 w-full"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
@@ -2049,12 +2101,40 @@ export default function DomainWorkspace({
           />
           <Textarea
             aria-label="Collection import text"
+            className="h-40 resize-y [field-sizing:fixed]"
             rows={6}
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder="Paste domains, CSV, or JSON"
+            placeholder={'garden.example\nstudio.example'}
           />
+          {importPreview && (
+            <div className="text-sm" aria-live="polite">
+              {importPreview.error ? (
+                <p role="alert" className="text-destructive">
+                  {importPreview.error}
+                </p>
+              ) : (
+                importPreview.result && (
+                  <>
+                    <p>
+                      Recognized fields:{' '}
+                      {importPreview.result.fields.join(', ')}
+                    </p>
+                    <p>
+                      {importPreview.result.added} new names ·{' '}
+                      {importPreview.result.duplicates} duplicates kept
+                      unchanged
+                    </p>
+                    <p className="text-muted-foreground">
+                      Review complete. New names will be saved privately.
+                    </p>
+                  </>
+                )
+              )}
+            </div>
+          )}
           <Button
+            disabled={!importPreview?.result || busy}
             onClick={() => {
               try {
                 const result = importPublication(importText, draft.listings);

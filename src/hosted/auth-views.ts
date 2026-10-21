@@ -14,10 +14,15 @@ export const emailStart = (next = '/app', notice = '') =>
       `<form action="/auth/email/request" method="post"><span class="eyebrow">Your domain portfolio</span><h1>Continue with email.</h1><p>One email address for your portfolio. We’ll send a sign-in link and a six-digit code. No password or Google account needed.</p>${notice ? `<p class="notice" role="status">${e(notice)}</p>` : ''}<input type="hidden" name="next" value="${e(next)}"><label>Email<input name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="254"></label><button type="submit">Email me a sign-in link</button><p class="note">New here? Your account is created after you verify your email and accept the Terms, subject to early-access capacity.</p><p><button type="button" data-passkey="login">Use a passkey</button></p><p id="auth-status" role="status" aria-live="polite"></p><p><a href="/login/password?next=${encodeURIComponent(next)}">Use an existing password</a></p></form>`,
     ),
   );
-export const emailCode = (id: string, error = '', code = '') =>
+export const emailCode = (
+  id: string,
+  error = '',
+  code = '',
+  requireLegal = false,
+) =>
   page(
     'Check your email',
-    `<form action="/auth/email/confirm" method="post"><h1>Check your email.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>If your address can sign in or register, you’ll receive a link and a six-digit code. Open the link, or enter the code here. Check your spam folder too.</p><input type="hidden" name="id" value="${e(id)}"><label>Six-digit code<input name="code" value="${e(code)}" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" minlength="6" required></label>${legal(!!error)}<button type="submit">Continue</button><p class="note">Expires in 10 minutes. A new request replaces your previous link and code. Delivery may take a few minutes.</p><p><a href="/login">Request a new link</a> · <a href="/login/password">Use an existing password</a></p></form>`,
+    `<form action="/auth/email/confirm" method="post"><h1>Check your email.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>If your address can sign in or register, you’ll receive a link and a six-digit code. Open the link, or enter the code here. Check your spam folder too.</p><input type="hidden" name="id" value="${e(id)}"><label>Six-digit code<input name="code" value="${e(code)}" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" minlength="6" required></label>${legal(requireLegal)}<button type="submit">Continue</button><p class="note">Expires in 10 minutes. A new request replaces your previous link and code. Delivery may take a few minutes.</p><p><a href="/login">Request a new link</a> · <a href="/login/password">Use an existing password</a></p></form>`,
   );
 export const emailConfirm = (
   id: string,
@@ -33,7 +38,7 @@ export const emailConfirm = (
 export const authUnavailable = () =>
   page(
     'Sign-in link unavailable',
-    '<h1>This link or code is unavailable.</h1><p>It may have expired, been replaced, or already been used. New accounts also require acceptance of the Terms and available early-access capacity. A confirmation email must be completed in the browser that requested it.</p><p><a href="/login">Request a new link</a></p>',
+    '<h1>This link or code is unavailable.</h1><p>It may have expired, been replaced, or already been used. New accounts also require acceptance of the Terms and available early-access capacity. Ordinary sign-in links can be opened in another browser. To confirm a sensitive account change, use the browser where you are signed in.</p><p><a href="/login">Request a new link</a></p>',
   );
 export const reauthPage = (next: string, hasPasskeys: boolean, email: string) =>
   withAuthScript(

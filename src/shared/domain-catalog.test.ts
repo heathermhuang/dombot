@@ -5,6 +5,7 @@ import { importedRows } from './imported-domains';
 import type { Domain, RegistrarMeta } from './ipc';
 import {
   buildDomainCatalog,
+  portfolioTotals,
   withInventory,
   selectedRegistrarTargets,
   matchesRegistrarFilters,
@@ -46,6 +47,35 @@ const filters = {
   nameserver: '',
 };
 describe('one domain catalog with exact registrar targets', () => {
+  it('counts unique imported and registrar names without treating hints or history as verified holdings', () => {
+    const listings = Array.from({ length: 50 }, (_, i) =>
+      privateListing(`sample-${i}.example`),
+    );
+    expect(portfolioTotals(buildDomainCatalog(listings, [], []))).toEqual({
+      total: 50,
+      imported: 50,
+      registrarVerified: 0,
+    });
+    listings.push({
+      ...privateListing('past.example'),
+      visibility: 'historical',
+    });
+    const catalog = buildDomainCatalog(
+      listings,
+      [
+        record('sample-0.example'),
+        record('sample-0.example', 'b'),
+        record('sample-1.example', 'c', { source: 'imported' }),
+        record('sample-2.example', 'a', { deleted: true }),
+      ],
+      accounts,
+    );
+    expect(portfolioTotals(catalog)).toEqual({
+      total: 50,
+      imported: 49,
+      registrarVerified: 1,
+    });
+  });
   it('shows imported names privately without making registrar hints actionable', () => {
     const imported = importedRows(
       {

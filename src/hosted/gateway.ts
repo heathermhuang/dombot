@@ -322,11 +322,20 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
     return c.html(
       link
         ? emailConfirm(id, String(proof), error.email, true, error.message)
-        : emailCode(id, error.message, String(proof)),
+        : emailCode(id, error.message, String(proof), true),
       400,
     );
   }
-  if (!result) return c.html(authUnavailable(), 400);
+  if (!result)
+    return c.html(
+      link
+        ? authUnavailable()
+        : emailCode(
+            id,
+            'We couldn’t confirm that code. Check the six digits and try again, or request a new link if it has expired or is unavailable.',
+          ),
+      400,
+    );
   c.header('Set-Cookie', sessionCookie(c.req.url, result.token));
   return c.redirect(safeNext(result.next), 303);
 });
