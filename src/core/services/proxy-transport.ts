@@ -65,6 +65,56 @@ function codeOf(error: unknown): string {
     : '';
 }
 
+// Keep only known diagnostic codes across registrar-client's Error-to-message
+// boundary. Never retain the proxy's response, URL, or arbitrary error detail.
+const PROXY_FAILURES: Record<string, string> = {
+  PROXY_CONNECT_REFUSED: 'The fixed-IP proxy refused the connection',
+  PROXY_AUTH_FAILED: 'The fixed-IP proxy rejected authentication',
+  PROXY_AUTH_REQUIRED: 'The fixed-IP proxy requires authentication',
+  PROXY_UNREACHABLE: 'The fixed-IP proxy could not be reached',
+  PROXY_PROTOCOL: 'The fixed-IP proxy returned an invalid CONNECT reply',
+  TIMEOUT_CONNECT: 'Connecting to the fixed-IP proxy timed out',
+  TIMEOUT_HANDSHAKE: 'The TLS handshake through the fixed-IP proxy timed out',
+  TIMEOUT_HEADERS:
+    'Waiting for response headers through the fixed-IP proxy timed out',
+  TIMEOUT_IDLE: 'The response through the fixed-IP proxy stalled',
+  TIMEOUT_TOTAL:
+    'The request through the fixed-IP proxy exceeded its time limit',
+};
+
+function proxyFailureTag(error: unknown): string {
+  const code = codeOf(error);
+  if (!Object.hasOwn(PROXY_FAILURES, code)) return '';
+  const detail =
+    error && typeof error === 'object' && 'detail' in error
+      ? error.detail
+      : undefined;
+  const status =
+    detail && typeof detail === 'object' && 'status' in detail
+      ? detail.status
+      : undefined;
+  const http =
+    code.startsWith('PROXY_') &&
+    typeof status === 'number' &&
+    Number.isInteger(status) &&
+    status >= 100 &&
+    status <= 599
+      ? `:${status}`
+      : '';
+  return ` [proxy:${code}${http}]`;
+}
+
+export function proxyFailureMessage(message: string): string | null {
+  const match = message.match(/\[proxy:([A-Z_]+)(?::([1-5]\d\d))?\]$/);
+  if (!match || !Object.hasOwn(PROXY_FAILURES, match[1])) return null;
+  const summary =
+    PROXY_FAILURES[match[1]] + (match[2] ? ` (HTTP ${match[2]})` : '');
+  return (
+    summary +
+    (match[1].startsWith('PROXY_') ? '. The registrar was not contacted.' : '.')
+  );
+}
+
 /** A proxy-stage failure in words the user can act on. Never includes the
  * proxy URL or the transport's own message, either of which may hold secrets. */
 function proxyStageMessage(code: string): string {
@@ -102,17 +152,18 @@ export async function sendThroughProxy(
     // The caller's own cancellation or timeout: let the library see it as such.
     if (error instanceof Error && error.name === 'AbortError') throw error;
     const code = codeOf(error);
+    const diagnostic = proxyFailureTag(error);
     if (BEFORE_SEND.test(code))
       throw markNotSent(
-        Object.assign(new Error(proxyStageMessage(code)), { code }),
+        Object.assign(new Error(proxyStageMessage(code) + diagnostic), {
+          code,
+        }),
       );
     // Anything else keeps only its code. A transport's message can quote the
     // proxy URL, and this must be safe even where no redaction wraps it. The
     // code still lets the library spot a failure that preceded sending.
     throw Object.assign(
-      new Error(
-        `The connection through the proxy failed${code ? ` (${code})` : ''}.`,
-      ),
+      new Error(`The connection through the proxy failed.${diagnostic}`),
       code ? { code } : {},
     );
   }

@@ -7,6 +7,7 @@ import {
 } from '@aoxborrow/registrar-client';
 import {
   configureProxyTransport,
+  sendThroughProxy,
   createProxiedRegistrar,
   ProxyStageError,
   type ProxyFetch,
@@ -73,6 +74,38 @@ const porkbunCreds = { apiKey: 'pk-secret', secretApiKey: 'sk-secret' };
 const ok = () => Promise.resolve(new Response(xml));
 
 describe('proxied registrar transport', () => {
+  it('preserves the proxy refusal status without exposing its response or credentials', async () => {
+    transport.mockRejectedValue(
+      Object.assign(new Error(`Forbidden ${proxy.url}`), {
+        code: 'PROXY_CONNECT_REFUSED',
+        detail: { status: 403, reason: 'private response', proxy: proxy.url },
+      }),
+    );
+    const error = await sendThroughProxy(
+      proxy,
+      'https://api.dynadot.com/restful/v2/domains',
+      {},
+    ).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      '[proxy:PROXY_CONNECT_REFUSED:403]',
+    );
+    expect((error as Error).message).not.toMatch(
+      /proxy-secret|private response/,
+    );
+  });
+
+  it('retains a typed timeout but never arbitrary transport detail', async () => {
+    transport.mockRejectedValue(
+      Object.assign(new Error(proxy.url), {
+        code: 'TIMEOUT_TOTAL',
+        detail: { status: 'secret-status' },
+      }),
+    );
+    await expect(
+      sendThroughProxy(proxy, 'https://api.dynadot.com/', {}),
+    ).rejects.toThrow('[proxy:TIMEOUT_TOTAL]');
+  });
   it('rejects a private proxy endpoint and never tunnels an off-origin request', async () => {
     expect(() =>
       createProxiedRegistrar('namecheap', credentials, {
