@@ -3,11 +3,65 @@ import {
   signGatewayRequest,
   verifyGatewayRequest,
   PROOF_HEADER,
+  MCP_DELEGATION_TOKEN,
+  delegatedMcpAuth,
 } from './gateway-proof';
 const secret = 'synthetic-proof-only-key-'.repeat(3),
   workspace = '11111111-1111-4111-8111-111111111111';
 afterEach(() => vi.useRealTimers());
 describe('private gateway proof diagnostics', () => {
+  it('limits shared MCP delegation to its tenant, request, expiry, and read scope', async () => {
+    const request = new Request('https://example.test/mcp', {
+      method: 'POST',
+      body: '{"method":"tools/list"}',
+      headers: { Authorization: `Bearer ${MCP_DELEGATION_TOKEN}` },
+    });
+    request.headers.set(
+      PROOF_HEADER,
+      await signGatewayRequest(secret, workspace, null, request, undefined, {
+        clientId: '22222222-2222-4222-8222-222222222222',
+        scopes: ['portfolio:read'],
+        expiresAt: Math.floor(Date.now() / 1000) + 60,
+      }),
+    );
+    const env = {
+      DOMBOT_AUTH: 'gateway',
+      DOMBOT_GATEWAY_SECRET: secret,
+      DOMBOT_WORKSPACE_ID: workspace,
+      DOMBOT_PUBLIC_BASE_PATH: '/w/' + workspace,
+    };
+    expect(await delegatedMcpAuth(request, env)).toMatchObject({
+      scopes: ['portfolio:read'],
+      resource: new URL('https://example.test/w/' + workspace + '/mcp'),
+    });
+    expect(
+      await delegatedMcpAuth(request, { ...env, DOMBOT_AUTH: 'password' }),
+    ).toBeNull();
+    expect(
+      await delegatedMcpAuth(request, {
+        ...env,
+        DOMBOT_WORKSPACE_ID: 'another',
+      }),
+    ).toBeNull();
+    const ownerApi = new Request(
+      'https://example.test/api/getRegistrarCredentials',
+      {
+        method: 'POST',
+        headers: request.headers,
+        body: '{"method":"tools/list"}',
+      },
+    );
+    expect(await verifyGatewayRequest(secret, workspace, ownerApi)).toBeNull();
+    const altered = new Request(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: '{"method":"tools/call"}',
+    });
+    expect(await delegatedMcpAuth(altered, env)).toBeNull();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 61000);
+    expect(await delegatedMcpAuth(request, env)).toBeNull();
+  });
   it('reports a future-issued proof without accepting it', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const now = Date.now(),

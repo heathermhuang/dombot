@@ -4,6 +4,7 @@ import {
   reserveLoginAttempt,
 } from './login-rate-limit';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import { delegatedMcpAuth } from '../shared/gateway-proof';
 import { ApiValidationError, invoke, type ApiMethodName } from '../core/api';
 import { MCP_PUBLIC_PATHS, createMcpRoutes } from '../core/mcp/routes';
 import { setAppIdentity } from '../core/app-info';
@@ -388,6 +389,7 @@ for (const path of MCP_PUBLIC_PATHS) {
       version: APP_VERSION,
       basePath: c.env.DOMBOT_PUBLIC_BASE_PATH,
       enforceScopes: c.env.DOMBOT_AUTH === 'gateway',
+      verifyStaticToken: (_token, request) => delegatedMcpAuth(request, c.env),
     }).fetch(c.req.raw),
   );
 }

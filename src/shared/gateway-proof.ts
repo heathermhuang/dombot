@@ -1,5 +1,14 @@
 import { SignJWT, jwtVerify, decodeJwt } from 'jose';
 import { salesAdmissionSchema, type SalesAdmission } from './sales-admission';
+import { z } from 'zod';
+
+export const MCP_DELEGATION_TOKEN = 'gateway-mcp-delegation';
+const mcpSchema = z.object({
+  clientId: z.string().uuid(),
+  scopes: z.tuple([z.literal('portfolio:read')]),
+  expiresAt: z.number().int().positive(),
+});
+export type McpDelegation = z.infer<typeof mcpSchema>;
 
 export const PROOF_HEADER = 'x-dombot-gateway-proof';
 const encoder = new TextEncoder();
@@ -19,12 +28,15 @@ export async function signGatewayRequest(
   owner: string | null,
   request: Request,
   sales?: SalesAdmission,
+  mcp?: McpDelegation,
 ): Promise<string> {
   if (secret.length < 32) throw new Error('Gateway key is not configured');
+  if (mcp && (owner !== null || sales)) throw Error('Invalid MCP delegation');
   return new SignJWT({
     owner,
     request: await fingerprint(request),
     ...(sales ? { version: 2, sales: salesAdmissionSchema.parse(sales) } : {}),
+    ...(mcp ? { version: 3, mcp: mcpSchema.parse(mcp) } : {}),
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuer('domains-gateway')
@@ -39,7 +51,11 @@ export async function verifyGatewayRequest(
   workspace: string,
   request: Request,
   rejected?: (reason: string) => void,
-): Promise<{ owner: string | null; sales?: SalesAdmission } | null> {
+): Promise<{
+  owner: string | null;
+  sales?: SalesAdmission;
+  mcp?: McpDelegation;
+} | null> {
   if (!secret || secret.length < 32 || !workspace) return null;
   const token = request.headers.get(PROOF_HEADER);
   if (!token) return null;
@@ -57,6 +73,22 @@ export async function verifyGatewayRequest(
     if (payload.request !== (await fingerprint(request))) return null;
     if (payload.owner !== null && typeof payload.owner !== 'string')
       return null;
+    if (payload.version === 3) {
+      const mcp = mcpSchema.safeParse(payload.mcp);
+      if (
+        !mcp.success ||
+        payload.owner !== null ||
+        payload.sales !== undefined ||
+        new URL(request.url).pathname !== '/mcp' ||
+        !['GET', 'POST', 'DELETE'].includes(request.method) ||
+        request.headers.get('authorization') !==
+          `Bearer ${MCP_DELEGATION_TOKEN}` ||
+        mcp.data.expiresAt <= Math.floor(Date.now() / 1000)
+      )
+        return null;
+      return { owner: null, mcp: mcp.data };
+    }
+    if (payload.mcp !== undefined) return null;
     if (payload.version === 2) {
       const sales = salesAdmissionSchema.safeParse(payload.sales);
       if (!sales.success) return null;
@@ -88,6 +120,37 @@ export async function verifyGatewayRequest(
     rejected?.(reason);
     return null;
   }
+}
+
+/** Internal delegation is authenticated separately from public OAuth tokens.
+ * It authorizes only the tenant MCP resource and never browser/owner APIs. */
+export async function delegatedMcpAuth(
+  request: Request,
+  env: {
+    DOMBOT_AUTH?: string;
+    DOMBOT_GATEWAY_SECRET?: string;
+    DOMBOT_WORKSPACE_ID?: string;
+    DOMBOT_PUBLIC_BASE_PATH?: string;
+  },
+) {
+  if (env.DOMBOT_AUTH !== 'gateway') return null;
+  const admission = await verifyGatewayRequest(
+    env.DOMBOT_GATEWAY_SECRET ?? '',
+    env.DOMBOT_WORKSPACE_ID ?? '',
+    request,
+  );
+  if (!admission?.mcp) return null;
+  return {
+    token: MCP_DELEGATION_TOKEN,
+    clientId: admission.mcp.clientId,
+    scopes: [...admission.mcp.scopes],
+    expiresAt: admission.mcp.expiresAt,
+    resource: new URL(
+      new URL(request.url).origin +
+        (env.DOMBOT_PUBLIC_BASE_PATH ?? '') +
+        '/mcp',
+    ),
+  };
 }
 
 /** A public edge key can admit only anonymous sales requests, never owners. */

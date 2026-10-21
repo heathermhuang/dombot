@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { SettingsCard } from './SettingsCard';
-import { hasExternalMcpGate, isDemo, isWeb } from '@/lib/platform';
+import { hasExternalMcpGate, isDemo, isWeb, webAuthMode } from '@/lib/platform';
 import { useAppStore } from '../../store/app';
 
 export default function McpClientsSettings() {
@@ -107,7 +107,9 @@ export default function McpClientsSettings() {
                 : !enabled
                   ? 'Enable this to let Claude or another MCP client manage your domains.'
                   : web
-                    ? 'Approved agents can read and change your domains. Anyone who can reach this address can ask to connect, but only connections you approve here get in.'
+                    ? webAuthMode() === 'gateway'
+                      ? 'Connect your AI assistant and approve portfolio access. Shared connections can read and refresh your portfolio. Revoke each connection below.'
+                      : 'Approved agents can read and change your domains. Only connections you approve here get access.'
                     : 'Approved agents can read and change your domains. The server only accepts connections from this computer.'}
             </p>
             {gated && (
