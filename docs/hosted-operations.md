@@ -64,11 +64,17 @@ Recovery password-validation errors retain the existing link so a customer can
 correct a mismatch without requesting another one; the atomic one-use/expiry check
 still applies when the corrected form is submitted.
 
-The customer can open `/recover` or the support link from sign-in. Identity verification
-is operator-assisted during early access. Never issue a link solely because someone
-supplies an account email. Verify through an established trusted channel or independently
-confirmed domain/registrar ownership and record the support case. Never request their
-password, registrar API keys, recovery backup or MCP bearer token.
+With verified email delivery enabled, `/recover` sends a single-use recovery link
+to the account's existing email address. The response does not reveal whether an
+account exists or is disabled. Normal email sign-in is also available, subject to
+the account's passkey requirements; password recovery does not remove a passkey.
+
+If the customer cannot access that mailbox, use the support path. For manual
+operator-assisted issuance, never send a link to a new address solely because
+someone supplies an account email. Verify through an established trusted channel
+or independently confirmed domain/registrar ownership and record the support
+case. Never request their password, registrar API keys, recovery backup or MCP
+bearer token.
 
 After verification, create a private request with `email`, `identityVerified: true` and
 `caseRef`, then run:
