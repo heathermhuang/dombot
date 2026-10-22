@@ -10,9 +10,13 @@ qualification. Use the full domains.domains wordmark and labelled sample data.
 1. Verify `https://domains.domains/` and `/signup` in a fresh browser. Scan the
    actual printed QR on iPhone and Android, using Wi-Fi and mobile data. An
    unfamiliar attendee should complete sign-in and import without coaching.
-2. Record available qualified workspace capacity at that time. Count only
-   enabled platform rows with `qualified_at>0` and `signup_enabled=1`, excluding
-   owners, invitations and closure reservations. Check the public registration,
+2. Record available qualified workspace capacity at that time. Use the same
+   union as registration: configured legacy `PUBLIC_SIGNUP_IDS` plus, when the
+   platform dispatcher is enabled, platform rows with `qualified_at>0` and
+   `signup_enabled=1`. Count each enabled workspace once, excluding owners,
+   invitations and closure reservations. Validate the legacy IDs against the
+   configured registry; invalid configuration closes registration. A platform-only
+   count is sufficient only when `PUBLIC_SIGNUP_IDS` is empty. Check public registration,
    legal, email and dispatcher gates. Recheck immediately before the event;
    open signup can consume the reserve before attendees arrive.
 3. Read the provider-wide remaining email quota separately from application

@@ -19,8 +19,9 @@ row. Roll pilot tenants before the founder. Preserve keys, data, sessions and pu
 
 Public signup uses verified email and prequalified capacity; see
 [passwordless-auth.md](passwordless-auth.md) and
-[conference-operations.md](conference-operations.md). Count enabled, qualified,
-signup-enabled platform rows with no owner, invitation or closure reservation.
+[conference-operations.md](conference-operations.md). Count the eligible union of
+configured legacy `PUBLIC_SIGNUP_IDS` and qualified, signup-enabled platform rows,
+with no owner, invitation or closure reservation. All counted workspaces must be enabled.
 Do not treat the legacy operator CLI status as the complete platform-pool count.
 The commands below remain available for deliberate operator-issued invitations.
 The operator uses the same Cloudflare authentication as Wrangler; no credentials
