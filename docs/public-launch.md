@@ -2,18 +2,22 @@
 
 The hosted foundation is promoted in place: preserve the gateway control database,
 all tenant databases, keys and workspace IDs. The `domains-staging` internal
-resource names do not imply separate data after promotion. Keep new-customer
-signup invite-only; this release does not add billing or unbounded provisioning.
+resource names do not imply separate data after promotion. Public early access
+uses verified email and prequalified capacity; it does not add billing or
+unbounded provisioning. See [conference-operations.md](conference-operations.md).
 
-- `PUBLIC_PORTFOLIO_PATH` is an explicitly configured `/w/<uuid>/p/<handle>`.
-  `/domains` redirects only to that public route, preserving query parameters.
-  It cannot route to a private API or another origin.
-- The homepage links to the founder collection and an early-access inquiry email.
+- `/domains` redirects to the explicitly allowed `https://alternative.domains/`
+  when `PUBLIC_PORTFOLIO_ORIGIN` selects it, otherwise to a validated
+  `PUBLIC_PORTFOLIO_PATH` of `/w/<uuid>/p/<handle>`. It cannot select a private
+  API or an arbitrary request-supplied origin.
+- The homepage offers free account creation, a labelled upstream demo, support,
+  and the founder collection.
 - `CANONICAL_ORIGIN` is set only after the public hostname and TLS are verified.
   Old hosts redirect GET/HEAD requests to the canonical origin. Other methods
   return 421 rather than replaying credentials or mutations across origins.
-- Existing MCP grants are resource-bound. Clients must reconnect using their
-  workspace's new-domain MCP URL after an origin change.
+- Existing MCP grants are resource-bound. The shared hosted endpoint is
+  `https://domains.domains/mcp`; legacy workspace endpoints remain supported.
+  Clients must reconnect after an origin change. See [unified-saas-mcp.md](unified-saas-mcp.md).
 
 ## DNS cutover sequence
 
@@ -45,10 +49,10 @@ required. Registrar registration, renewal, transfer and other provider charges a
 separate and remain payable to the registrar. This is an early-access offer; do not
 promise lifetime pricing or unlimited capacity.
 
-The homepage offers an email request for free access; invitations still reserve
-qualified workspace capacity. This does not enable open signup. Quote the actual
-managed hostname in conference materials until the public hostname cutover is
-completed and verified.
+The homepage offers verified-email account creation at `https://domains.domains/signup`.
+Use `https://domains.domains/` in conference materials and verify the complete QR
+journey before printing. Available capacity is a dated snapshot, never a promise
+of unlimited or permanently reserved accounts.
 
 The 17 October public-host release preserves the legacy Your.Link collection at
 `https://alternative.domains/`, using only its thirteen already-public collection sections
@@ -65,18 +69,19 @@ The previous gateway hostname and www redirect GET/HEAD only; POST/other methods
 421 so credentials and mutations cannot be replayed across origins. Existing host-bound
 browser cookies stay on their original host, and MCP clients must pair on the final origin.
 
-The free-service signup form is a bounded request queue with operator-reviewed invitations,
-not instant automatic infrastructure provisioning. Account closure suspends access and
-records a retention deadline; final physical erasure and off-device backup/key custody
+The free-service signup flow claims an existing qualified reserve after email
+verification and legal acceptance; it does not provision infrastructure on demand.
+Account closure suspends access and records a retention deadline; final physical
+erasure and off-device backup/key custody
 remain explicit operating gates until separately qualified. The agent spending budget is
 zero during this release. Never describe early access as unlimited or lifetime-free.
 
 ## Public-registration successor
 
-The verified-email public-account flow supersedes the invitation-only offer only
-when the operator identity, published legal policies, delivered transactional
-email and prequalified capacity gates are complete. See
+The verified-email public-account flow is the active conference offer. It remains
+gated by operator identity, published legal policies, delivered transactional
+email and prequalified capacity. See
 [public-registration.md](public-registration.md) for the exact settings and
-verification procedure. Until enabled, the existing bounded request form remains
-active. Use account/portfolio in customer copy; immutable internal tenant IDs do
-not change.
+verification procedure. If those gates are disabled, report that state explicitly
+and use the bounded fallback request flow. Use account/portfolio in customer copy;
+immutable internal tenant IDs do not change.

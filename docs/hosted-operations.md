@@ -1,7 +1,9 @@
 # Managed early-access operations
 
-The gateway maps operator-provisioned slots to private tenant Workers. Configuration
-accepts up to 32 unique workspace IDs and `WORKSPACE_0`–`WORKSPACE_31` service bindings.
+The gateway maps accounts to prequalified private tenant Workers. Existing accounts
+retain static service bindings; new accounts use the dedicated Workers for Platforms
+registry described in [workers-for-platforms.md](workers-for-platforms.md). The
+32-binding limit applies to the legacy registry, not the platform signup pool.
 A missing service/key fails closed. New keys use `EXTRA_GATEWAY_KEYS`, which cannot
 replace an existing `GATEWAY_KEYS` entry. Provision and verify the Worker, distinct D1,
 root key, gateway key, coordinator and private ingress before enabling its control row.
@@ -15,9 +17,15 @@ row. Roll pilot tenants before the founder. Preserve keys, data, sessions and pu
 
 ## Capacity and invitations
 
-`node scripts/hosted-account.mjs status --config <private-gateway.json>` reports ready
-capacity without printing customer identities or credentials. The operator uses the
-same Cloudflare authentication as Wrangler; no credentials are committed in this repo.
+Public signup uses verified email and prequalified capacity; see
+[passwordless-auth.md](passwordless-auth.md) and
+[conference-operations.md](conference-operations.md). Count the eligible union of
+configured legacy `PUBLIC_SIGNUP_IDS` and qualified, signup-enabled platform rows,
+with no owner, invitation or closure reservation. All counted workspaces must be enabled.
+Do not treat the legacy operator CLI status as the complete platform-pool count.
+The commands below remain available for deliberate operator-issued invitations.
+The operator uses the same Cloudflare authentication as Wrangler; no credentials
+are committed in this repo.
 
 Create a private JSON request containing `email`, then run:
 
@@ -57,11 +65,17 @@ Recovery password-validation errors retain the existing link so a customer can
 correct a mismatch without requesting another one; the atomic one-use/expiry check
 still applies when the corrected form is submitted.
 
-The customer can open `/recover` or the support link from sign-in. Identity verification
-is operator-assisted during early access. Never issue a link solely because someone
-supplies an account email. Verify through an established trusted channel or independently
-confirmed domain/registrar ownership and record the support case. Never request their
-password, registrar API keys, recovery backup or MCP bearer token.
+With verified email delivery enabled, `/recover` sends a single-use recovery link
+to the account's existing email address. The response does not reveal whether an
+account exists or is disabled. Normal email sign-in is also available, subject to
+the account's passkey requirements; password recovery does not remove a passkey.
+
+If the customer cannot access that mailbox, use the support path. For manual
+operator-assisted issuance, never send a link to a new address solely because
+someone supplies an account email. Verify through an established trusted channel
+or independently confirmed domain/registrar ownership and record the support
+case. Never request their password, registrar API keys, recovery backup or MCP
+bearer token.
 
 After verification, create a private request with `email`, `identityVerified: true` and
 `caseRef`, then run:
@@ -89,9 +103,10 @@ customer database as a drill. Compare semantic account/domain/draft/publication 
 and verify the restored private journey. Disable test routing afterward. A rollback must
 retain the coordinator class/namespace and preserve current D1 data and secrets.
 
-The current offer is invite-only managed early access. Public paid signup, automatic
-fleet provisioning, billing and per-operation registrar spend approval are separate
-features, not implied by a successful release or sync. Hostname cutover additionally
+The current offer is free public early access using verified email and existing
+qualified reserves. Paid signup, on-demand fleet provisioning, billing and
+per-operation registrar spend approval are separate features, not implied by a
+successful release or sync. Hostname cutover additionally
 requires verified DNS/TLS, mail-record preservation and fresh OAuth resource pairing on
 the new hostname.
 
@@ -122,27 +137,17 @@ in protected operator storage.
 
 ## Free service limits and public access requests
 
-The public `/signup` form accepts requests for review. It does not allocate infrastructure
-or issue an account credential. Ready slots remain operator-qualified and invitation-only:
-32 configured immutable workspace identities maximum; the existing pool is ten private
-Workers/D1s, including separately disabled QA slots. Never recycle a customer identity or
-database into the available pool. Expand capacity through the existing controlled provision,
-backup, isolated deployment and qualification procedure before issuing more invitations.
-Autonomous public fleet provisioning remains unavailable.
+The public `/signup` form starts the email link/code flow when public registration,
+legal, email delivery and capacity gates are enabled. It allocates a prequalified
+workspace only after verification and required legal acceptance. It does not
+provision new infrastructure on demand. QA identities are never public capacity.
 
-The queue holds at most 100 email addresses, expires requests after 30 days, accepts at
-most 20 requests globally and three per source IP in ten minutes, and returns a capacity
-error rather than silently discarding a full-queue request. The form gives the same response
-for new and duplicate addresses and makes no immediate-access promise. Export pending
-requests into a protected file for operator review:
-
-```sh
-node scripts/hosted-account.mjs requests --config <private-gateway.json> --output <new-private-request-export.json>
-```
-
-Use the existing `invite` flow after verification and available-capacity qualification.
-The tool never emails an invitation automatically. Pending request exports contain private
-contact information and must not appear in shared reports or source control.
+The earlier bounded access-request queue and operator invitation commands are
+legacy fallback operations. Do not describe them as the active customer journey
+while public registration is enabled. Keep the separate application campaign
+budget and provider-wide email quota visible to the operator; neither reserves
+the other's allowance. Do not reset campaign identifiers or counters to bypass
+limits. See [conference-operations.md](conference-operations.md) for event checks.
 
 Gateway allowances are 600 MCP POSTs per workspace and trusted source IP, and 3,000
 authenticated API requests per workspace per ten minutes. Unauthenticated traffic from
