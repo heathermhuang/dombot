@@ -25,6 +25,13 @@ A leased batch is not permission to send. The dispatcher records a durable attem
 
 For root-key rotation, use the existing export/rotate/import procedure with the Sales-aware host runtime. Validate the entire version-9 extension before mutation. Restore re-encrypts private content and rebuilds keyed metadata, including encrypted suppression addresses; no capabilities or delivery grants are portable. Verify restored drafts/conversations, private notes and suppression, then perform fresh registrar control and buyer confirmation before republishing/replying. Do not roll back to an incompatible reader after writing Sales data.
 
+A bundle without the `sales` extension is rejected before any sales, publication
+or private-namespace writes when the destination has any sales state. This
+includes suppression addresses and operational records even if no listing drafts
+remain. Export a complete host backup from the source account instead. Older
+sales-less bundles remain importable when all destination sales tables are empty;
+complete host backups retain their explicit replacement behavior.
+
 Cleanup removes pending inquiries after seven days, inactive verified/reconfirmation-needed conversations after twelve months, abuse fingerprints after 24 hours, suppression after 90 days and expired auxiliary receipts on their documented schedules. Closure keeps the existing recovery/manual-purge process; do not shorten it through this feature. Raw capability paths, bodies, email addresses and credentials must not enter logs or public receipts. Templates disable invocation URL logs and traces; preserve that setting in the live-derived configuration.
 
 ## Bounded operation limits
