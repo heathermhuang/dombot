@@ -8,7 +8,12 @@ import {
 } from '../shared/owner-site';
 import type { PublicationStore } from './publication-store';
 import type { SalesStore } from './sales-store';
-import { exportSales, restoreSales, salesBackupSchema } from './sales-backup';
+import {
+  exportSales,
+  hasSalesData,
+  restoreSales,
+  salesBackupSchema,
+} from './sales-backup';
 
 /** Host extension to the normal sealed export: draft selections travel, public
  * status never does. The existing root-key rotation script uses these methods. */
@@ -59,6 +64,10 @@ export function publicationBackupMethods(
       if (salesBackup && !sales)
         throw new BundleError(
           'The sales migration/runtime is required before restoring this backup. Nothing was imported.',
+        );
+      if (sales && !salesBackup && (await hasSalesData(sales.db)))
+        throw new BundleError(
+          'This backup has no domain inquiry data, but this account already has domain inquiry data. Export a complete backup from the source account before restoring. Nothing was imported.',
         );
       if (sales)
         await restoreSales(

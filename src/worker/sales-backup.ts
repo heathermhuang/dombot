@@ -130,6 +130,36 @@ export async function hasSales(db: D1Database): Promise<boolean> {
     )
     .first());
 }
+
+/** Include private, published and operational state, even when there are no drafts. */
+export async function hasSalesData(db: D1Database): Promise<boolean> {
+  // These identifiers are fixed schema names, never caller-controlled input.
+  const tables = [
+    'sale_drafts',
+    'sale_destinations',
+    'published_sales',
+    'sales_reviews',
+    'sales_review_items',
+    'sales_shop',
+    'sales_shop_reviews',
+    'sales_jobs',
+    'sales_job_items',
+    'sales_events',
+    'sales_host_bindings',
+    'sales_leads',
+    'sales_messages',
+    'sales_tokens',
+    'sales_outbox',
+    'sales_abuse',
+    'sales_suppression',
+  ];
+  const row = await db
+    .prepare(
+      `SELECT ${tables.map((table) => `EXISTS(SELECT 1 FROM ${table})`).join(' OR ')} AS present`,
+    )
+    .first<{ present: number }>();
+  return row?.present !== 0;
+}
 export async function exportSales(
   store: SalesStore,
 ): Promise<z.infer<typeof salesBackupSchema>> {
