@@ -792,6 +792,13 @@ describe('passkeys and fresh authentication', () => {
       'exportData',
       'importData',
       'applyDomainOp',
+      'startBulk',
+      'stepBulk',
+      '%73tepBulk',
+      'getBulkJob',
+      '%67etBulkJob',
+      'deleteDomains',
+      '%64eleteDomains',
     ]) {
       const response = await gateway.fetch(
         new Request(`https://domains.domains/w/${ids[0]}/api/${name}`, {
@@ -818,4 +825,43 @@ describe('passkeys and fresh authentication', () => {
       ).status,
     ).toBe(303);
   });
+
+  it.each([
+    'exportData/',
+    'exportData%2F',
+    'exportData%252F',
+    'getBulkJob/',
+    'deleteDomains%2f',
+    'stepBulk//',
+    'exportData%ZZ',
+  ])(
+    'rejects the noncanonical API method %s before forwarding',
+    async (name) => {
+      const { token } = await owner();
+      const forwarded = vi.fn(async () =>
+        Response.json({ result: 'must not execute' }),
+      );
+      env.WORKSPACE_0 = { fetch: forwarded } as unknown as Fetcher;
+      for (const authenticatedAt of [Date.now(), 0]) {
+        await db
+          .prepare('UPDATE sessions SET authenticated_at=?')
+          .bind(authenticatedAt)
+          .run();
+        const r = await gateway.fetch(
+          new Request(`https://domains.domains/w/${ids[0]}/api/${name}`, {
+            method: 'POST',
+            headers: {
+              Cookie: cookie(token),
+              Origin: 'https://domains.domains',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ args: [] }),
+          }),
+          env,
+        );
+        expect(r.status).toBe(400);
+      }
+      expect(forwarded).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -30,7 +30,8 @@ is not proof of China availability.
   Synced authenticators can legitimately have a zero counter; challenge replay
   protection is mandatory even when counters stay zero.
 - Credential access/changes, proxy credentials, backup import/export, registrar
-  writes, agent approvals and MCP enabling require authentication within five
+  writes, bulk-job continuation/results, domain deletion, agent approvals and MCP
+  enabling require authentication within five
   minutes. Once any passkey exists, a fresh existing passkey is required. Email
   login or password recovery cannot bypass it. Revoking a session invalidates its
   pending registration/reauthentication challenge. Password recovery also revokes
@@ -38,6 +39,9 @@ is not proof of China availability.
   Ordinary password changes and browser logout leave MCP connections active.
   Workspace-specific legacy pairings remain separately controlled through MCP
   settings; recovery does not remove registered passkeys.
+- The gateway decodes API method names once and rejects noncanonical names,
+  including literal/encoded trailing slashes and extra path separators, before
+  forwarding. Encoded letters retain the same sensitive-method checks.
 - A first passkey requires fresh email/password authentication. Further enrollment
   requires a fresh existing passkey. Limit ten per user. Removal requires a fresh
   passkey, derives the user from the session and signs out other browsers. Add a
