@@ -66,6 +66,6 @@ export function recoveryForm(code: string, error = ''): string {
     );
   return page(
     'Set a new password',
-    `<form action="/recover" method="post"><h1>Set a new password.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>This link can be used once. Updating your password signs out every browser session. Paired agents are managed separately in MCP settings.</p><input type="hidden" name="code" value="${e(code)}"><label>New password<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><label>Confirm new password<input name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><button type="submit">Update password</button></form>`,
+    `<form action="/recover" method="post"><h1>Set a new password.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>This link can be used once. Recovering your password signs out every browser session and disconnects AI assistants connected through the shared MCP URL. Pending shared MCP connections are canceled. Review workspace-specific agent connections separately in MCP settings.</p><input type="hidden" name="code" value="${e(code)}"><label>New password<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><label>Confirm new password<input name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><button type="submit">Update password</button></form>`,
   );
 }

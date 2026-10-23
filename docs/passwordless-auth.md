@@ -33,8 +33,11 @@ is not proof of China availability.
   writes, agent approvals and MCP enabling require authentication within five
   minutes. Once any passkey exists, a fresh existing passkey is required. Email
   login or password recovery cannot bypass it. Revoking a session invalidates its
-  pending registration/reauthentication challenge. Existing paired-agent grants
-  are separate and remain controlled through MCP settings.
+  pending registration/reauthentication challenge. Password recovery also revokes
+  shared SaaS MCP grants and pending OAuth authorizations/codes atomically.
+  Ordinary password changes and browser logout leave MCP connections active.
+  Workspace-specific legacy pairings remain separately controlled through MCP
+  settings; recovery does not remove registered passkeys.
 - A first passkey requires fresh email/password authentication. Further enrollment
   requires a fresh existing passkey. Limit ten per user. Removal requires a fresh
   passkey, derives the user from the session and signs out other browsers. Add a

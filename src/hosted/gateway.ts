@@ -832,7 +832,7 @@ app.post('/recover', bodyLimit({ maxSize: 16_384 }), async (c) => {
   return c.html(
     page(
       'Password updated',
-      '<h1>Password updated.</h1><p>Every browser session has been signed out. Sign in with your new password. Paired agents are managed separately in MCP settings.</p><p><a class="button" href="/login">Sign in</a></p>',
+      '<h1>Password updated.</h1><p>Every browser session has been signed out. Shared MCP connections have been revoked and pending connections canceled. Sign in with your new password and reconnect trusted AI assistants. Review workspace-specific agent connections separately in MCP settings.</p><p><a class="button" href="/login">Sign in</a></p>',
     ),
   );
 });

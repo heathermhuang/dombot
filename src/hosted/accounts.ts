@@ -163,7 +163,7 @@ export class Accounts {
     return results[0].results.length === 1;
   }
 
-  /** Operator-issued proof is consumed atomically with password/session changes. */
+  /** Recovery consumes its proof and retires browser/shared-MCP authority atomically. */
   async recoverPassword(code: string, nextPassword: string): Promise<boolean> {
     if (!/^[a-f0-9]{64}$/.test(code)) return false;
     const hash = await tokenHash(code);
@@ -192,6 +192,19 @@ export class Accounts {
       this.db
         .prepare(
           'DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM password_resets WHERE consumption_id=?1)',
+        )
+        .bind(consumption),
+      // Keep revocation in the recovery transaction. An exchange committed first
+      // has its new grant revoked; one committed later can no longer claim its
+      // deleted authorization. Only the winning recovery consumption may act.
+      this.db
+        .prepare(
+          'UPDATE mcp_grants SET revoked_at=?1 WHERE user_id IN (SELECT user_id FROM password_resets WHERE consumption_id=?2) AND revoked_at IS NULL',
+        )
+        .bind(committedAt, consumption),
+      this.db
+        .prepare(
+          'DELETE FROM mcp_authorizations WHERE user_id IN (SELECT user_id FROM password_resets WHERE consumption_id=?1)',
         )
         .bind(consumption),
     ]);
