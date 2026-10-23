@@ -43,4 +43,34 @@ describe('public launch routing', () => {
     expect(response?.headers.get('Location')).toBeNull();
     expect(await response?.text()).not.toContain('private');
   });
+  it('upgrades template-only HTTP reads and refuses credential writes', async () => {
+    const read = canonicalRedirect(
+      new Request('http://staging.example/app?view=domains'),
+      undefined,
+    );
+    expect(read?.status).toBe(308);
+    expect(read?.headers.get('Location')).toBe(
+      'https://staging.example/app?view=domains',
+    );
+    const write = canonicalRedirect(
+      new Request('http://staging.example/session/login', {
+        method: 'POST',
+        body: 'private-password',
+      }),
+      undefined,
+    );
+    expect(write?.status).toBe(421);
+    expect(write?.headers.get('Set-Cookie')).toBeNull();
+    expect(write?.headers.get('Location')).toBeNull();
+    expect(await write?.text()).not.toContain('private-password');
+    expect(
+      canonicalRedirect(new Request('https://staging.example/app'), undefined),
+    ).toBeNull();
+  });
+  it('keeps unconfigured loopback development available', () => {
+    for (const host of ['localhost', '127.0.0.1', '[::1]'])
+      expect(
+        canonicalRedirect(new Request(`http://${host}:8787/app`), undefined),
+      ).toBeNull();
+  });
 });

@@ -19,7 +19,9 @@ function run(args) {
   );
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
-for (const name of ['tenant-0', 'tenant-1', 'tenant-2', 'gateway']) {
+// Validate the complete plan before the first migration or deployment.
+const names = ['tenant-0', 'tenant-1', 'tenant-2', 'gateway'];
+for (const name of names) {
   const config = path.join(dir, `${name}.jsonc`);
   const cfg = JSON.parse(fs.readFileSync(config, 'utf8'));
   if (!cfg.name.startsWith('domains-staging') || cfg.routes?.length)
@@ -29,6 +31,21 @@ for (const name of ['tenant-0', 'tenant-1', 'tenant-2', 'gateway']) {
     (cfg.workers_dev !== false || cfg.preview_urls !== false)
   )
     throw Error('Tenant must have no public ingress');
+  if (name === 'gateway') {
+    const origin = cfg.vars?.CANONICAL_ORIGIN;
+    let valid = false;
+    try {
+      const parsed = new URL(origin);
+      valid = parsed.protocol === 'https:' && parsed.origin === origin;
+    } catch {
+      // Refuse stale generated configs before any migration or deployment.
+    }
+    if (!valid)
+      throw Error('Gateway requires an explicit HTTPS CANONICAL_ORIGIN');
+  }
+}
+for (const name of names) {
+  const config = path.join(dir, `${name}.jsonc`);
   run([
     'd1',
     'migrations',

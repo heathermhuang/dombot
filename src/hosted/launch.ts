@@ -10,11 +10,22 @@ export function canonicalRedirect(
   request: Request,
   origin: string | undefined,
 ): Response | null {
-  if (!origin) return null;
+  const incoming = new URL(request.url);
+  // Template-only deployments still refuse credential-bearing plain HTTP.
+  // Loopback remains available to local development and test servers.
+  if (!origin) {
+    if (
+      incoming.protocol !== 'http:' ||
+      ['localhost', '127.0.0.1', '[::1]'].includes(incoming.hostname)
+    )
+      return null;
+    const secure = new URL(incoming);
+    secure.protocol = 'https:';
+    origin = secure.origin;
+  }
   const configured = new URL(origin);
   if (configured.protocol !== 'https:' || configured.origin !== origin)
     throw new Error('Canonical origin must be an HTTPS origin');
-  const incoming = new URL(request.url);
   if (incoming.origin === origin) return null;
   // Do not forward request bodies, cookies or stale OAuth grants between hosts.
   if (request.method !== 'GET' && request.method !== 'HEAD')

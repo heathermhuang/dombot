@@ -9,11 +9,20 @@ await fs.mkdir(dir, { recursive: true, mode: 0o700 });
 const resources = JSON.parse(
   await fs.readFile(path.join(dir, 'resources.json'), 'utf8'),
 );
-if (
-  !resources.accountId ||
-  resources.databases?.length !== 4 ||
-  !resources.origin?.startsWith('https://')
-)
+let origin;
+try {
+  const parsed = new URL(resources.origin);
+  if (
+    parsed.protocol === 'https:' &&
+    parsed.origin === resources.origin &&
+    !parsed.username &&
+    !parsed.password
+  )
+    origin = parsed.origin;
+} catch {
+  // The validation below reports the required resource shape.
+}
+if (!resources.accountId || resources.databases?.length !== 4 || !origin)
   throw Error(
     'Provide an account, HTTPS staging origin, and four D1 database IDs in .wrangler/hosted/resources.json',
   );
@@ -121,6 +130,7 @@ await json('gateway.jsonc', {
     service: `domains-staging-tenant-${i}`,
   })),
   vars: {
+    CANONICAL_ORIGIN: origin,
     WORKSPACES: JSON.stringify(
       saved.workspaces.map((w, i) => ({
         id: w.id,
