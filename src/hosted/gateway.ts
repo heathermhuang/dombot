@@ -1156,11 +1156,20 @@ app.all('/w/:workspace/*', async (c) => {
     'importData',
     'applyDomainOp',
     'startBulk',
+    'stepBulk',
+    'getBulkJob',
+    'deleteDomains',
     'resolveApproval',
   ]);
   let apiMethod = '';
   try {
-    if (path.startsWith('/api/')) apiMethod = decodeURIComponent(path.slice(5));
+    if (path.startsWith('/api/')) {
+      apiMethod = decodeURIComponent(path.slice(5));
+      // Decode once for the same method identity the tenant router uses.
+      // Reject alternate path separators instead of relying on router strictness.
+      if (!/^[A-Za-z][A-Za-z0-9]*$/.test(apiMethod))
+        return c.json({ error: 'Invalid API path' }, 400);
+    }
   } catch {
     return c.json({ error: 'Invalid API path' }, 400);
   }
