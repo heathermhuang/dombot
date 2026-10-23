@@ -118,7 +118,16 @@ deploy docs give the equivalent two `openssl rand -base64 32` lines for people
 who'd rather do it by hand. Lose `DOMBOT_SECRET` and the data is unreadable by
 design; the docs say so, and the export bundle is the backup.
 `npm run web:rotate-secret` re-encrypts every doc under a new root key by
-round-tripping the data through a sealed bundle.
+round-tripping the data through a sealed bundle, after D1 retires old-root
+admission and active requests drain. Login and import are separately bound to
+the new generation. Deploy compatible code and migrations first; follow the
+[rotation maintenance procedure](self-hosting.md#root-key-rotation-maintenance).
+
+Registrar reads use jittered exponential retries within one request timeout
+budget. `Retry-After` remains a minimum wait; if it does not fit in the remaining
+budget, the rate-limit error returns instead. Unknown writes are not retried.
+These bounds do not impose a global registrar quota or a cross-tenant circuit
+breaker; provider limits still apply.
 
 ### Auth for the web UI
 

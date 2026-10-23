@@ -6,6 +6,10 @@ const migration = vi.hoisted(() => ({
   release: () => {},
 }));
 vi.mock('./proxy-transport', () => ({ workerProxyFetch: vi.fn() }));
+// These unit tests isolate initialization; root admission has real-D1 race tests.
+vi.mock('./root-retirement', () => ({
+  withRootLease: (_env: unknown, work: () => Promise<Response>) => work(),
+}));
 vi.mock('../core/storage/migrations', () => ({
   runMigrations: vi.fn(async () => {
     migration.calls++;
@@ -81,8 +85,8 @@ describe('Worker initialization recovery', () => {
     });
     expect((await status()).status).toBe(200);
     expect(migration.calls).toBe(2);
-    expect(kept).toHaveLength(2);
-    await expect(Promise.all(kept)).resolves.toHaveLength(2);
+    expect(kept).toHaveLength(5);
+    await expect(Promise.all(kept)).resolves.toHaveLength(5);
 
     // Once initialized, the auth-status read must not wait behind a stateful
     // registrar request. It needs only the completed auth configuration.

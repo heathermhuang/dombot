@@ -60,6 +60,7 @@ import {
 } from './sales-observation';
 import { SalesInquiryStore } from './sales-inquiry-store';
 import { reconcileSalesOutcomes } from './sales-reconciliation';
+import { retireRootRequest, withRootLease } from './root-retirement';
 
 // The Cloudflare Worker host: the same core (services, API table, storage
 // façade) as the desktop app behind an HTTP transport. See
@@ -261,6 +262,7 @@ app.get('/auth/status', async (c) => {
   const auth = c.get('auth');
   return c.json({
     mode: auth.mode,
+    rootRetirement: auth.mode !== 'gateway',
     authenticated: await isAuthenticated(auth, c.req.raw, c.env.DB),
     version: APP_VERSION,
     sales: c.env.DOMBOT_SALES_V1 === 'true',
@@ -412,40 +414,82 @@ app.get('*', async (c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx?: Parameters<typeof app.fetch>[2],
+  ) {
+    const work = (async () => {
+      if (new URL(request.url).pathname === '/auth/retire-root')
+        return retireRootRequest(request, env, async () => {
+          const url = new URL('/api/exportData', request.url);
+          return app.fetch(
+            new Request(url, {
+              method: 'POST',
+              headers: request.headers,
+              body: JSON.stringify({ args: [] }),
+            }),
+            env,
+            ctx,
+          );
+        });
+      return withRootLease(
+        env,
+        async () => app.fetch(request, env, ctx),
+        request,
+      );
+    })().catch((error: unknown) => {
+      console.error(
+        '[worker] root admission failed:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+      return Response.json(
+        {
+          error:
+            'Encryption-root admission is unavailable. Check migrations and rotation state.',
+        },
+        { status: 503 },
+      );
+    });
+    ctx?.waitUntil(work.then(() => {}).catch(() => {}));
+    return work;
+  },
 
   // Hourly cron (wrangler.jsonc). syncAll() runs only when the cache is older
   // than the configured interval, so the setting decides the real cadence.
   async scheduled(_controller, env) {
-    await withRequestLock(async () => {
-      await bootOnce(env);
-      await hydrate();
-      if (await hasSales(env.DB))
-        await reconcileSalesOutcomes(await SalesStore.from(env));
-      if (await hasSales(env.DB))
-        await new SalesInquiryStore(
-          await SalesStore.from(env),
-          env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
-        ).cleanup();
-      const beforeSales = salesControlState(env);
-      const minutes = getSettings().autoSyncIntervalMinutes;
-      if (minutes <= 0) {
-        console.log('[cron] auto-sync disabled in settings');
-        return;
-      }
-      const ran = await syncAll(minutes * 60_000);
-      await stepRenewalPricing();
-      if (await hasSales(env.DB))
-        await (
-          await SalesStore.from(env)
-        ).reconcile(
-          createVerifiedSaleObserver(env),
-          changedSalesDomains(beforeSales, salesControlState(env)),
+    await withRootLease(env, async () => {
+      await withRequestLock(async () => {
+        await bootOnce(env);
+        await hydrate();
+        if (await hasSales(env.DB))
+          await reconcileSalesOutcomes(await SalesStore.from(env));
+        if (await hasSales(env.DB))
+          await new SalesInquiryStore(
+            await SalesStore.from(env),
+            env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
+          ).cleanup();
+        const beforeSales = salesControlState(env);
+        const minutes = getSettings().autoSyncIntervalMinutes;
+        if (minutes <= 0) {
+          console.log('[cron] auto-sync disabled in settings');
+          return;
+        }
+        const ran = await syncAll(minutes * 60_000);
+        await stepRenewalPricing();
+        if (await hasSales(env.DB))
+          await (
+            await SalesStore.from(env)
+          ).reconcile(
+            createVerifiedSaleObserver(env),
+            changedSalesDomains(beforeSales, salesControlState(env)),
+          );
+        console.log(
+          ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
         );
-      console.log(
-        ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
-      );
-      await flushWrites();
+        await flushWrites();
+      });
+      return new Response(null, { status: 204 });
     });
   },
 } satisfies ExportedHandler<Env>;

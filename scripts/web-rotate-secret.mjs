@@ -7,12 +7,13 @@
 //   2. keep that bundle on disk, sealed here with a passphrase you're asked
 //      for (same envelope as the app's Settings → Export; see
 //      src/shared/bundle-seal.ts)
-//   3. `wrangler secret put DOMBOT_SECRET` with a fresh random key
-//   4. sign in again (sessions are derived from the secret, so it's a new one)
-//      and import the bundle, which rewrites every doc under the new key
+//   3. retire old-root admission in D1, drain active requests, and replace the
+//      backup with a final export; only then install a fresh random root
+//   4. independently bind login and import to the new root generation
 //
-// If anything fails after step 3 the instance is empty but your data is in
-// the bundle file: fix the problem and import it from Settings → Sync.
+// Deploy this protocol-compatible runtime and migrations before using it.
+// If retirement or propagation is uncertain, keep the old root retired and
+// retain both the sealed backup and private recovery-key file for the operator.
 //
 //   DOMBOT_URL=https://dombot.example.workers.dev npm run web:rotate-secret
 //
@@ -20,9 +21,9 @@
 // a passphrase to seal the on-disk bundle (or DOMBOT_BACKUP_PASSPHRASE). With
 // both in the environment the script runs unattended.
 
-import { randomBytes, webcrypto } from 'node:crypto';
+import { randomBytes, webcrypto, hkdfSync } from 'node:crypto';
 import { runWrangler } from './wrangler.mjs';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
@@ -72,7 +73,16 @@ async function sealBundle(text, passphrase) {
 }
 
 const url = (process.env.DOMBOT_URL || '').replace(/\/+$/, '');
-if (!/^https?:\/\//.test(url)) {
+let validOrigin = false;
+try {
+  const parsed = new URL(url);
+  validOrigin =
+    parsed.origin === url &&
+    (parsed.protocol === 'https:' ||
+      (parsed.protocol === 'http:' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)));
+} catch {}
+if (!validOrigin) {
   console.error(
     'Set DOMBOT_URL to your instance, e.g. DOMBOT_URL=https://dombot.you.workers.dev',
   );
@@ -111,23 +121,41 @@ if (!passphrase) {
 }
 rl.close();
 
+const request = (input, init = {}) =>
+  fetch(input, { ...init, signal: AbortSignal.timeout(30_000) });
 let cookie = '';
+let generation = '';
+const rootHeader = 'X-DomBot-Root-Generation';
 async function login() {
-  const res = await fetch(`${url}/auth/login`, {
+  const res = await request(`${url}/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: url },
+    headers: {
+      'content-type': 'application/json',
+      origin: url,
+      ...(generation ? { [rootHeader]: generation } : {}),
+    },
     body: JSON.stringify({ password }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(`login failed (${res.status}): ${body.error ?? ''}`);
   }
+  const observed = res.headers.get(rootHeader);
+  if (!observed || (generation && observed !== generation))
+    throw new Error('Login did not prove the required root generation');
+  generation = observed;
   cookie = (res.headers.get('set-cookie') || '').split(';')[0];
+  if (!cookie) throw new Error('Login returned no session cookie');
 }
 async function api(method, args) {
-  const res = await fetch(`${url}/api/${method}`, {
+  const res = await request(`${url}/api/${method}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: url, cookie },
+    headers: {
+      'content-type': 'application/json',
+      origin: url,
+      cookie,
+      [rootHeader]: generation,
+    },
     body: JSON.stringify({ args }),
   });
   const body = await res.json().catch(() => ({}));
@@ -136,11 +164,10 @@ async function api(method, args) {
   return body.result;
 }
 
-const status = await (await fetch(`${url}/auth/status`)).json();
-if (status.mode !== 'password') {
+const status = await (await request(`${url}/auth/status`)).json();
+if (status.mode !== 'password' || status.rootRetirement !== true) {
   console.error(
-    `This instance uses DOMBOT_AUTH=${status.mode}; this script only knows the password login. ` +
-      'Export from Settings → Sync, rotate the secret with `npx wrangler secret put DOMBOT_SECRET`, sign in, and import the file.',
+    'Deploy the root-retirement-compatible runtime and migrations first. This command requires password mode; no secret was changed.',
   );
   process.exit(1);
 }
@@ -149,65 +176,98 @@ if (status.mode !== 'password') {
 await login();
 const plain = await api('exportData', []);
 if (JSON.parse(plain).publicationDraft?.version === 2) {
-  const state = await fetch(`${url}/publishing/site`, { headers: { cookie } });
+  const state = await request(`${url}/publishing/site`, {
+    headers: { cookie },
+  });
   if (!state.ok || !(await state.json()).enabled)
     throw new Error(
       'Enable DOMBOT_OWNER_SITE_V2 on this compatible runtime before rotating a v2 site root key. No secret was changed.',
     );
 }
-const file = `dombot-data-${new Date().toISOString().slice(0, 10)}-pre-rotation.json`;
+const file = `dombot-data-${new Date().toISOString().replaceAll(':', '-')}-pre-rotation.json`;
 writeFileSync(file, await sealBundle(plain, passphrase), { mode: 0o600 });
 console.log(`Exported to ./${file} (sealed with your passphrase).`);
 
-// 3. New secret.
+// Freeze admission across isolates, then take the final export only after
+// every admitted old-root HTTP/cron request has finished and flushed.
 const next = randomBytes(32).toString('base64');
-const r = runWrangler(['secret', 'put', 'DOMBOT_SECRET'], {
-  input: next + '\n',
-  stdio: ['pipe', 'inherit', 'inherit'],
-});
-if (r.status !== 0) {
-  console.error(
-    '\nwrangler secret put failed; nothing was changed. Your export is still at ./' +
-      file,
-  );
-  process.exit(r.status ?? 1);
-}
-
-// 4. Wait until the new secret is live — proven by the pre-rotation session
-// (derived from the old secret) being rejected — then sign in fresh and
-// import. Importing through a stale isolate would re-seal the data under the
-// OLD key, so the proof matters.
-console.log('Waiting for the instance to pick up the new secret…');
-const oldCookie = cookie;
-let live = false;
-for (let attempt = 0; attempt < 60 && !live; attempt++) {
-  const res = await fetch(`${url}/api/getRevisions`, {
+const nextGeneration = Buffer.from(
+  hkdfSync(
+    'sha256',
+    Buffer.from(next, 'base64'),
+    Buffer.alloc(0),
+    'dombot/root-generation/v1',
+    32,
+  ),
+).toString('base64url');
+let finalBundle;
+for (let attempt = 0; attempt < 60; attempt++) {
+  const res = await request(`${url}/auth/retire-root`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       origin: url,
-      cookie: oldCookie,
+      cookie,
+      [rootHeader]: generation,
     },
-    body: JSON.stringify({ args: [] }),
+    body: JSON.stringify({ password, nextRoot: nextGeneration }),
   });
-  if (res.status === 401) live = true;
-  else await new Promise((r) => setTimeout(r, 2000));
+  if (![200, 202].includes(res.status))
+    throw new Error(
+      `Root retirement failed (${res.status}); no new secret was installed. Preserve ./${file} and inspect rotation state.`,
+    );
+  const state = await res.json();
+  if (
+    res.status === 200 &&
+    state.drained === true &&
+    typeof state.bundle === 'string'
+  ) {
+    finalBundle = state.bundle;
+    break;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 }
-if (!live) {
-  console.error(
-    'The instance still accepts the old session after two minutes. Not importing. ' +
-      `Once it restarts, sign in and import ./${file} from Settings → Sync.`,
+if (!finalBundle)
+  throw new Error(
+    `Old-root requests have not drained. No secret was installed. Preserve ./${file}; do not clear unknown request leases.`,
   );
-  process.exit(1);
+writeFileSync(file, await sealBundle(finalBundle, passphrase), { mode: 0o600 });
+// Keep the recovery key privately on disk before an externally ambiguous update.
+mkdirSync('.wrangler', { recursive: true, mode: 0o700 });
+const keyFile = `.wrangler/rotation-root-${nextGeneration}.txt`;
+writeFileSync(keyFile, next + '\n', { mode: 0o600, flag: 'wx' });
+const r = runWrangler(['secret', 'put', 'DOMBOT_SECRET'], {
+  input: next + '\n',
+  stdio: ['pipe', 'inherit', 'inherit'],
+});
+if (r.status !== 0)
+  throw new Error(
+    `Secret update failed or is uncertain. The old root remains retired; keep ./${file} and ${keyFile}, and inspect provider state before retrying.`,
+  );
+
+// Every login/import is independently bound to the new generation. A request
+// routed to an old isolate is rejected before it can hydrate or write data.
+generation = nextGeneration;
+let live = false;
+for (let attempt = 0; attempt < 60 && !live; attempt++) {
+  const res = await request(`${url}/auth/status`, {
+    headers: { [rootHeader]: generation },
+  });
+  live = res.ok && res.headers.get(rootHeader) === generation;
+  if (!live) await new Promise((resolve) => setTimeout(resolve, 2000));
 }
+if (!live)
+  throw new Error(
+    `New runtime propagation is unresolved. Preserve ./${file} and ${keyFile}; no import was attempted.`,
+  );
 await login();
-const imported = await api('importData', [plain]);
+const imported = await api('importData', [finalBundle]);
 console.log(
   `Imported ${imported.entries} item(s) across ${imported.namespaces} section(s).`,
 );
-console.log(`\nNew DOMBOT_SECRET=${next}`);
+console.log(`New root recovery key saved privately at ${keyFile}.`);
 console.log(
-  'Save it now — it is not shown again. Delete ./' +
+  'Store that key in your password manager. Delete ./' +
     file +
     ' once you have confirmed the instance is healthy (or keep it as a backup).',
 );
