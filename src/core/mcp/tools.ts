@@ -1000,8 +1000,9 @@ export function registerTools(
           domains: z
             .array(z.string())
             .min(1)
+            .max(100)
             .describe(
-              'Domain names to check, e.g. ["example.com", "example.net"]',
+              '1–100 domain names to check, e.g. ["example.com", "example.net"]',
             ),
         },
         annotations: { readOnlyHint: true },

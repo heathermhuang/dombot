@@ -6,10 +6,12 @@ import type {
   Domain,
   DomainOp,
   DomainOpKind,
+  DomainOpResult,
   DomainOpStatus,
   RegistrarMeta,
 } from '../../shared/ipc';
 import { OP_LABEL, unsupportedReason } from '../../shared/domain-ops';
+import { toCsv, toTsv } from '../../shared/csv';
 
 export interface Bucketed {
   /** Will be sent to the registrar. */
@@ -125,10 +127,6 @@ export function isRetryable(status: DomainOpStatus): boolean {
   );
 }
 
-function csvField(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
 /** The results report: one row per target with its status and message. */
 export function resultsToCsv(job: BulkJob): string {
   const withCodes = hasAuthCodes(job);
@@ -145,9 +143,16 @@ export function resultsToCsv(job: BulkJob): string {
     if (withCodes) row.push(r.data?.authCode ?? '');
     return row;
   });
-  return [header, ...rows]
-    .map((row) => row.map(csvField).join(','))
-    .join('\r\n');
+  return toCsv([header, ...rows]);
+}
+
+/** Copy-all is spreadsheet text; copying one code keeps its original value. */
+export function authCodesToTsv(results: readonly DomainOpResult[]): string {
+  return toTsv(
+    results
+      .filter((r) => r.data?.authCode)
+      .map((r) => [r.target.domainName, r.data?.authCode ?? '']),
+  );
 }
 
 /** Filename for a results export, e.g. "dombot-bulk-auto-renew-2026-09-04.csv". */

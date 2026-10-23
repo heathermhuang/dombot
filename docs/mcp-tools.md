@@ -8,9 +8,19 @@ Domains table the same way a row control does. How to connect a client is in
 the [README](../README.md#connecting-an-ai-agent) and in the app under
 Settings → MCP.
 
-Writes aren't gated behind a per-call approval: approving the client's
-connection in DomBot is the gate. Money ops (register, transfer, renew) say so
-in their descriptions.
+OAuth writes require an explicitly approved `domains:write` grant; money
+operations require `domains:spend`. Stdio and development static-token
+connections use `portfolio:read`. The server registers only tools allowed by
+the connection's permissions. OAuth approval is the gate for writes; there is
+no additional per-call approval. Money operations say so in their descriptions.
+
+`registrar_check_availability` accepts 1–100 domain names per call. Larger
+arrays are rejected before any provider invocation. Split larger checks into
+separate bounded calls.
+
+Bulk-result CSV and the auth-code Copy all TSV use the shared spreadsheet
+formula guard. Tabs, quotes and line breaks remain inside their original cell.
+The per-code copy button preserves the exact opaque code for transfer forms.
 
 ## Scope and parameters
 

@@ -210,6 +210,11 @@ third _adapter_ over the same `services/` core the UI uses — see
   approval prompt (dev/testing), `DOMBOT_MCP_TOKEN` for a static bearer token
   escape hatch (dev/testing). See
   [`src/core/mcp/oauth.ts`](src/core/mcp/oauth.ts).
+- **Permissions:** stdio and development static-token connections can read and
+  sync the portfolio. OAuth connections use the explicitly approved
+  `portfolio:read`, `domains:write`, and `domains:spend` permissions, which also
+  determine which tools are registered. Legacy unscoped connections must
+  reconnect. Availability checks accept up to 100 domain names per call.
 - **stdio shim.** `DomBot --mcp-stdio` runs the same binary headless as a
   stdin/stdout bridge to the HTTP server, for clients that can't dial a URL
   (Claude Desktop). It authenticates with a per-install token the app writes to

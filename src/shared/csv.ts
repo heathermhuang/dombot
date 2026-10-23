@@ -20,7 +20,9 @@ export function decodeText(bytes: Uint8Array): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
     return new TextDecoder('utf-8').decode(bytes.subarray(3));
   try {
-    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(
+      bytes,
+    );
   } catch {
     return new TextDecoder('windows-1252').decode(bytes);
   }
@@ -117,9 +119,15 @@ const FORMULA = /^[\s\uFEFF]*[=+@-]|^[\t\r\n]/u;
  * number column, where a leading minus is just a sign), then quoted per RFC
  * 4180 when it holds a comma, quote, or line break.
  */
-export function csvField(value: string, numeric = false): string {
+export function csvField(
+  value: string,
+  numeric = false,
+  delimiter: Delimiter = ',',
+): string {
   if (!numeric && FORMULA.test(value)) value = "'" + value;
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  return /["\r\n]/.test(value) || value.includes(delimiter)
+    ? `"${value.replace(/"/g, '""')}"`
+    : value;
 }
 
 /** Undoes `csvField`'s formula guard on a cell read back from a file. */
@@ -136,8 +144,18 @@ export function unguardCell(value: string): string {
 export function toCsv(
   rows: string[][],
   numeric: ReadonlySet<number> = new Set(),
+  delimiter: Delimiter = ',',
 ): string {
   return rows
-    .map((r) => r.map((cell, i) => csvField(cell, numeric.has(i))).join(','))
+    .map((r) =>
+      r
+        .map((cell, i) => csvField(cell, numeric.has(i), delimiter))
+        .join(delimiter),
+    )
     .join('\r\n');
+}
+
+/** Spreadsheet clipboard text, with the same formula guard and cell quoting. */
+export function toTsv(rows: string[][]): string {
+  return toCsv(rows, new Set(), '\t');
 }
