@@ -571,35 +571,44 @@ it('keeps healthy account delivery moving when another dispatcher fails', async 
   ).toBeNull();
 });
 it('leases failed platform dispatchers so the next due batch reaches healthy accounts', async () => {
-  const e = await verified();
-  e.PLATFORM_ENABLED = 'true';
-  for (let n = 0; n < 50; n++) {
-    const id = `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-    await db.batch([
-      db
-        .prepare('INSERT INTO workspaces(id,label,enabled) VALUES(?,?,1)')
-        .bind(id, 'Synthetic unavailable account'),
-      db
-        .prepare(
-          'INSERT INTO users(id,email,workspace_id,password_hash,created_at) VALUES(?,?,?,?,1)',
-        )
-        .bind(
-          crypto.randomUUID(),
-          `unavailable-${n}@example.test`,
-          id,
-          'fixture-only',
-        ),
-      db
-        .prepare(
-          'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,1)',
-        )
-        .bind(id, salesRecipientHash(e, `unavailable-${n}@example.test`)),
-    ]);
+  const now = Math.floor(Date.now() / 120_000) * 120_000 + 60_000;
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+  try {
+    const e = await verified();
+    e.PLATFORM_ENABLED = 'true';
+    for (let n = 0; n < 50; n++) {
+      const id = `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+      await db.batch([
+        db
+          .prepare('INSERT INTO workspaces(id,label,enabled) VALUES(?,?,1)')
+          .bind(id, 'Synthetic unavailable account'),
+        db
+          .prepare(
+            'INSERT INTO users(id,email,workspace_id,password_hash,created_at) VALUES(?,?,?,?,1)',
+          )
+          .bind(
+            crypto.randomUUID(),
+            `unavailable-${n}@example.test`,
+            id,
+            'fixture-only',
+          ),
+        db
+          .prepare(
+            'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,1)',
+          )
+          .bind(id, salesRecipientHash(e, `unavailable-${n}@example.test`)),
+      ]);
+    }
+    await expect(drainSales(e)).rejects.toThrow('dispatchers need attention');
+    expect(sends).toBe(0);
+    await drainSales(e);
+    expect(sends).toBe(1);
+    clock.mockReturnValue(now + 120_000);
+    await expect(drainSales(e)).rejects.toThrow('dispatchers need attention');
+    expect(sends).toBe(1);
+  } finally {
+    clock.mockRestore();
   }
-  await expect(drainSales(e)).rejects.toThrow('dispatchers need attention');
-  expect(sends).toBe(0);
-  await drainSales(e);
-  expect(sends).toBe(1);
 }, 30_000);
 it.each([
   ['E_RATE_LIMIT_EXCEEDED', 'retryable'],
