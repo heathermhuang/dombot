@@ -28,7 +28,7 @@ export async function getReleaseFeed(force = false): Promise<ReleaseFeed> {
       headers: { accept: 'application/json', ...userAgentHeaders() },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) throw new Error(`dombot.ai answered ${res.status}`);
+    if (!res.ok) throw new Error(`Release feed answered ${res.status}`);
     cache = {
       releases: parseReleaseFeed(await res.json()),
       checkedAt: new Date().toISOString(),
@@ -37,7 +37,7 @@ export async function getReleaseFeed(force = false): Promise<ReleaseFeed> {
   } catch (err) {
     lastError =
       err instanceof Error && err.name === 'TimeoutError'
-        ? 'dombot.ai did not answer in time'
+        ? 'Release feed did not answer in time'
         : err instanceof Error
           ? err.message
           : String(err);

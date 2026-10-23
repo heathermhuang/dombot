@@ -24,12 +24,12 @@ import { Switch } from '@/components/ui/switch';
 import { isDemo, isWeb } from '@/lib/platform';
 import { releaseNotesUrl, updateUrl, useUpdates } from '@/lib/updates';
 import { timeAgo } from '@/lib/time';
-import { releasesNewerThan } from '../../../shared/releases';
+import { releasesNewerThan, REPOSITORY_URL } from '../../../shared/releases';
 import type { UpdaterState } from '../../../shared/ipc';
 import { useAppStore } from '../../store/app';
 import { SettingsCard } from './SettingsCard';
 
-const REPO = 'https://github.com/aoxborrow/dombot';
+const REPO = REPOSITORY_URL;
 const SPONSOR = 'https://github.com/sponsors/aoxborrow';
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -203,9 +203,9 @@ export default function AboutSettings() {
               Check for updates automatically
             </Label>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
-              Once a week DomBot reads the release list at
-              dombot.ai/releases.json and lets you know when there’s a newer
-              version. Nothing about you or your portfolio is sent.
+              Once a week DomBot checks heathermhuang/dombot releases on GitHub
+              and lets you know when there’s a newer fork version. Nothing about
+              you or your portfolio is sent.
             </p>
           </div>
           <Switch

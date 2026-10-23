@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import {
   parseReleaseFeed,
+  REPOSITORY_URL,
+  RELEASES_PAGE,
   releasesNewerThan,
   type Release,
   type ReleaseFeed,
@@ -15,11 +17,10 @@ import { useAppStore } from '../store/app';
 // display preferences: they're about this window, not the instance.
 
 /** Where a self-hoster reads how to update their setup. */
-export const SELF_HOST_UPDATE_DOCS =
-  'https://github.com/aoxborrow/dombot/blob/main/docs/self-hosting.md#choosing-a-setup';
+export const SELF_HOST_UPDATE_DOCS = `${REPOSITORY_URL}/blob/main/docs/self-hosting.md#choosing-a-setup`;
 
 /** Every release, with notes, on GitHub. */
-export const RELEASES_PAGE = 'https://github.com/aoxborrow/dombot/releases';
+export { RELEASES_PAGE };
 
 /** How often a device checks on its own. "Check now" ignores it. */
 export const AUTO_CHECK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -27,9 +28,9 @@ export const AUTO_CHECK_MS = 7 * 24 * 60 * 60 * 1000;
 /** How often an open window asks whether its weekly check is due. */
 const POLL_MS = 6 * 60 * 60 * 1000;
 
-const FEED_KEY = 'dombot-release-feed';
-const AUTO_CHECKED_KEY = 'dombot-update-checked';
-const DISMISSED_KEY = 'dombot-update-dismissed';
+const FEED_KEY = 'dombot-fork-release-feed';
+const AUTO_CHECKED_KEY = 'dombot-fork-update-checked';
+const DISMISSED_KEY = 'dombot-fork-update-dismissed';
 
 function read(key: string): string | null {
   try {
@@ -123,7 +124,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
 
 /** Runs the weekly check for as long as the app is open (not with update
  *  checks turned off). Mounted once, in App. The demo checks too: it reads
- *  the same public list (dombot.ai allows that cross-origin) and, built from
+ *  the same public list (GitHub serves the public release index cross-origin) and, built from
  *  main, is always on the latest release. */
 export function useWeeklyUpdateCheck(): void {
   const updateChecks = useAppStore((s) => s.settings?.updateChecks);

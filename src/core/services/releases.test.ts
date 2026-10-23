@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RELEASES_URL } from '../../shared/releases';
 import { getReleaseFeed, resetReleaseFeed } from './releases';
 
 const feed = {
@@ -22,6 +23,10 @@ describe('getReleaseFeed', () => {
     const first = await getReleaseFeed();
     expect(first.releases.map((r) => r.version)).toEqual(['1.5.0', '1.4.0']);
     expect(first.error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(RELEASES_URL, expect.any(Object));
+    expect(RELEASES_URL).toContain(
+      '/heathermhuang/dombot/main/site/public/releases.json',
+    );
     expect(first.checkedAt).not.toBeNull();
 
     await getReleaseFeed();
@@ -36,7 +41,7 @@ describe('getReleaseFeed', () => {
     fetchMock.mockResolvedValueOnce(new Response('nope', { status: 503 }));
     const after = await getReleaseFeed(true);
     expect(after.releases).toHaveLength(2);
-    expect(after.error).toBe('dombot.ai answered 503');
+    expect(after.error).toBe('Release feed answered 503');
   });
 
   it('retries after a failure instead of serving it from cache', async () => {
