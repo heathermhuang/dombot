@@ -65,9 +65,14 @@ describe('Dynadot request pacing', () => {
     expect(starts[1] - starts[0]).toBe(1100);
   });
 
-  it.each(['direct', 'proxy'])(
-    'recovers from a headerless HTTP 429 over %s',
-    async (route) => {
+  it.each([
+    ['direct', 30_000],
+    ['proxy', 30_000],
+    ['direct', 90_000],
+    ['proxy', 90_000],
+  ] as const)(
+    'honors a headerless HTTP 429 over %s within timeout=%i',
+    async (route, timeout) => {
       const send = vi
         .fn()
         .mockResolvedValueOnce(
@@ -91,7 +96,18 @@ describe('Dynadot request pacing', () => {
         await saveRegistrarCredentials('dynadot', creds);
         provider = getRegistrarClient('dynadot');
       }
-      const result = provider.listDomains();
+      const result = provider.listDomains({ timeout });
+      if (timeout < 60_000) {
+        const rejected = expect(result).rejects.toMatchObject({
+          name: 'RateLimitError',
+          retryAfter: 60,
+        });
+        await signed(() => send.mock.calls.length > 0);
+        await rejected;
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(send).toHaveBeenCalledTimes(1);
+        return;
+      }
       await signed(() => send.mock.calls.length > 0);
       await vi.advanceTimersByTimeAsync(59999);
       expect(send).toHaveBeenCalledTimes(1);

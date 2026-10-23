@@ -21,6 +21,7 @@ beforeEach(() => {
   sqlite.exec(readFileSync('migrations/0001_docs.sql', 'utf8'));
   sqlite.exec(readFileSync('migrations/0002_login_attempts.sql', 'utf8'));
   sqlite.exec(readFileSync('migrations/0003_session_revocations.sql', 'utf8'));
+  sqlite.exec(readFileSync('migrations/0007_root_retirement.sql', 'utf8'));
   // Execute production SQL against SQLite; only the D1 transport is simulated.
   db = {
     prepare(sql: string) {

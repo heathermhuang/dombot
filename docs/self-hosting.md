@@ -198,12 +198,34 @@ alongside Cloudflare's own builds, or every push deploys twice.
   to your instance, and the only backup for data whose key you could lose.
 - **Rotating the root key**: `DOMBOT_SECRET` can't simply be replaced — the
   data is encrypted under it. `DOMBOT_URL=https://<your-host> npm run
-web:rotate-secret` exports a sealed bundle to disk, sets a new secret, and
-  imports the bundle back (password login only; behind a gate, do the same
-  three steps by hand).
+web:rotate-secret` uses the root-retirement protocol described below
+  (password login only).
 - **Bulk jobs** are stepped by your browser tab. Closing the tab pauses a
   running job; reopening resumes it. A job interrupted mid-request shows
   those items as "outcome unknown" rather than re-running them.
+
+### Root-key rotation maintenance
+
+Deploy the protocol-compatible release and its D1 migrations as a separate
+step before rotation. Finish that rollout and drain requests from older,
+incompatible code; a response from one new isolate does not qualify the whole
+deployment. Do not mix this protocol with an older runtime during rotation.
+
+The command saves an initial sealed backup, retires the old root in D1, waits
+for admitted HTTP and cron work to finish, and replaces the backup with a final
+export. It then installs the new root and binds **each** login/import request to
+that generation. Old-root isolates cannot admit sessions, MCP, inquiry writes,
+or cron work after retirement. The new root's recovery key is saved privately
+under `.wrangler/rotation-root-*.txt`; store it in your password manager.
+
+An interrupted or ambiguous writer lease holds rotation closed. Do not delete
+such a lease merely to unblock the script. Stop traffic and cron, establish
+that the old work has ended, and inspect D1/provider state before operator
+recovery. Keep the sealed backup and recovery-key file after any failed or
+uncertain secret update/import. A single rejected old cookie is never evidence
+of a fleet-wide cutover. Access/external-auth installations require an operator
+maintenance procedure that stops ingress and cron and drains old work before
+export/rekey/import; this password-mode command refuses them.
 
 ## Using Cloudflare Access instead of the password
 

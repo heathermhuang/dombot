@@ -63,7 +63,7 @@ export function createProxiedNamecheap(
   class ProxyHttpClient extends HttpClient {
     protected override withRetries<T>(
       req: RequestConfig,
-      attempt: () => Promise<T>,
+      attempt: (attemptReq: RequestConfig) => Promise<T>,
     ): Promise<T> {
       const reads = READ_COMMANDS.has(String(req.query?.Command ?? ''));
       return super.withRetries(

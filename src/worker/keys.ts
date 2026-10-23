@@ -73,6 +73,11 @@ export function deriveEncryptionKey(root: Uint8Array): Promise<Uint8Array> {
   return hkdf(root, 'dombot/enc/v1');
 }
 
+/** Public generation commitment; independent of the password and session key. */
+export async function rootGeneration(root: Uint8Array): Promise<string> {
+  return toBase64Url(await hkdf(root, 'dombot/root-generation/v1'));
+}
+
 /** Sales ingress never opens the registrar key/namespace. */
 export function deriveSalesKey(root: Uint8Array): Promise<Uint8Array> {
   return hkdf(root, 'dombot/sales/enc/v1');
