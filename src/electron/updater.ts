@@ -2,6 +2,9 @@ import { app, autoUpdater } from 'electron';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { UpdaterState } from '../shared/ipc';
+import { RELEASE_REPOSITORY } from '../shared/releases';
+
+declare const __DOMBOT_MACOS_UPDATE_SIGNED__: boolean;
 
 // Update-on-click for the desktop app, with Electron's built-in autoUpdater
 // (Squirrel.Mac / Squirrel.Windows) fed by update.electronjs.org, which serves
@@ -19,7 +22,7 @@ import type { UpdaterState } from '../shared/ipc';
 // server returning Squirrel's JSON), to rehearse an update before a release.
 const FEED =
   process.env.DOMBOT_UPDATE_FEED_URL ||
-  `https://update.electronjs.org/aoxborrow/dombot/${process.platform}-${process.arch}/${app.getVersion()}`;
+  `https://update.electronjs.org/${RELEASE_REPOSITORY}/${process.platform}-${process.arch}/${app.getVersion()}`;
 
 let state: Omit<UpdaterState, 'supported' | 'unsupportedReason'> = {
   status: 'idle',
@@ -33,6 +36,8 @@ let pending: ((s: UpdaterState) => void)[] = [];
 function unsupportedReason(): string | null {
   if (!app.isPackaged) return '';
   if (process.platform === 'darwin') {
+    if (!__DOMBOT_MACOS_UPDATE_SIGNED__)
+      return 'This Mac build requires a manual download. In-place updates need a Developer ID signed release.';
     // Squirrel.Mac replaces the .app where it is; run from the disk image or a
     // quarantined location, that fails.
     return app.isInApplicationsFolder()
@@ -95,7 +100,14 @@ export function downloadUpdate(): Promise<UpdaterState> {
     state = { ...state, status: 'downloading', error: null };
     // Squirrel checks the feed and, when there's an update, downloads it;
     // the events above report the outcome.
-    autoUpdater.checkForUpdates();
+    try {
+      autoUpdater.checkForUpdates();
+    } catch (error) {
+      settle({
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   return done;
 }

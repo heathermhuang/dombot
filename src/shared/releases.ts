@@ -5,7 +5,11 @@
 // src/core/services/releases.ts.
 
 /** Where the hosts fetch the feed from. */
-export const RELEASES_URL = 'https://dombot.ai/releases.json';
+export const RELEASE_REPOSITORY = 'heathermhuang/dombot';
+export const REPOSITORY_URL = `https://github.com/${RELEASE_REPOSITORY}`;
+export const RELEASES_PAGE = `${REPOSITORY_URL}/releases`;
+// The release workflow updates this public file after publishing all platforms.
+export const RELEASES_URL = `https://raw.githubusercontent.com/${RELEASE_REPOSITORY}/main/site/public/releases.json`;
 
 export interface Release {
   /** `1.5.0` — the tag without its `v`. */
@@ -59,17 +63,17 @@ export function parseReleaseFeed(json: unknown): Release[] {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
     const tag = str(r.tag);
-    const version = str(r.version) || tag.replace(/^v/, '');
-    if (!VERSION.test(version)) continue;
-    const url = str(r.url);
+    const version = (str(r.version) || tag).replace(/^v/, '');
+    if (!VERSION.test(version) || (tag && tag !== `v${version}`)) continue;
+    const url = `${RELEASES_PAGE}/tag/v${version}`;
+    // Also revalidates persisted feeds: never offer another repository's build.
+    if (r.url && r.url !== url) continue;
     out.push({
       version,
       tag: tag || `v${version}`,
       name: str(r.name) || `DomBot ${version}`,
       publishedAt: str(r.publishedAt),
-      url: /^https:\/\//.test(url)
-        ? url
-        : `https://github.com/aoxborrow/dombot/releases/tag/v${version}`,
+      url,
     });
   }
   return out.sort((a, b) => compareVersions(b.version, a.version));

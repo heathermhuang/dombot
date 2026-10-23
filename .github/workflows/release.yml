@@ -269,11 +269,10 @@ jobs:
 
       - name: Record the release for the site
         # site/public/releases.json lists every published release, newest
-        # first. The landing page bakes its download links from
-        # the newest at build time, and the site serves the file as-is at
-        # dombot.ai/releases.json, where installed copies check for updates.
-        # Committing it here is what redeploys the site: Cloudflare's Workers
-        # Builds rebuilds dombot.ai on every push to main.
+        # first. The landing page bakes its download links from the newest
+        # release at build time. This is also the fork's desktop release index.
+        # Installed fork builds read this file from raw.githubusercontent.com;
+        # publishing the index does not depend on the upstream website.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.setup.outputs.tag }}

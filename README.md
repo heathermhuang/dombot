@@ -124,17 +124,35 @@ and if DomBot isn't open when the client starts, it launches automatically.
 
 ## Staying up to date
 
-Once a week DomBot reads the list of releases at
-[dombot.ai/releases.json](https://dombot.ai/releases.json). When there's a newer
+This fork checks the published release index in
+[heathermhuang/dombot](https://github.com/heathermhuang/dombot/releases) once a week.
+The release workflow updates `site/public/releases.json` after all platform builds
+are published; installed copies read it from GitHub, independently of the upstream
+website. When there's a newer
 version, a green notification appears in the bell; dismiss it and it stays
 quiet until the next release. Nothing about you or your portfolio is sent, and
 you can turn the check off, or check by hand, in **Settings → About**.
 
-On macOS and Windows, **Update to …** in Settings → About downloads the new
+On Developer ID signed macOS builds and installed Windows copies, **Update to …**
+in Settings → About downloads the new
 version and **Restart to update** switches to it. Nothing downloads until you
-click. Linux packages, and copies run from somewhere other than an installed
-location, get a download link instead. Self-hosted instances link to
+click. Ad-hoc/unsigned macOS builds, Linux packages, and copies run from somewhere
+other than an installed location get a fork download link instead. Self-hosted
+instances link to
 [how to update your setup](docs/self-hosting.md).
+
+Versions through 1.5.1 hard-code the upstream update channel. Install this fork's
+1.5.2 or later once from its GitHub release to migrate; a new fork release cannot
+remotely change the channel inside an older binary. Application data stays in the
+same profile. The fork uses new update-cache keys so an old upstream cache or
+dismissal cannot suppress its security releases. Checks notify you; downloads and
+installation remain explicit actions.
+
+macOS in-place updates require Developer ID signing. Configure the existing
+`MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_API_KEY_P8`,
+`APPLE_API_KEY_ID` and `APPLE_API_ISSUER` Actions secrets to enable the signing and
+notarization steps. Signed builds carry a compile-time update-support flag;
+ad-hoc builds keep manual updates. No verification or signature check is disabled.
 
 ## Self-hosting in the browser
 

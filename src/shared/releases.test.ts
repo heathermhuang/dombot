@@ -27,7 +27,11 @@ describe('parseReleaseFeed', () => {
   it('keeps valid entries newest first and fills defaults', () => {
     const releases = parseReleaseFeed({
       releases: [
-        { tag: 'v1.4.0', notes: 'old', url: 'https://example.com/a' },
+        {
+          tag: 'v1.4.0',
+          notes: 'old',
+          url: 'https://github.com/heathermhuang/dombot/releases/tag/v1.4.0',
+        },
         { version: '1.5.0', tag: 'v1.5.0', name: 'Five', notes: 'new' },
         { tag: 'nightly' },
         null,
@@ -36,12 +40,26 @@ describe('parseReleaseFeed', () => {
     expect(releases.map((r) => r.version)).toEqual(['1.5.0', '1.4.0']);
     expect(releases[0]).toMatchObject({
       name: 'Five',
-      url: 'https://github.com/aoxborrow/dombot/releases/tag/v1.5.0',
+      url: 'https://github.com/heathermhuang/dombot/releases/tag/v1.5.0',
     });
     expect(releases[1]).toMatchObject({
       name: 'DomBot 1.4.0',
-      url: 'https://example.com/a',
+      url: 'https://github.com/heathermhuang/dombot/releases/tag/v1.4.0',
     });
+  });
+
+  it('rejects upstream builds and mismatched tags', () => {
+    expect(
+      parseReleaseFeed({
+        releases: [
+          {
+            tag: 'v99.0.0',
+            url: 'https://github.com/aoxborrow/dombot/releases/tag/v99.0.0',
+          },
+          { version: '1.5.2', tag: 'v1.5.3' },
+        ],
+      }),
+    ).toEqual([]);
   });
 
   it('tolerates a malformed feed', () => {
@@ -50,10 +68,10 @@ describe('parseReleaseFeed', () => {
   });
 
   it('never keeps a non-https link', () => {
-    const [r] = parseReleaseFeed({
+    const releases = parseReleaseFeed({
       releases: [{ tag: 'v1.0.0', url: 'javascript:alert(1)' }],
     });
-    expect(r.url).toMatch(/^https:\/\/github\.com\//);
+    expect(releases).toEqual([]);
   });
 });
 
