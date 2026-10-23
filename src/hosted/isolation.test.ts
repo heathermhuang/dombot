@@ -98,6 +98,7 @@ beforeAll(async () => {
             WORKSPACE_9: 'tenant2',
           },
           bindings: {
+            SALES_CUSTOM_HOSTS_ENABLED: 'true',
             AUTH_PEPPER: 'test-only-authentication-pepper-'.repeat(3),
             WORKSPACES: JSON.stringify(
               ids.map((id, i) => ({
@@ -156,6 +157,7 @@ beforeAll(async () => {
   await control.exec(sql('hosted/migrations/0005_passwordless_passkeys.sql'));
   await control.exec(sql('hosted/migrations/0002_password_recovery.sql'));
   await control.exec(sql('hosted/migrations/0003_lifecycle.sql'));
+  await control.exec(sql('hosted/migrations/0007_sales_hostnames.sql'));
   await control.exec(sql('hosted/migrations/0010_shared_mcp.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
@@ -643,6 +645,80 @@ describe('real gateway and isolated Worker instances', () => {
       cookies[0],
     );
     expect(attack.status).toBe(403);
+  });
+  it('gates bulk steps/results and hostname detachment on fresh authentication in the Workers runtime', async () => {
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    await control
+      .prepare(
+        "INSERT INTO sales_hostnames(hostname,workspace_id,listing_id,domain,epoch,status,challenge_hash,plan,updated_at,control_expires_at) VALUES('freshness.example',?,'listing','freshness.example',7,'active','fixture','{}',1,9999999999999)",
+      )
+      .bind(ids[0])
+      .run();
+    const before = await control
+      .prepare(
+        "SELECT * FROM sales_hostnames WHERE hostname='freshness.example'",
+      )
+      .first();
+    const sessionHash = await tokenHash(cookies[0].split('=')[1]);
+    await control
+      .prepare('UPDATE sessions SET authenticated_at=0 WHERE token_hash=?')
+      .bind(sessionHash)
+      .run();
+    try {
+      for (const [name, args] of [
+        ['stepBulk', ['absent-job']],
+        ['getBulkJob', []],
+        ['deleteDomains', [['freshness.example']]],
+      ] as const) {
+        const r = await api(0, name, [...args]);
+        expect(r.status).toBe(428);
+        expect(r.headers.get('X-DomBot-Engine')).toBeNull();
+      }
+      expect(
+        await control
+          .prepare(
+            "SELECT * FROM sales_hostnames WHERE hostname='freshness.example'",
+          )
+          .first(),
+      ).toEqual(before);
+    } finally {
+      await control
+        .prepare('UPDATE sessions SET authenticated_at=? WHERE token_hash=?')
+        .bind(Date.now(), sessionHash)
+        .run();
+    }
+    const job = await api(0, 'getBulkJob');
+    expect(job.status).toBe(200);
+    expect(job.headers.get('X-DomBot-Engine')).not.toBeNull();
+    const deleted = await api(0, 'deleteDomains', [['freshness.example']]);
+    expect(deleted.status).toBe(200);
+    expect(deleted.headers.get('X-DomBot-Engine')).not.toBeNull();
+    expect(
+      await control
+        .prepare(
+          "SELECT status,epoch,control_expires_at FROM sales_hostnames WHERE hostname='freshness.example'",
+        )
+        .first(),
+    ).toEqual({ status: 'detached', epoch: 8, control_expires_at: 0 });
+    // Hono's strict API route does not dispatch this spelling; the asset
+    // fallback rejects its POST. This is not a reproduced export bypass.
+    const tenant = await mf.getWorker('tenant0');
+    const raw = new Request('http://localhost/api/exportData/', {
+      method: 'POST',
+      body: '{"args":[]}',
+      headers: {
+        Origin: 'http://localhost',
+        'Content-Type': 'application/json',
+      },
+    });
+    raw.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(keys[0], ids[0], 'owner', raw),
+    );
+    expect((await tenant.fetch(raw)).status).toBe(405);
+    await control
+      .prepare("DELETE FROM sales_hostnames WHERE hostname='freshness.example'")
+      .run();
   });
   it('connects two accounts through one MCP URL with isolated, revocable read-only grants', async () => {
     const control = await mf.getD1Database('CONTROL_DB', 'gateway');
