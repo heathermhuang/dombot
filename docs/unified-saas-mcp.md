@@ -38,6 +38,17 @@ exchanged once. Access tokens expire after 30 days; this first release requires
 reconnecting after expiry and does not advertise refresh tokens. Unused client
 registrations and authorization requests expire and are pruned under rate limits.
 
+Successful password recovery revokes all of that user's shared MCP grants and
+deletes their pending authorizations, including issued codes, in the same D1
+transaction as the password update and browser-session deletion. A concurrent
+code exchange either commits first and its grant is revoked, or commits after
+recovery and fails because its authorization no longer exists. Reconnect through
+fresh sign-in and consent after recovery. Invalid, expired, disabled-account and
+replayed recovery attempts do not revoke connections. Ordinary password changes
+and browser logout retain the existing separate MCP revocation policy; revoke
+connections in MCP settings. Workspace-specific legacy pairings are stored in
+tenant databases and remain separately managed there.
+
 The shared resource advertises only read access. `portfolio:read` retains the
 existing engine definition, including sync and non-mutating registrar queries.
 Mutation and purchase permissions require a separate future release.

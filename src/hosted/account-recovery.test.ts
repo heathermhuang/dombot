@@ -22,6 +22,7 @@ beforeAll(async () => {
     '0001_control.sql',
     '0005_passwordless_passkeys.sql',
     '0002_password_recovery.sql',
+    '0010_shared_mcp.sql',
   ])
     await db.exec(
       readFileSync('hosted/migrations/' + file, 'utf8')
