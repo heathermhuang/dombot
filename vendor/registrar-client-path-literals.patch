@@ -1,0 +1,272 @@
+diff --git a/src/registrars/gandi.ts b/src/registrars/gandi.ts
+--- a/src/registrars/gandi.ts
++++ b/src/registrars/gandi.ts
+@@ -26,6 +26,33 @@
+ import { Feature, type RegistrarFeature } from '../features';
+ import type { RegistrarCredentials } from '../types';
+
++// Reject separators even after Unicode compatibility normalization. Encoded
++// separators must never depend on an upstream router's decoding behavior.
++function gandiPathSegment(value: string): string {
++  const normalized = value.normalize('NFKC');
++  if (!normalized || normalized === '.' || normalized === '..' || /[\\/\?#%]/.test(normalized)) {
++    throw new Error('Invalid Gandi request path component');
++  }
++  return encodeURIComponent(value);
++}
++
++function gandiDomainPath(value: string): string {
++  gandiPathSegment(value);
++  let hostname: string;
++  try {
++    if (/[\s:@\[\]]/.test(value)) throw new Error();
++    hostname = new URL('https://' + value).hostname.replace(/\.$/, '');
++  } catch {
++    throw new Error('Invalid Gandi domain path component');
++  }
++  const labels = hostname.split('.');
++  if (hostname.length > 253 || labels.length < 2 || /^[0-9.]+$/.test(hostname) ||
++      !labels.every(label => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) {
++    throw new Error('Invalid Gandi domain path component');
++  }
++  return encodeURIComponent(hostname);
++}
++
+ // A contact as returned under `GET /v5/domain/domains/{fqdn}/contacts` (and
+ // nested in the domain-detail `contacts` object). Gandi names fields `given`/
+ // `family`/`streetaddr`/`zip`; privacy is `data_obfuscated` on the detail
+@@ -267,7 +294,7 @@
+   // `GET /v5/domain/domains/{fqdn}` and normalize through the shared toDomain.
+   override async getDomain(domainName: string, opts?: RequestOptions): Promise<Domain> {
+     const d = await this.http.request<GandiDomain>({
+-      path: `/domain/domains/${domainName}`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}`,
+       ...opts,
+     });
+     return this.toDomain({ ...d, fqdn: d.fqdn ?? domainName });
+@@ -277,7 +304,7 @@
+   // JSON array of hostname strings.
+   override async getNameservers(domainName: string, opts?: RequestOptions): Promise<string[]> {
+     const res = await this.http.request<string[]>({
+-      path: `/domain/domains/${domainName}/nameservers`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}/nameservers`,
+       ...opts,
+     });
+     return Array.isArray(res) ? res.map(String) : [];
+@@ -287,7 +314,7 @@
+   // owner/admin/tech/bill; `owner` is the registrant and `bill` the billing role.
+   override async getContacts(domainName: string, opts?: RequestOptions): Promise<ContactSet> {
+     const res = await this.http.request<GandiContacts>({
+-      path: `/domain/domains/${domainName}/contacts`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`,
+       ...opts,
+     });
+     return {
+@@ -307,7 +334,7 @@
+    */
+   override async getDnsRecords(domainName: string, opts?: RequestOptions): Promise<DnsRecord[]> {
+     const rrsets = await this.http.request<GandiRecord[]>({
+-      path: `/livedns/domains/${domainName}/records`,
++      path: `/livedns/domains/${gandiDomainPath(domainName)}/records`,
+       ...opts,
+     });
+     const records: DnsRecord[] = [];
+@@ -420,7 +447,7 @@
+     opts?: RequestOptions
+   ): Promise<OperationResult> {
+     return this.mutate(
+-      { method: 'POST', path: `/domain/domains/${domainName}/renew`, body: { duration: years } },
++      { method: 'POST', path: `/domain/domains/${gandiDomainPath(domainName)}/renew`, body: { duration: years } },
+       'Domain renewed successfully',
+       opts
+     );
+@@ -435,7 +462,7 @@
+       throw new Error('At least 1 nameserver is required');
+     }
+     return this.mutate(
+-      { method: 'PUT', path: `/domain/domains/${domainName}/nameservers`, body: { nameservers } },
++      { method: 'PUT', path: `/domain/domains/${gandiDomainPath(domainName)}/nameservers`, body: { nameservers } },
+       'Nameservers updated successfully',
+       opts
+     );
+@@ -450,7 +477,7 @@
+     return this.mutate(
+       {
+         method: 'PATCH',
+-        path: `/domain/domains/${domainName}/status`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/status`,
+         body: { clientTransferProhibited: true },
+       },
+       'Domain locked successfully',
+@@ -462,7 +489,7 @@
+     return this.mutate(
+       {
+         method: 'PATCH',
+-        path: `/domain/domains/${domainName}/status`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/status`,
+         body: { clientTransferProhibited: false },
+       },
+       'Domain unlocked successfully',
+@@ -476,7 +503,7 @@
+   // domain-details endpoint (present for domains the account manages).
+   override async getAuthCode(domainName: string, opts?: RequestOptions): Promise<string> {
+     const d = await this.http.request<{ authinfo?: string }>({
+-      path: `/domain/domains/${domainName}`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}`,
+       ...opts,
+     });
+     return d.authinfo ?? '';
+@@ -489,7 +516,7 @@
+    */
+   override async getDnssec(domainName: string, opts?: RequestOptions): Promise<DnssecStatus> {
+     const keys = await this.http.request<GandiKey[]>({
+-      path: `/livedns/domains/${domainName}/keys`,
++      path: `/livedns/domains/${gandiDomainPath(domainName)}/keys`,
+       ...opts,
+     });
+     const active = (keys ?? []).filter(k => !k.deleted);
+@@ -507,14 +534,14 @@
+   ): Promise<OperationResult> {
+     try {
+       const keys = await this.http.request<GandiKey[]>({
+-        path: `/livedns/domains/${domainName}/keys`,
++        path: `/livedns/domains/${gandiDomainPath(domainName)}/keys`,
+         ...opts,
+       });
+       for (const k of keys ?? []) {
+         if (k.deleted || !k.id) continue;
+         await this.http.request({
+           method: 'DELETE',
+-          path: `/livedns/domains/${domainName}/keys/${encodeURIComponent(k.id)}`,
++          path: `/livedns/domains/${gandiDomainPath(domainName)}/keys/${encodeURIComponent(k.id)}`,
+           ...opts,
+         });
+       }
+@@ -534,7 +561,7 @@
+     opts?: RequestOptions
+   ): Promise<EmailForward[]> {
+     const forwards = await this.http.request<GandiForward[]>({
+-      path: `/email/forwards/${domainName}`,
++      path: `/email/forwards/${gandiDomainPath(domainName)}`,
+       ...opts,
+     });
+     const out: EmailForward[] = [];
+@@ -564,7 +591,7 @@
+         desired.set(f.alias, list);
+       }
+       const current = await this.http.request<GandiForward[]>({
+-        path: `/email/forwards/${domainName}`,
++        path: `/email/forwards/${gandiDomainPath(domainName)}`,
+         ...opts,
+       });
+       const currentSources = new Set(
+@@ -575,7 +602,7 @@
+         if (!desired.has(source)) {
+           await this.http.request({
+             method: 'DELETE',
+-            path: `/email/forwards/${domainName}/${encodeURIComponent(source)}`,
++            path: `/email/forwards/${gandiDomainPath(domainName)}/${gandiPathSegment(source)}`,
+             ...opts,
+           });
+         }
+@@ -584,14 +611,14 @@
+         if (currentSources.has(source)) {
+           await this.http.request({
+             method: 'PUT',
+-            path: `/email/forwards/${domainName}/${encodeURIComponent(source)}`,
++            path: `/email/forwards/${gandiDomainPath(domainName)}/${gandiPathSegment(source)}`,
+             body: { destinations },
+             ...opts,
+           });
+         } else {
+           await this.http.request({
+             method: 'POST',
+-            path: `/email/forwards/${domainName}`,
++            path: `/email/forwards/${gandiDomainPath(domainName)}`,
+             body: { source, destinations },
+             ...opts,
+           });
+@@ -613,7 +640,7 @@
+     opts?: RequestOptions
+   ): Promise<DomainForward[]> {
+     const redirs = await this.http.request<GandiWebredir[]>({
+-      path: `/domain/domains/${domainName}/webredirs`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs`,
+       ...opts,
+     });
+     return (redirs ?? []).map(r => ({
+@@ -655,7 +682,7 @@
+         if (!settable.some(f => same(f, existing))) {
+           await this.http.request({
+             method: 'DELETE',
+-            path: `/domain/domains/${domainName}/webredirs/${gandiHostToFqdn(existing.host, domainName)}`,
++            path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs/${gandiPathSegment(gandiHostToFqdn(existing.host, domainName))}`,
+             ...opts,
+           });
+         }
+@@ -665,7 +692,7 @@
+         if (!current.some(c => same(c, f))) {
+           await this.http.request({
+             method: 'POST',
+-            path: `/domain/domains/${domainName}/webredirs`,
++            path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs`,
+             // `protocol` is intentionally omitted so Gandi applies its default
+             // (http). Requesting `https` makes Gandi provision a Let's Encrypt
+             // certificate for the source host, which our normalized model doesn't
+@@ -693,7 +720,7 @@
+     try {
+       await this.http.request({
+         method: 'PATCH',
+-        path: `/domain/domains/${domainName}/autorenew`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/autorenew`,
+         body: { enabled },
+         ...opts,
+       });
+@@ -730,7 +757,7 @@
+     return this.mutate(
+       {
+         method: 'PATCH',
+-        path: `/domain/domains/${domainName}/contacts`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`,
+         body: { owner: { data_obfuscated: enabled } },
+       },
+       `WHOIS privacy ${enabled ? 'enabled' : 'disabled'} successfully`,
+@@ -752,7 +779,7 @@
+     return this.mutate(
+       {
+         method: 'PUT',
+-        path: `/livedns/domains/${domainName}/records`,
++        path: `/livedns/domains/${gandiDomainPath(domainName)}/records`,
+         body: { items: toGandiRrsets(records) },
+       },
+       'DNS records updated successfully',
+@@ -779,7 +806,7 @@
+       throw new Error(`${this.name}: updateContacts requires at least one contact role`);
+     }
+     return this.mutate(
+-      { method: 'PATCH', path: `/domain/domains/${domainName}/contacts`, body },
++      { method: 'PATCH', path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`, body },
+       'Contacts updated successfully',
+       opts
+     );
+@@ -840,7 +867,7 @@
+     };
+     if (input.years != null) body.duration = input.years;
+     return this.mutate(
+-      { method: 'POST', path: `/domain/transferin/${domainName}`, body },
++      { method: 'POST', path: `/domain/transferin/${gandiDomainPath(domainName)}`, body },
+       `Domain ${domainName} transfer requested successfully`,
+       opts
+     );
+diff --git a/src/registrars/cloudflare.ts b/src/registrars/cloudflare.ts
+--- a/src/registrars/cloudflare.ts
++++ b/src/registrars/cloudflare.ts
+@@ -594,7 +594,7 @@
+       const rules = settable.map(f => {
+         const fqdn = toFqdn(f.host || '@', zone.name);
+         return {
+-          expression: `http.host eq "${fqdn}"`,
++          expression: `http.host eq ${JSON.stringify(fqdn)}`,
+           description: `forward ${fqdn}`,
+           action: 'redirect',
+           action_parameters: {
