@@ -101,6 +101,13 @@ npm run web:build
 node scripts/deploy-hosted-staging.mjs
 ```
 
+The generator copies the exact HTTPS staging origin into `CANONICAL_ORIGIN`.
+The deployer checks every generated config before running any migration or
+upload; regenerate older configs that lack this value. The gateway also
+redirects unconfigured non-loopback HTTP reads to HTTPS and rejects HTTP
+credential writes without replaying their bodies. Plain HTTP is retained only
+for local loopback development.
+
 The preparation script preserves existing keys on reruns. It writes private
 configs, secrets and hashed invitation seed SQL under the ignored `.wrangler`
 directory; back up those files securely. It does not send invitations. The deploy
