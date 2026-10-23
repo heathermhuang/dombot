@@ -1,5 +1,7 @@
 import { app, BrowserWindow, session, shell } from 'electron';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { isAllowedRendererNavigation } from './navigation';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc';
 import { forwardCoreEventsToWindows } from './events';
@@ -93,12 +95,16 @@ function hardenRenderer(): void {
   });
 }
 
-/** The origins the renderer is allowed to sit on: the dev server, or file://. */
+const rendererFile = path.join(
+  __dirname,
+  `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`,
+);
+const rendererEntry =
+  MAIN_WINDOW_VITE_DEV_SERVER_URL || pathToFileURL(rendererFile).href;
+
+/** Pin main-frame and redirect navigation to the trusted renderer content. */
 function isAllowedNavigation(target: string): boolean {
-  if (isDev && MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    return target.startsWith(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  }
-  return target.startsWith('file://');
+  return isAllowedRendererNavigation(target, rendererEntry, isDev);
 }
 
 /** Opens the app window, optionally at a hash route (e.g. the app menu's
@@ -146,13 +152,15 @@ const createWindow = (route?: string) => {
 
   // Keep the renderer pinned to its own content — block any attempt to navigate
   // the window itself to another origin (open it externally if it's a web link).
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  const guardNavigation = (event: { preventDefault(): void }, url: string) => {
     if (isAllowedNavigation(url)) return;
     event.preventDefault();
     if (url.startsWith('https://') || url.startsWith('http://')) {
       void shell.openExternal(url);
     }
-  });
+  };
+  mainWindow.webContents.on('will-navigate', guardNavigation);
+  mainWindow.webContents.on('will-redirect', guardNavigation);
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
@@ -164,10 +172,7 @@ const createWindow = (route?: string) => {
         : MAIN_WINDOW_VITE_DEV_SERVER_URL,
     );
   } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-      route ? { hash: route } : undefined,
-    );
+    mainWindow.loadFile(rendererFile, route ? { hash: route } : undefined);
   }
 };
 

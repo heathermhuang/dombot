@@ -50,6 +50,15 @@ reusable credential or supply an accepted unsigned reply. Requests cannot
 follow redirects or change their configured endpoint. Restart DomBot and
 reconnect agents after upgrading; old per-install bearer tokens are rejected.
 
+Stdio and development-token connections are read/sync-only. OAuth tool
+registration follows the permissions shown at consent; unsupported legacy
+grants must reconnect. Availability arrays are capped at 100 before registrar
+calls. Bulk CSV and clipboard TSV exports guard spreadsheet formulas.
+
+Packaged renderer navigation and redirects are pinned to the actual app entry
+file, with hash routes allowed. Other local files cannot replace the app
+document. Development navigation requires the exact configured server origin.
+
 ## Verify it yourself
 
 You don't have to believe any of the above. Here's how to check.

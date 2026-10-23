@@ -36,10 +36,17 @@ async function verifyStaticToken(
   verifyStdio: ReturnType<typeof createStdioVerifier>,
 ) {
   const expiresAt = Math.floor(Date.now() / 1000) + TOKEN_TTL_SEC;
+  const resource = new URL('/mcp', request.url);
   // Dev/testing escape hatch: a static token via env.
   const staticToken = process.env.DOMBOT_MCP_TOKEN;
   if (staticToken && token === staticToken) {
-    return { token, clientId: 'static', scopes: [], expiresAt };
+    return {
+      token,
+      clientId: 'static',
+      scopes: ['portfolio:read'],
+      resource,
+      expiresAt,
+    };
   }
   // The key stays in the owner-only file; only one-use request proofs cross TCP.
   // Never accept the old per-install bearer credential from a copied config.
@@ -47,7 +54,8 @@ async function verifyStaticToken(
     return {
       token,
       clientId: 'stdio',
-      scopes: ['portfolio'],
+      scopes: ['portfolio:read'],
+      resource,
       expiresAt,
       extra: { clientName: 'Local stdio' },
     };
@@ -116,6 +124,7 @@ export function createDesktopMcpApp(
     '/',
     createMcpRoutes({
       version,
+      enforceScopes: true,
       verifyStaticToken: (token, request) =>
         verifyStaticToken(token, request, verifyStdio),
       autoApprove: process.env.DOMBOT_MCP_AUTOAPPROVE === '1',

@@ -13,6 +13,7 @@ import type {
 import { friendlyError } from '../../../shared/domain-ops';
 import { useAppStore } from '../../store/app';
 import {
+  authCodesToTsv,
   bucketSelection,
   bulkOpTitle,
   flagOf,
@@ -752,9 +753,7 @@ function AuthCodeResults({ results }: { results: DomainOpResult[] }) {
     }
   };
   const withCodes = results.filter((r) => r.data?.authCode);
-  const all = withCodes
-    .map((r) => `${r.target.domainName}\t${r.data!.authCode}`)
-    .join('\n');
+  const all = authCodesToTsv(withCodes);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">

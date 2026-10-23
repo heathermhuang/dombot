@@ -20,6 +20,8 @@ import { writeStdioConfig } from './stdio-config';
 import { MemoryDocStore } from '../../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../../core/storage/namespace';
 import { updateSettings } from '../../core/services/settings';
+import { createMcpRoutes } from '../../core/mcp/routes';
+import { listPendingApprovals, resolvePending } from '../../core/mcp/oauth';
 
 const config = { url: 'http://127.0.0.1:4123/mcp', token: 'b'.repeat(64) };
 const message = JSON.stringify({
@@ -41,11 +43,153 @@ const init = {
   body: message,
 };
 beforeEach(async () => {
+  vi.stubEnv('DOMBOT_MCP_AUTOAPPROVE', '0');
   configureStore(new MemoryDocStore());
   await hydrateStores();
   updateSettings({ mcpEnabled: true });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+async function desktopAuthorization(scope?: string, legacy = false) {
+  const origin = new URL(config.url).origin;
+  const app = legacy
+    ? createMcpRoutes({ version: 'legacy-test' })
+    : createDesktopMcpApp(config, 'test');
+  const registered = await app.fetch(
+    new Request(origin + '/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'Controlled scope client',
+        redirect_uris: ['http://localhost:9999/callback'],
+        token_endpoint_auth_method: 'none',
+      }),
+    }),
+  );
+  expect(registered.status).toBe(201);
+  const client = (await registered.json()) as { client_id: string };
+  const verifier = 'controlled-desktop-pkce-'.repeat(3);
+  const challenge = Buffer.from(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
+  ).toString('base64url');
+  const query = new URLSearchParams({
+    client_id: client.client_id,
+    redirect_uri: 'http://localhost:9999/callback',
+    response_type: 'code',
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+    resource: config.url,
+    ...(scope === undefined ? {} : { scope }),
+  });
+  const authorized = await app.fetch(
+    new Request(origin + '/authorize?' + query),
+  );
+  return { app, origin, client, verifier, authorized };
+}
+
+it('advertises canonical permissions and rejects unadvertised requests before consent', async () => {
+  const app = createDesktopMcpApp(config, 'test');
+  const metadata = (await (
+    await app.fetch(
+      new Request(
+        new URL('/.well-known/oauth-authorization-server', config.url),
+      ),
+    )
+  ).json()) as { scopes_supported: string[] };
+  expect(metadata.scopes_supported).toEqual([
+    'portfolio:read',
+    'domains:write',
+    'domains:spend',
+  ]);
+  const attempted = await desktopAuthorization('administrator');
+  expect(attempted.authorized.status).toBe(302);
+  expect(
+    new URL(attempted.authorized.headers.get('location')!).searchParams.get(
+      'error',
+    ),
+  ).toBe('invalid_scope');
+  expect(listPendingApprovals()).toHaveLength(0);
+});
+
+it('defaults desktop consent to read and registers only the explicitly approved permissions', async () => {
+  const first = await desktopAuthorization();
+  expect(first.authorized.status).toBe(200);
+  expect(listPendingApprovals()[0].scopes).toEqual(['portfolio:read']);
+  resolvePending(listPendingApprovals()[0].id, false);
+  const next = await desktopAuthorization('portfolio:read domains:write');
+  expect(next.authorized.status).toBe(200);
+  const pending = listPendingApprovals()[0];
+  expect(pending.scopes).toEqual(['portfolio:read', 'domains:write']);
+  const redirect = resolvePending(pending.id, true)!;
+  const tokenResponse = await next.app.fetch(
+    new Request(next.origin + '/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: next.client.client_id,
+        code: new URL(redirect).searchParams.get('code')!,
+        code_verifier: next.verifier,
+        redirect_uri: 'http://localhost:9999/callback',
+      }),
+    }),
+  );
+  expect(tokenResponse.status).toBe(200);
+  const token = ((await tokenResponse.json()) as { access_token: string })
+    .access_token;
+  const listed = await next.app.fetch(
+    new Request(config.url, {
+      ...init,
+      headers: { ...init.headers, Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+    }),
+  );
+  expect(listed.status).toBe(200);
+  const tools = (
+    (await listed.json()) as { result: { tools: { name: string }[] } }
+  ).result.tools.map((t) => t.name);
+  expect(tools).toContain('folder_list');
+  expect(tools).toContain('folder_create');
+  expect(tools).toContain('domain_dns_set');
+  expect(tools).not.toContain('domain_renew');
+  expect(tools).not.toContain('registrar_register_domain');
+});
+
+it('refuses a pre-enforcement grant with unsupported permissions', async () => {
+  const old = await desktopAuthorization('administrator', true);
+  expect(old.authorized.status).toBe(200);
+  const pending = listPendingApprovals()[0],
+    redirect = resolvePending(pending.id, true)!;
+  const response = await old.app.fetch(
+    new Request(old.origin + '/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: old.client.client_id,
+        code: new URL(redirect).searchParams.get('code')!,
+        code_verifier: old.verifier,
+        redirect_uri: 'http://localhost:9999/callback',
+      }),
+    }),
+  );
+  expect(response.status).toBe(200);
+  const token = ((await response.json()) as { access_token: string })
+    .access_token;
+  expect(
+    (
+      await createDesktopMcpApp(config, 'test').fetch(
+        new Request(config.url, {
+          ...init,
+          headers: { ...init.headers, Authorization: 'Bearer ' + token },
+        }),
+      )
+    ).status,
+  ).toBe(401);
+});
 
 it('preserves a real SDK initialize, tools list and legitimate tool call over authenticated local HTTP', async () => {
   let server!: Server;
@@ -64,11 +208,20 @@ it('preserves a real SDK initialize, tools list and legitimate tool call over au
   const client = new Client({ name: 'legitimate-stdio-client', version: '1' });
   try {
     await client.connect(createStdioTransport(current));
-    expect(
-      (await client.listTools()).tools.some(
-        (tool) => tool.name === 'folder_list',
-      ),
-    ).toBe(true);
+    const tools = (await client.listTools()).tools;
+    expect(tools.some((tool) => tool.name === 'folder_list')).toBe(true);
+    for (const name of [
+      'folder_create',
+      'domain_dns_set',
+      'domain_auth_code_get',
+      'domain_renew',
+      'registrar_register_domain',
+      'registrar_transfer_domain',
+    ])
+      expect(
+        tools.some((tool) => tool.name === name),
+        name,
+      ).toBe(false);
     expect(
       await client.callTool({ name: 'folder_list', arguments: {} }),
     ).toMatchObject({ content: [{ type: 'text' }] });

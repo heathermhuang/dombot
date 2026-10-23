@@ -393,6 +393,13 @@ async function bearer(
   if (!info) return fail('Invalid or expired token');
   if (
     options.enforceScopes &&
+    info.scopes.some(
+      (scope) => !HOSTED_SCOPES.some((allowed) => allowed === scope),
+    )
+  )
+    return fail('Token contains an unsupported permission; reconnect');
+  if (
+    options.enforceScopes &&
     info.resource?.href !==
       new URL(c.req.url).origin + (options.basePath ?? '') + MCP_PATH
   )
