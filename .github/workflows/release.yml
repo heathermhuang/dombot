@@ -49,14 +49,24 @@ jobs:
         id: decide
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH_REQUESTED: ${{ inputs.publish }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "push" ]; then
+          validate_tag() {
+            if [[ ! "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo '::error::Release tags must use vMAJOR.MINOR.PATCH.'
+              exit 1
+            fi
+          }
+          if [ "$EVENT_NAME" = "push" ]; then
             TAG="$GITHUB_REF_NAME"
+            validate_tag "$TAG"
             echo "Tag push → releasing $TAG"
             { echo "releasing=true"; echo "tag=$TAG"; echo "ref=$TAG"; } >> "$GITHUB_OUTPUT"
-          elif [ "${{ inputs.publish }}" = "true" ]; then
+          elif [ "$PUBLISH_REQUESTED" = "true" ]; then
             TAG="v$(jq -r .version package.json)"
+            validate_tag "$TAG"
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
                || git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
               echo "::error::$TAG already exists — bump the version in package.json first."
@@ -77,8 +87,8 @@ jobs:
         if: steps.decide.outputs.releasing == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.decide.outputs.tag }}
         run: |
-          TAG="${{ steps.decide.outputs.tag }}"
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --draft --generate-notes --title "DomBot $TAG"
@@ -234,8 +244,10 @@ jobs:
         if: needs.setup.outputs.releasing == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.setup.outputs.tag }}
         shell: bash
-        run: gh release upload "${{ needs.setup.outputs.tag }}" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
 
   # Flip the draft Release to published once every platform has uploaded.
   publish:
@@ -246,7 +258,9 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ needs.setup.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
 
       - name: Checkout main
         uses: actions/checkout@v7
