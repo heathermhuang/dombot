@@ -1,9 +1,9 @@
 # Current hosted registrar dependency
 
-The hosted engine pins `@aoxborrow/registrar-client@0.9.2-hosted.1` from the local
+The hosted engine pins `@aoxborrow/registrar-client@0.9.2-hosted.2` from the local
 archive. This is a reviewed MIT-licensed fork of the registry's 0.9.2 release,
-not an upstream-published version. `registrar-client-0.9.2-hosted.1.json` records
-upstream integrity, patch and archive hashes. Source and unchanged public types
+not an upstream-published version. `registrar-client-0.9.2-hosted.2.json` records
+upstream integrity, the patch series and archive hashes. Source and unchanged public types
 are included; `HOSTED-PATCH.md` in the archive records the ESM/CJS build commands.
 
 The patch requests Dynadot's required two-year `.ai` price-only renewal quote,
@@ -13,6 +13,13 @@ unchanged. `src/core/services/dynadot-pricing.test.ts` exercises the installed
 provider's actual request shape and proves price_check=1 remains present.
 The engine source archive includes this dependency, provenance and patch so its
 standalone build lock remains usable.
+
+The second patch, `registrar-client-path-literals.patch`, validates Gandi DNS
+domain names using IDNA, rejects path separators and dot/empty components before
+transport, and encodes path components. Cloudflare forwarding host names are
+serialized as single quoted expression literals. Local transport fixtures cover
+read/write paths, Unicode names, ESM/CommonJS exports and quote/backslash input;
+they do not contact registrar APIs or create live redirect rules.
 
 ## Historical 0.5.0 artifact
 
