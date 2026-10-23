@@ -3,6 +3,51 @@
     {
       "assets": [
         {
+          "name": "dombot-1.5.2-full.nupkg",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/dombot-1.5.2-full.nupkg"
+        },
+        {
+          "name": "DomBot-1.5.2-mac-arm64.dmg",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/DomBot-1.5.2-mac-arm64.dmg"
+        },
+        {
+          "name": "DomBot-1.5.2-mac-intel-x64.dmg",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/DomBot-1.5.2-mac-intel-x64.dmg"
+        },
+        {
+          "name": "DomBot-1.5.2.Setup.exe",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/DomBot-1.5.2.Setup.exe"
+        },
+        {
+          "name": "DomBot-darwin-arm64-1.5.2.zip",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/DomBot-darwin-arm64-1.5.2.zip"
+        },
+        {
+          "name": "DomBot-darwin-x64-1.5.2.zip",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/DomBot-darwin-x64-1.5.2.zip"
+        },
+        {
+          "name": "dombot-linux-amd64-1.5.2.deb",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/dombot-linux-amd64-1.5.2.deb"
+        },
+        {
+          "name": "dombot-linux-x86_64-1.5.2.rpm",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/dombot-linux-x86_64-1.5.2.rpm"
+        },
+        {
+          "name": "RELEASES",
+          "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.2/RELEASES"
+        }
+      ],
+      "name": "DomBot v1.5.2",
+      "publishedAt": "2026-10-23T23:29:11Z",
+      "tag": "v1.5.2",
+      "url": "https://github.com/heathermhuang/dombot/releases/tag/v1.5.2",
+      "version": "1.5.2"
+    },
+    {
+      "assets": [
+        {
           "name": "dombot-1.5.1-full.nupkg",
           "url": "https://github.com/heathermhuang/dombot/releases/download/v1.5.1/dombot-1.5.1-full.nupkg"
         },
