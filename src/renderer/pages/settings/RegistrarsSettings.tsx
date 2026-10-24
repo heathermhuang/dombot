@@ -1032,7 +1032,7 @@ function ProxyToggle({
         <FieldLabel htmlFor={id}>
           {provider.managedProxyEgressIp
             ? managedIp && !proxy
-              ? 'Managed Namecheap connection'
+              ? `Managed ${provider.displayName} connection`
               : 'Use my own proxy'
             : 'Use fixed IP proxy'}
         </FieldLabel>
@@ -1074,8 +1074,8 @@ function ProxyToggle({
         {managedIp ? (
           <>
             domains.domains provides this fixed IP automatically. Add{' '}
-            <strong>{managedIp}</strong> to your Namecheap API whitelist before
-            connecting. You do not need your own proxy.
+            <strong>{managedIp}</strong> to your {provider.displayName} API
+            whitelist before connecting. You do not need your own proxy.
           </>
         ) : !proxy ? (
           <>

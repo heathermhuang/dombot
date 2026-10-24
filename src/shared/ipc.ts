@@ -1048,6 +1048,8 @@ export interface DombotApi {
   testRegistrarAccount: (
     name: RegistrarName,
     accountId?: string,
+    /** Check the host-managed route without changing the account's routing. */
+    managedRoute?: boolean,
   ) => Promise<ConnectionResult>;
   getRegistrarMetadata: () => Promise<RegistrarMeta[]>;
   getRegistrarCredentials: (

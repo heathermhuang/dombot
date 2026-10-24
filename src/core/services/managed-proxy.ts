@@ -19,7 +19,7 @@ export function configureManagedProxy(url?: string, ip?: string): void {
 }
 
 export function managedProxyFor(name: RegistrarName): ProxyRoute | null {
-  return name === 'namecheap' ? managed : null;
+  return name === 'namecheap' || name === 'dynadot' ? managed : null;
 }
 
 export function managedProxyInfo(): { egressIp: string } | null {

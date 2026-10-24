@@ -42,21 +42,28 @@ manifest/lock. From its `source` directory, run `npm ci --ignore-scripts` then
 location; this package is not published to npm. Do not conflate a package rebuild,
 green tests or a local UI check with deployment or fresh provider qualification.
 
-## Managed Namecheap connection
+## Managed registrar connections
 
-Hosted tenants can provide a default Namecheap connection with the Worker secret
+Hosted tenants can provide default Namecheap and Dynadot connections with the Worker secret
 `DOMBOT_MANAGED_PROXY_URL` and the outgoing IPv4 variable
-`DOMBOT_MANAGED_PROXY_IP`. The current SaaS default is `194.153.254.242`.
+`DOMBOT_MANAGED_PROXY_IP`. The current SaaS default is the relay droplet,
+`152.42.223.194`; it connects directly to registrars without an external proxy.
 Configure both on every legacy tenant and Workers for Platforms deployment,
 including reserve slots and future provisioning templates. Do not put the URL
 or proxy credentials in source, public variables, customer stores or exports.
 
-With `DOMBOT_AUTH=gateway`, Namecheap uses this route automatically unless the
-account explicitly selects a customer-owned proxy. Its requests use the outgoing
-IP as `ClientIp`; customers only enter their Namecheap credentials and whitelist
-the displayed IP in Namecheap. The managed route applies to connection tests,
+With `DOMBOT_AUTH=gateway`, Namecheap and Dynadot use this route automatically unless the
+account explicitly selects a customer-owned proxy. Namecheap requests use the outgoing
+IP as `ClientIp`; customers enter their registrar credentials and whitelist
+the displayed IP with each registrar. The managed route applies to connection tests,
 sync, scheduled jobs and MCP. Failures never fall back to direct Worker traffic.
 Other registrars and non-hosted installations retain their existing routing.
+
+Before removing an existing customer override, call `testRegistrarAccount` with
+the registrar, account ID, and third argument `true` to check the managed route
+using the stored credentials. This read-only test leaves credentials, saved
+routing, cached holdings, and concurrent jobs unchanged; it fails if no managed
+route is configured and never falls back to another connection.
 
 Verify a real Namecheap read through a hosted tenant before rollout, verify that
 owner API responses and exports contain no managed credentials, then preserve

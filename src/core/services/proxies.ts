@@ -75,8 +75,8 @@ export async function saveProxyProfile(
   return profile;
 }
 
-/** Removes the proxy, first switching it off for any account that used it (those
- * accounts fall back to a direct connection). */
+/** Removes the proxy, first switching it off for any account that used it.
+ * Accounts return to their host-managed route when available, otherwise direct. */
 export async function removeProxyProfile(id = DEFAULT_PROXY_ID): Promise<void> {
   for (const user of proxyUsers(id)) await setAccountProxy(user.id, null);
   await store.delete(id);
