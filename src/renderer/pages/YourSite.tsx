@@ -55,7 +55,7 @@ export default function YourSite({
   if (!state)
     return (
       <section className="os-editor">
-        <h1>{inventory ? 'Your portfolio' : 'Your site'}</h1>
+        <h1>{inventory ? 'Your portfolio' : 'Public profile'}</h1>
         <p role={error ? 'alert' : 'status'}>{error || 'Loading…'}</p>
         {error && <button onClick={reload}>Try again</button>}
       </section>
@@ -81,7 +81,7 @@ export default function YourSite({
     }
     return (
       <section className="os-editor">
-        <h1>Update your site</h1>
+        <h1>Update your public profile</h1>
         <p>
           Your live page stays as it is until you review and publish. The update
           preserves your selected names, descriptions, email, prices and
@@ -133,7 +133,7 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <section className="os-editor">
-      <h1>Create your site</h1>
+      <h1>Create your public profile</h1>
       <p>
         Introduce yourself without making your portfolio public. Start with a
         name and address; add collections or projects when you need them.
@@ -198,11 +198,13 @@ function SiteAuthor() {
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState('');
+  const [removalNotice, setRemovalNotice] = useState('');
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setActionError('');
+    setRemovalNotice('');
     try {
       await action();
     } catch (e) {
@@ -246,8 +248,10 @@ function SiteAuthor() {
   if (!draft || !state)
     return (
       <section className="os-editor">
-        <h1>Your site</h1>
-        <p role={error ? 'alert' : 'status'}>{error || 'Loading your site…'}</p>
+        <h1>Public profile</h1>
+        <p role={error ? 'alert' : 'status'}>
+          {error || 'Loading your public profile…'}
+        </p>
         {error && (
           <button onClick={() => void siteEditor.load().catch(() => {})}>
             Try again
@@ -276,8 +280,10 @@ function SiteAuthor() {
     <section className="os-editor">
       <header className="os-header">
         <div>
-          <span className="os-eyebrow">Your site</span>
-          <h1>{state.revision ? 'Make it yours' : 'Create your site'}</h1>
+          <span className="os-eyebrow">Public profile</span>
+          <h1>
+            {state.revision ? 'Make it yours' : 'Create your public profile'}
+          </h1>
           <p>
             Introduce yourself. Share only what you choose. A site with no
             public domains is complete.
@@ -292,7 +298,7 @@ function SiteAuthor() {
                   : status === 'error'
                     ? 'Draft needs attention'
                     : 'Loading…'}{' '}
-            · {live ? 'Site published' : 'Not published'}
+            · {live ? 'Profile published' : 'Not published'}
           </p>
         </div>
         <div className="os-actions">
@@ -376,6 +382,7 @@ function SiteAuthor() {
         </ul>
       )}
       {projection.error && <p role="alert">{projection.error}</p>}
+      {removalNotice && <p role="status">{removalNotice}</p>}
       {receipt && (
         <p role="status">
           Published {receipt}.{' '}
@@ -384,7 +391,7 @@ function SiteAuthor() {
             target="_blank"
             rel="noreferrer"
           >
-            View your site ↗
+            View your public profile ↗
           </a>
         </p>
       )}
@@ -499,31 +506,28 @@ function SiteAuthor() {
               target="_blank"
               rel="noreferrer"
             >
-              View live site ↗
+              View live profile ↗
             </a>
             <button onClick={() => setConfirmRemove(true)}>Unpublish…</button>
           </>
         )}
         {confirmRemove && (
           <div>
-            <p>Remove the public site? Your private draft is kept.</p>
+            <p>Remove the public profile? Your private draft is kept.</p>
             <button
               disabled={busy}
               onClick={() =>
                 void run(async () => {
-                  if (state.enabled) await siteEditor.unpublish();
-                  else {
-                    await publicationRequest('/unpublish', 'POST', {
-                      revision: state.revision,
-                    });
-                    await siteEditor.discardAndReload();
-                  }
+                  await siteEditor.unpublish();
                   setConfirmRemove(false);
                   setReceipt('');
+                  setRemovalNotice(
+                    'Public profile removed. Your unfinished edits are kept.',
+                  );
                 })
               }
             >
-              Unpublish site
+              Unpublish profile
             </button>
             <button onClick={() => setConfirmRemove(false)}>
               Keep published

@@ -1,12 +1,11 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { SalesListing } from '../../../shared/sales-api';
-import { salePriceLabel } from '../../../shared/sales';
 import './sales.css';
 import { useSalesData } from '../../lib/sales-client';
 import { webAuthMode } from '../../lib/platform';
 
-export { salePriceLabel };
+export { salePriceLabel, saleModeLabel } from '../../../shared/sales';
 export function SalesShell({ children }: { children: ReactNode }) {
   const recipient = useSalesData<{ verified?: boolean; address?: string }>(
     webAuthMode() === 'gateway' ? '/recipient' : '/capabilities',
@@ -15,9 +14,9 @@ export function SalesShell({ children }: { children: ReactNode }) {
     <div className="sales">
       <nav aria-label="Sales navigation" className="sales-nav">
         {[
-          ['/sales', 'Listings'],
+          ['/sales', 'Sales pages'],
           ['/sales/inbox', 'Inbox'],
-          ['/sales/shop', 'Shop'],
+          ['/sales/shop', 'Sales shop'],
           ['/sales/channels', 'Channels'],
         ].map(([to, label]) => (
           <NavLink key={to} to={to} end={to === '/sales'}>
@@ -55,9 +54,11 @@ export function SalesFeedback({
           {error} {retry && <button onClick={retry}>Retry</button>}
         </p>
       )}
-      <p role="status" className="sales-notice">
-        {loading ? 'Loading…' : notice}
-      </p>
+      {(loading || notice) && (
+        <p role="status" className="sales-notice">
+          {loading ? 'Loading…' : notice}
+        </p>
+      )}
     </>
   );
 }
@@ -88,18 +89,6 @@ export function Field({
   );
 }
 
-export function saleModeLabel(mode: string): string {
-  return (
-    (
-      {
-        inquiry: 'Inquiry',
-        offer: 'Make an offer',
-        'buy-now': 'Buy now',
-        external: 'Marketplace link',
-      } as Record<string, string>
-    )[mode] ?? mode
-  );
-}
 export function conversationStatusLabel(status: string): string {
   return (
     (

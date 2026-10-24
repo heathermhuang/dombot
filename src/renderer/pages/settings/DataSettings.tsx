@@ -85,11 +85,11 @@ export default function DataSettings() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold">Sync</h2>
+        <h2 className="text-2xl font-bold">Data & sync</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           DomBot keeps a copy of your portfolio and refreshes it from the
-          registrars on a schedule, so it opens instantly and registrar APIs
-          aren&apos;t hit more often than needed.
+          registrars on a schedule. Manage spreadsheet import/export and private
+          backups here, alongside sync and cache controls.
         </p>
       </div>
 

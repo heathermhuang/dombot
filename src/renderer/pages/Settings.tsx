@@ -23,7 +23,7 @@ const SECTIONS = [
   { value: 'general', label: 'General' },
   { value: 'registrars', label: 'Registrars' },
   { value: 'proxy', label: 'Proxy' },
-  { value: 'data', label: 'Sync' },
+  { value: 'data', label: 'Data & sync' },
   { value: 'folders', label: 'Folders' },
   { value: 'mcp', label: 'MCP' },
   { value: 'about', label: 'About' },
@@ -67,7 +67,10 @@ export default function Settings() {
           {/* Phones: a compact section picker that stays one line no matter how
               many sections there are. Desktop: the vertical sidebar list. */}
           <Select value={tab} onValueChange={setTab}>
-            <SelectTrigger className="w-full md:hidden">
+            <SelectTrigger
+              className="w-full md:hidden"
+              aria-label="Settings section"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

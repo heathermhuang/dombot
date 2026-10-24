@@ -1,5 +1,11 @@
-/** Unmodified upstream marketing screenshots; publicly supplied demo data only. */
+/** Upstream previews remain unmodified; hosted Sales preview uses reserved .example fixtures. */
 export const productImages = {
+  hostedSales: {
+    path: '/product/hosted-sales-a6beae60bb87.png',
+    file: '/dombot-hosted-sales.png',
+    width: 343,
+    height: 428,
+  },
   domains: {
     path: '/product/domains-650a06636f75.png',
     file: '/dombot-domains.png',

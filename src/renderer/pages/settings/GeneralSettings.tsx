@@ -67,7 +67,8 @@ export default function GeneralSettings() {
       <div>
         <h2 className="text-2xl font-bold">General</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Preferences for this device. Changes apply right away.
+          Display preferences apply to this device. Money defaults are shared
+          across your portfolio. Changes apply right away.
         </p>
       </div>
 
@@ -194,7 +195,7 @@ export default function GeneralSettings() {
               description="The default for new amounts. Saved amounts keep their own currency."
             >
               <div>
-                <div className="w-72">
+                <div className="w-full max-w-72">
                   <CurrencyPicker
                     label="Preferred currency"
                     value={settings.preferredCurrency}
