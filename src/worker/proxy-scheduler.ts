@@ -11,6 +11,28 @@ export interface ProxySchedulerSettings {
   tenant?: string;
   service?: Pick<Fetcher, 'fetch'>;
   relayUrl?: string;
+  managedUrl?: string;
+}
+
+/** A supplied custom proxy must never have its credentials silently replaced. */
+export function managedProxy(
+  settings: ProxySchedulerSettings,
+  proxy: ProxyRoute,
+): boolean {
+  if (!settings.managedUrl) return false;
+  try {
+    const selected = new URL(proxy.url),
+      managed = new URL(settings.managedUrl);
+    return (
+      selected.origin === managed.origin &&
+      decodeURIComponent(selected.username) ===
+        decodeURIComponent(managed.username) &&
+      decodeURIComponent(selected.password) ===
+        decodeURIComponent(managed.password)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function scheduledProxy(

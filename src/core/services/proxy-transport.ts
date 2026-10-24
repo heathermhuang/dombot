@@ -44,6 +44,13 @@ export function getProxyTransport(): ProxyFetch | undefined {
   return transport;
 }
 
+export function proxyRequestTimeout(
+  proxy: ProxyRoute,
+  fallback: number,
+): number {
+  return requestPolicy?.(proxy).timeout ?? fallback;
+}
+
 /** The tunnel was never established, so the registrar never saw the request. */
 export class ProxyStageError extends Error {
   constructor(

@@ -10,6 +10,7 @@ import {
 } from '../shared/proxy-scheduler';
 import {
   acquireProxyLease,
+  managedProxy,
   scheduledProxy,
   type ProxySchedulerSettings,
 } from './proxy-scheduler';
@@ -27,20 +28,24 @@ export function createWorkerProxyFetch(
   return async (proxy, url, init) => {
     if (!scheduledProxy(settings, proxy))
       return workerProxyFetch(proxy, url, init);
-    const release = await acquireProxyLease(settings, init.signal);
+    const relayUrl = managedProxy(settings, proxy)
+      ? settings.relayUrl
+      : undefined;
+    if (relayUrl && new URL(relayUrl).protocol !== 'https:')
+      throw Object.assign(new Error('A secure relay is required'), {
+        code: 'PROXY_QUEUE_UNAVAILABLE',
+      });
+    const release = await acquireProxyLease(
+      { ...settings, relayUrl },
+      init.signal,
+    );
     try {
       if (init.signal?.aborted)
         throw Object.assign(
           new Error('Queued request cancelled before sending'),
           { code: 'PROXY_QUEUE_CANCELLED' },
         );
-      const selected = settings.relayUrl
-        ? { ...proxy, url: settings.relayUrl }
-        : proxy;
-      if (settings.relayUrl && new URL(settings.relayUrl).protocol !== 'https:')
-        throw Object.assign(new Error('A secure relay is required'), {
-          code: 'PROXY_QUEUE_UNAVAILABLE',
-        });
+      const selected = relayUrl ? { ...proxy, url: relayUrl } : proxy;
       return await workerProxyFetch(selected, url, {
         ...init,
         signal: AbortSignal.any([

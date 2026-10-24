@@ -9,6 +9,8 @@ const allowed = new Set([
   'api.namecheap.com:443',
   'api.dynadot.com:443',
   'ipv4.icanhazip.com:443',
+  'www.cloudflare.com:443',
+  'ipinfo.io:443',
 ]);
 const digest = (value) => createHash('sha256').update(value).digest();
 

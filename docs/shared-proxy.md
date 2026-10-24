@@ -32,6 +32,9 @@ Namecheap ClientIp stay unchanged.
 to customer stores, exports, API metadata, logs, or frontend assets. It changes
 only the transport used for the shared Hong Kong route. The original managed
 proxy URL remains available for controlled serial recovery.
+Relay substitution requires the original managed proxy credentials as well as
+the shared endpoint. A supplied custom password or a different proxy host is
+never silently replaced. Relay-only mode rejects a direct shared-endpoint caller.
 
 Start with scheduler mode `serial`. Install the relay on an approved fixed-IP
 host, obtain a valid public certificate, and verify authentication, destination

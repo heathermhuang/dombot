@@ -124,6 +124,7 @@ async function bootOnce(env: Env): Promise<Boot> {
       tenant: env.DOMBOT_WORKSPACE_ID,
       service: env.DOMBOT_PROXY_SCHEDULER,
       relayUrl: env.DOMBOT_PROXY_RELAY_URL,
+      managedUrl: env.DOMBOT_MANAGED_PROXY_URL,
     };
     configureProxyTransport(
       createWorkerProxyFetch(scheduler),

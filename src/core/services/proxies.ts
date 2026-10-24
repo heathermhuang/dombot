@@ -14,7 +14,7 @@ import type {
   RegistrarAccount,
 } from '../../shared/ipc';
 import { proxySecrets } from '../../shared/proxy';
-import { sendThroughProxy } from './proxy-transport';
+import { proxyRequestTimeout, sendThroughProxy } from './proxy-transport';
 import { redactRegistrarMessage } from './registrar-errors';
 import { Namespace } from '../storage/namespace';
 import { isSavedAccount, listAccounts, setAccountProxy } from './accounts';
@@ -188,10 +188,11 @@ export async function testProxy(input: {
   if (expected && !isPublicIpv4(expected))
     throw new Error('The outgoing IP must be a public IPv4 address.');
   const route: ProxyRoute = { url, ip: expected };
+  const timeout = proxyRequestTimeout(route, PROBE_TIMEOUT_MS);
   let failure = 'no response';
   for (const probe of IP_PROBES) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const response = await sendThroughProxy(route, probe.url, {
         method: 'GET',
@@ -209,7 +210,7 @@ export async function testProxy(input: {
       return { ip, expected, matches: expected ? ip === expected : true };
     } catch (error) {
       failure = controller.signal.aborted
-        ? `timed out after ${PROBE_TIMEOUT_MS / 1000}s`
+        ? `timed out after ${timeout / 1000}s`
         : error instanceof Error
           ? error.message
           : String(error);

@@ -32,6 +32,36 @@ beforeEach(() => {
 });
 
 describe('Worker proxy transport lifecycle', () => {
+  it('does not substitute managed relay credentials for a supplied custom proxy password', async () => {
+    const custom = {
+      ...proxy,
+      url: 'https://other:custom-password@8.8.8.8:12323/',
+    };
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.route).toBe('serial');
+        return Response.json(
+          body.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(new Response('custom'));
+    await createWorkerProxyFetch({
+      ip: proxy.ip,
+      tenant: crypto.randomUUID(),
+      service,
+      relayUrl: 'https://relay:token@relay.example.test',
+      managedUrl: proxy.url,
+    })(custom, 'https://api.namecheap.com/xml.response', {});
+    expect(mock.options[0].proxy).toBe(custom.url);
+  });
   it('uses the host-only HTTPS relay while preserving the original outgoing-IP route', async () => {
     const relayUrl = 'https://relay:relay-token@relay.example.test:443';
     const service = {
@@ -56,6 +86,7 @@ describe('Worker proxy transport lifecycle', () => {
       tenant: crypto.randomUUID(),
       service,
       relayUrl,
+      managedUrl: proxy.url,
     })(proxy, 'https://api.namecheap.com/xml.response', {});
     expect(mock.options[0].proxy).toBe(relayUrl);
     expect(mock.options[0].trust).toEqual({ mode: 'system' });
