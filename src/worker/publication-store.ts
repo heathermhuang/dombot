@@ -104,7 +104,7 @@ export class PublicationStore {
     if (!row) throw new PublicationConflict();
   }
 
-  async unpublish(expected: string): Promise<void> {
+  async unpublish(expected: string): Promise<string> {
     // Invalidate concurrent previews as well as removing the public page.
     const next = crypto.randomUUID();
     const results = await this.db.batch([
@@ -120,6 +120,7 @@ export class PublicationStore {
         .bind(next),
     ]);
     if (!results[0].results.length) throw new PublicationConflict();
+    return next;
   }
 
   /** A backup restore never makes content public. It also works after a root

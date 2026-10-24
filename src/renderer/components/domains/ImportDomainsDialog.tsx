@@ -1201,12 +1201,14 @@ function MatchStep({
         <p className="text-sm font-medium">For every row</p>
         {setup.datesAmbiguous && (
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Dates like 03/04/2024 are</Label>
+            <Label className="text-xs" htmlFor="import-date-order">
+              Dates like 03/04/2024 are
+            </Label>
             <Select
               value={setup.dateOrder}
               onValueChange={(v) => onDateOrder(v as 'mdy' | 'dmy')}
             >
-              <SelectTrigger className="h-8">
+              <SelectTrigger id="import-date-order" className="h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1217,7 +1219,9 @@ function MatchStep({
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Registrar</Label>
+          <Label className="text-xs" htmlFor="import-registrar">
+            Registrar
+          </Label>
           <Select
             value={otherRegistrar ? OTHER : (setup.defaults.registrar ?? NONE)}
             onValueChange={(v) => {
@@ -1225,7 +1229,7 @@ function MatchStep({
               onDefault('registrar', v === NONE || v === OTHER ? null : v);
             }}
           >
-            <SelectTrigger className="h-8">
+            <SelectTrigger id="import-registrar" className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1256,6 +1260,7 @@ function MatchStep({
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Currency for amounts without one</Label>
           <CurrencyPicker
+            label="Currency for amounts without one"
             value={setup.defaults.currency}
             onChange={(c) => onDefault('currency', c)}
           />
@@ -1273,7 +1278,9 @@ function MatchStep({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Status</Label>
+          <Label className="text-xs" htmlFor="import-status">
+            Status
+          </Label>
           <Select
             value={setup.defaults.status ?? NONE}
             onValueChange={(v) =>
@@ -1285,7 +1292,7 @@ function MatchStep({
               )
             }
           >
-            <SelectTrigger className="h-8">
+            <SelectTrigger id="import-status" className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1298,7 +1305,9 @@ function MatchStep({
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Purchase type</Label>
+          <Label className="text-xs" htmlFor="import-purchase-type">
+            Purchase type
+          </Label>
           <Select
             value={setup.defaults.purchaseType ?? NONE}
             onValueChange={(v) =>
@@ -1308,7 +1317,7 @@ function MatchStep({
               )
             }
           >
-            <SelectTrigger className="h-8">
+            <SelectTrigger id="import-purchase-type" className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

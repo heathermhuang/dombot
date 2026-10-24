@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { legalPage, legalVersion } from './legal';
 import {
+  passkeyPanel,
+  authRetry,
+  emailCode,
+  authUnavailable,
+} from './auth-views';
+import {
   accountForm,
   accountSecurity,
   recoveryForm,
@@ -133,7 +139,7 @@ describe('public website brand and product clarity', () => {
     expect(html).toContain(
       'Sample data and prices, not a customer portfolio or registrar quote.',
     );
-    expect(html.match(/<img\b/g)).toHaveLength(2);
+    expect(html.match(/<img\b/g)).toHaveLength(3);
     expect(html).toContain('href="https://demo.dombot.ai/"');
     expect(html).toContain('Original DomBot demo');
     expect(html).toContain('href="/signup"');
@@ -141,5 +147,40 @@ describe('public website brand and product clarity', () => {
     expect(html).toContain('href="/domains"');
     expect(html).toContain('By invitation, as accounts become available.');
     expect(home(false)).not.toContain('href="/domains"');
+  });
+});
+
+describe('account UI recovery and credential identification', () => {
+  it('keeps each passkey reference stable when another key is removed and escapes its label', () => {
+    const first = {
+      id: 'credential-a',
+      reference: 'stable-a',
+      created_at: 1792800000000,
+      authenticator: 'Built-in or synced authenticator',
+      last_used_at: 1792803600000,
+    };
+    const second = {
+      id: 'credential-b',
+      reference: 'stable-b',
+      created_at: 1792800000000,
+    };
+    expect(passkeyPanel([first, second])).toContain('Remove Passkey stable-b');
+    expect(passkeyPanel([second])).toContain('Remove Passkey stable-b');
+    expect(passkeyPanel([first])).toContain('Last used');
+    expect(passkeyPanel([second])).toContain('Not used yet');
+    expect(
+      passkeyPanel([{ ...first, reference: '<script>bad()</script>' }]),
+    ).not.toContain('<script>bad()');
+  });
+  it('preserves legal fields, generic recovery and readable retry time without requiring script', () => {
+    expect(emailCode('sample', '', '', true)).toContain(
+      'name="accept" value="yes" required',
+    );
+    expect(emailCode('sample')).toContain('name="legalVersion"');
+    expect(authUnavailable()).toContain('href="/login"');
+    const html = authRetry('<script>bad()</script>', 65);
+    expect(html).toContain('2 minutes');
+    expect(html).toContain('data-local-time datetime=');
+    expect(html).not.toContain('<script>bad()');
   });
 });

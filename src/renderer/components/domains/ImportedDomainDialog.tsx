@@ -89,9 +89,9 @@ export function ImportedDomainDialog({
             here. When an account reports it, sync takes over.
           </p>
           <div className="flex flex-col gap-2">
-            <Label>Registrar</Label>
+            <Label htmlFor="imported-registrar">Registrar</Label>
             <Select value={registrar} onValueChange={setRegistrar}>
-              <SelectTrigger>
+              <SelectTrigger id="imported-registrar">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -135,9 +135,9 @@ export function ImportedDomainDialog({
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Auto-renew</Label>
+            <Label htmlFor="imported-auto-renew">Auto-renew</Label>
             <Select value={autoRenew} onValueChange={setAutoRenew}>
-              <SelectTrigger>
+              <SelectTrigger id="imported-auto-renew">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

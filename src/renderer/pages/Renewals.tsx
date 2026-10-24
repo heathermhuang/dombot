@@ -768,6 +768,7 @@ function PriceEditorRow({
               if (e.key === 'Enter') void save();
             }}
             placeholder="—"
+            aria-label={`Annual renewal price for ${domain.domainName} in ${currency}`}
             aria-invalid={invalid}
             className="h-8 w-28 text-right tabular-nums"
           />

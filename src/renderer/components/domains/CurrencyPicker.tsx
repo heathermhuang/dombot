@@ -48,6 +48,7 @@ export function CurrencyPicker({
             'justify-between font-normal',
             compact ? 'w-full gap-2 sm:w-24' : 'w-full',
           )}
+          aria-label={`${label}: ${value}`}
           title={selected ? `${selected.code} — ${selected.name}` : undefined}
         >
           <span className="truncate">

@@ -273,8 +273,8 @@ export function createPublicationRoutes(
   });
   app.post('/unpublish', async (c) => {
     const { revision } = revisionSchema.parse(await c.req.json());
-    await (await store(c.env)).unpublish(revision);
-    return c.json({ ok: true });
+    const next = await (await store(c.env)).unpublish(revision);
+    return c.json({ ok: true, revision: next });
   });
   return app;
 }

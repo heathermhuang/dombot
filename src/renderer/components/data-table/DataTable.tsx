@@ -316,7 +316,11 @@ export function DataTable<T>({
               onPageChange(0);
             }}
           >
-            <SelectTrigger size="sm" className="w-[80px]">
+            <SelectTrigger
+              size="sm"
+              className="w-[80px]"
+              aria-label="Rows per page"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
