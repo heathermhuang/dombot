@@ -5,7 +5,10 @@ const migration = vi.hoisted(() => ({
   started: () => {},
   release: () => {},
 }));
-vi.mock('./proxy-transport', () => ({ workerProxyFetch: vi.fn() }));
+vi.mock('./proxy-transport', () => ({
+  createWorkerProxyFetch: () => vi.fn(),
+  workerProxyPolicy: () => () => ({}),
+}));
 // These unit tests isolate initialization; root admission has real-D1 race tests.
 vi.mock('./root-retirement', () => ({
   withRootLease: (_env: unknown, work: () => Promise<Response>) => work(),

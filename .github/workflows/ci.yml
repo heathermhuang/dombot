@@ -48,6 +48,8 @@ jobs:
         run: npm test
       - name: Security regression tests
         run: npx vitest run --config security-review/vitest.config.mts
+      - name: Fixed-source relay checks
+        run: node --test relay/server.check.mjs
 
   worker:
     name: Worker build (dry run)
@@ -76,6 +78,8 @@ jobs:
         run: npx wrangler deploy --config hosted/wrangler.lander.jsonc --dry-run --outdir dist/lander
       - name: Bundle hosted tenant
         run: npx wrangler deploy --config hosted/wrangler.tenant.jsonc --dry-run --outdir dist/tenant
+      - name: Bundle shared proxy scheduler
+        run: npx wrangler deploy --config hosted/wrangler.proxy-scheduler.jsonc --dry-run --outdir dist/proxy-scheduler
       - name: Bundle the Worker without deploying
         # No account or token needed: --dry-run stops after bundling.
         run: npx wrangler deploy --dry-run --outdir dist/worker

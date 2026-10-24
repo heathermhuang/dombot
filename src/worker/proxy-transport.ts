@@ -4,14 +4,74 @@ import {
   MAX_PROXY_RESPONSE_BYTES,
   type ProxyFetch,
 } from '../core/services/proxy-transport';
+import {
+  PROXY_NETWORK_MS,
+  PROXY_QUEUE_WAIT_MS,
+} from '../shared/proxy-scheduler';
+import {
+  acquireProxyLease,
+  managedProxy,
+  scheduledProxy,
+  type ProxySchedulerSettings,
+} from './proxy-scheduler';
+
+export function workerProxyPolicy(settings: ProxySchedulerSettings) {
+  return (proxy: Parameters<ProxyFetch>[0]) =>
+    scheduledProxy(settings, proxy)
+      ? { timeout: PROXY_QUEUE_WAIT_MS + PROXY_NETWORK_MS + 5000, retries: 0 }
+      : {};
+}
+
+export function createWorkerProxyFetch(
+  settings: ProxySchedulerSettings,
+): ProxyFetch {
+  return async (proxy, url, init) => {
+    if (!scheduledProxy(settings, proxy))
+      return workerProxyFetch(proxy, url, init);
+    const relayUrl = managedProxy(settings, proxy)
+      ? settings.relayUrl
+      : undefined;
+    if (relayUrl && new URL(relayUrl).protocol !== 'https:')
+      throw Object.assign(new Error('A secure relay is required'), {
+        code: 'PROXY_QUEUE_UNAVAILABLE',
+      });
+    const release = await acquireProxyLease(
+      { ...settings, relayUrl },
+      init.signal,
+    );
+    try {
+      if (init.signal?.aborted)
+        throw Object.assign(
+          new Error('Queued request cancelled before sending'),
+          { code: 'PROXY_QUEUE_CANCELLED' },
+        );
+      const selected = relayUrl ? { ...proxy, url: relayUrl } : proxy;
+      return await workerProxyFetch(selected, url, {
+        ...init,
+        signal: AbortSignal.any([
+          ...(init.signal ? [init.signal] : []),
+          AbortSignal.timeout(PROXY_NETWORK_MS),
+        ]),
+      });
+    } finally {
+      // A failed release never opens another connection: the durable lease
+      // remains held until its conservative expiry and cooldown.
+      await release().catch(() => {});
+    }
+  };
+}
 
 export const workerProxyFetch: ProxyFetch = async (proxy, url, init) => {
+  const sockets: ReturnType<typeof connect>[] = [];
   const client = new Client({
-    connect: (address, options) =>
-      connect(address, {
+    connect: (address, options) => {
+      const socket = connect(address, {
         ...options,
         allowHalfOpen: options?.allowHalfOpen ?? false,
-      }),
+      });
+      sockets.push(socket);
+      return socket;
+    },
     proxy: proxy.url,
     trust: { mode: 'system' },
     http2: false,
@@ -24,6 +84,10 @@ export const workerProxyFetch: ProxyFetch = async (proxy, url, init) => {
       totalMs: 30000,
     },
   });
+  // Bound the real socket lifetime even if an outer request stops waiting.
+  const timer = setTimeout(() => {
+    for (const socket of sockets) void socket.close().catch(() => {});
+  }, PROXY_NETWORK_MS);
   try {
     const response = await client.fetch(url, { ...init, redirect: 'manual' });
     const body = await response.arrayBuffer();
@@ -37,6 +101,11 @@ export const workerProxyFetch: ProxyFetch = async (proxy, url, init) => {
     );
   } finally {
     // A cached registrar must never retain sockets owned by an earlier Worker invocation.
-    await client.close();
+    try {
+      await client.close();
+    } finally {
+      await Promise.allSettled(sockets.map((socket) => socket.close()));
+      clearTimeout(timer);
+    }
   }
 };

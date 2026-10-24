@@ -18,8 +18,12 @@ vi.mock('tunnelfetch', () => ({
     close = mock.close;
   },
 }));
-import { workerProxyFetch } from './proxy-transport';
-const proxy = { url: 'https://test:secret@8.8.8.8:8080/', ip: '8.8.4.4' };
+import {
+  createWorkerProxyFetch,
+  workerProxyFetch,
+  workerProxyPolicy,
+} from './proxy-transport';
+const proxy = { url: 'https://test:secret@8.8.8.8:12323/', ip: '8.8.8.8' };
 
 beforeEach(() => {
   mock.options.length = 0;
@@ -28,6 +32,141 @@ beforeEach(() => {
 });
 
 describe('Worker proxy transport lifecycle', () => {
+  it('does not substitute managed relay credentials for a supplied custom proxy password', async () => {
+    const custom = {
+      ...proxy,
+      url: 'https://other:custom-password@8.8.8.8:12323/',
+    };
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.route).toBe('serial');
+        return Response.json(
+          body.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(new Response('custom'));
+    await createWorkerProxyFetch({
+      ip: proxy.ip,
+      tenant: crypto.randomUUID(),
+      service,
+      relayUrl: 'https://relay:token@relay.example.test',
+      managedUrl: proxy.url,
+    })(custom, 'https://api.namecheap.com/xml.response', {});
+    expect(mock.options[0].proxy).toBe(custom.url);
+  });
+  it('uses the host-only HTTPS relay while preserving the original outgoing-IP route', async () => {
+    const relayUrl = 'https://relay:relay-token@relay.example.test:443';
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.route).toBe('relay');
+        return Response.json(
+          body.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(new Response('done'));
+    const original = { ...proxy };
+    await createWorkerProxyFetch({
+      ip: proxy.ip,
+      tenant: crypto.randomUUID(),
+      service,
+      relayUrl,
+      managedUrl: proxy.url,
+    })(proxy, 'https://api.namecheap.com/xml.response', {});
+    expect(mock.options[0].proxy).toBe(relayUrl);
+    expect(mock.options[0].trust).toEqual({ mode: 'system' });
+    expect(proxy).toEqual(original);
+  });
+  it('holds the global lease until the body and socket cleanup finish', async () => {
+    const events: string[] = [];
+    mock.fetch.mockImplementation(async () => {
+      events.push('network');
+      return new Response('done');
+    });
+    mock.close.mockImplementation(async () => {
+      events.push('closed');
+    });
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const action = JSON.parse(String(init?.body)).action;
+        events.push(action);
+        return Response.json(
+          action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    const settings = { ip: proxy.ip, tenant: crypto.randomUUID(), service };
+    const response = await createWorkerProxyFetch(settings)(
+      proxy,
+      'https://api.namecheap.com/xml.response',
+      {},
+    );
+    expect(await response.text()).toBe('done');
+    expect(events).toEqual(['acquire', 'network', 'closed', 'release']);
+    expect(mock.options[0].timeouts?.totalMs).toBe(30000);
+    expect(workerProxyPolicy(settings)(proxy)).toEqual({
+      timeout: 155000,
+      retries: 0,
+    });
+    expect(workerProxyPolicy({})(proxy)).toEqual({});
+  });
+  it('never connects without a configured gate and releases after a network failure', async () => {
+    await expect(
+      createWorkerProxyFetch({ ip: proxy.ip })(
+        proxy,
+        'https://api.namecheap.com/xml.response',
+        {},
+      ),
+    ).rejects.toMatchObject({ code: 'PROXY_QUEUE_UNAVAILABLE' });
+    expect(mock.fetch).not.toHaveBeenCalled();
+    const calls: string[] = [];
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const action = JSON.parse(String(init?.body)).action;
+        calls.push(action);
+        return Response.json(
+          action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockRejectedValue(new Error('network failure'));
+    await expect(
+      createWorkerProxyFetch({
+        ip: proxy.ip,
+        tenant: crypto.randomUUID(),
+        service,
+      })(proxy, 'https://api.namecheap.com/xml.response', {}),
+    ).rejects.toThrow('network failure');
+    expect(calls).toEqual(['acquire', 'release']);
+    expect(mock.close).toHaveBeenCalledOnce();
+  });
   it('verifies certificates, bounds decoded bodies, disables redirects and isolates each request', async () => {
     mock.fetch.mockImplementation(
       async () =>

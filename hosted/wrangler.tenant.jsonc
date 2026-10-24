@@ -6,6 +6,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
+  "services": [
+    {
+      "binding": "DOMBOT_PROXY_SCHEDULER",
+      "service": "domains-shared-proxy-scheduler",
+    },
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "WORKSPACE_COORDINATOR", "class_name": "WorkspaceCoordinator" },
@@ -33,6 +39,7 @@
   ],
   "vars": {
     "DOMBOT_AUTH": "gateway",
+    "DOMBOT_PROXY_SCHEDULER_IP": "194.153.254.242",
     "SALES_DNS_CONTROL_ENABLED": "false",
     "DOMBOT_WORKSPACE_ID": "00000000-0000-4000-8000-000000000000",
     "DOMBOT_PUBLIC_BASE_PATH": "/w/00000000-0000-4000-8000-000000000000",

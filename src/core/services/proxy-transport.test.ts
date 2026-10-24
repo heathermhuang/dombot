@@ -74,6 +74,55 @@ const porkbunCreds = { apiKey: 'pk-secret', secretApiKey: 'sk-secret' };
 const ok = () => Promise.resolve(new Response(xml));
 
 describe('proxied registrar transport', () => {
+  it('allows a queued proxy connection test to wait beyond its ordinary probe deadline', async () => {
+    vi.useFakeTimers();
+    configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));
+    transport.mockImplementation(
+      (_route, _url, init) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response('ip=' + proxy.ip + '\n')),
+            16000,
+          );
+          init.signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(new DOMException('Aborted', 'AbortError'));
+            },
+            { once: true },
+          );
+        }),
+    );
+    const pending = testProxy({ url: proxy.url, egressIp: proxy.ip });
+    await vi.advanceTimersByTimeAsync(16001);
+    await expect(pending).resolves.toMatchObject({
+      matches: true,
+      ip: proxy.ip,
+    });
+  });
+  it('budgets queue waiting separately and never replays a scheduled write after an unknown outcome', async () => {
+    configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));
+    transport.mockRejectedValue(new Error('connection dropped after sending'));
+    const error = await createProxiedRegistrar('namecheap', credentials, proxy)
+      .renewDomain('example.test', 1)
+      .catch((e: Error) => e);
+    expect(error).toBeInstanceOf(OutcomeUnknownError);
+    expect(transport).toHaveBeenCalledOnce();
+  });
+  it('identifies a cancelled queue wait as never sent, without exposing private details', async () => {
+    configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));
+    transport.mockRejectedValue(
+      Object.assign(new Error(proxy.url), { code: 'PROXY_QUEUE_CANCELLED' }),
+    );
+    const error = await createProxiedRegistrar('namecheap', credentials, proxy)
+      .renewDomain('example.test', 1)
+      .catch((e: Error) => e);
+    expect(error).not.toBeInstanceOf(OutcomeUnknownError);
+    expect((error as Error).message).toContain('[proxy:PROXY_QUEUE_CANCELLED]');
+    expect((error as Error).message).not.toContain('proxy-secret');
+    expect(transport).toHaveBeenCalledOnce();
+  });
   it('preserves the proxy refusal status without exposing its response or credentials', async () => {
     transport.mockRejectedValue(
       Object.assign(new Error(`Forbidden ${proxy.url}`), {

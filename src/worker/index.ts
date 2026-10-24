@@ -42,7 +42,7 @@ import { D1DocStore } from './storage/d1-doc-store';
 import { runMigrations } from '../core/storage/migrations';
 import { configureProxyTransport } from '../core/services/proxy-transport';
 import { migrateLegacyProxies } from '../core/services/proxies';
-import { workerProxyFetch } from './proxy-transport';
+import { createWorkerProxyFetch, workerProxyPolicy } from './proxy-transport';
 import { configureManagedProxy } from '../core/services/managed-proxy';
 import { createPublicPortfolioRoutes } from './public-portfolio';
 import { createPublicationRoutes } from './publication-routes';
@@ -93,6 +93,8 @@ function bootFingerprint(env: Env): string {
     env.DOMBOT_AUTH,
     env.DOMBOT_MANAGED_PROXY_URL,
     env.DOMBOT_MANAGED_PROXY_IP,
+    env.DOMBOT_PROXY_SCHEDULER_IP,
+    env.DOMBOT_PROXY_RELAY_URL,
     env.CF_ACCESS_TEAM_DOMAIN,
     env.CF_ACCESS_AUD,
   ].join('\u0000');
@@ -114,7 +116,20 @@ async function bootOnce(env: Env): Promise<Boot> {
     // Once per isolate, before any request hydrates. Renames copy raw rows,
     // so values move still sealed.
     await runMigrations(raw, store);
-    configureProxyTransport(workerProxyFetch);
+    const scheduler = {
+      ip:
+        env.DOMBOT_AUTH === 'gateway'
+          ? env.DOMBOT_PROXY_SCHEDULER_IP
+          : undefined,
+      tenant: env.DOMBOT_WORKSPACE_ID,
+      service: env.DOMBOT_PROXY_SCHEDULER,
+      relayUrl: env.DOMBOT_PROXY_RELAY_URL,
+      managedUrl: env.DOMBOT_MANAGED_PROXY_URL,
+    };
+    configureProxyTransport(
+      createWorkerProxyFetch(scheduler),
+      workerProxyPolicy(scheduler),
+    );
     configureManagedProxy(
       env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_URL : undefined,
       env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_IP : undefined,

@@ -5,6 +5,10 @@ interface Env {
   /** SaaS-only default; URL is a Worker secret, never customer data. */
   DOMBOT_MANAGED_PROXY_URL?: string;
   DOMBOT_MANAGED_PROXY_IP?: string;
+  DOMBOT_PROXY_SCHEDULER_IP?: string;
+  DOMBOT_PROXY_SCHEDULER?: Fetcher;
+  /** Host-only HTTPS relay, never stored in customer data. */
+  DOMBOT_PROXY_RELAY_URL?: string;
   DOMBOT_SALES_DNS_CONTROL?: string;
   SALES_DNS_CONTROL_ENABLED?: string;
   DOMBOT_SALES_V1?: string;
