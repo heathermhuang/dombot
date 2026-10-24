@@ -44,10 +44,10 @@ export default function Shop() {
       <div className="sales-heading">
         <div>
           <p className="sales-kicker">SALES / SHOP</p>
-          <h1>Domain shop</h1>
+          <h1>Sales shop</h1>
           <p className="small">
-            A separate publication. Existing public sites and private inventory
-            stay independent.
+            A selected collection of your sales pages. Choose its names here;
+            your public profile and private portfolio keep their own selections.
           </p>
         </div>
         {remote.data?.published && (
@@ -124,12 +124,12 @@ export default function Shop() {
                 setDraft(await salesRequest<SaleShop>('/shop/site-copy'));
                 setReview(null);
                 action.setNotice(
-                  'Presentation copied to this private form. Names stay selected here; the old Public site is unchanged.',
+                  'Presentation copied to this private form. Names stay selected here; your public profile is unchanged.',
                 );
               })
             }
           >
-            Copy saved public-site presentation
+            Copy saved public-profile presentation
           </button>
           <p className="small">
             Copies the address, title and introduction only. Shop selections and

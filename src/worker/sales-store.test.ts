@@ -1088,6 +1088,53 @@ describe('sales recovery and isolation regressions', () => {
     expect(csv).not.toContain('two.example');
     expect(csv).not.toContain('SECRET_FLOOR');
     expect((await publicShop(db, 'sample', { q: '%' })).items).toHaveLength(0);
+    const app = createPublicSalesRoutes();
+    const html = await (
+      await app.request('https://host.example/shop/sample', {}, {
+        DB: db,
+      } as Env)
+    ).text();
+    expect(html).toContain('<details class="shop-filters" >');
+    expect(html).toContain('1 domain shown');
+    expect(html).toContain('value="inquiry"');
+    expect(html).toContain('Domain inquiry');
+    expect(html).not.toContain('private.example');
+    const filtered = await (
+      await app.request(
+        'https://host.example/shop/sample?mode=inquiry&q=%3Cscript%3E',
+        {},
+        { DB: db } as Env,
+      )
+    ).text();
+    expect(filtered).toContain('<details class="shop-filters" open>');
+    expect(filtered).toContain('Reset filters');
+    expect(filtered).toContain('&lt;script&gt;');
+    expect(filtered).not.toContain('<script>');
+  });
+  it('gives unavailable canonical inquiry proofs safe generic recovery without leaking inquiry data', async () => {
+    const app = createPublicSalesRoutes();
+    const env = {
+      DB: db,
+      DOMBOT_SALES_ORIGIN: 'https://host.example',
+      DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+    } as Env;
+    const responses = [];
+    for (const token of ['invalid', 'ab'.repeat(24)]) {
+      const response = await app.request(
+        'https://host.example/i/' + token,
+        {},
+        env,
+      );
+      expect(response.status).toBe(403);
+      const html = await response.text();
+      expect(html).toContain('Go to domains.domains');
+      expect(html).toContain('mailto:domains@domains.domains');
+      expect(html).not.toContain('buyer@example.com');
+      expect(html).not.toContain('fixture.example');
+      expect(html).not.toContain('/confirm');
+      responses.push(html);
+    }
+    expect(responses[0]).toBe(responses[1]);
   });
   it('deleting a domain erases dependent sales data without removing another listing', async () => {
     const { p, id } = await verifiedLead(),

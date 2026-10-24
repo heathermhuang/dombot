@@ -184,6 +184,7 @@ function SyncStatus() {
       <button
         type="button"
         onClick={() => navigate('/settings?tab=registrars')}
+        aria-label={`${short}${lastSyncedAt === null ? '' : `. Last synced ${new Date(lastSyncedAt).toLocaleString()}`}`}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-sm hover:text-foreground',
           !syncing && tone,
@@ -205,7 +206,7 @@ function SyncStatus() {
       {lastSyncedAt !== null && enabled.length > 0 && !syncing && (
         <span
           className={cn(
-            '-ml-1.5',
+            '-ml-1.5 hidden sm:inline',
             stale && 'text-amber-600 dark:text-amber-400',
           )}
           title={`Last synced ${new Date(lastSyncedAt).toLocaleString()}`}

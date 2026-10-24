@@ -1,0 +1,218 @@
+/* Added app surfaces share the established app tokens and control rhythm.
+   Public HTML retains its independent light presentation. */
+:is(.pf-workspace, .os-editor, .sales) {
+  font-family: var(--font-sans);
+  --app-control-radius: calc(var(--radius) - 4px);
+}
+:is(.pf-workspace, .os-editor, .sales) h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+:is(.os-editor, .sales) h2 {
+  font-size: 1.25rem;
+}
+:is(.os-editor, .sales) :is(button, input, select, textarea, .sales-button) {
+  border-radius: var(--app-control-radius);
+  font-family: inherit;
+}
+:is(.os-editor, .sales) :is(button, .sales-button) {
+  font-weight: 500;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+:is(.pf-header, .os-header, .sales-heading) {
+  margin-bottom: 16px;
+  gap: 16px;
+}
+.sales-nav {
+  margin-bottom: 20px;
+  gap: 20px;
+}
+.sales-nav a {
+  flex-shrink: 0;
+}
+.os-tabs {
+  margin-bottom: 20px;
+  gap: 8px;
+  padding: 10px 0;
+}
+.sales-state-picker,
+.sales-row-details {
+  display: none;
+}
+.sales-selection-tools summary,
+.sales-row-details summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px 0;
+}
+.sales-row-details dl {
+  margin: 8px 0;
+  white-space: normal;
+}
+.sales-row-details dt {
+  color: var(--muted-foreground);
+  margin-top: 6px;
+}
+.sales-row-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sales-row-details a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.sales-section {
+  margin: 8px 0;
+}
+.sales-section:not([open]) {
+  padding-bottom: 4px;
+}
+.sales .badge {
+  white-space: normal;
+  max-width: 100%;
+  line-height: 1.4;
+}
+@media (pointer: coarse), (max-width: 639px) {
+  :is(.os-editor, .sales) :is(button, .sales-button) {
+    min-height: 44px;
+  }
+}
+@media (max-width: 650px) {
+  :is(.pf-workspace, .os-editor, .sales) h1 {
+    font-size: 1.5rem;
+    margin: 4px 0 8px;
+  }
+  .pf-header {
+    gap: 10px;
+    padding-bottom: 10px;
+  }
+  .pf-eyebrow,
+  .sales-kicker,
+  .os-eyebrow {
+    display: none;
+  }
+  .os-header {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .os-header p {
+    margin-bottom: 8px;
+  }
+  .os-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 0;
+    margin-bottom: 16px;
+  }
+  .os-editor fieldset > section {
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+  }
+  .pf-table[data-mode='manage'] tr {
+    gap: 4px 10px;
+    padding: 10px 12px;
+  }
+  .pf-table[data-mode='manage'] .pf-domain-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 12px;
+  }
+  .pf-mobile-registrar-toggle {
+    font-size: 12px;
+    margin-left: auto;
+  }
+  .pf-table[data-mode='manage'] td[data-label] {
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .pf-table[data-mode='manage'] td[data-label]::before {
+    min-width: 100px;
+  }
+  .pf-table[data-mode='manage'] td[data-label='Registrar / account'] {
+    padding-bottom: 2px;
+  }
+  .pf-table[data-mode='manage']
+    tr:not([data-registrar-expanded='true'])
+    td[data-label='Status'] {
+    display: none;
+  }
+}
+@media (max-width: 639px) {
+  .sales-nav {
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .sales-heading {
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+  .sales-toolbar {
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .sales-state-tabs {
+    display: none;
+  }
+  .sales .sales-state-picker {
+    display: block;
+    width: auto;
+    flex: 1;
+  }
+  .sales-toolbar > input {
+    order: -1;
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .sales-toolbar > select {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    max-width: calc(50% - 4px);
+  }
+  .sales-selection-tools {
+    margin-left: auto;
+    font-size: 13px;
+  }
+  .sales-row-details {
+    display: block;
+    font-size: 13px;
+  }
+  .sales .sales-listings-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  .sales .sales-listings-table th:first-child {
+    width: 32px;
+  }
+  .sales .sales-listings-table th:nth-child(2) {
+    width: 40%;
+  }
+  .sales td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+  .sales td a.domain {
+    font-size: 14px;
+  }
+}
+@media (width < 64rem) {
+  .inventory-mobile-facts {
+    padding-top: 4px;
+  }
+  .inventory-mobile-facts dl {
+    gap: 4px;
+  }
+  .inventory-mobile-facts dl > div {
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 6px;
+  }
+  .inventory-mobile-facts summary {
+    padding: 8px 0;
+  }
+}

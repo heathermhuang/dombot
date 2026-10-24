@@ -35,6 +35,7 @@ export function SearchField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder.replace(/[….]+$/, '')}
         // Room on the right for the clear button below. The placeholder a
         // step quieter than the muted grey: lighter on white, darker on
         // black.

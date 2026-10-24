@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { createHttpApi, setSessionActive } from './api/http';
 import { markDemo, markWeb, hostPath, type AuthMode } from './lib/platform';
 import './index.css';
+import './app-surfaces.css';
 
 // HashRouter is used because the packaged app loads over the file:// protocol,
 // where BrowserRouter's history paths do not resolve.

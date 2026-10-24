@@ -1,0 +1,116 @@
+# DomBot UI review implementation — 24 October 2026
+
+Target: the completed F01–F16 audit in `output/ui-review-20261024` in the primary project. Implementation base: GitHub main `555ed7c32b84b6d0e4bd08e03eb5bcbc493879ce`, freshly fetched. Work is isolated in `/private/tmp/dombot-ui-fixes-20261024`; the primary checkout and both audit copies remain untouched.
+
+## Scope and binding decisions
+
+The user authorized planning, review, implementation, appropriate tests, PR preparation and release under project policy. All sixteen findings remain accounted for. Preserve the full domains.domains wordmark, forest/neutral tokens, exact approved upstream attribution, source offer and legal operator. Use account for access and portfolio for holdings. No real messages, registrar writes, purchases, DNS changes or destructive account tests. F16 covers an explicit external label only; alternative.domains remains independently maintained.
+
+The public profile, individual sales pages and selected sales shop remain three independent publications. No selection, API, ownership, fresh-authentication, legal acceptance, token validity or anti-enumeration rule is relaxed. Legacy portfolio and v2 owner-site branches must both work.
+
+## Phases and acceptance matrix
+
+| ID / origin | Files and smallest complete change | Acceptance evidence |
+|---|---|---|
+| F01 / fork | `renderer/lib/draft-session.ts`, session tests, `pages/YourSite.tsx`, `worker/publication-store.ts` and `publication-routes.ts`: return the exact revision rotated by this removal; serialize removal with any in-flight save; cancel pending autosave; send the known saved revision without validating/flushing the edit buffer; update public state without replacing unsaved edits. Fence concurrent saves/publish, preserve 409 conflict protection, keep removal confirmation and separate success notice. | Invalid HTTPS link does not block removal; no invalid save request; edits made during removal survive; delayed save settles before revision is chosen; rejected/stale removal leaves edits/public state recoverable; legacy and v2 paths covered. |
+| F02 / integration | `renderer/App.tsx`: retain mobile navigation Sync on the root route when publishing is supported. Keep page Sync in the v2 inventory. | Legacy and v2 root at 320/390/768 show an operable Sync entry; desktop retains global/page action; no provider calls during visual testing. |
+| F03 / fork | `pages/sales/Listings.tsx`, `sales.css`: native row details containing destination, latest inquiry, live public-page action when published. | Keyboard and touch can disclose every hidden field at phone width; desktop columns retained; draft never offers a nonexistent live link. |
+| F04 / fork | inventory/mobile CSS, `DomainWorkspace.tsx`, Sales list/shared, owner-site CSS: compact registrar/expiry/auto-renew facts; reduce repeated chrome; single filter picker on phones; put secondary selection tools in disclosure and bulk changes after selection; honor existing compact preference. | Comparable names visible sooner at 320/390/768; no hidden core facts, clipped actions or lost selection/revision semantics; empty/loading/error states remain understandable. |
+| F05 / fork | `worker/public-sales.ts`, shared mode labels and sales HTML CSS: one visible search field, native advanced-filter disclosure, readable mode names, shown-result count, active filter summary/reset near list. | Unfiltered list visible sooner on desktop and phones; every existing query, CSV export and cursor filter preserved; advanced filters reopen when active; escaped input and empty-results recovery. |
+| F06 / fork | `worker/public-sales.ts`: generic expired/revoked confirmation explanation, safe public navigation and support. No lookup through expired authority and no new resend capability. | Invalid and revoked tokens reaching the canonical handler return identical 403 generic recovery HTML; preserve custom-host foreign/unknown token 404 scoping, no inquiry/recipient/domain leak; live confirmation unchanged. Return to public domains homepage rather than guessing a domain from an invalid proof. |
+| F07 / fork | `hosted/passkeys.ts`, `auth-views.ts`, `browser-auth.ts`: stable credential reference plus authenticator transport, added/last-used dates; removal confirmation identifies exact credential, prevents duplicate submission, explains other-session sign-out and backup key. | Stable after list reorder/deletion; existing keys need no migration; never claim transport identifies a particular physical device; removal remains session/user/fresh-passkey gated. User-assigned names deferred in favor of migration-free identification within this fix. |
+| F08 / fork | shared app-surface CSS imported by app, portfolio/owner/Sales CSS and shared Sales feedback: existing tokens, consistent heading scale, control dimensions/radii, tab rhythm, focus and feedback. Reuse existing Button where JSX permits; avoid coupling isolated hosted HTML runtime to React. | Same hierarchy and controls across app; light/dark; mobile 44px targets; empty notice no longer creates a blank row; no unrelated landing redesign. |
+| F09 / fork | App nav, legacy workspace, YourSite, Sales list/Shop and review wording: Public profile, Sales pages, Sales shop; explain independent choices in context. | Navigation and preview/actions name their actual publication; no data selections merged; legacy URL/schema compatibility preserved. |
+| F10 / fork | hosted auth views + browser time formatting: recovery action first, short primary explanation and secondary account/legal details; relative retry first and semantic/local time enhancement; legal acceptance stays explicit. | Existing/new/unknown email cases preserve same availability rules and legal fields; timestamp has no-script fallback; hostile notices escaped. |
+| F11 / fork | hosted landing: preserve exact credited original previews; add a short clearly labeled hosted sample walkthrough using reserved .example data; readable mobile sample/links. | Hosted sample explicitly synthetic and not operational evidence; screenshot preview can open at full size; no private holdings or false capability claims. |
+| F12 / inherited | GeneralSettings currency wrapper: `w-full max-w-72`. | Full trigger within card at 320/390/768/1440; existing currency operation unchanged. |
+| F13 / inherited | Settings, pagination, toolbar, Renewals, NameserversEditor, ImportDomainsDialog, ImportedDomainDialog, Login, password-input. Associate labels/IDs and error/help; row labels include domain/currency; reveal action stays keyboard reachable with pressed state. | Inspect accessible names and actual Tab/Enter/Space flows; no secret value appears until explicit reveal; no screen-reader certification from static scans. |
+| F14 / inherited | RegistrarsSettings credential read: finally clears loading, explicit failed-read state and Retry, stale response cleanup. Keep unread credentials unsavable until successful retry. | Reject first read, loading ends and Retry works; save/test never submit empty fallback after failed read; close/reopen/account change ignores stale responses. |
+| F15 / inherited | Settings/DataSettings/GeneralSettings copy: Data & sync includes backups/import/export; explain device display defaults versus shared portfolio money defaults. | Existing `tab=data` links remain compatible; controls accurately describe persistence scope. |
+| F16 / external | landing founder link: explicitly external founder portfolio, alternative.domains and external-link treatment. | User can predict destination before leaving; no separate-site source changed. |
+
+## Execution and recovery design
+
+Unpublish: confirmation → wait current save (success uses returned revision; non-conflict validation/request failure can still remove known revision) → check conflict → POST unpublish(saved revision) → clear local public state using the exact returned revision without a later GET or replacing buffer → separate removal notice. While removal is active, autosave/publish wait; subsequent edits remain unsaved and may save after removal completes. A failed remove rejects visibly; it never claims success. Reload/discard remains deliberate.
+
+Credential read: closed → idle; open/retry → loading, controls disabled; success → editable; failure → actionable message + Retry, loading false, credential writes still disabled. Cleanup invalidates responses from closed or switched cards.
+
+Publication navigation:
+
+```text
+Domains (private holdings) ──select──> Public profile (legacy or v2)
+       └── create private sales drafts ──review──> Sales pages
+                                              └──separate selection/review──> Sales shop
+```
+
+Public shop: title → search + Advanced filters → shown results + active criteria/reset → domain ledger → export/next. Mobile inventory: search → summary rows with registrar/expiry/auto-renew → secondary controls on demand. Sales: tabs → title/create → search/state → rows/details → selected actions when applicable.
+
+| Feature | Loading | Empty | Error | Success / partial |
+|---|---|---|---|---|
+| Editor | existing loading status | start a draft | retain buffer, fix/retry/reload | saved and published state distinct; invalid draft can remain after removal |
+| Inventory/Sales | existing skeleton/status | import/connect or create private drafts | Retry without erasing filters | core facts visible; selected jobs preserve per-item receipts |
+| Public shop | server render | adjust filters/reset | existing safe HTTP response | count is shown items, never false total; pagination preserved |
+| Inquiry link | server render | unavailable is generic | safe public navigation/support | valid proof confirmation unchanged |
+| Passkeys | disabled pending action | add a passkey | fresh-authentication recovery | exact stable reference; no inferred device identity |
+| Registrar | loading credentials | existing account setup | failed read + Retry | successful read unlocks; mutation errors remain separate |
+
+Journey storyboard: (1) open private holdings, locate a name quickly; (2) see registrar/expiry/auto-renew without opening many screens; (3) choose a named publication, understand independent selection; (4) review and publish with existing safeguards; (5) remove live content even with unfinished edits; (6) recover from transient read or expired link with one safe next step. The first five seconds orient, five minutes complete the task, and returning users see stable naming and credential references.
+
+## Engineering review
+
+Scope accepted as-is: three logical implementation batches, one PR. Sequence behavior/accessibility before density/language, then packaging and release. Sequential implementation avoids overlap in shared CSS and state. No new dependencies, schema migrations or cross-deployment abstraction.
+
+Architecture: F01 must serialize public operations without accepting a foreign revision and must not call `read()` over unsaved work (current code does both flush and read). F14 must distinguish load failure from save failure so clearing loading cannot enable an empty credential overwrite. F06 cannot infer a domain from invalid authority. F07 uses existing last_used_at/transports and a hashed stable reference, avoiding a control-DB migration and false physical-device names. These are accepted implementation details under the user's explicit end-to-end fix authorization.
+
+Code quality: consolidate only shared visual primitives used by the three authored app surfaces; do not replace the underlying upstream widget library. Shared sale-mode display labels belong in shared sales code for React and public HTML. Use native details/select controls where appropriate, preserving keyboard behavior. No broad refactor.
+
+Tests: Vitest is established. Extend session tests for invalid-buffer removal, in-flight save and edit races, conflicts, removal/read failures and no republish. Add actual public-route assertions for shop filters and invalid inquiry privacy. Preserve/execute passwordless security regressions, authentic WebAuthn tests and fresh-auth removal tests. Credential failure/retry and field names need browser fixture checks with no real registrar calls. Build/typecheck/lint, all unit/security tests, relay checks, renderer/demo/site and all required Worker dry runs. Bump the engine version in the pack script and root file dependency, regenerate the archive/lock after final engine source/test changes, then install and verify the exact new artifact. Removal receipts from older coordinators without a revision lock editing with explicit reload recovery; never adopt a later GET revision over local edits.
+
+Performance: avoid extra credential reads per keystroke, added list network requests or unbounded rendering. Native disclosures do not add fetches. Counts describe the loaded page. Existing debounce/cursors and exact bulk limits retained. No benchmark claims from screenshot density.
+
+## Design review
+
+Mode: OPERATE for private app/account forms, EXPERIENCE for public domain list, PERSUADE for existing landing. Existing .impeccable.md and source tokens take precedence over generic skill defaults. This is refinement, not a new design direction.
+
+1. Information architecture 8→9: define the three publication nouns and results-first hierarchy above. No outstanding issue.
+2. Interaction states 7→9: state table adds recovery, loading, partial saves and selection outcomes. No outstanding issue.
+3. Journey 8→9: storyboard covers repeated portfolio work and privacy removal. No outstanding issue.
+4. Generic-pattern risk 8→9: no new card mosaic, decorative gradients or competing branding. Scan headlines, one purpose per section, cards only for grouped editing; motion limited to existing status affordances. Full wordmark present; record list is visual anchor; existing font/tokens retained. No outstanding issue.
+5. Design system alignment 8→9: shared `--primary`, `--foreground`, `--border`, `--ring`, app font and Button radius/spacing; .impeccable.md is the approved design source. No competing palette or wordmark. No outstanding issue.
+6. Responsive and accessibility 7→9: 320px fluid controls, named fields, explicit reveal, keyboard-native disclosures, retained focus rings/44px touch targets and reduced-motion behavior. Assistive-technology certification remains unclaimed. No outstanding issue.
+Responsive density: four-width evidence required, core registrar facts retained, secondary actions progressively disclosed. No outstanding issue.
+7. Decision register: all choices above execute explicit F01–F16 remedies within authorized scope; no new external commitments or pending product-policy decision. User-assigned passkey names are a possible later enhancement; stable existing-key identification closes the scoped defect without migrating authentication storage.
+
+## Verification and release
+
+Capture synthetic before/after screenshots at 320, 390, 768 and 1440 for legacy/v2 inventory, Sales list, owner-site, settings, public shop, account/recovery and landing as affected. Record keyboard focus/activation, loading/empty/error/Retry states. Label fixtures. Preserve audit screenshots as before evidence; recreate missing widths from base when needed.
+
+Review final diff and required tests, rebuild pinned engine, open/attach protected PR. Recheck main and CI before merge. Release only with current deployment instructions/config preserving every live binding/key/tenant/schedule and exact SOURCE_COMMIT. Inspect public source/runtime identity; observe private behavior only if an authorized signed-in session exists. Otherwise private production acceptance remains explicitly unverified even after release. Closure matrix separates commits, automated tests, screenshots, deployment and observations for each finding.
+
+## Implementation verification checkpoint
+
+Implemented F01–F16 within the scope above. F07 uses stable hashed references, authenticator capabilities and added/last-used dates, with no authentication schema migration. F11 includes an actual synthetic Sales screenshot with reserved .example names; original previews and attribution remain intact. F04 also reduces the phone status bar's repeated time display while retaining its accessible description.
+
+Independent implementation review found one P2 shared-CSS leak into Channels. Fixed by scoping table layout/column widths to `sales-listings-table`; Channels included in the four-width capture set; longer publication tab labels do not shrink into one another on narrow screens. No other blocking findings in the reviewed publication, filter, passkey or credential-recovery paths. A final native review retained the Retry action even if an independent sync clears the request error.
+
+Local evidence: 104 before/after viewport screenshots (320, 390, 768, 1440), plus removal, keyboard disclosure/reveal, credential error/Retry and narrow currency captures. All 104 document widths fit their viewports. At 390px the Sales fixture shows three partly/fully visible records instead of one; public shop shows three instead of none. The preferred-currency trigger is 223px within its 273px card at 320px.
+
+Required checks passed with the final behavior: typecheck, lint, 1,556 unit tests with one existing skip, four separate security regressions, four relay checks, web/demo/site builds and five Worker dry runs. The full suite passed again after the recovery adjustment. The final CSS tab correction reuses unchanged behavior tests; engine integrity/admission tests and affected screenshots are refreshed, and PR CI runs the full exact-head suite. The existing 500-slot D1 fixture needed a 30-second local hook allowance under load; it also passed in isolation with unchanged assertions. CI remains a separate gate.
+
+Release preparation read the live gateway and 523 tenant identities (513 platform), 31 account records and four disabled QA workspaces. No live product code, account data, access flags or schedules changed during preparation. The connected in-app browser redirects `/app` to sign-in; authenticated production acceptance is unavailable without a user session. Automatic approval review rejected exporting control/occupied tenant D1 payloads to local files because that copy destination was not explicitly authorized. No export ran; release waits for a permitted recovery-backup path. No alternative export is attempted.
+
+The gstack metadata helper could not write outside the workspace to ~/.gstack. The reviewed plan and independent findings are preserved here; no helper review-log success is claimed.
+
+## GSTACK REVIEW REPORT
+
+| Review | Runs | Status | Findings |
+|---|---:|---|---|
+| Engineering plan | 1 | CLEAR | Serialization, invalid authority, credential-read lock and engine pairing addressed in plan |
+| Design plan | 1 | CLEAR | Seven passes recorded; existing approved design system retained |
+| Outside review | 1 | CLEAR after corrections | Exact unpublish revision receipt, preserved custom-host 404 boundary, explicit engine version/dependency bump incorporated |
+
+OUTSIDE COVERAGE: native in-host independent plan reviewer completed; external provider review not run.
+
+VERDICT: Engineering and design plan CLEAR after independent corrections; ready to implement.
+
+NO UNRESOLVED DECISIONS

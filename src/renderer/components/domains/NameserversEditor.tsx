@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import {
   sameNameservers,
@@ -49,6 +49,7 @@ export function NameserversEditor({
   onSave?: (nameservers: string[]) => void;
   onCancel?: () => void;
 }) {
+  const fieldId = useId();
   const [text, setText] = useState(initial.join('\n'));
   const parsed = useMemo(() => validateNameservers(text), [text]);
   const unchanged =
@@ -71,7 +72,12 @@ export function NameserversEditor({
 
   return (
     <div className="flex flex-col gap-3">
+      <label htmlFor={fieldId} className="text-sm font-medium">
+        Nameservers
+      </label>
       <Textarea
+        id={fieldId}
+        aria-describedby={`${fieldId}-feedback`}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -98,7 +104,11 @@ export function NameserversEditor({
           }}
           disabled={saving}
         >
-          <SelectTrigger size="sm" className="w-full">
+          <SelectTrigger
+            size="sm"
+            className="w-full"
+            aria-label="Nameserver preset"
+          >
             <SelectValue placeholder="Presets…" />
           </SelectTrigger>
           <SelectContent className="max-w-[420px]">
@@ -121,20 +131,22 @@ export function NameserversEditor({
         </Select>
       )}
 
-      {(parsed.errors.length > 0 || parsed.warnings.length > 0) && (
-        <ul className="flex flex-col gap-0.5 text-xs">
-          {parsed.errors.map((m) => (
-            <li key={m} className="text-destructive">
-              {m}
-            </li>
-          ))}
-          {parsed.warnings.map((m) => (
-            <li key={m} className="text-amber-600 dark:text-amber-400">
-              {m}
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul
+        id={`${fieldId}-feedback`}
+        aria-live="polite"
+        className="flex flex-col gap-0.5 text-xs"
+      >
+        {parsed.errors.map((m) => (
+          <li key={m} className="text-destructive">
+            {m}
+          </li>
+        ))}
+        {parsed.warnings.map((m) => (
+          <li key={m} className="text-amber-600 dark:text-amber-400">
+            {m}
+          </li>
+        ))}
+      </ul>
 
       {note && (
         <p className="inline-flex items-start gap-1.5 text-xs text-muted-foreground">

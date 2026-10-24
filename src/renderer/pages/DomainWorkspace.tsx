@@ -607,7 +607,7 @@ export default function DomainWorkspace({
               ? 'Domains'
               : view === 'review'
                 ? 'Review your changes'
-                : draft.title || 'Your public page'}
+                : draft.title || 'Your public profile'}
           </h1>
           <div className="pf-status">
             {area === 'domains' && (
@@ -622,7 +622,7 @@ export default function DomainWorkspace({
                   <span>
                     <i className="pf-live-dot" />
                     {area === 'domains'
-                      ? `${state.published.count} live on public page`
+                      ? `${state.published.count} live on public profile`
                       : `Live · ${state.published.count} names`}
                   </span>
                 ) : (
@@ -652,15 +652,16 @@ export default function DomainWorkspace({
                 onClick={() => navigateView('settings')}
               >
                 <Settings2 />
-                Public page
+                Public profile
               </Button>
               <Button
                 variant="outline"
                 size="sm"
+                className="hidden sm:inline-flex"
                 onClick={() => navigateView('preview')}
               >
                 <Eye />
-                Preview
+                Preview profile
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -674,6 +675,12 @@ export default function DomainWorkspace({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="sm:hidden"
+                    onSelect={() => navigateView('preview')}
+                  >
+                    Preview public profile
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => list.setMode('manage')}>
                     Show registrar details
                   </DropdownMenuItem>
@@ -705,12 +712,12 @@ export default function DomainWorkspace({
                       <DropdownMenuItem asChild>
                         <a href={liveUrl} target="_blank" rel="noreferrer">
                           <ArrowUpRight />
-                          View live page
+                          View live profile
                         </a>
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={copyLink}>
                         <Copy />
-                        Copy page link
+                        Copy profile link
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </>
@@ -759,7 +766,7 @@ export default function DomainWorkspace({
                   navigateView('domains');
                 }}
               >
-                Manage listings
+                Choose profile domains
               </Button>
               {view !== 'settings' && (
                 <Button
@@ -781,7 +788,7 @@ export default function DomainWorkspace({
                     <Button
                       size="sm"
                       variant="ghost"
-                      aria-label="Public page options"
+                      aria-label="Public profile options"
                     >
                       <MoreHorizontal />
                     </Button>
@@ -791,11 +798,11 @@ export default function DomainWorkspace({
                       <>
                         <DropdownMenuItem asChild>
                           <a href={liveUrl} target="_blank" rel="noreferrer">
-                            View live page
+                            View live profile
                           </a>
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={copyLink}>
-                          Copy page link
+                          Copy profile link
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => setConfirmUnpublish(true)}
@@ -816,7 +823,7 @@ export default function DomainWorkspace({
               onClick={() => navigateView('preview')}
             >
               <Eye />
-              Preview page
+              Preview profile
             </Button>
           )}
           {view === 'preview' && (
@@ -839,7 +846,7 @@ export default function DomainWorkspace({
           </a>
           <Button size="sm" variant="outline" asChild>
             <a href={liveUrl} target="_blank" rel="noreferrer">
-              View live page
+              View live profile
             </a>
           </Button>
           <Button size="sm" variant="outline" onClick={copyLink}>
@@ -1203,7 +1210,7 @@ export default function DomainWorkspace({
                       inventory.map((item) => item.domainName.toLowerCase()),
                     ).size,
                   ],
-                  ['listed', 'Manage listings', pageListCount],
+                  ['listed', 'Profile domains', pageListCount],
                   ['private', 'Private domains', privateNames.length],
                 ] as [DomainScope, string, number][]
               ).map(([key, label, count]) => (
@@ -1224,7 +1231,7 @@ export default function DomainWorkspace({
                   ? `${pageListCount} selected or live, including ${history.length} historical`
                   : scope === 'private'
                     ? `${privateNames.length} private names`
-                    : `${new Set(inventory.map((item) => item.domainName)).size} inventory names`}
+                    : 'registered inventory'}
               </span>
               {(
                 [
@@ -1450,7 +1457,7 @@ export default function DomainWorkspace({
                       )
                     }
                   >
-                    Add {selectedPrivate.length} to public page
+                    Add {selectedPrivate.length} to public profile
                   </Button>
                 )}
                 {allCurrent && (
@@ -1615,7 +1622,7 @@ export default function DomainWorkspace({
                       />
                     </th>
                     <th>Domain</th>
-                    {mode === 'publish' && <th>Public page</th>}
+                    {mode === 'publish' && <th>Public profile</th>}
                     {mode === 'manage' ? (
                       <>
                         <th>Registrar / account</th>
@@ -1751,7 +1758,7 @@ export default function DomainWorkspace({
                                         )
                                       }
                                     >
-                                      Add to public page
+                                      Add to public profile
                                     </Button>
                                   )
                                 ) : (
@@ -1879,7 +1886,7 @@ export default function DomainWorkspace({
                 </h2>
                 <p>
                   {draft.listings.length === 0
-                    ? 'Connect a registrar to manage your domains, or import names to prepare your public page.'
+                    ? 'Connect a registrar to manage your domains, or import names to prepare your public profile.'
                     : 'Try another view or clear the active filters.'}
                 </p>
                 {draft.listings.length === 0 ? (
@@ -2158,8 +2165,8 @@ export default function DomainWorkspace({
         <DialogContent>
           <DialogTitle>Unpublish this portfolio?</DialogTitle>
           <DialogDescription>
-            The public page will be removed. Your draft and registrar inventory
-            remain.
+            The public profile will be removed. Your draft and registrar
+            inventory remain.
           </DialogDescription>
           <Button
             disabled={busy}
