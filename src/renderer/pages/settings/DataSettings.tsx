@@ -264,6 +264,7 @@ function ExportCard() {
           className="w-56"
         >
           <PasswordInput
+            revealLabel="export passphrase"
             id="export-pass"
             autoComplete="new-password"
             value={exportPass}
@@ -378,6 +379,7 @@ function ImportCard() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="import-pass">Passphrase</Label>
               <PasswordInput
+                revealLabel="import passphrase"
                 id="import-pass"
                 autoComplete="off"
                 value={importPass}

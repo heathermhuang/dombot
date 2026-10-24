@@ -17,7 +17,7 @@ import {
   authRetrySeconds,
   AuthEmailUnavailable,
 } from './auth-policy';
-import { Passkeys } from './passkeys';
+import { Passkeys, passkeyNameSchema } from './passkeys';
 import { authScript } from '../../hosted/generated-auth';
 import {
   emailStart,
@@ -399,7 +399,12 @@ app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
   )
     return c.json({ error: 'Too many attempts. Try later.' }, 429);
   const action = c.req.param('action');
-  const form = await c.req.json();
+  const nameForm =
+    action === 'rename' &&
+    c.req
+      .header('content-type')
+      ?.startsWith('application/x-www-form-urlencoded');
+  const form = nameForm ? await c.req.parseBody() : await c.req.json();
   if (action === 'options') {
     if (!['register', 'login', 'reauth'].includes(form.kind))
       return c.json({ error: 'Invalid request' }, 400);
@@ -458,7 +463,7 @@ app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
       .first<{ next_path: string }>();
     return c.json({ next: safeNext(destination?.next_path) });
   }
-  if (action === 'remove') {
+  if (action === 'remove' || action === 'rename') {
     if (!user || !session) return c.json({ error: 'Sign in first' }, 401);
     if (!(await keys.fresh(user)))
       return c.json(
@@ -468,6 +473,26 @@ app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
         },
         428,
       );
+    if (action === 'rename') {
+      const name = passkeyNameSchema.safeParse(form.name);
+      if (typeof form.id !== 'string' || !name.success)
+        return c.json(
+          {
+            error:
+              'Enter a passkey name of 1–80 characters without control characters.',
+          },
+          400,
+        );
+      if (!(await keys.rename(user, form.id, name.data, session)))
+        return c.json(
+          {
+            error:
+              'Passkey could not be renamed. Confirm your identity and try again.',
+          },
+          400,
+        );
+      return nameForm ? c.redirect('/account', 303) : c.json({ ok: true });
+    }
     if (
       typeof form.id !== 'string' ||
       !(await keys.remove(user, form.id, session))

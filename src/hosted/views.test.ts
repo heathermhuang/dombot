@@ -183,4 +183,22 @@ describe('account UI recovery and credential identification', () => {
     expect(html).toContain('data-local-time datetime=');
     expect(html).not.toContain('<script>bad()');
   });
+  it('shows escaped user names alongside stable references and names the removal target', () => {
+    const html = passkeyPanel([
+      {
+        id: 'sample-id',
+        name: 'Laptop <backup>',
+        reference: 'stable-a',
+        created_at: 1792800000000,
+      },
+    ]);
+    expect(html).toContain('<h3>Laptop &lt;backup&gt;</h3>');
+    expect(html).toContain('Reference stable-a');
+    expect(html).toContain(
+      'data-passkey-name="Laptop &lt;backup&gt; (reference stable-a)"',
+    );
+    expect(html).toContain('data-rename-passkey="sample-id"');
+    expect(html).toContain('name="name" value="Laptop &lt;backup&gt;"');
+    expect(html).not.toContain('<backup>');
+  });
 });

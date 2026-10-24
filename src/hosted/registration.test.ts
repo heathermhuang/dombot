@@ -52,6 +52,7 @@ beforeAll(async () => {
     '0003_lifecycle.sql',
     '0004_public_registration.sql',
     '0010_shared_mcp.sql',
+    '0011_passkey_names.sql',
   ])
     await db.exec(
       readFileSync('hosted/migrations/' + file, 'utf8')

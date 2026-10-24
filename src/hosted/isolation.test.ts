@@ -159,6 +159,7 @@ beforeAll(async () => {
   await control.exec(sql('hosted/migrations/0003_lifecycle.sql'));
   await control.exec(sql('hosted/migrations/0007_sales_hostnames.sql'));
   await control.exec(sql('hosted/migrations/0010_shared_mcp.sql'));
+  await control.exec(sql('hosted/migrations/0011_passkey_names.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
     await db.exec(sql('migrations/0001_docs.sql'));

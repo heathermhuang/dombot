@@ -9,6 +9,18 @@ import {
 } from '../../hosted/webauthn';
 import { opaqueToken, tokenHash } from './crypto';
 import type { SessionUser } from './accounts';
+import { z } from 'zod';
+
+export const passkeyNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .refine((value) =>
+    [...value].every(
+      (char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127,
+    ),
+  );
 
 interface KeyRow {
   id: string;
@@ -34,11 +46,12 @@ export class Passkeys {
   async list(user: SessionUser) {
     const rows = (
       await this.env.CONTROL_DB.prepare(
-        'SELECT id,created_at,last_used_at,transports FROM passkeys WHERE user_id=?1 ORDER BY created_at,id',
+        'SELECT id,name,created_at,last_used_at,transports FROM passkeys WHERE user_id=?1 ORDER BY created_at,id',
       )
         .bind(user.id)
         .all<{
           id: string;
+          name: string;
           created_at: number;
           last_used_at: number | null;
           transports: string;
@@ -47,6 +60,7 @@ export class Passkeys {
     return Promise.all(
       rows.map(async (row) => ({
         id: row.id,
+        name: row.name,
         created_at: row.created_at,
         last_used_at: row.last_used_at,
         reference: (await tokenHash(row.id)).slice(0, 12),
@@ -336,6 +350,26 @@ export class Passkeys {
     } catch {
       return null;
     }
+  }
+  async rename(user: SessionUser, id: string, name: string, session: string) {
+    const parsed = passkeyNameSchema.safeParse(name);
+    if (!parsed.success || !(await this.fresh(user))) return false;
+    const now = Date.now();
+    // Recheck the active session and owner atomically with the metadata write.
+    // Naming a key never changes its authority or signs other browsers out.
+    const result = await this.env.CONTROL_DB.prepare(
+      "UPDATE passkeys SET name=?1 WHERE id=?2 AND user_id=?3 AND EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspaces w ON w.id=u.workspace_id WHERE s.token_hash=?4 AND s.user_id=?3 AND s.expires_at>?5 AND s.authenticated_at>?6 AND s.authenticated_at<=?5 AND s.auth_method='passkey' AND w.enabled=1) RETURNING id",
+    )
+      .bind(
+        parsed.data,
+        id,
+        user.id,
+        await tokenHash(session),
+        now,
+        now - 300_000,
+      )
+      .all();
+    return result.results.length === 1;
   }
   async remove(user: SessionUser, id: string, session: string) {
     if (!(await this.fresh(user))) return false;

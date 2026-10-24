@@ -23,6 +23,35 @@ async function post(path: string, body: unknown) {
   }
   return data;
 }
+for (const form of document.querySelectorAll<HTMLFormElement>(
+  'form[data-rename-passkey]',
+))
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = form.querySelector<HTMLButtonElement>(
+      'button[type="submit"]',
+    )!;
+    if (button.disabled) return;
+    button.disabled = true;
+    const feedback = form.querySelector<HTMLElement>('[data-name-status]')!;
+    feedback.hidden = false;
+    feedback.textContent = 'Saving name…';
+    try {
+      const name = new FormData(form).get('name');
+      await post('/auth/passkeys/rename', {
+        id: form.dataset.renamePasskey,
+        name,
+      });
+      location.reload();
+    } catch (error) {
+      feedback.textContent =
+        error instanceof Error
+          ? error.message
+          : 'Could not save this passkey name. Try again.';
+      button.disabled = false;
+    }
+  });
+
 for (const button of document.querySelectorAll<HTMLButtonElement>(
   '[data-passkey]',
 )) {
