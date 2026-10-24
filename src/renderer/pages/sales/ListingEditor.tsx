@@ -56,14 +56,14 @@ function ListingEditorView() {
       { draft, revision },
     );
     editor.saved(draft, r.revision);
-    action.setNotice('Draft saved. Public page unchanged.');
+    action.setNotice('Draft saved. Public sales page unchanged.');
     return r.revision;
   };
   const source = remote.data?.observation.price;
   return (
     <SalesShell>
       <Link className="link" to="/sales">
-        ← Listings
+        ← Sales pages
       </Link>
       <div className="sales-heading">
         <div>
@@ -418,11 +418,12 @@ function ListingEditorView() {
                   checked={draft.includeInShop}
                   onChange={(e) => update('includeInShop', e.target.checked)}
                 />
-                Include in selected shop when this change is published
+                Include in Sales shop when this change is published
               </label>
               <p>
-                The existing Public site has independent selections. Publishing
-                here does not update that site.
+                Your Public profile has its own selection. Publishing this sales
+                page does not change that profile. Sales shop includes only the
+                sales pages you select for it.
               </p>
             </section>
             <section className="sales-section">

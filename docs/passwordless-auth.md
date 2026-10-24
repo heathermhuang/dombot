@@ -82,6 +82,17 @@ a version without fresh-auth guards weakens protections and must not be presente
 as an equivalent security state. Passwordless users need this gateway to sign in;
 prefer a fix forward or retained `/login/password` fallback for password users.
 
+## Passkey names
+
+Passkeys can be given a recognizable name from Account security. Names are
+display metadata alongside a stable reference and added/last-used information;
+they do not identify the physical device behind a synced credential. Saving a
+name requires a fresh existing passkey confirmation and does not change the key,
+counter, revision or browser sessions. Apply control migration
+`0011_passkey_names.sql` before deploying the gateway that reads these names.
+Existing credentials start unnamed and retain their stable references. Keep the
+additive column when rolling back gateway code.
+
 ## Capacity and external qualification
 
 Cloudflare's account API reported a 1,000/day provider quota on 18 October 2026.

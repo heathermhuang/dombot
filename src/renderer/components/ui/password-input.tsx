@@ -15,14 +15,19 @@ function PasswordInput({
   className,
   value,
   disabled,
+  id,
+  revealLabel,
   ...props
-}: Omit<React.ComponentProps<'input'>, 'type'>) {
+}: Omit<React.ComponentProps<'input'>, 'type'> & { revealLabel: string }) {
   const [visible, setVisible] = React.useState(false);
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
   const hasValue = value != null && String(value).length > 0;
 
   return (
     <div className="relative">
       <Input
+        id={inputId}
         type={visible ? 'text' : 'password'}
         value={value}
         disabled={disabled}
@@ -33,7 +38,8 @@ function PasswordInput({
       {hasValue && (
         <button
           type="button"
-          aria-label={visible ? 'Hide value' : 'Show value'}
+          aria-label={`${visible ? 'Hide' : 'Show'} ${revealLabel}`}
+          aria-controls={inputId}
           aria-pressed={visible}
           title={visible ? 'Hide' : 'Show'}
           onClick={() => setVisible((v) => !v)}

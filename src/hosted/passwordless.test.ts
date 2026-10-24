@@ -584,6 +584,168 @@ describe('one email flow for sign-in and signup', () => {
   });
 });
 describe('passkeys and fresh authentication', () => {
+  async function namedKeyFixture() {
+    const { accounts, user, token } = await owner();
+    const keys = new Passkeys(env),
+      device = authenticator();
+    const options = await keys.options('register', user, token);
+    const enrolled = (await keys.verify(
+      options.id,
+      device.register(options.options.challenge),
+      user,
+      token,
+    ))!;
+    const current = (await accounts.session(enrolled))!;
+    return { accounts, user, keys, device, enrolled, current };
+  }
+  const renameRequest = (
+    id: string,
+    name: unknown,
+    session?: string,
+    origin = 'https://domains.domains',
+  ) =>
+    gateway.fetch(
+      new Request('https://domains.domains/auth/passkeys/rename', {
+        method: 'POST',
+        headers: {
+          Origin: origin,
+          'Content-Type': 'application/json',
+          ...(session ? { Cookie: cookie(session) } : {}),
+        },
+        body: JSON.stringify({ id, name }),
+      }),
+      env,
+    );
+  it('persists a passkey name without changing its credential, stable reference or sessions', async () => {
+    const { user, keys, device, enrolled } = await namedKeyFixture();
+    const before = await db
+      .prepare('SELECT * FROM passkeys WHERE id=?')
+      .bind(device.id)
+      .first();
+    const sessions = await db
+      .prepare('SELECT * FROM sessions ORDER BY token_hash')
+      .all();
+    const reference = (await keys.list(user))[0].reference;
+    const response = await renameRequest(
+      device.id,
+      '  Laptop <backup>  ',
+      enrolled,
+    );
+    expect(response.status).toBe(200);
+    const after = await db
+      .prepare('SELECT * FROM passkeys WHERE id=?')
+      .bind(device.id)
+      .first();
+    expect(after).toEqual({ ...before, name: 'Laptop <backup>' });
+    expect(
+      await db.prepare('SELECT * FROM sessions ORDER BY token_hash').all(),
+    ).toEqual(sessions);
+    expect((await keys.list(user))[0]).toMatchObject({
+      name: 'Laptop <backup>',
+      reference,
+    });
+    const accountPage = await gateway.fetch(
+      new Request('https://domains.domains/account', {
+        headers: { Cookie: cookie(enrolled) },
+      }),
+      env,
+    );
+    const html = await accountPage.text();
+    expect(html).toContain('Laptop &lt;backup&gt;');
+    expect(html).not.toContain('<backup>');
+    const plainForm = await post(
+      '/auth/passkeys/rename',
+      { id: device.id, name: 'Backup security key' },
+      enrolled,
+    );
+    expect(plainForm.status).toBe(303);
+    expect(plainForm.headers.get('location')).toBe('/account');
+    expect((await keys.list(user))[0].name).toBe('Backup security key');
+  });
+  it('rejects unsigned, cross-origin, weak-auth and invalid-name rename requests', async () => {
+    const { accounts, user, device, enrolled } = await namedKeyFixture();
+    expect((await renameRequest(device.id, 'Laptop')).status).toBe(401);
+    expect(
+      (await renameRequest(device.id, 'Laptop', enrolled, 'https://evil.test'))
+        .status,
+    ).toBe(403);
+    const weak = (await accounts.newSession(
+      (await accounts.login(user.email, password))!,
+    ))!;
+    const rejected = await renameRequest(device.id, 'Laptop', weak);
+    expect(rejected.status).toBe(428);
+    expect(await rejected.json()).toHaveProperty(
+      'reauth',
+      '/account/reauth?next=%2Faccount',
+    );
+    for (const name of ['', ' '.repeat(3), 'x'.repeat(81), 'bad\nname', null])
+      expect((await renameRequest(device.id, name, enrolled)).status).toBe(400);
+    expect(
+      (
+        await db
+          .prepare('SELECT name FROM passkeys WHERE id=?')
+          .bind(device.id)
+          .first()
+      )?.name,
+    ).toBe('');
+  });
+  it('rechecks key ownership and session revocation, expiry, freshness and workspace enablement at the write', async () => {
+    const { accounts, keys, device, enrolled, current } =
+      await namedKeyFixture();
+    await db
+      .prepare(
+        "INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT 'other','other@example.test',?1,password_hash,created_at FROM users WHERE id='owner-id'",
+      )
+      .bind(ids[1])
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO passkeys(id,user_id,public_key,counter,transports,created_at,revision) SELECT 'other-key','other',public_key,counter,transports,created_at,revision FROM passkeys WHERE id=?",
+      )
+      .bind(device.id)
+      .run();
+    expect(
+      await keys.rename(current, 'other-key', 'Wrong owner', enrolled),
+    ).toBe(false);
+    await db.prepare('UPDATE sessions SET authenticated_at=0').run();
+    expect(await keys.rename(current, device.id, 'Stale', enrolled)).toBe(
+      false,
+    );
+    await db
+      .prepare('UPDATE sessions SET authenticated_at=?,expires_at=0')
+      .bind(Date.now())
+      .run();
+    expect(await keys.rename(current, device.id, 'Expired', enrolled)).toBe(
+      false,
+    );
+    await db
+      .prepare('UPDATE sessions SET expires_at=?')
+      .bind(Date.now() + 60000)
+      .run();
+    await db
+      .prepare('UPDATE workspaces SET enabled=0 WHERE id=?')
+      .bind(ids[0])
+      .run();
+    expect(await keys.rename(current, device.id, 'Disabled', enrolled)).toBe(
+      false,
+    );
+    await db
+      .prepare('UPDATE workspaces SET enabled=1 WHERE id=?')
+      .bind(ids[0])
+      .run();
+    await accounts.logout(enrolled);
+    expect(await keys.rename(current, device.id, 'Revoked', enrolled)).toBe(
+      false,
+    );
+    expect(
+      (
+        await db
+          .prepare('SELECT name FROM passkeys WHERE id=?')
+          .bind(device.id)
+          .first()
+      )?.name,
+    ).toBe('');
+  });
   it('binds only a validated local return path when issuing the passkey challenge', async () => {
     for (const [next, expected] of [
       ['/account/close', '/account/close'],

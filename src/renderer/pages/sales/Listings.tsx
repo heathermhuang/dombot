@@ -409,7 +409,7 @@ export default function Listings() {
       <div
         className="sales-table-region"
         role="region"
-        aria-label="Sales listings"
+        aria-label="Sales pages"
         tabIndex={0}
       >
         <table className="sales-listings-table">
@@ -440,7 +440,7 @@ export default function Listings() {
               <th>Page status</th>
               <th>Destination</th>
               <th>Latest inquiry</th>
-              <th>Public page</th>
+              <th>Public sales page</th>
             </tr>
           </thead>
           <tbody>

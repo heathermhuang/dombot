@@ -51,7 +51,7 @@ function PublicationReviewView() {
   return (
     <SalesShell>
       <Link className="link" to="/sales">
-        ← Listings
+        ← Sales pages
       </Link>
       <div className="sales-heading">
         <div>
@@ -101,7 +101,7 @@ function PublicationReviewView() {
           {receipt.failures?.map((f) => (
             <p key={f.id}>
               <Link className="link" to={`/sales/listings/${f.id}`}>
-                Review listing
+                Review sales page
               </Link>{' '}
               · {f.error}
             </p>
@@ -289,6 +289,6 @@ async function commitBulkPublication(
   return {
     items,
     failures,
-    message: `${items.length} publication receipts · ${failures.length} need review. Domain activation is separate; current availability remains visible in Listings.`,
+    message: `${items.length} publication receipts · ${failures.length} need review. Domain activation is separate; current availability remains visible in Sales pages.`,
   };
 }

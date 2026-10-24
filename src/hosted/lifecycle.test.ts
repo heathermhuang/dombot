@@ -17,6 +17,7 @@ beforeAll(async () => {
   for (const f of [
     '0001_control.sql',
     '0005_passwordless_passkeys.sql',
+    '0011_passkey_names.sql',
     '0002_password_recovery.sql',
     '0003_lifecycle.sql',
   ])

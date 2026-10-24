@@ -50,6 +50,7 @@ export const reauthPage = (next: string, hasPasskeys: boolean, email: string) =>
 export const passkeyPanel = (
   keys: {
     id: string;
+    name?: string;
     created_at: number;
     last_used_at?: number | null;
     reference?: string;
@@ -60,8 +61,10 @@ export const passkeyPanel = (
     keys.length
       ? keys
           .map((k) => {
-            const name = `Passkey ${k.reference ?? k.id.slice(-12)}`;
-            return `<div class="passkey-row"><h3>${e(name)}</h3><p>${e(k.authenticator ?? 'Authenticator')}<br>Added <time datetime="${e(new Date(k.created_at).toISOString())}">${e(new Date(k.created_at).toISOString().slice(0, 10))}</time> · ${k.last_used_at ? `Last used <time datetime="${e(new Date(k.last_used_at).toISOString())}">${e(new Date(k.last_used_at).toISOString().slice(0, 16).replace('T', ' '))} UTC</time>` : 'Not used yet'}</p><button type="button" data-remove-passkey="${e(k.id)}" data-passkey-name="${e(name)}">Remove ${e(name)}</button></div>`;
+            const reference = k.reference ?? k.id.slice(-12);
+            const name = k.name || `Passkey ${reference}`;
+            const identity = k.name ? `${name} (reference ${reference})` : name;
+            return `<div class="passkey-row"><h3>${e(name)}</h3><p>Reference ${e(reference)} · ${e(k.authenticator ?? 'Authenticator')}<br>Added <time datetime="${e(new Date(k.created_at).toISOString())}">${e(new Date(k.created_at).toISOString().slice(0, 10))}</time> · ${k.last_used_at ? `Last used <time datetime="${e(new Date(k.last_used_at).toISOString())}">${e(new Date(k.last_used_at).toISOString().slice(0, 16).replace('T', ' '))} UTC</time>` : 'Not used yet'}</p><form method="post" action="/auth/passkeys/rename" class="passkey-name-form" data-rename-passkey="${e(k.id)}"><input type="hidden" name="id" value="${e(k.id)}"><label for="passkey-name-${e(reference)}">Name for ${e(identity)}<input id="passkey-name-${e(reference)}" name="name" value="${e(k.name ?? '')}" maxlength="80" required autocomplete="off" placeholder="e.g. Laptop or backup security key"></label><button type="submit" aria-label="Save name for ${e(identity)}">Save name</button><p class="note" role="status" data-name-status hidden></p></form><button type="button" data-remove-passkey="${e(k.id)}" data-passkey-name="${e(identity)}">Remove ${e(identity)}</button></div>`;
           })
           .join('')
       : '<p>No passkeys added yet.</p>'
