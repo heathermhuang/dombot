@@ -32,6 +32,48 @@ beforeEach(() => {
 });
 
 describe('Worker proxy transport lifecycle', () => {
+  it('keeps a managed direct-egress relay inside the shared queue', async () => {
+    const managed = {
+      url: 'https://relay:direct-token@relay.example.test',
+      ip: '152.42.223.194',
+    };
+    const calls: string[] = [];
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const command = JSON.parse(String(init?.body));
+        calls.push(command.action);
+        expect(command.route).toBe('relay');
+        return Response.json(
+          command.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(new Response('direct'));
+    const settings = {
+      ip: managed.ip,
+      managedUrl: managed.url,
+      relayUrl: managed.url,
+      tenant: crypto.randomUUID(),
+      service,
+    };
+    await createWorkerProxyFetch(settings)(
+      managed,
+      'https://api.namecheap.com/xml.response',
+      {},
+    );
+    expect(calls).toEqual(['acquire', 'release']);
+    expect(mock.options[0].proxy).toBe(managed.url);
+    expect(workerProxyPolicy(settings)(managed)).toEqual({
+      timeout: 155000,
+      retries: 0,
+    });
+  });
   it('does not substitute managed relay credentials for a supplied custom proxy password', async () => {
     const custom = {
       ...proxy,

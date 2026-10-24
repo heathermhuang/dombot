@@ -13,6 +13,27 @@ const shared = {
 };
 
 describe('tenant proxy lease client', () => {
+  it('queues the configured HTTPS relay independently of a caller-supplied expected IP', () => {
+    const url = 'https://relay:private-token@relay.example.test:443';
+    const settings = { ip: '152.42.223.194', managedUrl: url };
+    expect(scheduledProxy(settings, { url, ip: settings.ip })).toBe(true);
+    expect(scheduledProxy(settings, { url, ip: '194.153.254.242' })).toBe(true);
+    expect(
+      scheduledProxy(settings, {
+        url: 'https://relay:different-token@relay.example.test',
+        ip: settings.ip,
+      }),
+    ).toBe(false);
+    expect(
+      scheduledProxy(settings, {
+        url: 'https://relay:private-token@customer.example.test',
+        ip: settings.ip,
+      }),
+    ).toBe(false);
+    expect(scheduledProxy({ managedUrl: url }, { url, ip: settings.ip })).toBe(
+      false,
+    );
+  });
   it('never sends credentials or request details to the shared scheduler', async () => {
     const calls: ProxyQueueCommand[] = [];
     const service = {

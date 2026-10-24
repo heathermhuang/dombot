@@ -1,6 +1,6 @@
 # Shared registrar proxy
 
-Hosted requests using the managed Hong Kong egress must acquire a lease from
+Hosted requests using the managed fixed-IP egress must acquire a lease from
 `domains-shared-proxy-scheduler` through their private
 `DOMBOT_PROXY_SCHEDULER` service binding. The scheduler receives only a random
 request ID, workspace ID, route mode, and fenced lease token. Proxy URLs,
@@ -21,17 +21,28 @@ gate. This serial mode is a fallback, not a high-volume capacity claim.
 
 ## Fixed-source relay
 
-The authenticated HTTPS CONNECT relay in `relay/server.mjs` forwards to the
-existing Hong Kong proxy. It accepts only the approved registrar hosts on port
+The authenticated HTTPS CONNECT relay in `relay/server.mjs` can connect directly
+from the droplet's IPv4 address or forward through the existing proxy during
+migration. It accepts only the approved registrar hosts on port
 443 and the IP-echo host used for qualification. It never decrypts registrar TLS
 and never accepts caller-selected upstream proxies. Worker-to-relay TLS and
-registrar TLS both use certificate verification. The original outgoing IP and
-Namecheap ClientIp stay unchanged.
+registrar TLS both use certificate verification. Direct mode pins destination
+connections to IPv4. Set the managed outgoing IP and Namecheap ClientIp to the
+droplet's verified address only after the account allows that address.
+
+Relay configuration `mode=direct` needs only its authentication token and TLS
+configuration; upstream credentials are rejected. `mode=migrate` temporarily
+accepts the existing token for the upstream route and a separate `directToken`
+for direct egress, so tenants can move without changing the IP under existing
+connections. An upstream failure never falls back directly. After migration,
+remove the old token and upstream credentials and retain only direct mode.
 
 `DOMBOT_PROXY_RELAY_URL` is a host-only HTTPS proxy secret. It must not be written
 to customer stores, exports, API metadata, logs, or frontend assets. It changes
-only the transport used for the shared Hong Kong route. The original managed
-proxy URL remains available for controlled serial recovery.
+only the transport used for the managed route. During migration, the old managed
+proxy URL remains available for controlled recovery. New direct-egress tenants
+use the authenticated HTTPS relay URL as their managed URL, and still enter the
+global queue.
 Relay substitution requires the original managed proxy credentials as well as
 the shared endpoint. A supplied custom password or a different proxy host is
 never silently replaced. Relay-only mode rejects a direct shared-endpoint caller.
