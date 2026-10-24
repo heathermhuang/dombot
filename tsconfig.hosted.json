@@ -13,7 +13,9 @@
     "src/hosted/views.ts",
     "src/hosted/env.d.ts",
     "hosted-configuration.d.ts",
-    "src/shared/gateway-proof.ts"
+    "src/shared/gateway-proof.ts",
+    "src/hosted/proxy-scheduler.ts",
+    "proxy-scheduler-configuration.d.ts"
   ],
   "exclude": ["src/**/*.test.ts"]
 }

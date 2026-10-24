@@ -74,6 +74,28 @@ const porkbunCreds = { apiKey: 'pk-secret', secretApiKey: 'sk-secret' };
 const ok = () => Promise.resolve(new Response(xml));
 
 describe('proxied registrar transport', () => {
+  it('budgets queue waiting separately and never replays a scheduled write after an unknown outcome', async () => {
+    configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));
+    transport.mockRejectedValue(new Error('connection dropped after sending'));
+    const error = await createProxiedRegistrar('namecheap', credentials, proxy)
+      .renewDomain('example.test', 1)
+      .catch((e: Error) => e);
+    expect(error).toBeInstanceOf(OutcomeUnknownError);
+    expect(transport).toHaveBeenCalledOnce();
+  });
+  it('identifies a cancelled queue wait as never sent, without exposing private details', async () => {
+    configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));
+    transport.mockRejectedValue(
+      Object.assign(new Error(proxy.url), { code: 'PROXY_QUEUE_CANCELLED' }),
+    );
+    const error = await createProxiedRegistrar('namecheap', credentials, proxy)
+      .renewDomain('example.test', 1)
+      .catch((e: Error) => e);
+    expect(error).not.toBeInstanceOf(OutcomeUnknownError);
+    expect((error as Error).message).toContain('[proxy:PROXY_QUEUE_CANCELLED]');
+    expect((error as Error).message).not.toContain('proxy-secret');
+    expect(transport).toHaveBeenCalledOnce();
+  });
   it('preserves the proxy refusal status without exposing its response or credentials', async () => {
     transport.mockRejectedValue(
       Object.assign(new Error(`Forbidden ${proxy.url}`), {

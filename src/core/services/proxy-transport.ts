@@ -30,8 +30,15 @@ export type ProxyFetch = (
 
 // A host supplies a transport, never a shared open socket.
 let transport: ProxyFetch | undefined;
-export function configureProxyTransport(next?: ProxyFetch): void {
+let requestPolicy:
+  | ((proxy: ProxyRoute) => Pick<RegistrarOptions, 'timeout' | 'retries'>)
+  | undefined;
+export function configureProxyTransport(
+  next?: ProxyFetch,
+  policy?: typeof requestPolicy,
+): void {
   transport = next;
+  requestPolicy = policy;
 }
 export function getProxyTransport(): ProxyFetch | undefined {
   return transport;
@@ -73,6 +80,13 @@ const PROXY_FAILURES: Record<string, string> = {
   PROXY_AUTH_REQUIRED: 'The fixed-IP proxy requires authentication',
   PROXY_UNREACHABLE: 'The fixed-IP proxy could not be reached',
   PROXY_PROTOCOL: 'The fixed-IP proxy returned an invalid CONNECT reply',
+  PROXY_QUEUE_BUSY:
+    'The shared registrar connection is busy. Try syncing again shortly',
+  PROXY_QUEUE_TIMEOUT:
+    'The shared registrar connection is busy. Try syncing again shortly',
+  PROXY_QUEUE_CANCELLED: 'The queued registrar request was cancelled',
+  PROXY_QUEUE_UNAVAILABLE:
+    'The shared registrar connection scheduler is unavailable',
   TIMEOUT_CONNECT: 'Connecting to the fixed-IP proxy timed out',
   TIMEOUT_HANDSHAKE: 'The TLS handshake through the fixed-IP proxy timed out',
   TIMEOUT_HEADERS:
@@ -218,7 +232,10 @@ export function createProxiedRegistrar(
     name,
     // Through the proxy, its outgoing address is the Client IP Namecheap sees.
     name === 'namecheap' ? { ...credentials, clientIp: proxy.ip } : credentials,
-    { fetch: wrapFetch ? wrapFetch(fetch) : fetch } satisfies RegistrarOptions,
+    {
+      ...requestPolicy?.(proxy),
+      fetch: wrapFetch ? wrapFetch(fetch) : fetch,
+    } satisfies RegistrarOptions,
   );
   const baseUrl = (
     provider as unknown as { http?: { config?: { baseUrl?: string } } }
