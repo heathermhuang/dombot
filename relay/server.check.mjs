@@ -151,3 +151,162 @@ test('relay authenticates, restricts targets, uses its own upstream credentials 
     await new Promise((resolve) => upstream.close(resolve));
   }
 });
+
+test('direct mode opens only the allowed IPv4 destination and forwards no upstream credentials', async () => {
+  const connections = [],
+    payloads = [];
+  const echo = net.createServer((socket) => {
+    socket.on('data', (bytes) => {
+      payloads.push(bytes);
+      socket.write(bytes);
+    });
+    socket.on('error', () => {});
+  });
+  echo.listen(0, '127.0.0.1');
+  await once(echo, 'listening');
+  const token = 'direct-mode-test-token-'.repeat(3);
+  const relay = createRelay({ mode: 'direct', token }, undefined, (options) => {
+    connections.push(options);
+    return net.createConnection({
+      host: '127.0.0.1',
+      port: echo.address().port,
+    });
+  });
+  relay.listen(0, '127.0.0.1');
+  await once(relay, 'listening');
+  async function request(target, secret = token) {
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: relay.address().port,
+      method: 'CONNECT',
+      path: target,
+      headers: {
+        'Proxy-Authorization':
+          'Basic ' + Buffer.from('relay:' + secret).toString('base64'),
+      },
+    });
+    req.end();
+    const [response, socket] = await once(req, 'connect');
+    return { response, socket };
+  }
+  try {
+    const bad = await request('api.namecheap.com:443', 'wrong');
+    assert.equal(bad.response.statusCode, 407);
+    bad.socket.destroy();
+    const blocked = await request('127.0.0.1:443');
+    assert.equal(blocked.response.statusCode, 403);
+    blocked.socket.destroy();
+    assert.equal(connections.length, 0);
+    const good = await request('api.namecheap.com:443');
+    assert.equal(good.response.statusCode, 200);
+    assert.deepEqual(connections, [
+      { host: 'api.namecheap.com', port: 443, family: 4 },
+    ]);
+    const bytes = Buffer.from([0x16, 0x03, 0x03, 0, 3, 0xaa, 0x01, 0xff]);
+    good.socket.write(bytes);
+    const [received] = await once(good.socket, 'data');
+    assert.deepEqual(received, bytes);
+    assert.deepEqual(Buffer.concat(payloads), bytes);
+    good.socket.destroy();
+    assert.throws(
+      () =>
+        createRelay({
+          mode: 'direct',
+          token,
+          upstream: { username: 'unused', password: 'unused' },
+        }),
+      /Invalid relay/,
+    );
+  } finally {
+    relay.closeAllConnections();
+    await new Promise((r) => relay.close(r));
+    await new Promise((r) => echo.close(r));
+  }
+});
+
+test('migration chooses the route only from its authenticated token', async () => {
+  const selected = [],
+    payloads = [];
+  let legacyObserved;
+  const legacyReady = new Promise((resolve) => {
+    legacyObserved = resolve;
+  });
+  const echo = net.createServer((socket) => {
+    socket.on('data', (bytes) => {
+      payloads.push(bytes);
+      if (bytes.toString().startsWith('CONNECT ')) legacyObserved();
+      socket.write(bytes);
+    });
+    socket.on('error', () => {});
+  });
+  echo.listen(0, '127.0.0.1');
+  await once(echo, 'listening');
+  const token = 'legacy-migration-token-'.repeat(3),
+    directToken = 'direct-migration-token-'.repeat(3);
+  const relay = createRelay(
+    {
+      mode: 'migrate',
+      token,
+      directToken,
+      upstream: {
+        host: '194.153.254.242',
+        port: 12323,
+        username: 'synthetic-upstream-user',
+        password: 'synthetic-upstream-password',
+      },
+    },
+    undefined,
+    (options) => {
+      selected.push(options);
+      return net.createConnection({
+        host: '127.0.0.1',
+        port: echo.address().port,
+      });
+    },
+  );
+  relay.listen(0, '127.0.0.1');
+  await once(relay, 'listening');
+  async function request(secret) {
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: relay.address().port,
+      method: 'CONNECT',
+      path: 'api.dynadot.com:443',
+      headers: {
+        'Proxy-Authorization':
+          'Basic ' + Buffer.from('relay:' + secret).toString('base64'),
+      },
+    });
+    req.end();
+    return once(req, 'connect');
+  }
+  try {
+    const [direct, socket] = await request(directToken);
+    assert.equal(direct.statusCode, 200);
+    assert.deepEqual(selected[0], {
+      host: 'api.dynadot.com',
+      port: 443,
+      family: 4,
+    });
+    socket.destroy();
+    const pending = request(token);
+    await legacyReady;
+    assert.deepEqual(selected[1], {
+      host: '194.153.254.242',
+      port: 12323,
+      family: 4,
+    });
+    assert.match(
+      Buffer.concat(payloads).toString(),
+      /^CONNECT api\.dynadot\.com:443/,
+    );
+    // The echo is not an HTTP proxy, so the legacy connection is rejected rather than falling back directly.
+    const [legacy, legacySocket] = await pending;
+    assert.equal(legacy.statusCode, 502);
+    legacySocket.destroy();
+  } finally {
+    relay.closeAllConnections();
+    await new Promise((r) => relay.close(r));
+    await new Promise((r) => echo.close(r));
+  }
+});

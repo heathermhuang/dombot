@@ -18,7 +18,7 @@
     },
   ],
   "vars": {
-    "SHARED_PROXY_IP": "194.153.254.242",
+    "SHARED_PROXY_IP": "152.42.223.194",
     "SHARED_PROXY_MODE": "serial",
     "SHARED_PROXY_CONCURRENCY": "1",
   },

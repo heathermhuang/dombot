@@ -42,8 +42,8 @@ export function scheduledProxy(
   const endpoint = new URL(proxy.url);
   return Boolean(
     settings.ip &&
-    endpoint.hostname === settings.ip &&
-    endpoint.port === '12323',
+    (managedProxy(settings, proxy) ||
+      (endpoint.hostname === settings.ip && endpoint.port === '12323')),
   );
 }
 
