@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { canonicalDomain } from '../shared/publication';
-import { inquirySchema, salePriceLabel } from '../shared/sales';
+import { inquirySchema, salePriceLabel, saleModeLabel } from '../shared/sales';
 import {
   renderSalesLander,
   salesPage,
@@ -344,7 +344,7 @@ export function createPublicSalesRoutes() {
         'Confirm inquiry',
         grant
           ? `<section class="flow"><span class="eyebrow">Email confirmation</span><h1>Ready to start the conversation?</h1><div class="panel"><p>Confirm your email so we can reply to your inquiry. This does not accept an offer or commit you to a purchase.</p><form method="post" action="${e(base(c))}/i/${e(c.req.param('token'))}/confirm"><button>Confirm email address</button></form></div></section>`
-          : '<h1>This link expired or was revoked.</h1>',
+          : '<section class="flow"><h1>This link expired or was revoked.</h1><p>It can no longer confirm an inquiry. If you still want to get in touch, return to the public domain page you visited and send a new inquiry.</p><p><a class="cta" href="https://domains.domains/">Go to domains.domains</a></p><p class="note">Need help? <a href="mailto:domains@domains.domains">Contact support</a>. Do not forward private conversation links.</p></section>',
       ),
       grant ? 200 : 403,
     );
@@ -428,7 +428,25 @@ export function createPublicSalesRoutes() {
     return c.html(
       salesPage(
         shop.title,
-        `<span class="eyebrow">Selected domains</span><h1>${e(shop.title)}</h1><p>${e(shop.intro)}</p><form><label for="q">Find a domain</label><input id="q" name="q" value="${e(f.q)}"><label for="mode">Sale mode</label><select id="mode" name="mode"><option value="">All modes</option>${['inquiry', 'offer', 'buy-now', 'external'].map((m) => `<option ${f.mode === m ? 'selected' : ''}>${m}</option>`).join('')}</select><label for="tld">Extension</label><input id="tld" name="tld" value="${e(f.tld)}"><label for="category">Category</label><input id="category" name="category" value="${e(f.category)}"><label for="currency">Price currency</label><input id="currency" name="currency" maxlength="3" value="${e(f.currency)}"><label for="min">Minimum asking amount</label><input id="min" name="min" inputmode="numeric" value="${e(f.min)}"><label for="max">Maximum asking amount</label><input id="max" name="max" inputmode="numeric" value="${e(f.max)}"><button>Search</button> <a href="?">Reset</a></form><p><a href="${e(base(c))}/shop/${e(shop.handle)}/export?${e(exportQuery.toString())}">Download these results as CSV (up to 100)</a></p><table class="ledger"><thead><tr><th>Domain</th><th>Price</th><th>Sales path</th></tr></thead><tbody>${items.map((s) => `<tr><td><a href="${e(base(c))}/d/${e(s.domain)}">${e(s.displayName)}</a></td><td>${e(salePriceLabel(s.publicPrice))}</td><td>${e(s.mode)}</td></tr>`).join('')}</tbody></table>${!items.length ? '<p>No matching domains. Adjust your filters or Reset.</p>' : ''}${cursor ? `<a href="?${e(values.toString())}">Next page</a>` : ''}`,
+        `<span class="eyebrow">Selected domains</span><h1>${e(shop.title)}</h1><p>${e(shop.intro)}</p>
+<form class="shop-search"><label for="q">Find a domain</label><div class="shop-search-row"><input id="q" name="q" value="${e(f.q)}" placeholder="Search names or keywords"><button>Search</button></div>
+<details class="shop-filters" ${Object.entries(f).some(([key, value]) => key !== 'q' && key !== 'cursor' && value) ? 'open' : ''}><summary>Advanced filters</summary><div class="shop-filter-grid">
+<label for="mode">Sales path<select id="mode" name="mode"><option value="">All sales paths</option>${['inquiry', 'offer', 'buy-now', 'external'].map((m) => `<option value="${m}" ${f.mode === m ? 'selected' : ''}>${e(saleModeLabel(m))}</option>`).join('')}</select></label>
+<label for="tld">Extension<input id="tld" name="tld" value="${e(f.tld)}" placeholder="e.g. com"></label><label for="category">Category<input id="category" name="category" value="${e(f.category)}" placeholder="e.g. Technology"></label><label for="currency">Price currency<input id="currency" name="currency" maxlength="3" value="${e(f.currency)}" placeholder="e.g. USD"></label><label for="min">Minimum asking amount<input id="min" name="min" inputmode="numeric" value="${e(f.min)}" placeholder="e.g. 1000"></label><label for="max">Maximum asking amount<input id="max" name="max" inputmode="numeric" value="${e(f.max)}" placeholder="e.g. 10000"></label></div><button>Apply filters</button></details></form>
+<p class="shop-results">${items.length} ${items.length === 1 ? 'domain' : 'domains'} shown${cursor ? ' · More on the next page' : ''}${
+          Object.entries(f).some(([key, value]) => key !== 'cursor' && value)
+            ? ` · Filters: ${e(
+                Object.entries(f)
+                  .filter(([key, value]) => key !== 'cursor' && value)
+                  .map(
+                    ([key, value]) =>
+                      `${({ q: 'Search', mode: 'Sales path', tld: 'Extension', category: 'Category', currency: 'Currency', min: 'Minimum', max: 'Maximum' } as Record<string, string>)[key]}: ${key === 'mode' ? saleModeLabel(value) : value}`,
+                  )
+                  .join(' · '),
+              )} · <a href="?">Reset filters</a>`
+            : ''
+        }</p>
+<table class="ledger"><thead><tr><th>Domain</th><th>Price</th><th>Sales path</th></tr></thead><tbody>${items.map((s) => `<tr><td><a href="${e(base(c))}/d/${e(s.domain)}">${e(s.displayName)}</a><span class="shop-mobile-mode">${e(saleModeLabel(s.mode))}</span></td><td>${e(salePriceLabel(s.publicPrice))}</td><td>${e(saleModeLabel(s.mode))}</td></tr>`).join('')}</tbody></table>${!items.length ? '<p>No matching domains. Adjust your filters or <a href="?">reset filters</a>.</p>' : ''}${cursor ? `<a class="cta secondary" href="?${e(values.toString())}">Next page</a>` : ''}<p class="note"><a href="${e(base(c))}/shop/${e(shop.handle)}/export?${e(exportQuery.toString())}">Download these results as CSV (up to 100)</a></p>`,
       ),
     );
   });

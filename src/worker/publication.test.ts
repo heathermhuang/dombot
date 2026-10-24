@@ -366,15 +366,26 @@ describe('publication database and HTTP boundary', () => {
   it('unpublishes immediately, keeps the draft, and invalidates outstanding previews', async () => {
     const revision = await store.save(draft, null);
     await call('/publishing/publish', 'POST', { revision });
-    expect(
-      (await call('/publishing/unpublish', 'POST', { revision })).status,
-    ).toBe(200);
+    const removed = await call('/publishing/unpublish', 'POST', { revision });
+    expect(removed.status).toBe(200);
+    const receipt = await removed.json();
+    expect(receipt.revision).toBe((await store.draft()).revision);
+    expect(receipt.revision).not.toBe(revision);
     expect((await call('/p/portfolio', 'GET', undefined, false)).status).toBe(
       404,
     );
     expect((await store.draft()).draft).toEqual(draft);
     expect(
       (await call('/publishing/publish', 'POST', { revision })).status,
+    ).toBe(409);
+    const next = await store.save(
+      { ...draft, title: 'Another tab' },
+      receipt.revision,
+    );
+    expect(next).not.toBe(receipt.revision);
+    expect(
+      (await call('/publishing', 'PUT', { draft, revision: receipt.revision }))
+        .status,
     ).toBe(409);
   });
   it('a stale unpublish cannot remove a newer publication', async () => {

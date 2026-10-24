@@ -34,6 +34,8 @@ export class DraftSession<D, S extends { draft: D; revision: string | null }> {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private loading: Promise<void> | null = null;
   private saving: Promise<void> | null = null;
+  private publication: Promise<void> | null = null;
+  private removing = false;
   private conflict = false;
   constructor(
     protected client: DraftClient<D, S>,
@@ -110,6 +112,7 @@ export class DraftSession<D, S extends { draft: D; revision: string | null }> {
   }
   async flush(): Promise<void> {
     clearTimeout(this.timer);
+    if (this.removing && this.publication) await this.publication;
     if (this.conflict) throw new Error(this.snapshot.error);
     if (this.saving) {
       await this.saving;
@@ -184,21 +187,77 @@ export class DraftSession<D, S extends { draft: D; revision: string | null }> {
     if (this.saving) await this.saving.catch(() => {});
     await this.read();
   }
+  private async publicAction(action: () => Promise<void>): Promise<void> {
+    if (this.publication) {
+      await this.publication.catch(() => {});
+      return this.publicAction(action);
+    }
+    const pending = Promise.resolve().then(action);
+    this.publication = pending;
+    try {
+      await pending;
+    } finally {
+      this.publication = null;
+      this.removing = false;
+    }
+  }
   async publish() {
-    await this.flush();
-    const revision = this.snapshot.state?.revision;
-    if (!revision) throw new Error('Save a draft first.');
-    await this.refreshReview();
-    await this.client.publish(revision);
-    // Publishing may finish after the user has navigated back to editing.
-    // Refresh the public baseline without replacing their newer draft buffer.
-    await this.refreshReview();
+    return this.publicAction(async () => {
+      await this.flush();
+      const revision = this.snapshot.state?.revision;
+      if (!revision) throw new Error('Save a draft first.');
+      await this.refreshReview();
+      await this.client.publish(revision);
+      // Keep edits made while publication was finishing.
+      await this.refreshReview();
+    });
   }
   async unpublish() {
-    await this.flush();
-    const revision = this.snapshot.state?.revision;
-    if (!revision) throw new Error('Save a draft first.');
-    await this.client.unpublish(revision);
-    await this.read();
+    return this.publicAction(async () => {
+      this.removing = true;
+      clearTimeout(this.timer);
+      // Only settle a write already sent. Unfinished fields must never prevent
+      // removal, and edits made during removal must remain in the buffer.
+      if (this.saving) await this.saving.catch(() => {});
+      if (this.conflict) throw new Error(this.snapshot.error);
+      const revision = this.snapshot.state?.revision;
+      if (!revision) throw new Error('No saved public profile to remove.');
+      try {
+        const result = await this.client.unpublish(revision);
+        const state = this.snapshot.state!;
+        this.emit({
+          state: { ...state, published: null, publishedSnapshot: null },
+        });
+        // Use only this operation's receipt. A later read could contain another
+        // tab's edits and must never authorize overwriting them with our buffer.
+        let next: string | null = null;
+        if (
+          result &&
+          typeof result === 'object' &&
+          'revision' in result &&
+          typeof result.revision === 'string'
+        )
+          next = result.revision;
+        else {
+          this.conflict = true;
+          this.emit({
+            status: 'error',
+            errorKind: 'request',
+            error:
+              'Public profile removed. Reload the saved draft before saving again. Your edits are still here.',
+          });
+          return;
+        }
+        this.emit({
+          state: { ...this.snapshot.state!, revision: next },
+          status: this.isDirty() ? 'unsaved' : 'saved',
+          error: '',
+          errorKind: null,
+        });
+      } catch (error) {
+        this.fail(error);
+        throw error;
+      }
+    });
   }
 }

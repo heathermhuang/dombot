@@ -1714,10 +1714,6 @@ export default function Domains({
                       </dd>
                     </div>
                   ))}
-                <div>
-                  <dt>Status</dt>
-                  <dd>{d.status || 'Not reported'}</dd>
-                </div>
               </dl>
               <details>
                 <summary>
@@ -1725,6 +1721,10 @@ export default function Domains({
                   <span className="sr-only">for {d.domainName}</span>
                 </summary>
                 <dl>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{d.status || 'Not reported'}</dd>
+                  </div>
                   {dataColumns
                     .filter(
                       (c) =>

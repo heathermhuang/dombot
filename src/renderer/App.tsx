@@ -374,7 +374,7 @@ function HostedSyncControl() {
 const NAV_ITEMS = [
   { to: '/', label: 'Domains', icon: Globe },
   { to: '/sales', label: 'Sales', icon: Globe },
-  { to: '/public-page', label: 'Public site', icon: Globe },
+  { to: '/public-page', label: 'Public profile', icon: Globe },
   { to: '/renewals', label: 'Renewals', icon: CalendarClock },
   { to: '/activity', label: 'Activity', icon: History },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -449,7 +449,7 @@ function MobileNav() {
         )}
         {/* The Sync action lives here on phones; on wider screens it's in the
             status bar. Domains has its own in the page header. */}
-        {pathname !== '/' && (
+        {(pathname !== '/' || supportsPublishing()) && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem

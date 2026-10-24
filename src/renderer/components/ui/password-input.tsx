@@ -33,19 +33,13 @@ function PasswordInput({
       {hasValue && (
         <button
           type="button"
-          // Not a tab stop: it's a convenience, and keeping it out of the tab
-          // order means Tab moves straight from the field to the next control.
-          tabIndex={-1}
           aria-label={visible ? 'Hide value' : 'Show value'}
+          aria-pressed={visible}
           title={visible ? 'Hide' : 'Show'}
           onClick={() => setVisible((v) => !v)}
           className="absolute inset-y-0 right-0 flex items-center px-2.5 text-muted-foreground/70 transition-colors hover:text-foreground"
         >
-          {visible ? (
-            <EyeOff className="size-4" />
-          ) : (
-            <Eye className="size-4" />
-          )}
+          {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
       )}
     </div>

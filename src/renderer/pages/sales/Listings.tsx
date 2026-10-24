@@ -72,7 +72,7 @@ export default function Listings() {
       <div className="sales-heading">
         <div>
           <p className="sales-kicker">SALES / LISTINGS</p>
-          <h1>Sales listings</h1>
+          <h1>Sales pages</h1>
           <p className="small">
             Manage sales pages and inquiries alongside your portfolio.
           </p>
@@ -178,7 +178,11 @@ export default function Listings() {
           </p>
         </section>
       )}
-      <div className="sales-toolbar" role="group" aria-label="Listing filters">
+      <div
+        className="sales-toolbar sales-state-tabs"
+        role="group"
+        aria-label="Listing filters"
+      >
         {['All', 'Published', 'Drafts', 'Needs attention', 'Paused'].map(
           (label) => (
             <button
@@ -197,6 +201,25 @@ export default function Listings() {
         )}
       </div>
       <div className="sales-toolbar">
+        <select
+          className="sales-state-picker"
+          aria-label="Listing status"
+          value={filter}
+          onChange={(e) => {
+            setFilter(e.target.value);
+            setMatchingSelection(null);
+            setCursor('');
+            setSelection(new Set());
+          }}
+        >
+          {['All', 'Published', 'Drafts', 'Needs attention', 'Paused'].map(
+            (label) => (
+              <option key={label} value={label}>
+                {label === 'All' ? 'All statuses' : label}
+              </option>
+            ),
+          )}
+        </select>
         <input
           aria-label="Search sales listings"
           placeholder="Search domains…"
@@ -220,7 +243,7 @@ export default function Listings() {
             setSelection(new Set());
           }}
         >
-          <option value="">All sale modes</option>
+          <option value="">All paths</option>
           {['inquiry', 'offer', 'buy-now', 'external'].map((v) => (
             <option key={v} value={v}>
               {saleModeLabel(v)}
@@ -228,35 +251,38 @@ export default function Listings() {
           ))}
         </select>
         <span className="small">{visible.length} on this page</span>
-        <button
-          disabled={rows.loading || q !== searchQ || action.busy}
-          onClick={() =>
-            void action.run(async () => {
-              const all: SalesListing[] = [];
-              let next: string | null = '';
-              for (let n = 0; n < 5 && next !== null; n++) {
-                const page: SalesPage<SalesListing> = await salesRequest<
-                  SalesPage<SalesListing>
-                >(
-                  `/listings?cursor=${next}&q=${encodeURIComponent(searchQ)}&mode=${encodeURIComponent(mode)}&state=${encodeURIComponent(filter)}`,
+        <details className="sales-selection-tools">
+          <summary>Selection tools</summary>
+          <button
+            disabled={rows.loading || q !== searchQ || action.busy}
+            onClick={() =>
+              void action.run(async () => {
+                const all: SalesListing[] = [];
+                let next: string | null = '';
+                for (let n = 0; n < 5 && next !== null; n++) {
+                  const page: SalesPage<SalesListing> = await salesRequest<
+                    SalesPage<SalesListing>
+                  >(
+                    `/listings?cursor=${next}&q=${encodeURIComponent(searchQ)}&mode=${encodeURIComponent(mode)}&state=${encodeURIComponent(filter)}`,
+                  );
+                  all.push(...page.items);
+                  next = page.cursor;
+                }
+                if (next !== null)
+                  throw new Error(
+                    'Narrow the filters: the controlled release supports up to 500 exact selected names per job.',
+                  );
+                setMatchingSelection(all);
+                setSelection(new Set(all.map((r) => r.draft.id)));
+                action.setNotice(
+                  `${all.length} exact matching names selected. Selection stays fixed until you clear it.`,
                 );
-                all.push(...page.items);
-                next = page.cursor;
-              }
-              if (next !== null)
-                throw new Error(
-                  'Narrow the filters: the controlled release supports up to 500 exact selected names per job.',
-                );
-              setMatchingSelection(all);
-              setSelection(new Set(all.map((r) => r.draft.id)));
-              action.setNotice(
-                `${all.length} exact matching names selected. Selection stays fixed until you clear it.`,
-              );
-            })
-          }
-        >
-          Select all matching (up to 500)
-        </button>
+              })
+            }
+          >
+            Select all matching (up to 500)
+          </button>
+        </details>
       </div>
       {!!picked.length && (
         <div className="sales-toolbar" aria-label="Selected listing actions">
@@ -386,7 +412,7 @@ export default function Listings() {
         aria-label="Sales listings"
         tabIndex={0}
       >
-        <table>
+        <table className="sales-listings-table">
           <thead>
             <tr>
               <th className="selection">
@@ -445,6 +471,35 @@ export default function Listings() {
                       ? 'Changes pending'
                       : 'Private terms kept separate'}
                   </p>
+                  <details className="sales-row-details">
+                    <summary>Page details</summary>
+                    <dl>
+                      <dt>Destination</dt>
+                      <dd>
+                        {r.published?.destination?.provider ?? 'Direct inquiry'}
+                      </dd>
+                      <dt>Latest inquiry</dt>
+                      <dd>
+                        {r.lastInquiryAt ? (
+                          <Link className="link" to="/sales/inbox">
+                            {new Date(r.lastInquiryAt).toLocaleString()}
+                          </Link>
+                        ) : (
+                          'No inquiries yet'
+                        )}
+                      </dd>
+                    </dl>
+                    {r.published && (
+                      <a
+                        className="link"
+                        href={hostPath(`/d/${r.draft.domain}`)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open public sales page ↗
+                      </a>
+                    )}
+                  </details>
                 </td>
                 <td>
                   {salePriceLabel(r.published?.publicPrice ?? null)}
@@ -452,7 +507,6 @@ export default function Listings() {
                 </td>
                 <td>
                   <span className="badge">{listingState(r)}</span>
-                  <p className="small">Domain setup separate</p>
                 </td>
                 <td>
                   {r.published?.destination?.provider ?? 'Direct inquiry'}
@@ -474,7 +528,7 @@ export default function Listings() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Open public page
+                      Open public sales page
                     </a>
                   )}
                 </td>

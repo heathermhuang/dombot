@@ -32,13 +32,34 @@ const origin = 'https://domains.domains',
 export class Passkeys {
   constructor(private readonly env: HostedEnv) {}
   async list(user: SessionUser) {
-    return (
+    const rows = (
       await this.env.CONTROL_DB.prepare(
-        'SELECT id,created_at,last_used_at FROM passkeys WHERE user_id=?1 ORDER BY created_at',
+        'SELECT id,created_at,last_used_at,transports FROM passkeys WHERE user_id=?1 ORDER BY created_at,id',
       )
         .bind(user.id)
-        .all<{ id: string; created_at: number; last_used_at: number | null }>()
+        .all<{
+          id: string;
+          created_at: number;
+          last_used_at: number | null;
+          transports: string;
+        }>()
     ).results;
+    return Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        created_at: row.created_at,
+        last_used_at: row.last_used_at,
+        reference: (await tokenHash(row.id)).slice(0, 12),
+        // Transport describes authenticator capabilities, not a physical device.
+        authenticator: row.transports.includes('internal')
+          ? 'Built-in or synced authenticator'
+          : row.transports.includes('usb') || row.transports.includes('nfc')
+            ? 'USB / NFC security key'
+            : row.transports.includes('hybrid')
+              ? 'Cross-device authenticator'
+              : 'Authenticator',
+      })),
+    );
   }
   async fresh(user: SessionUser) {
     const hasKeys = Boolean(

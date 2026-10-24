@@ -55,6 +55,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
           autoFocus
           autoComplete="current-password"
           placeholder="Password"
+          aria-label="Instance password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={busy}

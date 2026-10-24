@@ -206,3 +206,17 @@ export function salePriceLabel(price: SaleMoney | null): string {
     ? `${price.currency} ${BigInt(price.amount).toLocaleString('en-US')}`
     : 'Request price';
 }
+
+/** Public and owner UI use the same reader-facing names; stored modes stay stable. */
+export function saleModeLabel(mode: string): string {
+  return (
+    (
+      {
+        inquiry: 'Domain inquiry',
+        offer: 'Make an offer',
+        'buy-now': 'Buy now',
+        external: 'Marketplace link',
+      } as Record<string, string>
+    )[mode] ?? mode
+  );
+}

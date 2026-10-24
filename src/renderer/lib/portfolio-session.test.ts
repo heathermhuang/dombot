@@ -34,6 +34,18 @@ function client(): PublicationClient {
 }
 afterEach(() => vi.useRealTimers());
 describe('serialized portfolio autosave', () => {
+  it('removes the legacy publication without saving an invalid local portfolio draft', async () => {
+    const api = client();
+    api.unpublish = vi.fn(async () => ({ revision: 'removed-r1' }));
+    const session = new PortfolioSession(api, 60_000);
+    await session.load();
+    session.update({ ...session.getSnapshot().draft!, title: '' });
+    await session.unpublish();
+    expect(api.save).not.toHaveBeenCalled();
+    expect(api.unpublish).toHaveBeenCalledWith('r0');
+    expect(session.getSnapshot().draft?.title).toBe('');
+    expect(session.getSnapshot().state?.revision).toBe('removed-r1');
+  });
   it('serializes edits made while an earlier save is in flight using the returned revision', async () => {
     const api = client();
     let release!: (value: { revision: string }) => void;

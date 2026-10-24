@@ -64,17 +64,19 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
   button.addEventListener('click', async () => {
     if (
       !confirm(
-        'Remove this passkey? Other browsers will be signed out. Make sure you have another passkey or can access your email.',
+        `Remove ${button.dataset.passkeyName ?? 'this passkey'}? Other browsers will be signed out. Keep another working passkey for sensitive actions. Removing your last passkey restores email/password access to those actions.`,
       )
     )
       return;
     try {
+      button.disabled = true;
       await post('/auth/passkeys/remove', { id: button.dataset.removePasskey });
       location.reload();
     } catch {
       say(
         'Passkey removal needs a fresh passkey confirmation. Please confirm your identity and try again.',
       );
+      button.disabled = false;
     }
   });
 // The unchanged upstream renderer receives a clear step-up response from the
@@ -105,4 +107,15 @@ if (/^\/w\/[a-f0-9-]{36}\//.test(location.pathname)) {
     }
     return response;
   };
+}
+
+for (const time of document.querySelectorAll<HTMLTimeElement>(
+  'time[data-local-time]',
+)) {
+  const date = new Date(time.dateTime);
+  if (Number.isFinite(date.getTime()))
+    time.textContent = date.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
 }
