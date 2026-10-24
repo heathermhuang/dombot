@@ -489,6 +489,34 @@ export function getRegistrarClient(
   return client;
 }
 
+/** Verify the host-managed route without changing a saved customer override,
+ * credentials, cached holdings, or the client's route for concurrent jobs. */
+export async function testRegistrarAccount(
+  name: RegistrarName,
+  accountId?: string,
+  managedRoute = false,
+) {
+  if (!managedRoute)
+    return getRegistrarClient(name, accountId).testConnection();
+  const account = resolveAccount(name, accountId);
+  requireActive(account);
+  const proxy = managedProxyFor(name);
+  if (!proxy)
+    throw new Error('No managed connection is configured for this registrar.');
+  const client = new RegistrarClient(
+    protectRegistrar(
+      buildProvider(
+        name,
+        resolveCredentials(name, account.id),
+        account.id,
+        proxy,
+      ),
+      accountSecrets(account.id, proxy),
+    ),
+  );
+  return client.testConnection({ retries: 0 });
+}
+
 /** Every string that must never appear in this account's diagnostics. */
 function accountSecrets(
   accountId: string,

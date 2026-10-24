@@ -57,6 +57,7 @@ import {
   getRegistrarCredentialValues,
   getRegistrarFeatures,
   getRegistrarMetadata,
+  testRegistrarAccount,
   saveRegistrarCredentials,
   setRegistrarEnabledCached,
   syncRegistrar,
@@ -284,9 +285,8 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
   ),
   removeRegistrarAccount: method(z.tuple([z.string()]), removeRegistrarAccount),
   testRegistrarAccount: method(
-    z.tuple([s.registrarName, s.accountId]),
-    async (name, accountId) =>
-      getRegistrarClient(name, accountId).testConnection(),
+    z.tuple([s.registrarName, s.accountId, z.boolean().optional()]),
+    testRegistrarAccount,
   ),
   getRegistrarMetadata: method(none, async () => getRegistrarMetadata()),
   getRegistrarCredentials: method(

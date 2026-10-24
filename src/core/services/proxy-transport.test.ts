@@ -40,6 +40,7 @@ import {
   resetRegistrarClients,
   saveRegistrarCredentials,
   syncRegistrar,
+  testRegistrarAccount,
 } from './registrars';
 
 const credentials = {
@@ -385,7 +386,7 @@ const proxyOnly = {
 const namecheapMeta = () =>
   getRegistrarMetadata().find((r) => r.name === 'namecheap')!;
 
-describe('host-managed Namecheap default', () => {
+describe('host-managed registrar defaults', () => {
   beforeEach(() => {
     configureManagedProxy(proxy.url, proxy.ip);
     transport.mockImplementation(ok);
@@ -441,6 +442,102 @@ describe('host-managed Namecheap default', () => {
     await getRegistrarClient('namecheap').listDomains();
     expect(transport.mock.calls.at(-1)?.[0].ip).toBe(proxy.ip);
     expect(namecheapMeta().proxyManaged).toBe(true);
+  });
+
+  it('keeps Dynadot on the managed route after removing an override, without exporting host secrets', async () => {
+    transport.mockImplementation(() =>
+      Promise.resolve(Response.json({ code: 200, data: {} })),
+    );
+    await saveProxyProfile({
+      url: 'https://own:password@1.1.1.1:8080/',
+      egressIp: '1.0.0.1',
+    });
+    await saveRegistrarCredentials(
+      'dynadot',
+      { apiKey: 'dynadot-key', apiSecret: 'dynadot-secret' },
+      undefined,
+      true,
+    );
+    await getRegistrarClient('dynadot').testConnection();
+    expect(transport.mock.calls.at(-1)?.[0].ip).toBe('1.0.0.1');
+    await removeProxyProfile();
+    expect(await getRegistrarClient('dynadot').testConnection()).toMatchObject({
+      success: true,
+    });
+    expect(transport.mock.calls.at(-1)?.[0]).toEqual(proxy);
+    expect(
+      getRegistrarMetadata().find((r) => r.name === 'dynadot'),
+    ).toMatchObject({
+      proxyManaged: true,
+      proxyEgressIp: proxy.ip,
+    });
+    expect(exportBundle({ version: 'test', platform: 'web' })).not.toContain(
+      proxy.url,
+    );
+  });
+
+  it.each(['namecheap', 'dynadot'] as const)(
+    'tests the managed %s route without changing the working override or saved credentials',
+    async (name) => {
+      const creds =
+        name === 'namecheap'
+          ? credentials
+          : { apiKey: 'dynadot-key', apiSecret: 'dynadot-secret' };
+      const direct = vi.fn();
+      vi.stubGlobal('fetch', direct);
+      await saveProxyProfile({
+        url: 'https://own:password@1.1.1.1:8080/',
+        egressIp: '1.0.0.1',
+      });
+      await saveRegistrarCredentials(name, creds, undefined, true);
+      const client = getRegistrarClient(name);
+      const saved = JSON.stringify([
+        listAccounts(),
+        getProxySettings(),
+        getStoredCredentials(name),
+      ]);
+      transport.mockImplementation(() =>
+        Promise.resolve(
+          name === 'namecheap'
+            ? new Response(xml)
+            : Response.json({ code: 200, data: {} }),
+        ),
+      );
+      expect(await testRegistrarAccount(name, name, true)).toMatchObject({
+        success: true,
+      });
+      expect(transport.mock.calls.at(-1)?.[0]).toEqual(proxy);
+      if (name === 'namecheap')
+        expect(
+          new URL(String(transport.mock.calls.at(-1)?.[1])).searchParams.get(
+            'ClientIp',
+          ),
+        ).toBe(proxy.ip);
+      transport.mockRejectedValue(
+        new ProxyStageError('PROXY_AUTH_FAILED', proxy.url),
+      );
+      const failed = await testRegistrarAccount(name, name, true);
+      expect(failed.success).toBe(false);
+      expect(JSON.stringify(failed)).not.toMatch(/proxy-secret|proxy-user/);
+      expect(direct).not.toHaveBeenCalled();
+      expect(
+        JSON.stringify([
+          listAccounts(),
+          getProxySettings(),
+          getStoredCredentials(name),
+        ]),
+      ).toBe(saved);
+      expect(getRegistrarClient(name)).toBe(client);
+    },
+  );
+
+  it('rejects a managed test when the route is unavailable, without falling back to the override', async () => {
+    await saveRegistrarCredentials('namecheap', credentials);
+    configureManagedProxy();
+    await expect(
+      testRegistrarAccount('namecheap', undefined, true),
+    ).rejects.toThrow(/No managed connection/);
+    expect(transport).not.toHaveBeenCalled();
   });
 
   it('does not route other providers or create an empty customer proxy reference', async () => {
