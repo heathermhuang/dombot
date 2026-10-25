@@ -31,6 +31,10 @@ export async function salesRequest<T>(
         { status: response.status, code: value.code, reauth: value.reauth },
       );
     return value;
+  } catch (error) {
+    if (controller?.signal.aborted)
+      throw new Error('Sales records took too long to load. Please try again.');
+    throw error;
   } finally {
     if (timer) clearTimeout(timer);
   }

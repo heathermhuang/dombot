@@ -697,7 +697,7 @@ export default function Activity() {
   ];
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div className="activity-page flex min-h-0 w-full flex-1 flex-col">
       {/* -m-1 p-1 leaves room for focus rings, which the scroll box would clip. */}
       <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1">
         {/* As tall as Domains' title row (its Sync button), so the toolbar
@@ -742,8 +742,39 @@ export default function Activity() {
           }}
           searchPlaceholder="Search domains…"
           fields={filterFields}
-          presets={['account', 'priority', 'type']}
-        />
+        >
+          <select
+            className="activity-mobile-sort rounded-md border bg-background px-3 text-sm"
+            aria-label="Sort activity"
+            value={`${sortKey}:${sortDir}`}
+            onChange={(event) => {
+              const [key, dir] = event.target.value.split(':');
+              setSortKey(key);
+              setSortDir(dir as 'asc' | 'desc');
+              setPage(0);
+            }}
+          >
+            {columns
+              .filter((column) => column.sortable !== false)
+              .flatMap((column) =>
+                (['asc', 'desc'] as const).map((dir) => (
+                  <option
+                    key={`${column.key}:${dir}`}
+                    value={`${column.key}:${dir}`}
+                  >
+                    {column.label} ·{' '}
+                    {column.key === 'date'
+                      ? dir === 'desc'
+                        ? 'Newest first'
+                        : 'Oldest first'
+                      : dir === 'asc'
+                        ? 'A–Z'
+                        : 'Z–A'}
+                  </option>
+                )),
+              )}
+          </select>
+        </FilterToolbar>
 
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand/70 bg-brand/10 py-1.5 pl-2.5 pr-[7px]">
@@ -836,7 +867,7 @@ export default function Activity() {
       </div>
 
       <DataTable
-        className="mt-[13px]"
+        className="activity-table mt-[13px]"
         rows={rows}
         columns={columns}
         rowKey={(r) => r.event.id}
