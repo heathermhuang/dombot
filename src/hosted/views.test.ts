@@ -139,7 +139,7 @@ describe('public website brand and product clarity', () => {
     expect(html).toContain(
       'Names from our public collection. Account details and statuses are illustrative.',
     );
-    expect(html.match(/<img\b/g)).toHaveLength(3);
+    expect(html.match(/<img\b/g)).toHaveLength(14);
     expect(html).not.toContain('.example');
     expect(html).toContain('href="https://demo.dombot.ai/"');
     expect(html).toContain('Domain inventory');

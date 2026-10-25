@@ -32,6 +32,7 @@ import {
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
 import { productImages, previousProductImages } from './product-images';
+import { registrarLogos } from './registrar-logos';
 import { sourcePage } from './source';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
@@ -180,6 +181,18 @@ app.get('/product/:image', async (c) => {
   const response = await c.env.LANDING_ASSETS.fetch(new Request(url));
   if (!response.ok) return c.notFound();
   c.header('Content-Type', 'image/png');
+  c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  return c.body(response.body);
+});
+app.get('/registrars/:logo', async (c) => {
+  const logo = registrarLogos.find((entry) => entry.path === c.req.path);
+  if (!logo) return c.notFound();
+  if (!c.env.LANDING_ASSETS) return c.text('Logo unavailable', 503);
+  const response = await c.env.LANDING_ASSETS.fetch(
+    new Request(new URL(logo.file, c.req.url)),
+  );
+  if (!response.ok) return c.notFound();
+  c.header('Content-Type', 'image/svg+xml');
   c.header('Cache-Control', 'public, max-age=31536000, immutable');
   return c.body(response.body);
 });
