@@ -44,3 +44,14 @@ image, with adjacent sample-data attribution and a link to the original image.
 The product URL fingerprint changed so immutable caches fetch the new capture.
 Focused account/product-image tests, source integrity, site build, typecheck,
 lint, and the gateway dry-run bundle were rechecked for this correction.
+
+## Consistent light-theme landing images
+
+Inventory and renewal screenshots now use native light-theme demo captures with
+visible demo attribution. Both shared PNGs are 1440x1100; their hosted public URL
+fingerprints and both landing implementations' image dimensions were updated.
+The source site's old 150% renewals zoom/crop was removed, and hosted image frames
+use a white background. All three hosted landing images load at their declared
+natural dimensions. Desktop (1280px) and mobile (390px) DOM layout checks found
+no horizontal overflow. Focused tests, engine integrity, site build, typecheck,
+lint, and gateway bundling passed. No production deployment was performed.

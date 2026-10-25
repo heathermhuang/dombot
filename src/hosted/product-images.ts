@@ -7,15 +7,15 @@ export const productImages = {
     height: 1440,
   },
   domains: {
-    path: '/product/domains-650a06636f75.png',
+    path: '/product/domains-ecf103a893af.png',
     file: '/dombot-domains.png',
-    width: 1801,
-    height: 1445,
+    width: 1440,
+    height: 1100,
   },
   renewals: {
-    path: '/product/renewals-2e961f9330b2.png',
+    path: '/product/renewals-bc197540662d.png',
     file: '/dombot-renewals.png',
-    width: 2804,
-    height: 1778,
+    width: 1440,
+    height: 1100,
   },
 } as const;

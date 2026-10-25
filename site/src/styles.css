@@ -146,10 +146,8 @@ code, .mono { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, mono
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
 .shot {
-  /* 1801/1445 is the image ratio (the capture is pre-cropped to the top-left
-     of the Domains screen, ending on a row boundary). Declared so the frame
-     holds its height before the image loads. */
-  position: relative; aspect-ratio: 1801 / 1445; overflow: hidden;
+  /* Match the light-theme capture without clipping its application frame. */
+  position: relative; aspect-ratio: 1440 / 1100; overflow: hidden;
   border: 1px solid var(--line-strong); border-top: none;
   border-radius: 0 0 12px 12px; background: var(--surface);
 }
@@ -182,14 +180,6 @@ section { padding: 56px 0; border-top: 1px solid var(--line); }
 /* Same framed-window treatment as the hero. The halo would otherwise bleed
    past the viewport edge. */
 #features { overflow-x: clip; }
-/* The frame shows the left two-thirds of the full 2804×1778 Renewals capture
-   (heading, the first two stat cards, most of the month chart) and trims the
-   status bar off the bottom, so the frame is taller than the wide capture
-   would be. The image itself isn't cropped: it's scaled to 150% of the frame
-   and the frame's overflow clips the rest. */
-.shot-renewals { aspect-ratio: 1869.33 / 1700; /* (2804 ÷ 1.5) / (1778 − 78) */ }
-.shot-renewals img { width: 150%; max-width: none; }
-
 /* ── download ── */
 .dl-grid { margin-top: 34px; display: grid; gap: 14px; }
 @media (min-width: 760px) { .dl-grid { grid-template-columns: repeat(3, 1fr); } }

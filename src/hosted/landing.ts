@@ -19,7 +19,7 @@ export const landingStyles = `
 .access-note{font-size:12px;line-height:1.7;color:var(--muted);margin-top:18px}.access-note strong{color:var(--ink);font-weight:600}
 .product-preview{min-width:0;margin:0}.preview-caption{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;font-size:12px;color:var(--muted)}
 .sample-label{display:inline-flex;align-items:center;padding:3px 7px;border:1px solid #ccd6c6;border-radius:3px;font-size:12px;color:#4c6247;white-space:nowrap}
-.product-shot{display:block;border:1px solid #cbd5c5;border-radius:12px;overflow:hidden;background:#0d0d0f;box-shadow:0 24px 48px -24px #20382c45,0 2px 6px #20382c0a}
+.product-shot{display:block;border:1px solid #cbd5c5;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 24px 48px -24px #20382c45,0 2px 6px #20382c0a}
 .product-shot img{display:block;width:100%;height:auto}.product-shot:hover{outline:2px solid #75916c;outline-offset:3px}
 .preview-link{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;background:#edf2e8;color:var(--green);font-size:12px;font-weight:600}
 .preview-note{font-size:12px;margin:10px 0 0;color:var(--muted);line-height:1.6}
