@@ -18,6 +18,8 @@ export interface DomainListFilters {
   nameserver: string;
 }
 interface DomainListState extends DomainListFilters {
+  initialized: boolean;
+  initializeScope: (hasInventory: boolean, hasPrivateDomains: boolean) => void;
   mode: 'manage' | 'publish';
   page: number;
   picked: Set<string>;
@@ -29,6 +31,18 @@ interface DomainListState extends DomainListFilters {
 }
 /** One catalog selection/search survives mode changes and Public page visits. */
 export const useDomainList = create<DomainListState>((set) => ({
+  initialized: false,
+  initializeScope: (hasInventory, hasPrivateDomains) =>
+    set((state) =>
+      state.initialized
+        ? state
+        : {
+            initialized: true,
+            ...(!hasInventory && hasPrivateDomains
+              ? { scope: 'private' as const, mode: 'publish' as const }
+              : {}),
+          },
+    ),
   mode: 'manage',
   scope: 'registered',
   ownership: 'all',
@@ -44,6 +58,7 @@ export const useDomainList = create<DomainListState>((set) => ({
   picked: new Set(),
   startTask: (scope, ownership = 'all') =>
     set({
+      initialized: true,
       scope,
       ownership,
       mode: scope === 'registered' ? 'manage' : 'publish',
@@ -59,7 +74,13 @@ export const useDomainList = create<DomainListState>((set) => ({
       picked: new Set(),
     }),
   setMode: (mode) => set({ mode }),
-  setFilters: (patch) => set({ ...patch, page: 1, picked: new Set() }),
+  setFilters: (patch) =>
+    set({
+      ...patch,
+      ...(patch.scope ? { initialized: true } : {}),
+      page: 1,
+      picked: new Set(),
+    }),
   setPage: (page) => set({ page }),
   setPicked: (picked) => set({ picked }),
 }));

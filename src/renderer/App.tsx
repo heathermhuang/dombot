@@ -80,6 +80,13 @@ const TAB_OPTIONS: Record<
 };
 
 export default function App() {
+  useEffect(() => {
+    if (webAuthMode() !== 'gateway') return;
+    // Radix renders dialogs and menus under body, outside the app shell.
+    // Give those surfaces the same managed palette as the page they belong to.
+    document.documentElement.classList.add('hosted-theme');
+    return () => document.documentElement.classList.remove('hosted-theme');
+  }, []);
   const { search } = useLocation();
   const publication = usePortfolioEditor();
   useEffect(() => {

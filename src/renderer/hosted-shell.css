@@ -1,10 +1,13 @@
 /* The managed SaaS shell has its own presentation. Desktop and self-hosted
    DomBot keep the upstream theme and navigation treatment. */
+:root.hosted-theme,
 .hosted-app {
   --background: #f5f6f1;
   --foreground: #20382c;
   --card: #ffffff;
   --card-foreground: #20382c;
+  --popover: #ffffff;
+  --popover-foreground: #20382c;
   --primary: #2a5b3d;
   --brand: #2a5b3d;
   --secondary: #ebeee6;
@@ -23,11 +26,14 @@
   font-family: Archivo, var(--font-sans), sans-serif;
   font-variant-numeric: tabular-nums;
 }
+:root.dark.hosted-theme,
 .dark .hosted-app {
   --background: #141c17;
   --foreground: #e7ede3;
   --card: #1c2720;
   --card-foreground: #e7ede3;
+  --popover: #1c2720;
+  --popover-foreground: #e7ede3;
   --primary: #337544;
   --brand: #9cddad;
   --secondary: #253329;

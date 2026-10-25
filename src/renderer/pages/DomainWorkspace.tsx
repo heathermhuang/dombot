@@ -147,6 +147,14 @@ export default function DomainWorkspace({
         ? requestedView
         : 'settings';
   const list = useDomainList();
+  const initializeScope = list.initializeScope;
+  useEffect(() => {
+    if (area !== 'domains' || !draft || !state || accounts === null) return;
+    initializeScope(
+      inventory.length > 0 || accounts.some((account) => account.configured),
+      draft.listings.some((item) => item.visibility === 'private'),
+    );
+  }, [area, draft, state, accounts, inventory.length, initializeScope]);
   const { mode, scope, query, collection, sort, page, picked } = list;
   const hasActiveFilters =
     [

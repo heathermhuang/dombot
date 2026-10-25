@@ -10,7 +10,7 @@ The public page includes a keyboard skip link.
 The full wordmark, sample-data attribution, inquiry language, legal acceptance,
 authentication behavior, and upstream desktop/self-hosted theme are preserved.
 No dependencies were added. The matching engine/UI package is
-`1.5.2-hosted.10`; source and asset integrity verification passed.
+`1.5.2-hosted.11`; source and asset integrity verification passed.
 
 ## Validation
 
@@ -25,11 +25,12 @@ No dependencies were added. The matching engine/UI package is
 - Browser-rendered desktop light/dark workspaces and mobile account and Sales
   layouts were inspected. The mobile homepage, account page, and workspace had
   no document-level horizontal overflow at 390px.
-- Connected-browser clicks did not update React filter/theme state in either
-  the candidate or an unchanged `1.5.2-hosted.9` fixture. Interactive browser
-  verification is therefore limited. The light-theme screenshot uses a local
-  fixture that initializes the normal saved theme preference before rendering.
-  No production state or customer data was used.
+- The final browser review exercised Sales filtering/editor navigation, private
+  import validation and deduplication, persisted imports after reload, explicit
+  view preservation, theme switching, saved dark preferences, and keyboard menu
+  dismissal. Menus and dialogs were checked against the managed theme tokens.
+  An interaction limitation in the initial preview pass was not reproduced in
+  this final review. No customer data or external email was used.
 
 Screenshots and bundle logs are local artifacts under
 `.gstack/saas-ui-polish/`. This document records local verification only;
@@ -55,3 +56,26 @@ use a white background. All three hosted landing images load at their declared
 natural dimensions. Desktop (1280px) and mobile (390px) DOM layout checks found
 no horizontal overflow. Focused tests, engine integrity, site build, typecheck,
 lint, and gateway bundling passed. No production deployment was performed.
+
+
+## Final UX review and corrections
+
+Three issues were corrected before release:
+
+1. New hosted sessions without a saved preference opened in dark mode despite
+   the light onboarding design. The managed default is now light; explicit saved
+   preferences and desktop/self-hosted defaults remain unchanged.
+2. Dialogs and menus rendered under the document body missed the managed palette.
+   The managed root now supplies matching light/dark tokens, including popovers.
+3. Reloading a portfolio containing only private imports opened an empty registrar
+   inventory. The initial view now shows those private names; explicit view
+   choices survive ordinary page navigation. Three store regressions cover this.
+
+Browser reproduction verified an invalid import is blocked, two unique names
+plus a duplicate import privately, both names remain visible after reload, and
+an explicit Inventory choice remains selected after visiting Public profile.
+The published page and registrar access remain separate actions.
+
+Release evidence is recorded separately from these local checks. The deployment
+uses existing configuration, fresh recovery copies, staged pilots, exact engine
+and source headers, and post-release account/data/configuration comparisons.
