@@ -1,5 +1,6 @@
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { getPricingRetryAt, subscribePricingRetry } from '../api/http';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { CircleAlert, RefreshCw } from 'lucide-react';
@@ -27,6 +28,10 @@ export default function StatusBar() {
   const mcpInfo = useAppStore((s) => s.mcpInfo);
   const loadMcpInfo = useAppStore((s) => s.loadMcpInfo);
   const renewalPricing = useAppStore((s) => s.renewalPricing);
+  const pricingRetryAt = useSyncExternalStore(
+    subscribePricingRetry,
+    getPricingRetryAt,
+  );
   const registrars = useAppStore((s) => s.registrars);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const navigate = useNavigate();
@@ -89,7 +94,9 @@ export default function StatusBar() {
               title="Renewal prices update separately. Last saved prices stay visible while new quotes are fetched."
             >
               {renewalPricing.remaining > 0
-                ? `Updating renewal prices · ${renewalPricing.remaining} left`
+                ? pricingRetryAt
+                  ? `Renewal prices paused · retry at ${new Date(pricingRetryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : `Updating renewal prices · ${renewalPricing.remaining} left`
                 : `${renewalPricing.failed} renewal prices could not update`}
             </span>
           )}

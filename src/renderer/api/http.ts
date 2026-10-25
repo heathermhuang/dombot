@@ -30,6 +30,7 @@ class HttpApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly retryAt?: number,
   ) {
     super(message);
     this.name = 'HttpApiError';
@@ -67,9 +68,38 @@ async function call<T>(method: string, args: unknown[] = []): Promise<T> {
     throw new HttpApiError(
       body.error ?? `${method} failed (${res.status})`,
       res.status,
+      res.status === 429
+        ? retryTime(res.headers.get('Retry-After'))
+        : undefined,
     );
   }
   return body.result as T;
+}
+
+function retryTime(value: string | null): number {
+  const seconds = value?.trim() ? Number(value) : NaN;
+  const at = Number.isFinite(seconds)
+    ? Date.now() + seconds * 1_000
+    : value
+      ? Date.parse(value)
+      : NaN;
+  // Older gateways may omit Retry-After. Preserve their ten-minute budget.
+  return Number.isFinite(at) && at > Date.now() ? at : Date.now() + 600_000;
+}
+
+let pricingRetryAt = 0;
+const pricingRetryListeners = new Set<() => void>();
+export const getPricingRetryAt = () => pricingRetryAt;
+export function subscribePricingRetry(listener: () => void): () => void {
+  pricingRetryListeners.add(listener);
+  return () => {
+    pricingRetryListeners.delete(listener);
+  };
+}
+function setPricingRetryAt(at: number): void {
+  if (pricingRetryAt === at) return;
+  pricingRetryAt = at;
+  for (const listener of pricingRetryListeners) listener();
 }
 
 // ── date revival ────────────────────────────────────────────────────────────
@@ -178,11 +208,14 @@ class Poller {
 /** Whether this client is currently stepping a job (drives the poll rate). */
 let driving: string | null = null;
 let pricingDriving = false;
+let pricingRetryTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Read-only pricing work is persisted by the Worker. Open owner tabs advance
  * small batches even when another tab is selected; reloads resume the rest. */
 async function driveRenewalPricing(): Promise<void> {
-  if (pricingDriving) return;
+  if (pricingDriving || Date.now() < pricingRetryAt) return;
+  clearTimeout(pricingRetryTimer);
+  setPricingRetryAt(0);
   pricingDriving = true;
   try {
     for (;;) {
@@ -195,8 +228,16 @@ async function driveRenewalPricing(): Promise<void> {
       if (wait > 0)
         await new Promise<void>((resolve) => setTimeout(resolve, wait));
     }
-  } catch {
-    // The next revision poll resumes the persisted pending reads.
+  } catch (error) {
+    if (error instanceof HttpApiError && error.status === 429) {
+      setPricingRetryAt(error.retryAt!);
+      // Continue an already-running background job even if the tab is hidden.
+      pricingRetryTimer = setTimeout(
+        () => void driveRenewalPricing(),
+        pricingRetryAt - Date.now(),
+      );
+    }
+    // Revision polls resume persisted reads only after the quota resets.
   } finally {
     pricingDriving = false;
   }

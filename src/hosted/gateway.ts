@@ -1211,20 +1211,35 @@ app.all('/w/:workspace/*', async (c) => {
   }
   if (
     [
-      '/api/getPortfolio',
-      '/api/syncRegistrar',
-      '/api/stepRenewalPricing',
-      '/api/lookupRegistrations',
-    ].includes(path) &&
-    !(await account(c.env).rateLimit(`provider:${id}`, 20))
-  )
-    return c.json(
-      {
-        error:
-          'Provider refresh limit reached. Use cached inventory and try later.',
-      },
-      429,
-    );
+      'getPortfolio',
+      'syncRegistrar',
+      'stepRenewalPricing',
+      'lookupRegistrations',
+    ].includes(apiMethod)
+  ) {
+    const resetAt = (Math.floor(Date.now() / 600_000) + 1) * 600_000;
+    // Background work shares the existing cap but cannot consume its last
+    // five slots. Owner-initiated refreshes retain the full 20-slot budget.
+    const backgroundAllowed =
+      apiMethod !== 'stepRenewalPricing' ||
+      (await account(c.env).rateLimit(`pricing:${id}`, 15));
+    if (
+      !backgroundAllowed ||
+      !(await account(c.env).rateLimit(`provider:${id}`, 20))
+    )
+      return c.json(
+        {
+          error:
+            'Provider refresh limit reached. Use cached inventory and try later.',
+        },
+        429,
+        {
+          'Retry-After': String(
+            Math.max(1, Math.ceil((resetAt - Date.now()) / 1_000)),
+          ),
+        },
+      );
+  }
   if (apiMethod === 'updateSettings' && c.req.method === 'POST') {
     const body = (await c.req.raw.clone().json()) as {
       args?: { autoSyncIntervalMinutes?: number; mcpEnabled?: boolean }[];
