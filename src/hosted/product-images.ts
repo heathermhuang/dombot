@@ -19,3 +19,15 @@ export const productImages = {
     height: 720,
   },
 } as const;
+
+// Existing open pages can still request their lazy-loaded, immutable previews.
+export const previousProductImages = [
+  {
+    path: '/product/domains-ecf103a893af.png',
+    file: '/dombot-domains.png',
+  },
+  {
+    path: '/product/renewals-bc197540662d.png',
+    file: '/dombot-renewals.png',
+  },
+] as const;

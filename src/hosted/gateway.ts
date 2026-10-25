@@ -31,7 +31,7 @@ import {
 } from './auth-views';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
-import { productImages } from './product-images';
+import { productImages, previousProductImages } from './product-images';
 import { sourcePage } from './source';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
@@ -170,9 +170,10 @@ app.get(brandFontPath, (c) => {
   return c.body(brandFontBytes);
 });
 app.get('/product/:image', async (c) => {
-  const image = Object.values(productImages).find(
-    (entry) => entry.path === c.req.path,
-  );
+  const image = [
+    ...Object.values(productImages),
+    ...previousProductImages,
+  ].find((entry) => entry.path === c.req.path);
   if (!image) return c.notFound();
   if (!c.env.LANDING_ASSETS) return c.text('Preview unavailable', 503);
   const url = new URL(image.file, c.req.url);

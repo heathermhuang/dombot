@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import gateway from './gateway';
-import { productImages } from './product-images';
+import { productImages, previousProductImages } from './product-images';
 
 describe('public product preview boundary', () => {
   it('serves only the explicit previews and does not forward account credentials', async () => {
@@ -8,7 +8,10 @@ describe('public product preview boundary', () => {
       async () => new Response(new Uint8Array([137, 80, 78, 71])),
     );
     const env = { LANDING_ASSETS: { fetch } } as unknown as HostedEnv;
-    for (const image of Object.values(productImages)) {
+    for (const image of [
+      ...Object.values(productImages),
+      ...previousProductImages,
+    ]) {
       const response = await gateway.fetch(
         new Request('https://domains.domains' + image.path + '?private=value', {
           headers: {
