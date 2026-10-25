@@ -57,6 +57,7 @@ import { useSyncState } from './lib/sync-state';
 import { ActivityBell } from './components/activity/ActivityBell';
 import { Toaster } from '@/components/ui/sonner';
 import { portfolioEditor, usePortfolioEditor } from './lib/publication-client';
+import './hosted-shell.css';
 
 /**
  * How each page shows as a header tab, by route: which metric its pill shows
@@ -162,7 +163,12 @@ export default function App() {
   }, [attachBulk, applyBulkProgress, applyBulkFinished]);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+    <div
+      className={cn(
+        'flex h-dvh flex-col overflow-hidden bg-background text-foreground',
+        webAuthMode() === 'gateway' && 'hosted-app',
+      )}
+    >
       {isDemo() && <DemoBanner />}
       {/* Three columns: the logo, the tab strip (centered, so the two side
           columns match), and the bell just right of the tabs. The tabs run
@@ -170,7 +176,7 @@ export default function App() {
           them. */}
       <header
         className={cn(
-          'relative h-12 border-b bg-tab-bar px-4 sm:px-6',
+          'hosted-topbar relative h-12 border-b bg-tab-bar px-4 sm:px-6',
           supportsPublishing()
             ? 'flex items-center'
             : 'grid grid-cols-[1fr_auto_1fr]',
@@ -216,8 +222,9 @@ export default function App() {
         {/* Desktop: the tab strip. On phones it collapses into the hamburger
             menu on the right (MobileNav). */}
         <TabStrip
+          aria-label="Portfolio navigation"
           className={cn(
-            'mr-4 hidden self-end justify-self-end',
+            'hosted-nav mr-4 hidden self-end justify-self-end',
             supportsPublishing() ? 'xl:flex' : 'sm:flex',
           )}
         >
@@ -295,7 +302,10 @@ export default function App() {
           area between them scrolls when a page is taller. Its scrollbar gutter
           is always reserved so pages of different heights line up. The top 8px
           fades out, so scrolled content doesn't cut off hard at the tabs. */}
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [mask-image:linear-gradient(to_bottom,transparent,black_8px)] px-4 pt-[22px] pb-4 sm:px-6 sm:pt-[31px]">
+      <main
+        id="portfolio-content"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [mask-image:linear-gradient(to_bottom,transparent,black_8px)] px-4 pt-[22px] pb-4 sm:px-6 sm:pt-[31px]"
+      >
         <Routes>
           <Route
             path="/"
