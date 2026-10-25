@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import gateway from './gateway';
+import { registrarLogos } from './registrar-logos';
+import { registrars } from '@aoxborrow/registrar-client';
 import { productImages, previousProductImages } from './product-images';
 
 describe('public product preview boundary', () => {
@@ -11,6 +13,7 @@ describe('public product preview boundary', () => {
     for (const image of [
       ...Object.values(productImages),
       ...previousProductImages,
+      ...registrarLogos,
     ]) {
       const response = await gateway.fetch(
         new Request('https://domains.domains' + image.path + '?private=value', {
@@ -22,17 +25,25 @@ describe('public product preview boundary', () => {
         env,
       );
       expect(response.status).toBe(200);
-      expect(response.headers.get('Content-Type')).toBe('image/png');
+      expect(response.headers.get('Content-Type')).toBe(
+        image.path.endsWith('.svg') ? 'image/svg+xml' : 'image/png',
+      );
       expect(response.headers.get('Cache-Control')).toContain('immutable');
       const request = fetch.mock.calls.at(-1)![0] as Request;
       expect(new URL(request.url).pathname).toBe(image.file);
       expect(new URL(request.url).search).toBe('');
       expect([...request.headers]).toEqual([]);
     }
+    expect(registrarLogos.map((logo) => logo.id).sort()).toEqual(
+      Object.keys(registrars).sort(),
+    );
     fetch.mockClear();
     for (const path of [
       '/product/_headers',
       '/product/.env',
+      '/registrars/.env',
+      '/registrars/namecheap.svg',
+      '/registrar-namecheap.svg',
       '/dombot-domains.png',
     ]) {
       expect(
