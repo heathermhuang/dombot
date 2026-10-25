@@ -1269,14 +1269,23 @@
   .pf-table[data-mode] .pf-collection-cell {
     display: block;
   }
-  .pf-workspace button,
+  .pf-workspace button:not([role='checkbox']):not([role='switch']),
   .pf-workspace select,
   .pf-drawer select {
     min-height: 44px;
   }
-  .pf-table [role='checkbox'] {
-    min-height: 24px;
-    width: 24px;
+  .pf-workspace [role='checkbox'] {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+  }
+  /* Keep the visual square small while retaining a 44px touch area. */
+  .pf-workspace [role='checkbox']::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
   }
   .pf-filter-summary,
   .pf-add-intent {
@@ -1375,9 +1384,9 @@
     display: grid;
   }
   .pf-toolbar {
-    grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .pf-search {
-    grid-column: auto;
+    grid-column: 1 / -1;
   }
 }

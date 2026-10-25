@@ -216,3 +216,203 @@
     padding: 8px 0;
   }
 }
+
+.activity-table .domain-scroll-host {
+  min-height: 16rem;
+}
+
+.activity-mobile-sort,
+.table-selection-label {
+  display: none;
+}
+
+/* On a phone the page scrolls as one ledger. A viewport-sized flex table
+   can otherwise collapse to its header when the filters or records expand. */
+@media (max-width: 639px) {
+  .activity-page {
+    flex: none;
+  }
+  .activity-page > div:first-child {
+    flex-shrink: 0;
+    overflow: visible;
+  }
+  .activity-page .sales-section {
+    padding: 8px 0 0;
+    margin: 12px 0 0;
+  }
+  .activity-page .sales-section summary {
+    font-size: 13px;
+    color: var(--muted-foreground);
+    align-content: center;
+  }
+  .activity-page .sales-records {
+    padding-bottom: 12px;
+  }
+  .activity-mobile-sort {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .activity-table,
+  .activity-table .domain-scroll-host {
+    flex: none;
+    min-height: 0;
+  }
+  .activity-table .domain-table-scroll {
+    position: static;
+    overflow: visible;
+  }
+  .activity-table .domain-scroll-thumb {
+    display: none;
+  }
+  .activity-table table,
+  .activity-table thead,
+  .activity-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .activity-table thead {
+    position: static;
+  }
+  .activity-table thead tr {
+    display: block;
+  }
+  .activity-table thead th:not(:first-child) {
+    display: none;
+  }
+  .activity-table thead th:first-child {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px;
+  }
+  .activity-table .table-selection-label {
+    display: inline;
+    font-size: 12px;
+    letter-spacing: normal;
+  }
+  .activity-table tbody tr {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 12px;
+  }
+  .activity-table tbody td {
+    display: block;
+    grid-column: 2 / -1;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .activity-table tbody td:first-child:not([colspan]) {
+    grid-column: 1;
+    grid-row: 1;
+    padding-top: 12px;
+    box-shadow: none;
+  }
+  .activity-table [role='checkbox'] {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+  }
+  .activity-table [role='checkbox']::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+  .activity-table td[data-column='domain'] {
+    grid-row: 1;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .activity-table td[data-column='domain'] > div > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .activity-table td[data-column='date'] {
+    grid-row: 2;
+    grid-column: 2;
+    align-self: center;
+    font-size: 12px;
+  }
+  .activity-table td[data-column='type'] {
+    grid-row: 2;
+    grid-column: 3;
+    justify-self: end;
+  }
+  .activity-table td[data-column='account'] {
+    grid-row: 3;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .activity-table td[data-column='account'] > span {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .activity-table td[data-column='status'] {
+    grid-row: 4;
+    font-size: 12px;
+  }
+  .activity-table td[data-column='status']:empty,
+  .activity-table td[data-column='details'],
+  .activity-table td[data-column='source'] {
+    display: none;
+  }
+  .activity-table td[colspan] {
+    grid-column: 1 / -1;
+    height: auto;
+    padding: 24px 8px;
+  }
+}
+
+@media (max-width: 650px) {
+  .domain-more-filters {
+    padding: 0 12px;
+  }
+  .domain-more-filters summary {
+    align-content: center;
+  }
+  .domain-more-filters[open] {
+    padding-bottom: 12px;
+  }
+  .pf-mobile-select {
+    min-height: 44px;
+    padding-block: 12px;
+  }
+}
+@media (max-width: 639px) {
+  .activity-page [role='radiogroup'] {
+    height: 48px;
+  }
+  .activity-page input[type='search'] {
+    min-height: 44px;
+  }
+  .activity-page [data-chip-trigger] {
+    padding-right: 48px;
+  }
+  .activity-page span:has(> [data-chip-trigger]) {
+    height: 44px;
+  }
+}
+
+/* WebKit's native select ignores min-height; style the control itself so
+   sorting keeps the same touch area and outline as the adjacent controls. */
+@media (max-width: 650px) {
+  .activity-mobile-sort,
+  .pf-toolbar select {
+    appearance: none;
+    height: 44px;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238f8f8f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+}

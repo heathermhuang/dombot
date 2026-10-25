@@ -191,6 +191,9 @@ export function DataTable<T>({
                     // match the row checkboxes' fill, a touch darker.
                     className="bg-[color-mix(in_oklab,var(--background),black_4%)] dark:bg-[color-mix(in_oklab,var(--background),white_3%)]"
                   />
+                  <span className="table-selection-label">
+                    {selection.allLabel}
+                  </span>
                 </TableHead>
               )}
               {columns.map((col, i) => {
@@ -203,6 +206,7 @@ export function DataTable<T>({
                 return (
                   <TableHead
                     key={col.key}
+                    data-column={col.key}
                     className={cn(
                       col.align === 'right' && 'text-right',
                       col.align === 'center' && 'text-center',
@@ -274,6 +278,7 @@ export function DataTable<T>({
                   {columns.map((col, i) => (
                     <TableCell
                       key={col.key}
+                      data-column={col.key}
                       className={cn(
                         col.align === 'right' && 'text-right',
                         col.align === 'center' && 'text-center',
