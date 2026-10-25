@@ -79,12 +79,9 @@ export default function StatusBar() {
         </button>
       </div>
 
-      {/* Centered on the bar itself, independent of the side groups' widths.
-          Hidden on phones, where the side groups already fill the bar. */}
-      <ModeToggle
-        bare
-        className="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:inline-flex"
-      />
+      {/* Keep controls in the wrapping flow so a pricing cooldown cannot
+          overlap the theme picker on narrow tablets. */}
+      <ModeToggle bare className="hidden sm:inline-flex" />
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         {renewalPricing &&
