@@ -681,6 +681,26 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
   writeEntry('portfolio', accountId, entry);
   // Refresh renewal quotes as part of the sync (see syncRenewalQuotes).
   if (!entry.lastError && entry.lastSyncedAt != null) {
+    // Older detail is overlaid on list rows by both the UI and MCP. Carry
+    // reported expiry dates into that cache so an external renewal survives
+    // the overlay. Keep detail-only fields, quotes and their age intact; a
+    // list that omits a date must not erase a previously known value.
+    for (const domain of entry.domains) {
+      if (domain.expirationDate == null && domain.renewalDate == null) continue;
+      patchEntryData<DetailRecord>(
+        'detail',
+        detailKey(accountId, domain.domainName),
+        (detail) => ({
+          ...detail,
+          ...(domain.expirationDate != null
+            ? { expirationDate: domain.expirationDate }
+            : {}),
+          ...(domain.renewalDate != null
+            ? { renewalDate: domain.renewalDate }
+            : {}),
+        }),
+      );
+    }
     if (incrementalRenewalPricing && name === 'dynadot') {
       const pending = entry.domains
         .filter((d) => usesPerNameQuote(name, tldOf(d.domainName)))
