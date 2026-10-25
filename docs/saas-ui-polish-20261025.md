@@ -34,3 +34,13 @@ No dependencies were added. The matching engine/UI package is
 Screenshots and bundle logs are local artifacts under
 `.gstack/saas-ui-polish/`. This document records local verification only;
 deployment and production-user verification have not been performed.
+
+## Sales illustration correction
+
+Replaced the old 343x428 dark mobile table crop with a native 2560x1440
+capture of the current light-theme Sales interface using synthetic `.example`
+listings. The landing section now places its introduction above a full-width
+image, with adjacent sample-data attribution and a link to the original image.
+The product URL fingerprint changed so immutable caches fetch the new capture.
+Focused account/product-image tests, source integrity, site build, typecheck,
+lint, and the gateway dry-run bundle were rechecked for this correction.
