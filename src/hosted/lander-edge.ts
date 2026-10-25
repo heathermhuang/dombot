@@ -13,6 +13,10 @@ import {
 import { salesPublicPath } from '../shared/sales-admission';
 import { workspaceSchema, workspaceService } from './workspaces';
 import type { HostBinding } from './sales-hostnames';
+import {
+  legacySalesFormScript,
+  legacySalesFormScriptPath,
+} from './sales-form-compat';
 
 /** Public-only SaaS origin. No cookies, account routes, owner keys or registrar credentials. */
 export default {
@@ -27,13 +31,21 @@ export default {
         },
       });
     const url = new URL(incoming.url);
-    if (url.pathname === salesFormScriptPath && incoming.method === 'GET')
-      return new Response(salesFormScript, {
-        headers: {
-          'Content-Type': 'text/javascript',
-          'Cache-Control': 'public,max-age=3600',
+    if (
+      [salesFormScriptPath, legacySalesFormScriptPath].includes(url.pathname) &&
+      incoming.method === 'GET'
+    )
+      return new Response(
+        url.pathname === salesFormScriptPath
+          ? salesFormScript
+          : legacySalesFormScript,
+        {
+          headers: {
+            'Content-Type': 'text/javascript',
+            'Cache-Control': 'public,max-age=3600',
+          },
         },
-      });
+      );
     if (url.pathname === brandFontPath && incoming.method === 'GET')
       return new Response(brandFontBytes, {
         headers: {

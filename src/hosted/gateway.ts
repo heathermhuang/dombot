@@ -69,15 +69,23 @@ import {
 } from './sales-notifications';
 import { salesHostRequest } from './sales-host-routes';
 import { refreshSalesHostnames } from './sales-hostnames';
+import {
+  legacySalesFormScript,
+  legacySalesFormScriptPath,
+} from './sales-form-compat';
 type GatewayVariables = { user: Awaited<ReturnType<Accounts['session']>> };
 type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
-app.get(salesFormScriptPath, (c) =>
-  c.body(salesFormScript, 200, {
-    'Content-Type': 'text/javascript',
-    'Cache-Control': 'public,max-age=3600',
-  }),
-);
+for (const [path, script] of [
+  [salesFormScriptPath, salesFormScript],
+  [legacySalesFormScriptPath, legacySalesFormScript],
+])
+  app.get(path, (c) =>
+    c.body(script, 200, {
+      'Content-Type': 'text/javascript',
+      'Cache-Control': 'public,max-age=3600',
+    }),
+  );
 const account = (env: HostedEnv) =>
   new Accounts(env.CONTROL_DB, env.AUTH_PEPPER);
 const secure = (url: string) => new URL(url).protocol === 'https:';
