@@ -188,6 +188,34 @@ afterAll(async () => {
 });
 
 describe('owner site routing and isolation', () => {
+  it('caps pricing below the shared quota, provides a cooldown, and reserves owner refresh slots', async () => {
+    const db = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const bucket = Math.floor(Date.now() / 600_000);
+    const providerKey = `${await tokenHash(`provider:${ids[1]}`)}:${bucket}`;
+    const pricingKey = `${await tokenHash(`pricing:${ids[1]}`)}:${bucket}`;
+    try {
+      for (let n = 0; n < 15; n++)
+        expect((await api(1, 'stepRenewalPricing')).status).toBe(200);
+      for (const method of ['stepRenewalPricing', '%73tepRenewalPricing']) {
+        const rejected = await api(1, method);
+        expect(rejected.status).toBe(429);
+        const seconds = Number(rejected.headers.get('Retry-After'));
+        expect(seconds).toBeGreaterThan(0);
+        expect(seconds).toBeLessThanOrEqual(600);
+      }
+      for (let n = 0; n < 5; n++)
+        expect((await api(1, 'lookupRegistrations', [[]])).status).toBe(200);
+      expect((await api(1, 'lookupRegistrations', [[]])).status).toBe(429);
+      // A different portfolio has an independent bounded allowance.
+      expect((await api(0, 'stepRenewalPricing')).status).toBe(200);
+    } finally {
+      await db
+        .prepare('DELETE FROM rate_limits WHERE key IN (?1,?2)')
+        .bind(providerKey, pricingKey)
+        .run();
+    }
+  }, 30_000);
+
   it('serves selected collection routes anonymously without opening private editor routes', async () => {
     const { emptyOwnerSite } = await import('../shared/owner-site');
     const site = emptyOwnerSite();

@@ -69,15 +69,23 @@ import {
 } from './sales-notifications';
 import { salesHostRequest } from './sales-host-routes';
 import { refreshSalesHostnames } from './sales-hostnames';
+import {
+  legacySalesFormScript,
+  legacySalesFormScriptPath,
+} from './sales-form-compat';
 type GatewayVariables = { user: Awaited<ReturnType<Accounts['session']>> };
 type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
-app.get(salesFormScriptPath, (c) =>
-  c.body(salesFormScript, 200, {
-    'Content-Type': 'text/javascript',
-    'Cache-Control': 'public,max-age=3600',
-  }),
-);
+for (const [path, script] of [
+  [salesFormScriptPath, salesFormScript],
+  [legacySalesFormScriptPath, legacySalesFormScript],
+])
+  app.get(path, (c) =>
+    c.body(script, 200, {
+      'Content-Type': 'text/javascript',
+      'Cache-Control': 'public,max-age=3600',
+    }),
+  );
 const account = (env: HostedEnv) =>
   new Accounts(env.CONTROL_DB, env.AUTH_PEPPER);
 const secure = (url: string) => new URL(url).protocol === 'https:';
@@ -1211,20 +1219,35 @@ app.all('/w/:workspace/*', async (c) => {
   }
   if (
     [
-      '/api/getPortfolio',
-      '/api/syncRegistrar',
-      '/api/stepRenewalPricing',
-      '/api/lookupRegistrations',
-    ].includes(path) &&
-    !(await account(c.env).rateLimit(`provider:${id}`, 20))
-  )
-    return c.json(
-      {
-        error:
-          'Provider refresh limit reached. Use cached inventory and try later.',
-      },
-      429,
-    );
+      'getPortfolio',
+      'syncRegistrar',
+      'stepRenewalPricing',
+      'lookupRegistrations',
+    ].includes(apiMethod)
+  ) {
+    const resetAt = (Math.floor(Date.now() / 600_000) + 1) * 600_000;
+    // Background work shares the existing cap but cannot consume its last
+    // five slots. Owner-initiated refreshes retain the full 20-slot budget.
+    const backgroundAllowed =
+      apiMethod !== 'stepRenewalPricing' ||
+      (await account(c.env).rateLimit(`pricing:${id}`, 15));
+    if (
+      !backgroundAllowed ||
+      !(await account(c.env).rateLimit(`provider:${id}`, 20))
+    )
+      return c.json(
+        {
+          error:
+            'Provider refresh limit reached. Use cached inventory and try later.',
+        },
+        429,
+        {
+          'Retry-After': String(
+            Math.max(1, Math.ceil((resetAt - Date.now()) / 1_000)),
+          ),
+        },
+      );
+  }
   if (apiMethod === 'updateSettings' && c.req.method === 'POST') {
     const body = (await c.req.raw.clone().json()) as {
       args?: { autoSyncIntervalMinutes?: number; mcpEnabled?: boolean }[];

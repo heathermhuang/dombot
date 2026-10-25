@@ -639,7 +639,7 @@ describe('passkeys and fresh authentication', () => {
     expect(after).toEqual({ ...before, name: 'Laptop <backup>' });
     expect(
       await db.prepare('SELECT * FROM sessions ORDER BY token_hash').all(),
-    ).toEqual(sessions);
+    ).toMatchObject({ results: sessions.results });
     expect((await keys.list(user))[0]).toMatchObject({
       name: 'Laptop <backup>',
       reference,

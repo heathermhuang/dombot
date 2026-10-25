@@ -1,5 +1,6 @@
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { getPricingRetryAt, subscribePricingRetry } from '../api/http';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { CircleAlert, RefreshCw } from 'lucide-react';
@@ -27,6 +28,10 @@ export default function StatusBar() {
   const mcpInfo = useAppStore((s) => s.mcpInfo);
   const loadMcpInfo = useAppStore((s) => s.loadMcpInfo);
   const renewalPricing = useAppStore((s) => s.renewalPricing);
+  const pricingRetryAt = useSyncExternalStore(
+    subscribePricingRetry,
+    getPricingRetryAt,
+  );
   const registrars = useAppStore((s) => s.registrars);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const navigate = useNavigate();
@@ -74,12 +79,9 @@ export default function StatusBar() {
         </button>
       </div>
 
-      {/* Centered on the bar itself, independent of the side groups' widths.
-          Hidden on phones, where the side groups already fill the bar. */}
-      <ModeToggle
-        bare
-        className="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:inline-flex"
-      />
+      {/* Keep controls in the wrapping flow so a pricing cooldown cannot
+          overlap the theme picker on narrow tablets. */}
+      <ModeToggle bare className="hidden sm:inline-flex" />
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         {renewalPricing &&
@@ -89,7 +91,9 @@ export default function StatusBar() {
               title="Renewal prices update separately. Last saved prices stay visible while new quotes are fetched."
             >
               {renewalPricing.remaining > 0
-                ? `Updating renewal prices · ${renewalPricing.remaining} left`
+                ? pricingRetryAt
+                  ? `Renewal prices paused · retry at ${new Date(pricingRetryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : `Updating renewal prices · ${renewalPricing.remaining} left`
                 : `${renewalPricing.failed} renewal prices could not update`}
             </span>
           )}
