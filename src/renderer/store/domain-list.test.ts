@@ -7,6 +7,30 @@ beforeEach(() => {
   useDomainList.setState({ ...initial, picked: new Set() }, true);
 });
 describe('shared Manage/Publish context', () => {
+  it('shows private imports after reopening an account with no registrar inventory', () => {
+    useDomainList.getState().initializeScope(false, true);
+    expect(useDomainList.getState()).toMatchObject({
+      initialized: true,
+      scope: 'private',
+      mode: 'publish',
+    });
+  });
+  it('keeps the inventory view for connected or empty portfolios', () => {
+    useDomainList.getState().initializeScope(true, true);
+    expect(useDomainList.getState().scope).toBe('registered');
+    useDomainList.setState({ initialized: false });
+    useDomainList.getState().initializeScope(false, false);
+    expect(useDomainList.getState().scope).toBe('registered');
+  });
+  it('does not override an explicit inventory choice when returning to the page', () => {
+    useDomainList.getState().initializeScope(false, true);
+    useDomainList.getState().startTask('registered');
+    useDomainList.getState().initializeScope(false, true);
+    expect(useDomainList.getState()).toMatchObject({
+      scope: 'registered',
+      mode: 'manage',
+    });
+  });
   it('preserves filters, search, page and selection when changing columns', () => {
     useDomainList.getState().setFilters({
       query: 'example',
@@ -81,13 +105,11 @@ it('applies hosted table preferences without losing the active filter context', 
   usePreferences.getState().setPreferences({ density: 'compact' });
   expect(useDomainList.getState()).toMatchObject({ sort: 'price', page: 4 });
   expect(useDomainList.getState().picked.size).toBe(1);
-  usePreferences
-    .getState()
-    .setPreferences({
-      sortKey: 'expirationDate',
-      sortDir: 'desc',
-      pageSize: 25,
-    });
+  usePreferences.getState().setPreferences({
+    sortKey: 'expirationDate',
+    sortDir: 'desc',
+    pageSize: 25,
+  });
   expect(useDomainList.getState()).toMatchObject({
     query: 'example',
     account: 'account-b',

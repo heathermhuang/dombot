@@ -1,16 +1,16 @@
 {
   "name": "@domains-domains/dombot-engine",
-  "version": "1.5.2-hosted.9",
+  "version": "1.5.2-hosted.11",
   "upstream": {
     "repository": "https://github.com/aoxborrow/dombot",
     "revision": "feef729a1758c1ff667ce3b78d03a13ec3d6573b",
     "version": "1.5.0"
   },
-  "archive": "vendor/domains-domains-dombot-engine-1.5.2-hosted.9.tgz",
-  "sourceSha256": "76db09bd25791093f786071440dda9af7a2976c434406a94d62931750b28503c",
-  "packageSha256": "43c8dec8100b0851bea365d8cceceee427314854806eadc804409494f9ef81e1",
+  "archive": "vendor/domains-domains-dombot-engine-1.5.2-hosted.11.tgz",
+  "sourceSha256": "dc8e03f0a0c6b8d4562e78db81eb4b0a04d78e523c6a2374c6a1efb34c96dd3a",
+  "packageSha256": "6b0c626390aa30c74b849196ac63a43ae85c073ee2f6b726a09aacccc285f386",
   "typesSha256": "9bc7d791e9fe5e8b5b10d7378513ecea6ecff2d680d6adb89154ac498a0e853d",
-  "manifestSha256": "d20e1606496318950264f9f5539c35459d26a4477e748ad087f4a251fc526100",
-  "sha256": "e062261a5ea246134ffbd9285321093e1bb43a38c7a815e72906dfc34c04bfd8",
-  "integrity": "sha512-MszSsimiNXyPpRn2VQ51uwI4IwNrbRbOUC0s3V1grdx7u0IpFbcM8arDxDZ2vRdxn+bVB8SMgJLT1eAMddhggg=="
+  "manifestSha256": "5549e7df28625861a19161b0005d0e918d962cee9d111cbe49c9a976f1b42362",
+  "sha256": "bcc2097e0e76206f4ba76b790292ca1f3424ab8a0e110338a802bd5f0848827e",
+  "integrity": "sha512-X30lS9Unqsj4Ph3X2/1xI8yzTsBYCvwxTFSpQJjO0WL+tx4BqOn6Z6FLacG2WQr8aWaiCAgoo5nrBg8bKO+nJg=="
 }

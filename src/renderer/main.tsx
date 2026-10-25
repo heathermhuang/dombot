@@ -5,7 +5,13 @@ import App from './App';
 import Login from './pages/Login';
 import { ThemeProvider } from '@/components/theme-provider';
 import { createHttpApi, setSessionActive } from './api/http';
-import { markDemo, markWeb, hostPath, type AuthMode } from './lib/platform';
+import {
+  markDemo,
+  markWeb,
+  hostPath,
+  webAuthMode,
+  type AuthMode,
+} from './lib/platform';
 import './index.css';
 import './app-surfaces.css';
 
@@ -21,7 +27,11 @@ const root = createRoot(container);
 function render(node: React.ReactNode) {
   root.render(
     <React.StrictMode>
-      <ThemeProvider defaultTheme="dark">{node}</ThemeProvider>
+      <ThemeProvider
+        defaultTheme={webAuthMode() === 'gateway' ? 'light' : 'dark'}
+      >
+        {node}
+      </ThemeProvider>
     </React.StrictMode>,
   );
 }
