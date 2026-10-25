@@ -1,4 +1,4 @@
-/** Upstream previews remain unmodified; hosted Sales preview uses reserved .example fixtures. */
+/** Branded SaaS previews use synthetic .example fixtures, never private holdings. */
 export const productImages = {
   hostedSales: {
     path: '/product/hosted-sales-5c8170de15bc.png',
@@ -7,15 +7,15 @@ export const productImages = {
     height: 1440,
   },
   domains: {
-    path: '/product/domains-ecf103a893af.png',
-    file: '/dombot-domains.png',
-    width: 1440,
-    height: 1100,
+    path: '/product/domains-8d8ae08e58a7.png',
+    file: '/portfolio-inventory.png',
+    width: 1280,
+    height: 720,
   },
   renewals: {
-    path: '/product/renewals-bc197540662d.png',
-    file: '/dombot-renewals.png',
-    width: 1440,
-    height: 1100,
+    path: '/product/renewals-783275fc3973.png',
+    file: '/portfolio-renewals.png',
+    width: 1280,
+    height: 720,
   },
 } as const;

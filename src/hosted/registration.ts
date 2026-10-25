@@ -151,7 +151,7 @@ export async function sendAccountEmail(
       kind === 'signup'
         ? 'Verify your email for domains.domains'
         : 'Reset your domains.domains password',
-    text: `${kind === 'signup' ? 'Verify your email to start using hosted DomBot' : 'Set a new password for your domains.domains sign-in'}:\n\n${url.href}\n\nThis link expires in ${kind === 'signup' ? 20 : 15} minutes and can be used once. If you did not request this, ignore this email. Your account has not been changed.\n\ndomains.domains`,
+    text: `${kind === 'signup' ? 'Verify your email to start using domains.domains' : 'Set a new password for your domains.domains sign-in'}:\n\n${url.href}\n\nThis link expires in ${kind === 'signup' ? 20 : 15} minutes and can be used once. If you did not request this, ignore this email. Your account has not been changed.\n\ndomains.domains`,
   });
 }
 

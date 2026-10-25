@@ -137,11 +137,16 @@ describe('public website brand and product clarity', () => {
     const html = home(true);
     expect(html).toContain('Sample data');
     expect(html).toContain(
-      'Sample data and prices, not a customer portfolio or registrar quote.',
+      'Sample domains and prices, not customer holdings or registrar quotes.',
     );
     expect(html.match(/<img\b/g)).toHaveLength(3);
     expect(html).toContain('href="https://demo.dombot.ai/"');
-    expect(html).toContain('Original DomBot demo');
+    expect(html).toContain('Domain inventory');
+    expect(html).toContain('Renewal planning');
+    const main = html.match(/<main[^>]*>([\s\S]*?)<\/main>/)?.[1] ?? '';
+    expect(main.replace(/<[^>]*>/g, '')).not.toMatch(
+      /dombot|upstream|original demo/i,
+    );
     expect(html).toContain('href="/signup"');
     expect(html).toContain('href="/login"');
     expect(html).toContain('href="/domains"');

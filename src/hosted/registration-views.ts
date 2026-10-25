@@ -4,7 +4,7 @@ import { legalVersion } from './legal';
 export const signupStart = () =>
   page(
     'Sign up',
-    `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Start your domain portfolio.</h1><p>Sign up to use hosted DomBot. Verify your email, then connect a registrar or import your domain list. No invitation or credit card required.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Send verification link</button><p class="note">Free during early access, subject to available capacity. Registrar charges are separate. Read our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
+    `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Start your domain portfolio.</h1><p>Verify your email, then connect a registrar or import your domain list. No invitation or credit card required.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Send verification link</button><p class="note">Free during early access, subject to available capacity. Registrar charges are separate. Read our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
   );
 export const signupFinish = (code: string, email: string, error = '') =>
   page(
