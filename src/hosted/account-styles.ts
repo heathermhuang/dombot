@@ -13,6 +13,7 @@ body:not(.landing-page) input:not([type=checkbox]):not([type=hidden]){border-rad
 body:not(.landing-page) input:focus-visible{border-color:var(--green);box-shadow:0 0 0 4px #31613b12;outline:2px solid var(--green);outline-offset:2px}
 body:not(.landing-page) button,body:not(.landing-page) .button{border-radius:8px;font-size:14px;font-weight:600;transition:background-color 160ms,box-shadow 160ms;line-height:1.5}
 body:not(.landing-page) button:hover{background:#214931;box-shadow:0 4px 12px -6px #20382c70}
+body:not(.landing-page) button[data-passkey="login"]:hover{background:#edf3e9;box-shadow:none}
 body:not(.landing-page) main>form>button[type=submit]{width:100%;min-height:48px;margin-top:8px}
 body:not(.landing-page) .note{font-size:12px;line-height:1.75}
 body:not(.landing-page) .error{background:#fcf1ee;border-color:#e3bcb2}
