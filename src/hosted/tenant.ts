@@ -31,9 +31,11 @@ export default {
     }
     const platformPath = new URL(request.url).pathname;
     if (
-      ['/platform-internal/health', '/platform-internal/pause'].includes(
-        platformPath,
-      )
+      [
+        '/platform-internal/health',
+        '/platform-internal/pause',
+        '/platform-internal/admin-snapshot',
+      ].includes(platformPath)
     ) {
       // Anonymous lander admission cannot operate platform lifecycle controls.
       if (
@@ -44,6 +46,20 @@ export default {
         ))
       )
         return new Response('Forbidden', { status: 403 });
+      if (platformPath === '/platform-internal/admin-snapshot') {
+        if (request.method !== 'GET')
+          return new Response('Method not allowed', { status: 405 });
+        const proof = await verifyGatewayRequest(
+          env.DOMBOT_GATEWAY_SECRET ?? '',
+          env.DOMBOT_WORKSPACE_ID ?? '',
+          request,
+        );
+        if (!proof || proof.owner !== null || proof.sales || proof.mcp)
+          return new Response('Forbidden', { status: 403 });
+        return Response.json(await coordinator(env).adminSnapshot(), {
+          headers: { 'Cache-Control': 'no-store' },
+        });
+      }
       if (Reflect.get(env, 'DOMBOT_PLATFORM_ALARMS') !== 'true')
         return new Response('Not found', { status: 404 });
       if (platformPath.endsWith('/pause')) {

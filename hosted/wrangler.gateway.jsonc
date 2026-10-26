@@ -37,6 +37,7 @@
     },
   ],
   "vars": {
+    "ADMIN_USER_IDS": "[]",
     "WORKSPACES": "[]",
     "SOURCE_COMMIT": "",
     "PUBLIC_REGISTRATION_ENABLED": "false",
