@@ -236,6 +236,52 @@ beforeEach(async () => {
   } as HostedEnv;
 });
 describe('one email flow for sign-in and signup', () => {
+  it.each(['login', 'signup', 'reauth'])(
+    'returns the committed %s session even when a subsequent session read fails',
+    async (intent) => {
+      const existing = intent === 'signup' ? null : await owner();
+      const auth = new EmailAuth(env);
+      await auth.issue(
+        existing?.user.email ?? 'new@example.test',
+        '/admin',
+        intent === 'reauth' ? existing!.user : undefined,
+        intent === 'reauth' ? existing!.token : undefined,
+      );
+      const proof = delivered();
+      const read = vi
+        .spyOn(Accounts.prototype, 'session')
+        .mockRejectedValue(new Error('transient session read failure'));
+      let response: Response;
+      try {
+        response = await post(
+          '/auth/email/confirm',
+          { id: proof.id, code: proof.code, accept: 'yes', legalVersion },
+          intent === 'reauth' ? existing!.token : undefined,
+        );
+      } finally {
+        read.mockRestore();
+      }
+      // The transaction has committed even on the old failure path. Returning
+      // an error here strands a consumed proof without delivering its cookie.
+      expect(
+        (await db.prepare('SELECT count(*) n FROM sessions').first())?.n,
+      ).toBe(intent === 'login' ? 2 : 1);
+      expect(response!.status).toBe(303);
+      expect(response!.headers.get('Location')).toBe('/admin');
+      const token = response!.headers
+        .get('Set-Cookie')!
+        .match(/__Host-dd_session=([a-f0-9]{64});/)![1];
+      expect(
+        await new Accounts(db, env.AUTH_PEPPER).session(token),
+      ).toMatchObject({
+        email: existing?.user.email ?? 'new@example.test',
+        auth_method: 'email',
+      });
+      if (intent === 'reauth')
+        expect(await existing!.accounts.session(existing!.token)).toBeNull();
+      expect(await auth.consume(proof.id, proof.code, false, true)).toBeNull();
+    },
+  );
   it('supports 500 shared-network attendees despite expired proofs, without bypassing address limits', async () => {
     // Exercise one fixed limiter window even when a slow CI run crosses a wall-clock boundary.
     const clock = vi
