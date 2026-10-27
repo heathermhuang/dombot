@@ -165,7 +165,17 @@ export class EmailAuth {
       (!sessionHash || row.session_hash !== sessionHash)
     )
       return null;
-    if (!row.user_id && !accept) throw new TermsAcceptanceRequired(row.email);
+    if (!row.user_id && !accept) {
+      // The proof was correct. Reviewing signup terms is not another guess;
+      // keep the last remaining attempt usable for the acceptance submission.
+      await db
+        .prepare(
+          'UPDATE email_signins SET attempts=attempts-1 WHERE id=?1 AND consumed_at IS NULL AND attempts>0',
+        )
+        .bind(id)
+        .run();
+      throw new TermsAcceptanceRequired(row.email);
+    }
     if (!row.user_id && !registrationReady(this.env)) return null;
     if (
       row.intent === 'reauth' &&

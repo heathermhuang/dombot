@@ -1185,19 +1185,16 @@ export default function DomainWorkspace({
           <Globe />
           <h2>Bring your domains together</h2>
           <p>
-            Import a list of names, or connect a registrar to see your verified
-            inventory.
+            Connect your first registrar to bring your domains into one
+            portfolio. You can also import a CSV.
           </p>
           <div className="pf-actions justify-center">
-            <Button onClick={() => setImporting(true)}>
-              <Upload />
-              Import domains
+            <Button onClick={() => navigate('/settings?tab=registrars')}>
+              Connect your first registrar
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/settings?tab=registrars')}
-            >
-              Connect a registrar
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              <Upload />
+              Import CSV
             </Button>
           </div>
           <p className="pf-onboarding-note">

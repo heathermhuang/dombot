@@ -1,5 +1,6 @@
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -197,6 +198,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await mf?.dispose();
 });
+afterEach(() => vi.unstubAllGlobals());
 beforeEach(async () => {
   await db.exec(
     'DELETE FROM webauthn_challenges;DELETE FROM email_signins;DELETE FROM passkeys;DELETE FROM legal_acceptances;DELETE FROM signup_proofs;DELETE FROM email_budgets;DELETE FROM closure_requests;DELETE FROM password_resets;DELETE FROM sessions;DELETE FROM invitations;DELETE FROM users;DELETE FROM workspaces;DELETE FROM rate_limits;DELETE FROM signup_requests;',
@@ -395,9 +397,11 @@ describe('one email flow for sign-in and signup', () => {
       const p = delivered();
       const body = { id: p.id, [kind]: p[kind as 'code' | 'token'] };
       const rejected = await post('/auth/email/confirm', body);
-      expect(rejected.status).toBe(400);
+      expect(rejected.status).toBe(200);
       const html = await rejected.text();
-      expect(html).toContain('Accept the Terms');
+      expect(html).toContain('Create your account.');
+      if (kind === 'code') expect(html).toContain('Email confirmed');
+      expect(html).not.toContain('role="alert"');
       expect(html).toContain(`value="${p.id}"`);
       expect(html).toContain('name="accept" value="yes" required');
       expect(html).not.toContain('This link or code is unavailable');
@@ -414,6 +418,39 @@ describe('one email flow for sign-in and signup', () => {
     },
   );
 
+  it('lets a correctly entered final attempt complete the signup acceptance step', async () => {
+    await new EmailAuth(env).issue('last-attempt@example.test', '/app');
+    const p = delivered();
+    const wrong = p.code === '999999' ? '000000' : '999999';
+    for (let i = 0; i < 4; i++)
+      expect(
+        (await post('/auth/email/confirm', { id: p.id, code: wrong })).status,
+      ).toBe(400);
+    expect(
+      (await post('/auth/email/confirm', { id: p.id, code: p.code })).status,
+    ).toBe(200);
+    expect(
+      (
+        await post('/auth/email/confirm', {
+          id: p.id,
+          code: p.code,
+          accept: 'yes',
+          legalVersion,
+        })
+      ).status,
+    ).toBe(303);
+    expect(
+      (
+        await post('/auth/email/confirm', {
+          id: p.id,
+          code: p.code,
+          accept: 'yes',
+          legalVersion,
+        })
+      ).status,
+    ).toBe(400);
+  });
+
   it('keeps login email-first with self-hosted passkeys and an explicit password fallback', async () => {
     const r = await gateway.fetch(
         new Request('https://domains.domains/login'),
@@ -426,6 +463,146 @@ describe('one email flow for sign-in and signup', () => {
     expect(r.headers.get('Content-Security-Policy')).toContain(
       "script-src 'self'",
     );
+  });
+
+  it('shows no legal checkbox or password option before email ownership is verified', async () => {
+    await owner();
+    const returning = await post('/auth/email/request', {
+      email: 'owner@example.test',
+    });
+    const returningHtml = await returning.text();
+    expect(returningHtml).not.toContain('name="accept"');
+    expect(returningHtml).not.toContain('/login/password');
+    const p = delivered();
+    const signedIn = await post('/auth/email/confirm', {
+      id: p.id,
+      code: p.code,
+    });
+    expect(signedIn.status).toBe(303);
+    expect(signedIn.headers.get('Set-Cookie')).toContain('__Host-dd_session=');
+    const signup = await post('/auth/email/request', {
+      email: 'new@example.test',
+    });
+    expect(
+      (await signup.text()).replace(
+        /value="[a-f0-9]{64}"/,
+        'value="challenge"',
+      ),
+    ).toBe(returningHtml.replace(/value="[a-f0-9]{64}"/, 'value="challenge"'));
+  });
+
+  it('only offers password confirmation when the signed-in account has a password', async () => {
+    const { token } = await owner();
+    const request = () =>
+      gateway.fetch(
+        new Request('https://domains.domains/account/reauth', {
+          headers: { Cookie: cookie(token) },
+        }),
+        env,
+      );
+    expect(await (await request()).text()).toContain('Confirm with password');
+    await db
+      .prepare("UPDATE users SET password_hash='email-only-v1:fixture'")
+      .run();
+    const html = await (await request()).text();
+    expect(html).not.toContain('type="password"');
+    expect(html).toContain('Send confirmation email');
+  });
+
+  it.each(['spaces', 'hyphen', 'full-width digits'])(
+    'accepts a pasted code with %s',
+    async (format) => {
+      await owner();
+      await new EmailAuth(env).issue('owner@example.test', '/app');
+      const p = delivered();
+      const code =
+        format === 'spaces'
+          ? ` ${p.code.slice(0, 3)} ${p.code.slice(3)} `
+          : format === 'hyphen'
+            ? `${p.code.slice(0, 3)}-${p.code.slice(3)}`
+            : p.code.replace(/\d/g, (digit) =>
+                String.fromCharCode(digit.charCodeAt(0) + 0xfee0),
+              );
+      expect(
+        (await post('/auth/email/confirm', { id: p.id, code })).status,
+      ).toBe(303);
+    },
+  );
+
+  it('takes an already signed-in visitor straight to their portfolio', async () => {
+    const { token } = await owner();
+    const response = await gateway.fetch(
+      new Request('https://domains.domains/login', {
+        headers: { Cookie: cookie(token) },
+      }),
+      env,
+    );
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('/app');
+  });
+
+  it('allows adding a registrar and loading public proxy options without fresh authentication', async () => {
+    // Match Workers' streamed Request construction rather than Node's duplex requirement.
+    const NativeRequest = Request;
+    vi.stubGlobal(
+      'Request',
+      class extends NativeRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          super(input, {
+            ...init,
+            ...(init?.body ? { duplex: 'half' } : {}),
+          } as RequestInit);
+        }
+      },
+    );
+    const { token } = await owner();
+    await db.prepare('UPDATE sessions SET authenticated_at=0').run();
+    const forwarded = vi.fn(
+      async () =>
+        new Response('{"result":null}', {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    env.WORKSPACE_0 = { fetch: forwarded } as unknown as Fetcher;
+    env.GATEWAY_KEYS = JSON.stringify({ [ids[0]]: 'a'.repeat(64) });
+    const request = (
+      name: string,
+      args: unknown[],
+      origin = 'https://domains.domains',
+    ) =>
+      gateway.fetch(
+        new Request(`https://domains.domains/w/${ids[0]}/api/${name}`, {
+          method: 'POST',
+          headers: {
+            Cookie: cookie(token),
+            Origin: origin,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ args }),
+        }),
+        env,
+      );
+    expect(
+      (
+        await request('connectRegistrarAccount', [
+          'dynadot',
+          { apiKey: 'new', apiSecret: 'secret' },
+        ])
+      ).status,
+    ).toBe(200);
+    expect((await request('getProxySettings', [true])).status).toBe(200);
+    expect(forwarded).toHaveBeenCalledTimes(2);
+    expect((await request('getProxySettings', [])).status).toBe(428);
+    expect((await request('getProxySettings', [false])).status).toBe(428);
+    expect(
+      (await request('getProxySettings', [true], 'https://elsewhere.test'))
+        .status,
+    ).toBe(403);
+    expect(
+      (await request('connectRegistrarAccount', [], 'https://elsewhere.test'))
+        .status,
+    ).toBe(403);
+    expect(forwarded).toHaveBeenCalledTimes(2);
   });
   it('stores no link or code, never consumes GET and requires legal acceptance for passwordless signup', async () => {
     expect(
@@ -950,7 +1127,6 @@ describe('passkeys and fresh authentication', () => {
       '%65xportData',
       'getProxySettings',
       'saveRegistrarCredentials',
-      'connectRegistrarAccount',
       'exportData',
       'importData',
       'applyDomainOp',
