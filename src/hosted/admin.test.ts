@@ -383,3 +383,14 @@ describe('admin metric meaning', () => {
     });
   });
 });
+
+it('restricts retained sync diagnostics to the freshly authenticated sole admin', async () => {
+  expect((await call('/admin/sync-monitor', 'user')).status).toBe(403);
+  expect((await call('/admin/sync-monitor', 'old')).status).toBe(303);
+  expect((await call('/admin/sync-monitor', null)).status).toBe(303);
+  const response = await call('/admin/sync-monitor');
+  expect(response.status).toBe(200);
+  expect(await response.text()).toContain(
+    'Successful retries do not erase retained failures',
+  );
+});

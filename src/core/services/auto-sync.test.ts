@@ -33,7 +33,7 @@ beforeEach(() => {
 describe('syncAll', () => {
   it('syncs and notifies', async () => {
     expect(await syncAll()).toBe(true);
-    expect(getPortfolio).toHaveBeenCalledWith(true);
+    expect(getPortfolio).toHaveBeenCalledWith(true, 'scheduled');
     expect(broadcastPortfolioChanged).toHaveBeenCalledTimes(1);
   });
 

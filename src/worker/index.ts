@@ -9,6 +9,7 @@ import { ApiValidationError, invoke, type ApiMethodName } from '../core/api';
 import { MCP_PUBLIC_PATHS, createMcpRoutes } from '../core/mcp/routes';
 import { setAppIdentity } from '../core/app-info';
 import { syncAll } from '../core/services/auto-sync';
+import { configureSyncDiagnostics } from '../core/services/sync-diagnostics';
 import {
   configureIncrementalRenewalPricing,
   stepRenewalPricing,
@@ -135,6 +136,7 @@ async function bootOnce(env: Env): Promise<Boot> {
       env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_IP : undefined,
     );
     configureIncrementalRenewalPricing(true);
+    configureSyncDiagnostics(env.DOMBOT_AUTH === 'gateway');
     return { auth: await buildAuthConfig(env, root) };
   })();
   bootFor = fp;

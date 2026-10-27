@@ -1,3 +1,4 @@
+import { SYNC_ALERT_RECIPIENT, type SyncAlert } from './sync-monitor';
 import { Hono } from 'hono';
 import { Accounts, type SessionUser } from './accounts';
 import { Passkeys } from './passkeys';
@@ -91,7 +92,7 @@ const metric = (label: string, value: number, help: string) =>
 const shell = (body: string) =>
   page(
     'System administration',
-    `${styles}<section class="admin"><nav aria-label="Admin navigation"><a href="/admin">Overview & users</a><a href="/account">Account security</a><a href="/app">My portfolio</a></nav>${body}</section>`,
+    `${styles}<section class="admin"><nav aria-label="Admin navigation"><a href="/admin">Overview & users</a><a href="/admin/sync-monitor">Dynadot monitoring</a><a href="/account">Account security</a><a href="/app">My portfolio</a></nav>${body}</section>`,
   );
 const selectUsers =
   'SELECT u.id,u.email,u.workspace_id,u.created_at,w.enabled,s.snapshot,s.observed_at,s.attempted_at,s.unavailable FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN admin_snapshots s ON s.workspace_id=w.id';
@@ -153,7 +154,7 @@ export function adminRoutes(
     return c.html(
       shell(`<span class="eyebrow">Operator console</span><h1>System status</h1><p>Storage checked ${timestamp(Date.now())}. Portfolio readings are cached observations; refreshing reads stored inventory without contacting registrars.</p>${notices}
       <div class="summary">${metric('User accounts', totals.users, `${totals.enabled} enabled`)}${metric('Owned domains observed', totals.owned, `${totals.observed} of ${totals.enabled} enabled users`)}${metric('Need attention', totals.failed, 'Sync failed, stale or never completed')}${metric('Unknown / stale readings', totals.unknown + totals.stale, 'Refresh before relying on totals')}</div>
-      <section class="surface"><h2>System overview</h2><p>${totals.unavailable} portfolios unavailable on their last observation attempt.</p><p>${pill('Control database reachable')} ${pill(totals.unknown || totals.stale || totals.failed || totals.unavailable ? 'Attention required' : 'Snapshot coverage current', Boolean(totals.unknown || totals.stale || totals.failed || totals.unavailable))}</p><p>${capacity?.total ?? 0} unclaimed qualified signup slots. Public registration: ${c.env.PUBLIC_REGISTRATION_ENABLED === 'true' ? 'enabled' : 'disabled'}. Email delivery qualification: ${c.env.EMAIL_DELIVERY_VERIFIED === 'true' ? 'configured as verified' : 'not verified'}.</p><p class="muted">Owned counts deduplicate names within each user and include imports; archived names are excluded. The aggregate sums user holdings, so the same name held by two users counts twice. Disabled accounts are excluded. ${totals.archived} archived and ${totals.imported} imported names observed. Unknown users are never counted as zero. Totals may contain readings older than 15 minutes.</p><details><summary>Release & monitoring coverage</summary><p>Gateway source: <code>${e(c.env.SOURCE_COMMIT ?? 'Not configured')}</code></p><p>Runtime errors and sync outcomes are retained from this release onward, up to 100 events per workspace. Existing failures cannot be reconstructed after a successful retry. Uptime, provider availability, historical error rate and backup recovery are not measured by this view.</p></details></section>
+      <section class="surface"><h2>System overview</h2><p>${totals.unavailable} portfolios unavailable on their last observation attempt.</p><p>${pill('Control database reachable')} ${pill(totals.unknown || totals.stale || totals.failed || totals.unavailable ? 'Attention required' : 'Snapshot coverage current', Boolean(totals.unknown || totals.stale || totals.failed || totals.unavailable))}</p><p>${capacity?.total ?? 0} unclaimed qualified signup slots. Public registration: ${c.env.PUBLIC_REGISTRATION_ENABLED === 'true' ? 'enabled' : 'disabled'}. Email delivery qualification: ${c.env.EMAIL_DELIVERY_VERIFIED === 'true' ? 'configured as verified' : 'not verified'}.</p><p class="muted">Owned counts deduplicate names within each user and include imports; archived names are excluded. The aggregate sums user holdings, so the same name held by two users counts twice. Disabled accounts are excluded. ${totals.archived} archived and ${totals.imported} imported names observed. Unknown users are never counted as zero. Totals may contain readings older than 15 minutes.</p><details><summary>Release & monitoring coverage</summary><p>Gateway source: <code>${e(c.env.SOURCE_COMMIT ?? 'Not configured')}</code></p><p>Generic runtime outcomes retain up to 100 events per portfolio. The Dynadot monitor separately retains sanitized sync attempts for 30 days, including failures followed by successful retries. Uptime, provider availability and backup recovery are not measured by this view.</p></details></section>
       <section class="surface"><div class="toolbar"><h2>Users & portfolios</h2><form action="/admin/refresh" method="post"><input type="hidden" name="offset" value="${offset}"><input type="hidden" name="q" value="${e(q)}"><button>Refresh these ${shown.length} users</button></form></div><form method="get" action="/admin"><label>Search email or user / portfolio ID<input type="search" name="q" value="${e(q)}" maxlength="120"></label><button>Search users</button></form><p class="muted">${filtered.length} matches. Showing ${shown.length ? offset + 1 : 0}–${Math.min(offset + PAGE_SIZE, filtered.length)}. Includes operator and test accounts.</p>
       <div class="scroll" tabindex="0" role="region" aria-label="User portfolio counts"><table><thead><tr><th>User</th><th>Access</th><th class="number">Owned</th><th>Sync status</th><th>Observation</th></tr></thead><tbody>${
         shown
@@ -167,6 +168,45 @@ export function adminRoutes(
           })
           .join('') || '<tr><td colspan="5">No matching users.</td></tr>'
       }</tbody></table></div><nav aria-label="User pages">${offset > 0 ? `<a href="/admin?q=${encodeURIComponent(q)}&offset=${Math.max(0, offset - PAGE_SIZE)}">← Previous</a>` : ''}${offset + PAGE_SIZE < filtered.length ? `<a href="/admin?q=${encodeURIComponent(q)}&offset=${offset + PAGE_SIZE}">Next users →</a>` : ''}</nav></section>`),
+    );
+  });
+  app.get('/sync-monitor', async (c) => {
+    const now = Date.now();
+    const control = await c.env.CONTROL_DB.prepare(
+      'SELECT completed_at FROM sync_monitor_control WHERE id=1',
+    ).first<{ completed_at: number | null }>();
+    const coverage = await c.env.CONTROL_DB.prepare(
+      'SELECT COUNT(*) total,SUM(CASE WHEN c.checked_at>? AND c.errors=0 THEN 1 ELSE 0 END) current,SUM(CASE WHEN c.errors>0 THEN 1 ELSE 0 END) unavailable FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN sync_monitor_checks c ON c.workspace_id=u.workspace_id WHERE w.enabled=1',
+    )
+      .bind(now - 10 * 60_000)
+      .first<{ total: number; current: number; unavailable: number }>();
+    const events = (
+      await c.env.CONTROL_DB.prepare(
+        'SELECT s.*,u.id user_id,u.email FROM sync_monitor_events s LEFT JOIN users u ON u.workspace_id=s.workspace_id ORDER BY s.at DESC,s.seq DESC LIMIT 100',
+      ).all<{
+        id: string;
+        user_id: string;
+        email: string;
+        at: number;
+        ok: number;
+        diagnostic: string;
+      }>()
+    ).results;
+    const alerts = (
+      await c.env.CONTROL_DB.prepare(
+        'SELECT * FROM sync_monitor_alerts ORDER BY at DESC,id DESC LIMIT 50',
+      ).all<SyncAlert>()
+    ).results;
+    const pending = await c.env.CONTROL_DB.prepare(
+      "SELECT COUNT(*) n FROM sync_monitor_alerts WHERE status!='sent'",
+    ).first<{ n: number }>();
+    await audit(c.env, c.get('admin'), 'view');
+    return c.html(
+      shell(`<span class="eyebrow">Operator console</span><h1>Dynadot sync monitoring</h1><p>${pill(c.env.SYNC_MONITOR_ENABLED === 'true' ? 'Enabled' : 'Disabled', c.env.SYNC_MONITOR_ENABLED !== 'true')} Last completed check: ${timestamp(control?.completed_at)}. Refresh this page for current readings.</p>
+      <div class="summary">${metric('Portfolios covered', coverage?.current ?? 0, `of ${coverage?.total ?? 0} enabled, checked within 10 minutes`)}${metric('Observation errors', coverage?.unavailable ?? 0, 'Not treated as healthy')}${metric('Alert deliveries outstanding', pending?.n ?? 0, 'Queued or delivery uncertain')}${metric('Retained days', 30, 'Up to 200 attempts per portfolio before collection')}</div>
+      <section class="surface"><h2>Alert policy</h2><p>New Dynadot inventory failures, a change in failure cause, and recovery are emailed to ${e(SYNC_ALERT_RECIPIENT)}. Repeated failures with the same cause remain recorded without repeated incident emails. The production cron checks every two minutes, up to 25 portfolios per run; fleet coverage currently takes approximately ${Math.max(1, Math.ceil((coverage?.total ?? 0) / 25)) * 2} minutes. No registrar calls are initiated by this monitor.</p><p>Monitoring unavailability after two failed observations and detected retention gaps also create alerts. Emails are limited to 10 attempts per hour and five per run; remaining alerts stay queued. An uncertain send may have reached the mailbox and is retried up to three times with the same alert ID. After that, it remains visible here for operator follow-up. This view records provider acceptance, not inbox delivery.</p><p class="muted">Capture begins with engine 1.5.2-hosted.14. Earlier failures cannot be reconstructed. Successful retries do not erase retained failures. Attempts retain correlation ID, account ID, timing, trigger, route class, classified failure, HTTP status and exact engine/source version. Provider messages, credentials and domain names are excluded.</p></section>
+      <section class="surface"><h2>Recent sync attempts</h2><p class="muted">Latest 100 across all users, retained for 30 days. Times are UTC.</p><div class="scroll" tabindex="0" role="region" aria-label="Dynadot sync attempts"><table><thead><tr><th>Time / user</th><th>Outcome</th><th>Diagnostics</th></tr></thead><tbody>${events.map((row) => `<tr><td>${timestamp(row.at)}<br><a href="/admin/users/${encodeURIComponent(row.user_id)}">${e(row.email ?? row.user_id)}</a></td><td>${pill(row.ok ? 'Succeeded' : 'Failed', !row.ok)}</td><td><details><summary>Sanitized attempt ${e(row.id.slice(0, 8))}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${e(JSON.stringify(JSON.parse(row.diagnostic), null, 2))}</pre></details></td></tr>`).join('') || '<tr><td colspan="3">No Dynadot attempts collected yet.</td></tr>'}</tbody></table></div></section>
+      <section class="surface"><h2>Recent alerts & delivery</h2><div class="scroll" tabindex="0" role="region" aria-label="Dynadot alerts"><table><thead><tr><th>Time</th><th>Alert</th><th>Delivery</th></tr></thead><tbody>${alerts.map((row) => `<tr><td>${timestamp(row.at)}</td><td>${e(row.kind)}<details><summary>Alert ${e(row.id.slice(0, 8))}</summary><code>${e(row.id)}</code><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${e(JSON.stringify(JSON.parse(row.diagnostic), null, 2))}</pre></details></td><td>${pill(row.status === 'sent' ? 'Accepted by email provider' : row.status, row.status !== 'sent')}<br>${timestamp(row.sent_at)}</td></tr>`).join('') || '<tr><td colspan="3">No incidents or alert deliveries recorded.</td></tr>'}</tbody></table></div></section>`),
     );
   });
   app.post('/refresh', async (c) => {

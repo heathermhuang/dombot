@@ -59,7 +59,7 @@ export async function syncAll(ifOlderThanMs?: number): Promise<boolean> {
   }
   inFlight = true;
   try {
-    await getPortfolio(true);
+    await getPortfolio(true, 'scheduled');
     broadcastPortfolioChanged();
     console.log('[auto-sync] portfolio refreshed');
     return true;

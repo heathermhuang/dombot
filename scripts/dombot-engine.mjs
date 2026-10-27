@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const root = process.cwd();
 const name = '@domains-domains/dombot-engine';
-const version = '1.5.2-hosted.13';
+const version = '1.5.2-hosted.14';
 const upstream = {
   repository: 'https://github.com/aoxborrow/dombot',
   revision: 'feef729a1758c1ff667ce3b78d03a13ec3d6573b',
@@ -153,6 +153,10 @@ if (process.argv[2] === 'verify') {
   await fs.cp('dist/web', path.join(temp, 'web'), { recursive: true });
   const bundle = await build({
     entryPoints: ['src/worker/engine.ts'],
+    define: {
+      __DOMBOT_ENGINE_VERSION__: JSON.stringify(version),
+      __DOMBOT_ENGINE_SOURCE__: JSON.stringify(sourceSha256),
+    },
     bundle: true,
     write: false,
     platform: 'node',

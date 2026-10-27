@@ -1,4 +1,5 @@
 interface HostedEnv {
+  SYNC_MONITOR_ENABLED?: string;
   ADMIN_USER_IDS?: string;
   PLATFORM_ENABLED?: string;
   DISPATCHER?: DispatchNamespace;

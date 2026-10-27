@@ -36,6 +36,8 @@ import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { createProxiedRegistrar, proxyFailureMessage } from './proxy-transport';
 import { createDynadotFetch } from './dynadot-transport';
 import { Namespace } from '../storage/namespace';
+import { recordSyncAttempt } from './sync-diagnostics';
+import type { SyncTrigger } from '../../shared/sync-monitor';
 import { broadcastPortfolioChanged } from '../events';
 import { isBulkRunning } from './bulk-jobs';
 import { accountProxyRoute, getProxyProfile } from './proxies';
@@ -645,7 +647,12 @@ function assemblePortfolio(): Portfolio {
  * `lastSyncedAt` and only record `lastError`, so a transient failure doesn't blank
  * a registrar that was working.
  */
-async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
+async function syncRegistrarInto(
+  account: RegistrarAccount,
+  trigger: SyncTrigger,
+): Promise<void> {
+  const startedAt = Date.now();
+  let syncError: unknown;
   const { registrar: name, id: accountId } = account;
   let generation = generations.get(accountId) ?? 0;
   const prev = readRegistrarEntry(accountId);
@@ -656,6 +663,7 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
     generations.set(accountId, generation);
     const { domains, errors } = await listPortfolio([client]);
     const error = errors[0]?.error;
+    syncError = error;
     entry = error
       ? {
           domains: prev?.domains ?? [],
@@ -670,6 +678,7 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
           lastErrorAt: null,
         };
   } catch (err) {
+    syncError = err;
     entry = {
       domains: prev?.domains ?? [],
       lastSyncedAt: prev?.lastSyncedAt ?? null,
@@ -677,6 +686,25 @@ async function syncRegistrarInto(account: RegistrarAccount): Promise<void> {
       lastErrorAt: Date.now(),
     };
   }
+  if (name === 'dynadot')
+    recordSyncAttempt(
+      {
+        accountId,
+        trigger,
+        startedAt,
+        at: Date.now(),
+        durationMs: Date.now() - startedAt,
+        ok: !entry.lastError,
+        lastGoodAt: entry.lastSyncedAt,
+        domains: entry.domains.length,
+        route: account.proxyId
+          ? 'custom'
+          : managedProxyFor(name)
+            ? 'managed'
+            : 'direct',
+      },
+      syncError,
+    );
   if ((generations.get(accountId) ?? 0) !== generation) return;
   writeEntry('portfolio', accountId, entry);
   // Refresh renewal quotes as part of the sync (see syncRenewalQuotes).
@@ -1055,8 +1083,13 @@ function holdingsOf(
 }
 
 /** Pull these accounts, then record arrivals, departures, moves, and renewals. */
-async function syncAccounts(accounts: RegistrarAccount[]): Promise<void> {
-  await Promise.all(accounts.map((account) => syncRegistrarInto(account)));
+async function syncAccounts(
+  accounts: RegistrarAccount[],
+  trigger: SyncTrigger = 'manual',
+): Promise<void> {
+  await Promise.all(
+    accounts.map((account) => syncRegistrarInto(account, trigger)),
+  );
   const attempted = new Set(accounts.map((account) => account.id));
   const after = getActiveAccounts().map((account) =>
     holdingsOf(account, attempted.has(account.id)),
@@ -1077,11 +1110,14 @@ async function syncAccounts(accounts: RegistrarAccount[]): Promise<void> {
  * the "Sync domains" button) we re-sync every configured registrar in parallel,
  * then return the assembled result.
  */
-export async function getPortfolio(refresh = true): Promise<Portfolio> {
+export async function getPortfolio(
+  refresh = true,
+  trigger: SyncTrigger = 'manual',
+): Promise<Portfolio> {
   if (refresh) {
     // Only sync enabled registrars — a disabled one keeps its credentials but is
     // deliberately skipped.
-    await syncAccounts(getActiveAccounts());
+    await syncAccounts(getActiveAccounts(), trigger);
   }
   return assemblePortfolio();
 }
@@ -1094,13 +1130,14 @@ export async function getPortfolio(refresh = true): Promise<Portfolio> {
 export async function syncRegistrar(
   name: RegistrarName,
   accountId?: string,
+  trigger: SyncTrigger = 'manual',
 ): Promise<Portfolio> {
   const account = resolveAccount(name, accountId);
   if (isConfigured(name, account.id)) {
     // A configured account keeps its cached slice even while disabled — the
     // portfolio just hides it (see setRegistrarEnabledCached, which never
     // clears). Only sync when it's actually enabled.
-    if (isRegistrarEnabled(account.id)) await syncAccounts([account]);
+    if (isRegistrarEnabled(account.id)) await syncAccounts([account], trigger);
   } else {
     // Credentials are gone — drop the stale slice so it can't reappear.
     clearRegistrarData(account.id);

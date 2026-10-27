@@ -36,6 +36,7 @@ export interface DomBotSchedule {
   noRetry(): void;
 }
 export interface DomBotEngine {
+  syncMonitor(env: DomBotEnvironment, revision?: string): Promise<unknown>;
   fetch(
     request: Request,
     env: DomBotEnvironment,
