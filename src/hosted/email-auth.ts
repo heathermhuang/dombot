@@ -214,6 +214,7 @@ export class EmailAuth {
           .bind(newId, legalVersion, now, consumption),
       );
     }
+    const sessionStatementIndex = statements.length;
     if (row.intent === 'reauth') {
       // Rotate the browser token after fresh authentication; never revive an
       // expired/revoked session or grant an email downgrade after passkey setup.
@@ -248,9 +249,11 @@ export class EmailAuth {
     }
     try {
       const results = await db.batch(statements);
+      // The guarded INSERT is the transaction's session receipt. A separate
+      // read can fail after commit, stranding a consumed proof without a cookie.
       if (
         !results[0].results.length ||
-        !(await new Accounts(db, this.env.AUTH_PEPPER).session(token))
+        results[sessionStatementIndex].results.length !== 1
       )
         return null;
       if (this.env.SALES_MAIL_ENABLED === 'true') {
