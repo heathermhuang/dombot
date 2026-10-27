@@ -263,7 +263,7 @@ export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
   if (!allowed || !Array.isArray(admins) || !admins.includes(allowed.id))
     throw Error('Sync alert recipient is not the enabled administrator');
   const recent = await env.CONTROL_DB.prepare(
-    'SELECT COUNT(*) n FROM sync_monitor_alerts WHERE attempted_at>?',
+    'SELECT COUNT(*) n FROM sync_monitor_deliveries WHERE at>?',
   )
     .bind(Date.now() - 3600_000)
     .first<{ n: number }>();
@@ -277,11 +277,16 @@ export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
   ).results;
   for (const alert of rows) {
     const claim = await env.CONTROL_DB.prepare(
-      "UPDATE sync_monitor_alerts SET status='sending',attempted_at=?,attempts=attempts+1 WHERE id=? AND (status='pending' OR (status='uncertain' AND attempts<3 AND attempted_at<?)) RETURNING id",
+      "UPDATE sync_monitor_alerts SET status='sending',attempted_at=?,attempts=attempts+1 WHERE id=? AND (status='pending' OR (status='uncertain' AND attempts<3 AND attempted_at<?)) RETURNING id,attempts",
     )
       .bind(Date.now(), alert.id, Date.now() - 10 * 60_000)
       .first();
     if (!claim) continue;
+    await env.CONTROL_DB.prepare(
+      'INSERT INTO sync_monitor_deliveries(alert_id,attempt,at) VALUES(?,?,?)',
+    )
+      .bind(alert.id, Number(claim.attempts), Date.now())
+      .run();
     try {
       const sent = await env.EMAIL.send({
         from: { email: env.EMAIL_FROM, name: 'domains.domains system alerts' },
@@ -326,6 +331,9 @@ export async function monitorDynadotSync(env: HostedEnv): Promise<void> {
       await Promise.all(rows.slice(i, i + 4).map((row) => observe(env, row)));
     await deliverSyncAlerts(env);
     await env.CONTROL_DB.batch([
+      env.CONTROL_DB.prepare(
+        'DELETE FROM sync_monitor_deliveries WHERE at<?',
+      ).bind(now - SYNC_RETENTION_MS),
       env.CONTROL_DB.prepare('DELETE FROM sync_monitor_events WHERE at<?').bind(
         now - SYNC_RETENTION_MS,
       ),

@@ -84,6 +84,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   for (const table of [
+    'sync_monitor_deliveries',
     'sync_monitor_alerts',
     'sync_monitor_events',
     'sync_monitor_accounts',
@@ -95,7 +96,7 @@ beforeEach(async () => {
       'UPDATE sync_monitor_control SET lease_until=0,lease=NULL,completed_at=NULL',
     )
     .run();
-  send.mockClear();
+  send.mockReset().mockResolvedValue({ messageId: 'synthetic-accepted' });
   fetch.mockReset();
   env = {
     CONTROL_DB: db,
@@ -205,6 +206,33 @@ describe('production Dynadot collector and email outbox', () => {
         .first(),
     ).toMatchObject({ status: 'uncertain', attempts: 3 });
     send.mockResolvedValue({ messageId: 'synthetic-accepted' });
+  });
+  it('counts delivery attempts, including retries, against the separate hourly budget', async () => {
+    for (let seq = 1; seq <= 12; seq++)
+      await ingestSyncEvent(env, workspace, {
+        ...event(seq),
+        accountId: 'account-' + seq,
+      });
+    await deliverSyncAlerts(env);
+    await deliverSyncAlerts(env);
+    await deliverSyncAlerts(env);
+    expect(send).toHaveBeenCalledTimes(10);
+    expect(
+      (
+        await db
+          .prepare(
+            "SELECT COUNT(*) n FROM sync_monitor_alerts WHERE status='pending'",
+          )
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(2);
+    expect(
+      (
+        await db
+          .prepare('SELECT COUNT(*) n FROM sync_monitor_deliveries')
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(10);
   });
   it('refuses delivery to a non-admin and respects the monitor switch and active lease', async () => {
     await ingestSyncEvent(env, workspace, event(1));

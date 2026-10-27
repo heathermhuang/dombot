@@ -7,3 +7,6 @@ CREATE INDEX sync_monitor_events_time ON sync_monitor_events(at);
 CREATE TABLE sync_monitor_accounts (workspace_id TEXT NOT NULL, account_id TEXT NOT NULL, seq INTEGER NOT NULL, fingerprint TEXT, incident_id TEXT, failures INTEGER NOT NULL DEFAULT 0, last_good_at INTEGER, PRIMARY KEY(workspace_id,account_id));
 CREATE TABLE sync_monitor_alerts (id TEXT PRIMARY KEY, workspace_id TEXT, at INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('failure','recovery','gap','unavailable','available','test')), diagnostic TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sending','sent','uncertain')), message_id TEXT, attempted_at INTEGER, attempts INTEGER NOT NULL DEFAULT 0, sent_at INTEGER);
 CREATE INDEX sync_monitor_alerts_pending ON sync_monitor_alerts(status,at);
+
+CREATE TABLE sync_monitor_deliveries (alert_id TEXT NOT NULL, attempt INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(alert_id,attempt));
+CREATE INDEX sync_monitor_deliveries_time ON sync_monitor_deliveries(at);
