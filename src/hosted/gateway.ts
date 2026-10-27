@@ -1,4 +1,5 @@
 import { canonicalDomain } from '../shared/publication';
+import { adminRoutes, isAdmin } from './admin';
 import { receiveSalesReply } from './sales-relay';
 import {
   domainControlRequest,
@@ -108,7 +109,10 @@ const safeNext = (value: unknown) =>
   /^\/w\/[a-f0-9-]{36}\//.test(value) &&
   !/[\r\n\\]/.test(value)
     ? value
-    : value === '/account' || value === '/account/close' || sharedMcpNext(value)
+    : value === '/admin' ||
+        value === '/account' ||
+        value === '/account/close' ||
+        sharedMcpNext(value)
       ? value
       : '/app';
 const mcpPath = (path: string) =>
@@ -801,12 +805,31 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
   );
 });
 
-app.get('/health', (c) =>
-  c.json({
-    ok: true,
-    service: 'domains-staging',
-    version: 'hosted-foundation-1',
-  }),
+app.get('/health', async (c) => {
+  try {
+    await c.env.CONTROL_DB.prepare('SELECT 1').first();
+    return c.json({
+      ok: true,
+      service: 'domains.domains',
+      scope: 'gateway-storage',
+      observedAt: Date.now(),
+      source: c.env.SOURCE_COMMIT ?? null,
+    });
+  } catch {
+    return c.json(
+      {
+        ok: false,
+        service: 'domains.domains',
+        scope: 'gateway-storage',
+        observedAt: Date.now(),
+      },
+      503,
+    );
+  }
+});
+app.route(
+  '/admin',
+  adminRoutes((request, env) => account(env).session(readSession(request))),
 );
 app.get('/login', (c) =>
   c.html(
@@ -1003,6 +1026,11 @@ app.get('/account', async (c) => {
     .bind(user.id)
     .first<{ password_hash: string }>();
   let html = accountSecurity(user);
+  if (isAdmin(c.env, user))
+    html = html.replace(
+      '<section class="session-actions"',
+      '<p><a href="/admin">System administration →</a></p><section class="session-actions"',
+    );
   if (!credential?.password_hash.startsWith('scrypt-v1:'))
     html = html.replace(
       /<form action="\/account\/password"[\s\S]*?<\/form>/,

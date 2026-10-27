@@ -1,4 +1,5 @@
 interface HostedEnv {
+  ADMIN_USER_IDS?: string;
   PLATFORM_ENABLED?: string;
   DISPATCHER?: DispatchNamespace;
   EMAIL_CAMPAIGN_ID?: string;
