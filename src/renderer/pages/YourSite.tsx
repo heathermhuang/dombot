@@ -199,7 +199,7 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
             />
             <small>
               {addressState?.enabled
-                ? `${window.location.origin}/${handle || 'yourname'}`
+                ? `${window.location.origin}/${addressState.address?.handle ?? (handle || 'yourname')}`
                 : `/p/${handle || 'your-name'}`}{' '}
               · choose once when creating the draft
             </small>
