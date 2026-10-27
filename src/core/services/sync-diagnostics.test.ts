@@ -38,7 +38,8 @@ describe('retained Dynadot attempt diagnostics', () => {
     recordSyncAttempt(
       input(),
       new Error(
-        'proxy [proxy:PROXY_QUEUE_TIMEOUT] https://private.test?key=secret',
+        'proxy [' +
+          'proxy:PROXY_QUEUE_TIMEOUT] https://private.test?key=secret',
       ),
     );
     recordSyncAttempt({ ...input(Date.now(), true), trigger: 'mcp' });

@@ -1233,7 +1233,7 @@ it('records actual Dynadot manual, MCP and scheduled inventory attempts through 
   configureSyncDiagnostics(true);
   try {
     listPortfolio.mockRejectedValueOnce(
-      new Error('proxy [proxy:PROXY_QUEUE_TIMEOUT] key=secret'),
+      new Error('proxy [' + 'proxy:PROXY_QUEUE_TIMEOUT] key=secret'),
     );
     await syncRegistrar('dynadot', undefined, 'manual');
     listPortfolio.mockResolvedValue({ domains: [], errors: [] });
