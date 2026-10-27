@@ -3,6 +3,7 @@ import { acquireProxyLease, scheduledProxy } from './proxy-scheduler';
 import {
   advanceProxyQueue,
   emptyProxyQueue,
+  PROXY_QUEUE_WAIT_MS,
   type ProxyQueueCommand,
 } from '../shared/proxy-scheduler';
 
@@ -131,6 +132,137 @@ describe('tenant proxy lease client', () => {
     const release = await next;
     expect(admitted).toBe(true);
     await release();
+  });
+  it('admits all five proxied sync reads when relay capacity is temporarily occupied', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100000);
+    const state = emptyProxyQueue();
+    const policy = { concurrency: 4, cooldownMs: 0, relayOnly: true };
+    const blockers = Array.from({ length: 4 }, (_, i) => ({
+      action: 'acquire' as const,
+      tenant: 'other-' + i,
+      id: 'active-' + i,
+      route: 'relay' as const,
+    }));
+    for (const blocker of blockers)
+      advanceProxyQueue(
+        state,
+        blocker,
+        Date.now(),
+        () => crypto.randomUUID(),
+        policy,
+      );
+    const active = [...state.active];
+    let busyReplies = 0,
+      maxActive = 0,
+      maxPending = 0;
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const command = JSON.parse(String(init?.body));
+        const reply = advanceProxyQueue(
+          state,
+          command,
+          Date.now(),
+          () => crypto.randomUUID(),
+          policy,
+        );
+        if (reply.status === 'busy') busyReplies++;
+        maxActive = Math.max(maxActive, state.active.length);
+        maxPending = Math.max(maxPending, state.pending.length);
+        return Response.json(reply);
+      }),
+    };
+    // The owner's full sync has four Dynadot accounts plus Namecheap. Each
+    // performs one proxy read; a fifth waiting read must not become a failed
+    // registrar sync merely because the first four already hold queue tickets.
+    const tenant = crypto.randomUUID();
+    const requests = Promise.allSettled(
+      Array.from({ length: 5 }, async () => {
+        const release = await acquireProxyLease({
+          tenant,
+          service,
+          relayUrl: 'https://relay.example.test',
+        });
+        await release();
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(busyReplies).toBeGreaterThan(0);
+    for (const blocker of active)
+      advanceProxyQueue(
+        state,
+        { ...blocker, action: 'release' },
+        Date.now(),
+        () => '',
+        policy,
+      );
+    await vi.advanceTimersByTimeAsync(15000);
+    const outcomes = await requests;
+    expect(outcomes.filter((r) => r.status === 'rejected')).toEqual([]);
+    expect(outcomes).toHaveLength(5);
+    expect(maxActive).toBeLessThanOrEqual(4);
+    expect(maxPending).toBeLessThanOrEqual(4);
+    expect(state.active).toEqual([]);
+    expect(state.pending).toEqual([]);
+  });
+  it('bounds permanent saturation by the original queue deadline and a modest poll rate', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100000);
+    const calls: string[] = [];
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const command = JSON.parse(String(init?.body));
+        calls.push(command.action);
+        return Response.json({
+          status: command.action === 'acquire' ? 'busy' : 'cancelled',
+        });
+      }),
+    };
+    let finished = false;
+    const result = acquireProxyLease({ tenant: crypto.randomUUID(), service });
+    void result.then(
+      () => {
+        finished = true;
+      },
+      () => {
+        finished = true;
+      },
+    );
+    const rejected = expect(result).rejects.toMatchObject({
+      code: 'PROXY_QUEUE_TIMEOUT',
+    });
+    await vi.advanceTimersByTimeAsync(PROXY_QUEUE_WAIT_MS - 1);
+    expect(finished).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await rejected;
+    expect(calls.filter((action) => action === 'acquire')).toHaveLength(24);
+    expect(calls.at(-1)).toBe('cancel');
+  });
+  it('cancels during capacity backoff without later retrying admission', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const calls: string[] = [];
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const command = JSON.parse(String(init?.body));
+        calls.push(command.action);
+        return Response.json({
+          status: command.action === 'acquire' ? 'busy' : 'cancelled',
+        });
+      }),
+    };
+    const result = acquireProxyLease(
+      { tenant: crypto.randomUUID(), service },
+      controller.signal,
+    );
+    const rejected = expect(result).rejects.toMatchObject({
+      code: 'PROXY_QUEUE_CANCELLED',
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+    await rejected;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(calls).toEqual(['acquire', 'cancel']);
   });
   it('fails closed for missing or failed bindings and leaves the UK route outside this gate', async () => {
     await expect(
