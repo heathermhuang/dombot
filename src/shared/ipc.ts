@@ -538,6 +538,11 @@ export interface RegistrarConfigField {
  * configured-but-not-connected / connected) and the status-bar pill.
  */
 export interface RegistrarSync {
+  recovery?: {
+    state: 'deferred' | 'failed' | 'recovered';
+    retryAt?: number;
+    attempts: number;
+  };
   /** Last SUCCESSFUL domain sync (ms epoch), or null if it never succeeded. */
   lastSyncedAt: number | null;
   /** Error from the most recent sync attempt, or null when it succeeded. */
@@ -790,6 +795,8 @@ export interface Portfolio {
 }
 
 export interface RenewalPricingProgress {
+  /** Queued prices waiting for successful inventory recovery. */
+  blocked?: number;
   remaining: number;
   failed: number;
   /** Earliest retry when all pending quotes are temporarily paused. */

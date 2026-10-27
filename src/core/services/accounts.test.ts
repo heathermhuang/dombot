@@ -632,7 +632,7 @@ describe('multi-account storage, routing and portable migration', () => {
     await expect(flushWrites()).rejects.toThrow(/keyring unavailable/);
   });
 
-  it('an older sync cannot overwrite a newer successful sync for the same account', async () => {
+  it('an older sync cannot overwrite a newer sync after credentials are resaved', async () => {
     const company = await twoAccounts();
     let finish!: (rows: ProviderDomain[]) => void;
     fakes.providers.get('company')!.listDomains.mockImplementationOnce(
@@ -642,6 +642,11 @@ describe('multi-account storage, routing and portable migration', () => {
         }),
     );
     const oldSync = syncRegistrar('dynadot', company.id);
+    await saveRegistrarCredentials(
+      'dynadot',
+      { apiKey: 'company', apiSecret: 'test-secret' },
+      company.id,
+    );
     fakes.providers
       .get('company')!
       .listDomains.mockResolvedValue([domain('new.com')]);

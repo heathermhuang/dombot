@@ -85,7 +85,9 @@ export default function StatusBar() {
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         {renewalPricing &&
-          (renewalPricing.remaining > 0 || renewalPricing.failed > 0) && (
+          (renewalPricing.remaining > 0 ||
+            renewalPricing.failed > 0 ||
+            !!renewalPricing.blocked) && (
             <span
               role="status"
               title="Renewal prices update separately. Last saved prices stay visible while new quotes are fetched."
@@ -94,7 +96,9 @@ export default function StatusBar() {
                 ? pricingRetryAt
                   ? `Renewal prices paused · retry at ${new Date(pricingRetryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                   : `Updating renewal prices · ${renewalPricing.remaining} left`
-                : `${renewalPricing.failed} renewal prices could not update`}
+                : renewalPricing.blocked
+                  ? `${renewalPricing.blocked} renewal prices waiting for inventory recovery`
+                  : `${renewalPricing.failed} renewal prices could not update`}
             </span>
           )}
         <SyncStatus />

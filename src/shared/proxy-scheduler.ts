@@ -11,6 +11,7 @@ export interface ProxyTicket {
   tenant: string;
   expiresAt: number;
   route: 'serial' | 'relay';
+  provider?: 'dynadot';
 }
 export interface ProxyGrant extends ProxyTicket {
   token: string;
@@ -20,6 +21,8 @@ export interface ProxyQueueState {
   active: ProxyGrant[];
   availableAt: number;
   lastTenant: string;
+  dynadotAvailableAt?: number;
+  dynadotLimitedUntil?: number;
 }
 export type ProxyQueueCommand = {
   action: 'acquire' | 'release' | 'cancel';
@@ -27,10 +30,12 @@ export type ProxyQueueCommand = {
   tenant: string;
   token?: string;
   route?: 'serial' | 'relay';
+  provider?: 'dynadot';
+  retryAfterMs?: number;
 };
 export type ProxyQueueReply =
   | { status: 'granted'; token: string; expiresAt: number }
-  | { status: 'waiting'; retryAfterMs: number }
+  | { status: 'waiting' | 'deferred'; retryAfterMs: number }
   | { status: 'busy' | 'released' | 'cancelled' | 'stale' };
 
 export function emptyProxyQueue(): ProxyQueueState {
@@ -67,6 +72,13 @@ export function advanceProxyQueue(
           ),
       ),
     );
+    for (const grant of expired) {
+      if (grant.provider === 'dynadot')
+        state.dynadotAvailableAt = Math.max(
+          state.dynadotAvailableAt ?? 0,
+          grant.expiresAt + 1100,
+        );
+    }
     state.active = state.active.filter((grant) => grant.expiresAt > now);
   }
   const matches = (ticket: ProxyTicket) =>
@@ -77,6 +89,21 @@ export function advanceProxyQueue(
     );
     if (index < 0) return { status: 'stale' };
     const [released] = state.active.splice(index, 1);
+    if (released.provider === 'dynadot') {
+      state.dynadotAvailableAt = Math.max(
+        state.dynadotAvailableAt ?? 0,
+        now + 1100,
+      );
+      if (
+        command.retryAfterMs &&
+        Number.isSafeInteger(command.retryAfterMs) &&
+        command.retryAfterMs > 0
+      )
+        state.dynadotLimitedUntil = Math.max(
+          state.dynadotLimitedUntil ?? 0,
+          now + command.retryAfterMs,
+        );
+    }
     state.availableAt =
       now +
       Math.max(
@@ -97,6 +124,16 @@ export function advanceProxyQueue(
       token: existing.token,
       expiresAt: existing.expiresAt,
     };
+  if (
+    command.provider === 'dynadot' &&
+    (state.dynadotLimitedUntil ?? 0) > now
+  ) {
+    state.pending = state.pending.filter((ticket) => !matches(ticket));
+    return {
+      status: 'deferred',
+      retryAfterMs: state.dynadotLimitedUntil! - now,
+    };
+  }
   if (!state.pending.some(matches)) {
     if (
       state.pending.length >= PROXY_QUEUE_LIMIT ||
@@ -109,6 +146,7 @@ export function advanceProxyQueue(
       tenant: command.tenant,
       expiresAt: now + PROXY_QUEUE_WAIT_MS,
       route: command.route ?? 'serial',
+      ...(command.provider ? { provider: command.provider } : {}),
     });
   }
   if (
@@ -119,11 +157,18 @@ export function advanceProxyQueue(
       state.active.some((grant) => grant.route === 'serial')
     )
   ) {
+    const eligible = (ticket: ProxyTicket) =>
+      ticket.provider !== 'dynadot' ||
+      (!state.active.some((grant) => grant.provider === 'dynadot') &&
+        now >= (state.dynadotAvailableAt ?? 0) &&
+        now >= (state.dynadotLimitedUntil ?? 0));
     // Rotate tenants rather than letting one portfolio occupy every turn.
     const next = state.pending.findIndex(
-      (ticket) => ticket.tenant !== state.lastTenant,
+      (ticket) => eligible(ticket) && ticket.tenant !== state.lastTenant,
     );
-    const [ticket] = state.pending.splice(next < 0 ? 0 : next, 1);
+    const index = next < 0 ? state.pending.findIndex(eligible) : next;
+    if (index < 0) return { status: 'waiting', retryAfterMs: 1000 };
+    const [ticket] = state.pending.splice(index, 1);
     state.active.push({
       ...ticket,
       token: newToken(),

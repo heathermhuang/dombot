@@ -73,7 +73,11 @@ interface AppState {
   // Aggregated portfolio across every configured registrar.
   portfolio: Domain[];
   portfolioErrors: PortfolioErrorInfo[];
-  renewalPricing: { remaining: number; failed: number } | null;
+  renewalPricing: {
+    remaining: number;
+    failed: number;
+    blocked?: number;
+  } | null;
   portfolioRegistrars: string[];
   /** Map of registrar id → nicely capitalized display name. */
   portfolioRegistrarLabels: Record<string, string>;

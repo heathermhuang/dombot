@@ -694,7 +694,12 @@ function AccountCard({
             className="mx-5 mt-0.5 mb-[18px] flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
           >
             <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <span className="min-w-0 break-words">{sync.lastError}</span>
+            <span className="min-w-0 break-words">
+              {sync.lastError}
+              {sync.recovery?.retryAt && sync.recovery.state === 'deferred'
+                ? ` Retry eligible after ${new Date(sync.recovery.retryAt).toLocaleString()}.`
+                : ''}
+            </span>
           </div>
         )}
 
@@ -1357,7 +1362,9 @@ function SyncStatus({
       <span className="flex items-center gap-1.5">
         <CircleX className="size-3.5 shrink-0 text-destructive" />
         <span className="text-[13px] font-medium text-destructive">
-          Sync failed
+          {meta.sync.recovery?.state === 'deferred'
+            ? 'Sync deferred'
+            : 'Sync failed'}
         </span>
       </span>
     );

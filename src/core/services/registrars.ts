@@ -122,6 +122,7 @@ interface RegistrarPortfolioEntry {
   lastError: string | null;
   /** Absent in entries written before it was recorded. */
   lastErrorAt?: number | null;
+  recovery?: RegistrarMeta['sync']['recovery'];
 }
 
 /** Older bundles can contain raw transport errors with credentials in URLs
@@ -160,6 +161,7 @@ function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
 
 // Cache one client per account so we don't rebuild it on every call.
 const clients = new Map<string, RegistrarClient>();
+const inventoryInFlight = new Map<string, Promise<void>>();
 
 interface RenewalPricingJob {
   syncedAt: number;
@@ -183,16 +185,17 @@ export function configureIncrementalRenewalPricing(enabled: boolean): void {
 export function getRenewalPricingStatus(): RenewalPricingProgress {
   const active = new Set(getActiveAccounts().map((a) => a.id));
   let remaining = 0;
+  let blocked = 0;
   let failed = 0;
   let nextAt = Infinity;
   for (const [id, job] of Object.entries(renewalJobs.all())) {
     const entry = readRegistrarEntry(id);
-    if (
-      !active.has(id) ||
-      entry?.lastSyncedAt !== job.syncedAt ||
-      entry.lastError
-    )
+    if (!active.has(id) || entry?.lastSyncedAt !== job.syncedAt) continue;
+    if (entry.lastError) {
+      blocked += job.pending.length;
+      failed += job.failed;
       continue;
+    }
     remaining += job.pending.length;
     failed += job.failed;
     if (job.pending.length > 0) nextAt = Math.min(nextAt, job.notBefore ?? 0);
@@ -200,6 +203,7 @@ export function getRenewalPricingStatus(): RenewalPricingProgress {
   return {
     remaining,
     failed,
+    ...(blocked ? { blocked } : {}),
     ...(nextAt > Date.now() && Number.isFinite(nextAt) ? { nextAt } : {}),
   };
 }
@@ -216,10 +220,11 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
     Object.entries(renewalJobs.all()).map(async ([id, job]) => {
       const account = active.get(id);
       const entry = readRegistrarEntry(id);
-      if (!account || entry?.lastSyncedAt !== job.syncedAt || entry.lastError) {
+      if (!account || entry?.lastSyncedAt !== job.syncedAt) {
         await renewalJobs.delete(id);
         return;
       }
+      if (entry.lastError || inventoryInFlight.has(id)) return;
       const domain = job.pending[0];
       if (!domain) return;
       if ((job.notBefore ?? 0) > Date.now()) return;
@@ -257,11 +262,13 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
       )
         return;
       if ((generations.get(id) ?? 0) !== generation) return;
+      const localCooldown =
+        failure instanceof Error &&
+        /\[dynadot:(shared|local)-cooldown\]/.test(failure.message);
       if (
-        failure instanceof RateLimitError ||
-        (failure instanceof RegistrarError &&
-          failure.shouldRetry() &&
-          (job.attempts ?? 0) < 2)
+        (failure instanceof RateLimitError ||
+          (failure instanceof RegistrarError && failure.shouldRetry())) &&
+        (localCooldown || (job.attempts ?? 0) < 2)
       ) {
         const seconds =
           failure instanceof RateLimitError
@@ -270,7 +277,7 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
         await renewalJobs.set(id, {
           ...job,
           notBefore: Date.now() + seconds * 1000,
-          attempts: (job.attempts ?? 0) + 1,
+          attempts: (job.attempts ?? 0) + (localCooldown ? 0 : 1),
         });
         changed = true;
         return;
@@ -337,6 +344,7 @@ function buildProvider(
 const clientCredentials = new Map<string, string>();
 const generations = new Map<string, number>();
 function invalidateAccount(id: string): void {
+  inventoryInFlight.delete(id);
   clients.delete(id);
   clientCredentials.delete(id);
   generations.set(id, (generations.get(id) ?? 0) + 1);
@@ -647,7 +655,7 @@ function assemblePortfolio(): Portfolio {
  * `lastSyncedAt` and only record `lastError`, so a transient failure doesn't blank
  * a registrar that was working.
  */
-async function syncRegistrarInto(
+async function performInventorySync(
   account: RegistrarAccount,
   trigger: SyncTrigger,
 ): Promise<void> {
@@ -656,12 +664,19 @@ async function syncRegistrarInto(
   const { registrar: name, id: accountId } = account;
   let generation = generations.get(accountId) ?? 0;
   const prev = readRegistrarEntry(accountId);
+  if (name === 'dynadot' && prev?.recovery) {
+    if ((prev.recovery.retryAt ?? 0) > Date.now()) return;
+    if (trigger === 'scheduled' && prev.recovery.state === 'failed') return;
+  }
   let entry: RegistrarPortfolioEntry;
   try {
     const client = getRegistrarClient(name, accountId);
     generation = (generations.get(accountId) ?? 0) + 1;
     generations.set(accountId, generation);
-    const { domains, errors } = await listPortfolio([client]);
+    const { domains, errors } = await listPortfolio(
+      [client],
+      name === 'dynadot' ? { retries: 0 } : undefined,
+    );
     const error = errors[0]?.error;
     syncError = error;
     entry = error
@@ -686,7 +701,39 @@ async function syncRegistrarInto(
       lastErrorAt: Date.now(),
     };
   }
-  if (name === 'dynadot')
+  if ((generations.get(accountId) ?? 0) !== generation) return;
+  const sharedCooldown =
+    syncError instanceof Error &&
+    /\[dynadot:(shared|local)-cooldown\]/.test(syncError.message);
+  if (name === 'dynadot') {
+    if (syncError instanceof RateLimitError) {
+      const attempts = sharedCooldown
+        ? (prev?.recovery?.attempts ?? 0)
+        : (trigger === 'scheduled' ? (prev?.recovery?.attempts ?? 0) : 0) + 1;
+      entry.recovery = {
+        state: attempts >= 3 ? 'failed' : 'deferred',
+        attempts,
+        retryAt:
+          Date.now() +
+          Math.max(
+            syncError.retryAfter ?? 60,
+            60 * 2 ** Math.max(0, attempts - 1),
+          ) *
+            1000,
+      };
+      entry.lastError =
+        attempts >= 3
+          ? 'Dynadot rate limit: automatic inventory retries stopped after three attempts. Cached domains are preserved. Try Sync after the cooldown.'
+          : 'Dynadot rate limit: inventory refresh is deferred. Cached domains are preserved; a scheduled retry is pending.';
+    } else if (!entry.lastError && prev?.lastError) {
+      entry.recovery = {
+        state: 'recovered',
+        attempts: prev.recovery?.attempts ?? 0,
+      };
+    }
+  }
+  // A shared cooldown is a deferral, not another request/failure at Dynadot.
+  if (name === 'dynadot' && !sharedCooldown)
     recordSyncAttempt(
       {
         accountId,
@@ -705,7 +752,6 @@ async function syncRegistrarInto(
       },
       syncError,
     );
-  if ((generations.get(accountId) ?? 0) !== generation) return;
   writeEntry('portfolio', accountId, entry);
   // Refresh renewal quotes as part of the sync (see syncRenewalQuotes).
   if (!entry.lastError && entry.lastSyncedAt != null) {
@@ -744,15 +790,53 @@ async function syncRegistrarInto(
           );
         })
         .map((d) => d.domainName);
+      const previousJob = renewalJobs.get(accountId);
       await renewalJobs.set(accountId, {
         syncedAt: entry.lastSyncedAt,
         pending,
         failed: 0,
+        ...(previousJob?.notBefore ? { notBefore: previousJob.notBefore } : {}),
       });
     } else {
       await syncRenewalQuotes(name, entry.domains, accountId, generation);
     }
   }
+}
+
+/** Coalesce overlapping reads of one account; a fleet pass can share a manual pull. */
+function syncRegistrarInto(
+  account: RegistrarAccount,
+  trigger: SyncTrigger,
+): Promise<void> {
+  const running = inventoryInFlight.get(account.id);
+  if (running) return running;
+  const work = performInventorySync(account, trigger);
+  inventoryInFlight.set(account.id, work);
+  const clear = () => {
+    if (inventoryInFlight.get(account.id) === work)
+      inventoryInFlight.delete(account.id);
+  };
+  void work.then(clear, clear);
+  return work;
+}
+
+/** Due inventory recovery bypasses aggregate portfolio freshness (a healthy
+ * sibling must not hide a failed account). The ordinary host scheduler owns it. */
+export async function retryDeferredSyncs(): Promise<boolean> {
+  const due = getActiveAccounts().filter((account) => {
+    if (account.registrar !== 'dynadot') return false;
+    const entry = readRegistrarEntry(account.id);
+    if (!entry?.lastError) return false;
+    if (!entry.recovery)
+      return /429|rate.?limit|too many/i.test(entry.lastError);
+    return (
+      entry.recovery.state === 'deferred' &&
+      (entry.recovery.retryAt ?? 0) <= Date.now()
+    );
+  });
+  if (!due.length) return false;
+  await syncAccounts(due, 'scheduled');
+  return true;
 }
 
 /**
@@ -1356,6 +1440,7 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
         lastErrorAt: sync?.lastError ? (sync.lastErrorAt ?? null) : null,
         domainCount: sync?.domains.filter(hasDomainName).length ?? 0,
         trackedSince: account.trackedSince ?? null,
+        ...(sync?.recovery ? { recovery: sync.recovery } : {}),
       },
     };
   });

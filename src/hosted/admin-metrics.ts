@@ -54,6 +54,13 @@ export const adminSnapshotSchema = z.object({
         enabled: z.boolean(),
         domains: count,
         lastSyncedAt: count.nullable(),
+        recovery: z
+          .object({
+            state: z.enum(['deferred', 'failed', 'recovered']),
+            retryAt: count.optional(),
+            attempts: count,
+          })
+          .optional(),
         state: z.enum(['ok', 'failed', 'stale', 'never', 'disabled']),
         code: operationSchema.shape.code,
       }),
@@ -111,6 +118,7 @@ export function summarizeAdmin(
         enabled: m.enabled,
         domains: m.sync.domainCount,
         lastSyncedAt: m.sync.lastSyncedAt,
+        ...(m.sync.recovery ? { recovery: m.sync.recovery } : {}),
         state: !m.enabled
           ? 'disabled'
           : m.sync.lastError
