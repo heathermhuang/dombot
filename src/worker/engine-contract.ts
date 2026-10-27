@@ -37,6 +37,7 @@ export interface DomBotSchedule {
 }
 export interface DomBotEngine {
   adminInventory(env: DomBotEnvironment, query: unknown): Promise<unknown>;
+  maintenanceState(env: DomBotEnvironment): Promise<DomBotMaintenanceState>;
   syncMonitor(env: DomBotEnvironment, revision?: string): Promise<unknown>;
   fetch(
     request: Request,
@@ -44,4 +45,11 @@ export interface DomBotEngine {
     context: DomBotContext,
   ): Promise<Response>;
   scheduled(event: DomBotSchedule, env: DomBotEnvironment): Promise<void>;
+}
+
+export interface DomBotMaintenanceState {
+  version: 1;
+  state: 'empty' | 'work' | 'unknown';
+  reason: string;
+  revision: string | null;
 }

@@ -33,6 +33,8 @@ export default {
     const platformPath = new URL(request.url).pathname;
     if (
       [
+        '/platform-internal/reconcile',
+        '/platform-internal/resume',
         '/platform-internal/health',
         '/platform-internal/pause',
         '/platform-internal/admin-snapshot',
@@ -157,8 +159,33 @@ export default {
           headers: { 'Cache-Control': 'no-store' },
         });
       }
+      const controlProof = await verifyGatewayRequest(
+        env.DOMBOT_GATEWAY_SECRET ?? '',
+        env.DOMBOT_WORKSPACE_ID ?? '',
+        request,
+      );
+      if (
+        !controlProof ||
+        controlProof.owner !== null ||
+        controlProof.sales ||
+        controlProof.mcp
+      )
+        return new Response('Forbidden', { status: 403 });
       if (Reflect.get(env, 'DOMBOT_PLATFORM_ALARMS') !== 'true')
         return new Response('Not found', { status: 404 });
+      if (
+        platformPath.endsWith('/reconcile') ||
+        platformPath.endsWith('/resume')
+      ) {
+        if (request.method !== 'POST')
+          return new Response('Method not allowed', { status: 405 });
+        return Response.json(
+          platformPath.endsWith('/resume')
+            ? await coordinator(env).resumePlatformAlarm()
+            : await coordinator(env).reconcileMaintenance(),
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
       if (platformPath.endsWith('/pause')) {
         if (request.method !== 'POST')
           return new Response('Method not allowed', { status: 405 });

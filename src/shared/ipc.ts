@@ -241,6 +241,12 @@ export interface AppInfo {
   /** `process.platform` on desktop ('darwin', 'win32', 'linux', …); 'web'
    *  for a self-hosted browser instance. */
   platform: string;
+  /** Managed-service identity, supplied by the gateway from the live runtime. */
+  hosted?: {
+    engineVersion: string | null;
+    engineSource: string | null;
+    sourceCommit: string | null;
+  };
 }
 
 /** The desktop app's update-on-click progress (Settings → About). */

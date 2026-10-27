@@ -8,7 +8,7 @@ import {
   type Release,
   type ReleaseFeed,
 } from '../../shared/releases';
-import { isWeb } from './platform';
+import { isWeb, webAuthMode } from './platform';
 import { useAppStore } from '../store/app';
 
 // The release feed in the renderer, plus what this device remembers between
@@ -84,6 +84,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
   checking: false,
   dismissed: read(DISMISSED_KEY),
   check: async (force = false) => {
+    if (webAuthMode() === 'gateway') return;
     set({ checking: true });
     try {
       const feed = await window.api.getReleaseFeed(force);
@@ -109,6 +110,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
     }
   },
   autoCheck: async () => {
+    if (webAuthMode() === 'gateway') return;
     const last = Number(read(AUTO_CHECKED_KEY));
     if (Number.isFinite(last) && Date.now() - last < AUTO_CHECK_MS) return;
     // Recorded before the fetch, so an offline device waits a week too
@@ -136,7 +138,7 @@ export function useWeeklyUpdateCheck(): void {
     if (!appInfo) void loadAppInfo();
   }, [appInfo, loadAppInfo]);
   useEffect(() => {
-    if (!updateChecks) return;
+    if (!updateChecks || webAuthMode() === 'gateway') return;
     void autoCheck();
     const timer = setInterval(() => void autoCheck(), POLL_MS);
     return () => clearInterval(timer);
@@ -153,7 +155,8 @@ export function useAvailableUpdate(): {
   const current = useAppStore((s) => s.appInfo?.version);
   const updateChecks = useAppStore((s) => s.settings?.updateChecks);
   const releases = useUpdates((s) => s.feed?.releases);
-  if (!updateChecks || !current || !releases) return null;
+  if (webAuthMode() === 'gateway' || !updateChecks || !current || !releases)
+    return null;
   const newer = releasesNewerThan(releases, current);
   return newer.length ? { current, latest: newer[0], newer } : null;
 }

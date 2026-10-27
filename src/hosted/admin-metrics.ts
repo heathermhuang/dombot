@@ -26,6 +26,22 @@ export const operationSchema = z.object({
 });
 export type Operation = z.infer<typeof operationSchema>;
 export const adminSnapshotSchema = z.object({
+  maintenance: z
+    .object({
+      policy: z.boolean(),
+      paused: z.boolean(),
+      dirty: z.boolean(),
+      generation: count,
+      observedAt: count,
+      alarmAt: count.nullable(),
+      inspection: z.object({
+        version: z.literal(1),
+        state: z.enum(['empty', 'work', 'unknown']),
+        reason: z.string().max(80),
+        revision: z.string().max(64).nullable(),
+      }),
+    })
+    .optional(),
   at: count,
   owned: count,
   archived: count,

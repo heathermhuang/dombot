@@ -1,9 +1,11 @@
 import worker, { readAdminInventory } from './index';
 import { readSyncMonitor } from './sync-monitor';
+import { maintenanceState } from './maintenance';
 import type { DomBotEngine, DomBotEnvironment } from './engine-contract';
 import { mcpPreflight as admitMcp } from './mcp-preflight';
 
 const engine: DomBotEngine = {
+  maintenanceState,
   syncMonitor: readSyncMonitor,
   adminInventory: readAdminInventory,
   fetch: async (request, env, context) =>

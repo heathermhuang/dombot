@@ -1482,10 +1482,23 @@ app.all('/w/:workspace/*', async (c) => {
   if (
     response.ok &&
     user &&
-    ['getMcpInfo', 'listMcpClients'].includes(apiMethod)
+    ['getAppInfo', 'getMcpInfo', 'listMcpClients'].includes(apiMethod)
   ) {
     const json = (await response.json()) as { result: unknown };
-    if (apiMethod === 'getMcpInfo')
+    if (apiMethod === 'getAppInfo') {
+      const engineVersion = response.headers.get('X-DomBot-Engine');
+      const engineSource = response.headers.get('X-DomBot-Engine-Source');
+      json.result = {
+        ...(json.result as Record<string, unknown>),
+        hosted: {
+          engineVersion,
+          engineSource,
+          sourceCommit: c.env.SOURCE_COMMIT ?? null,
+        },
+      };
+      if (engineVersion) c.header('X-DomBot-Engine', engineVersion);
+      if (engineSource) c.header('X-DomBot-Engine-Source', engineSource);
+    } else if (apiMethod === 'getMcpInfo')
       json.result = {
         ...(json.result as Record<string, unknown>),
         url: url.origin + '/mcp',
