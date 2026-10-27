@@ -21,8 +21,11 @@ uncached and retain the existing public renderer's security headers.
 ## Release
 
 1. Apply additive control migration `0015_portfolio_addresses.sql`.
-2. Deploy compatible tenant adapters and the pinned UI engine, then the gateway.
-   Preserve live bindings, configuration, keys, public legacy hosts and DNS.
+2. Deploy the gateway with both new flags off first, so its address-options
+   endpoint is available before the new editor is served. Then deploy compatible
+   tenant adapters and the pinned UI engine. Preserve live bindings, configuration,
+   keys, public legacy hosts and DNS. Old editors and long links keep working
+   throughout this sequence.
 3. Enable `PUBLIC_SITE_ADDRESSES_ENABLED=true` only after the migration and all
    tenant readers are in place. Verify a controlled unpublished claim, publication,
    collection links, copy/open links, unpublish, and cross-account rejection.
