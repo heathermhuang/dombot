@@ -121,6 +121,7 @@ if (/^\/w\/[a-f0-9-]{36}\//.test(location.pathname)) {
     if (
       url.origin === location.origin &&
       url.pathname.startsWith('/w/') &&
+      !url.pathname.endsWith('/api/getBulkJob') &&
       response.status === 428
     ) {
       try {

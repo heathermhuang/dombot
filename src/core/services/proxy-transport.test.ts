@@ -71,6 +71,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it('returns only proxy connection metadata for registrar setup', async () => {
+  await saveProxyProfile({ url: proxy.url, egressIp: proxy.ip });
+  expect(getProxySettings(true).proxy).toEqual({ url: '', egressIp: proxy.ip });
+  expect(JSON.stringify(getProxySettings(true))).not.toContain('proxy-secret');
+  expect(getProxySettings().proxy?.url).toBe(proxy.url);
+});
+
 const porkbunCreds = { apiKey: 'pk-secret', secretApiKey: 'sk-secret' };
 const ok = () => Promise.resolve(new Response(xml));
 

@@ -29,6 +29,7 @@ is not proof of China availability.
   check. Public keys are stored; private keys and biometrics are never received.
   Synced authenticators can legitimately have a zero counter; challenge replay
   protection is mandatory even when counters stay zero.
+- Connecting a new registrar requires the active portfolio session and same-origin checks. Registrar setup reads only proxy connection addresses; the saved proxy URL and its credentials still require fresh authentication.
 - Credential access/changes, proxy credentials, backup import/export, registrar
   writes, bulk-job continuation/results, domain deletion, agent approvals and MCP
   enabling require authentication within five
@@ -49,9 +50,9 @@ is not proof of China availability.
   identity verification; email alone does not remove registered passkeys.
 
 The unchanged tenant HTML receives a self-hosted enhancement from the gateway.
-It routes a `428` response to confirmation and returns to the private page. It
+It routes an action’s `428` response to confirmation and returns to the private page. It
 never automatically replays a registrar write or backup export; retry the action
-after confirming. JavaScript-disabled browsers can still use email/password.
+after confirming. The startup bulk-job probe may receive `428` without navigating away or exposing protected results. JavaScript-disabled browsers can still use email/password.
 
 ## Build, rollout and rollback
 
@@ -125,3 +126,7 @@ removed by hourly expiry cleanup and must not be reset across billing periods.
 Provider failures and unknown-address reservations remain charged. Set the total only after recording an explicit usage budget and checking current
 provider pricing. A reservation ceiling is a conservative send cap, not a claim
 about account-wide billing or inbox delivery.
+
+## Email-first onboarding
+
+The code-entry screen is the same for new and returning email addresses and does not ask for legal acceptance. A valid returning-user proof signs in directly. A valid new-user proof opens a normal Terms and Privacy acceptance step; only the explicit submission creates the account. A pasted code may contain spaces, hyphens or full-width digits. Invalid, replaced and expired proofs retain the same correction response and five-attempt limit. Signed-in visitors to `/login` return to their portfolio. Password confirmation is offered only when the authenticated account has a password.

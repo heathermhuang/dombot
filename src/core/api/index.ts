@@ -304,7 +304,10 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
       await saveRegistrarCredentials(name, creds, accountId, useProxy);
     },
   ),
-  getProxySettings: method(none, async () => getProxySettings()),
+  getProxySettings: method(
+    z.tuple([z.boolean().optional()]),
+    async (connectionOnly) => getProxySettings(connectionOnly),
+  ),
   saveProxySettings: method(z.tuple([proxyInput]), async (proxy) => {
     await saveProxyProfile(proxy);
   }),

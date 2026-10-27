@@ -4,6 +4,7 @@ import {
   passkeyPanel,
   authRetry,
   emailCode,
+  emailConfirm,
   authUnavailable,
 } from './auth-views';
 import {
@@ -177,10 +178,11 @@ describe('account UI recovery and credential identification', () => {
     ).not.toContain('<script>bad()');
   });
   it('preserves legal fields, generic recovery and readable retry time without requiring script', () => {
-    expect(emailCode('sample', '', '', true)).toContain(
+    expect(emailConfirm('sample', 'proof', 'new@example.test', true)).toContain(
       'name="accept" value="yes" required',
     );
-    expect(emailCode('sample')).toContain('name="legalVersion"');
+    expect(emailCode('sample')).not.toContain('name="legalVersion"');
+    expect(emailCode('sample')).not.toContain('name="accept"');
     expect(authUnavailable()).toContain('href="/login"');
     const html = authRetry('<script>bad()</script>', 65);
     expect(html).toContain('2 minutes');
