@@ -98,6 +98,7 @@ beforeAll(async () => {
             WORKSPACE_9: 'tenant2',
           },
           bindings: {
+            SOURCE_COMMIT: 'a'.repeat(40),
             SALES_CUSTOM_HOSTS_ENABLED: 'true',
             AUTH_PEPPER: 'test-only-authentication-pepper-'.repeat(3),
             WORKSPACES: JSON.stringify(
@@ -424,6 +425,21 @@ describe('real gateway and isolated Worker instances', () => {
     });
     expect((await api(2, 'getRegistrarMetadata')).status).toBe(200);
   }, 10_000);
+
+  it('reports the live hosted engine and gateway source without replacing the base app identity', async () => {
+    const response = await api(2, 'getAppInfo');
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      result: { version: string; hosted: unknown };
+    };
+    expect(body.result.version).toBe('1.5.2');
+    expect(body.result.hosted).toEqual({
+      engineVersion: response.headers.get('X-DomBot-Engine'),
+      engineSource: response.headers.get('X-DomBot-Engine-Source'),
+      sourceCommit: 'a'.repeat(40),
+    });
+    expect(response.headers.get('X-DomBot-Engine')).toBeTruthy();
+  });
   it('creates distinct workspaces and rejects invitation reuse', async () => {
     for (let i = 0; i < 2; i++) {
       const response = await request('/session', 'GET', undefined, cookies[i]);

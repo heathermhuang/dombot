@@ -24,3 +24,8 @@
 - Run `npm ci --prefix hosted --ignore-scripts` and `node hosted/build-auth.mjs` after the normal root dependency install, before hosted typechecks/tests/bundles. Auth dependencies belong to `hosted/package.json` so they do not change the pinned tenant engine.
 - The default account journey uses ten-minute single-use email links/codes and optional passkeys. Preserve explicit legal acceptance, qualified capacity, immutable identities, existing password access, single-use challenge transactions and five-minute fresh authentication for sensitive actions. New registrar connections use the active session without a second identity check; saved credentials and other sensitive actions retain fresh authentication. Once a passkey exists, email/password sign-in must not bypass the passkey check for those sensitive actions. See `docs/passwordless-auth.md`.
 - QQ/163/126 inbox delivery and mainland-China network access require actual controlled receipts; never infer them from Google mailbox delivery or removal of Google login dependencies.
+
+## Managed release information
+
+- Settings → About and the header badge show the live hosted engine version and gateway source revision. Managed accounts use service update information; desktop and self-hosted users retain their existing release/update controls. Do not identify the hosted release using only the root package version.
+- Credit the hosted service and SaaS layer to Heatherm Huang, linking https://github.com/heathermhuang and https://x.com/heathermhuang. Keep this contribution credit separate from Aaron Oxborrow's original DomBot credit and retain the source/license notices.

@@ -54,3 +54,55 @@ it('does not reuse upstream cache, dismissals or check timestamps after channel 
   expect(getReleaseFeed).toHaveBeenCalledTimes(1);
   expect(storage.has('dombot-fork-release-feed')).toBe(true);
 });
+
+it('does not check desktop/fork releases for the managed service', async () => {
+  const { markWeb } = await import('./platform');
+  markWeb('gateway');
+  const { useUpdates } = await import('./updates');
+  await useUpdates.getState().autoCheck();
+  await useUpdates.getState().check(true);
+  expect(getReleaseFeed).not.toHaveBeenCalled();
+  expect(storage.has('dombot-fork-update-checked')).toBe(false);
+});
+
+it('suppresses cached desktop release notifications only on the managed service', async () => {
+  const { createElement } = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { useAppStore } = await import('../store/app');
+  const { markWeb } = await import('./platform');
+  const state = {
+    appInfo: { version: '1.5.2' },
+    settings: { updateChecks: true },
+  } as ReturnType<typeof useAppStore.getState>;
+  vi.mocked(useAppStore).mockImplementation((selector) => selector(state));
+  storage.set(
+    'dombot-fork-release-feed',
+    JSON.stringify({
+      releases: [
+        {
+          version: '99.0.0',
+          tag: 'v99.0.0',
+          name: 'Future desktop release',
+          url: 'https://github.com/heathermhuang/dombot/releases/tag/v99.0.0',
+          publishedAt: '',
+        },
+      ],
+      checkedAt: new Date().toISOString(),
+    }),
+  );
+  const { useAvailableUpdate } = await import('./updates');
+  const Status = () =>
+    createElement(
+      'span',
+      null,
+      useAvailableUpdate() ? 'update available' : 'no desktop update',
+    );
+  markWeb('gateway');
+  expect(renderToStaticMarkup(createElement(Status))).toContain(
+    'no desktop update',
+  );
+  markWeb('password');
+  expect(renderToStaticMarkup(createElement(Status))).toContain(
+    'update available',
+  );
+});

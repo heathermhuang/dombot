@@ -100,6 +100,16 @@ export default function App() {
   }, [publication]);
   useWeeklyUpdateCheck();
   const appInfo = useAppStore((s) => s.appInfo);
+  const displayedVersion =
+    webAuthMode() === 'gateway'
+      ? appInfo?.hosted?.engineVersion
+      : appInfo?.version;
+  const hostedCommit =
+    webAuthMode() === 'gateway' ? appInfo?.hosted?.sourceCommit : null;
+  const displayedRevision =
+    hostedCommit && /^[a-f0-9]{40}$/i.test(hostedCommit)
+      ? hostedCommit.slice(0, 7)
+      : null;
   const hydrateFromCache = useAppStore((s) => s.hydrateFromCache);
   const applyPortfolioCacheUpdate = useAppStore(
     (s) => s.applyPortfolioCacheUpdate,
@@ -284,7 +294,7 @@ export default function App() {
           {/* The running version, dim, tucked into the window's top-right
               corner; opens Settings → About. Hidden below lg, where the tab
               pills hide too and the header gets tight. */}
-          {appInfo && (
+          {displayedVersion && (
             <button
               type="button"
               onClick={() => navigate('/settings?tab=about')}
@@ -292,14 +302,32 @@ export default function App() {
                 'hidden rounded-sm text-[11px] leading-none text-muted-foreground/40 hover:text-muted-foreground lg:inline',
                 !supportsPublishing() && 'absolute top-[7px] right-[10px]',
               )}
-              title="About this version"
+              title={
+                displayedRevision
+                  ? `About this release · source ${displayedRevision}`
+                  : 'About this version'
+              }
+              aria-label={
+                displayedRevision
+                  ? `About domains.domains release ${displayedVersion}, source ${displayedRevision}`
+                  : undefined
+              }
             >
               {/* A serif italic "v", dimmer than the monospace digits (like
                   the domain names) and set a little apart from them. */}
-              <span className="mr-px font-serif text-[12px] italic opacity-60">
-                v
+              <span className="block">
+                <span className="mr-px font-serif text-[12px] italic opacity-60">
+                  v
+                </span>
+                <span className="font-mono text-[10px]">
+                  {displayedVersion}
+                </span>
               </span>
-              <span className="font-mono text-[10px]">{appInfo.version}</span>
+              {displayedRevision && (
+                <span className="mt-1 block font-mono text-[9px]">
+                  {displayedRevision}
+                </span>
+              )}
             </button>
           )}
         </div>
