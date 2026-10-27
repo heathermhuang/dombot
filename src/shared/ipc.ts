@@ -1063,7 +1063,8 @@ export interface DombotApi {
     /** Turn the fixed IP proxy on or off for this account; omitted = unchanged. */
     useProxy?: boolean,
   ) => Promise<void>;
-  getProxySettings: () => Promise<ProxySettings>;
+  /** With true, return connection addresses without the saved proxy URL/secrets. */
+  getProxySettings: (connectionOnly?: boolean) => Promise<ProxySettings>;
   saveProxySettings: (proxy: {
     url: string;
     egressIp: string;

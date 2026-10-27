@@ -397,7 +397,15 @@ export function createHttpApi(): DombotApi {
     },
     cancelBulk: m('cancelBulk'),
     getBulkJob: async () => {
-      const job = reviveJob(await call<BulkJob | null>('getBulkJob'));
+      let job: BulkJob | null;
+      try {
+        job = reviveJob(await call<BulkJob | null>('getBulkJob'));
+      } catch (error) {
+        // This probe runs at startup. A stale session must not force a fresh
+        // sign-in just to open the app; job results remain protected server-side.
+        if (error instanceof HttpApiError && error.status === 428) return null;
+        throw error;
+      }
       // Re-attach: if a job is still running (page reload mid-job), resume
       // stepping it from here.
       if (job?.status === 'running') void driveBulk(job.id, job.results.length);

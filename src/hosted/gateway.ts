@@ -336,7 +336,11 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
   const form = await c.req.parseBody();
   const id = typeof form.id === 'string' ? form.id : '';
   const link = typeof form.token === 'string';
-  const proof = link ? form.token : form.code;
+  const proof = link
+    ? form.token
+    : typeof form.code === 'string'
+      ? form.code.normalize('NFKC').replace(/[\s-]/g, '')
+      : form.code;
   let result;
   try {
     result =
@@ -352,10 +356,15 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
   } catch (error) {
     if (!(error instanceof TermsAcceptanceRequired)) throw error;
     return c.html(
-      link
-        ? emailConfirm(id, String(proof), error.email, true, error.message)
-        : emailCode(id, error.message, String(proof), true),
-      400,
+      emailConfirm(
+        id,
+        String(proof),
+        error.email,
+        true,
+        '',
+        link ? 'token' : 'code',
+      ),
+      200,
     );
   }
   if (!result)
@@ -374,11 +383,17 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
 app.get('/account/reauth', async (c) => {
   const user = await account(c.env).session(readSession(c.req.raw));
   if (!user) return c.redirect('/login', 303);
+  const credential = await c.env.CONTROL_DB.prepare(
+    'SELECT password_hash FROM users WHERE id=?1',
+  )
+    .bind(user.id)
+    .first<{ password_hash: string }>();
   return c.html(
     reauthPage(
       safeNext(c.req.query('next')),
       (await new Passkeys(c.env).list(user)).length > 0,
       user.email,
+      credential?.password_hash.startsWith('scrypt-v1:') ?? false,
     ),
   );
 });
@@ -831,16 +846,18 @@ app.route(
   '/admin',
   adminRoutes((request, env) => account(env).session(readSession(request))),
 );
-app.get('/login', (c) =>
-  c.html(
+app.get('/login', async (c) => {
+  if (await account(c.env).session(readSession(c.req.raw)))
+    return c.redirect(safeNext(c.req.query('next')), 303);
+  return c.html(
     emailStart(
       safeNext(c.req.query('next')),
       c.req.query('notice') === 'signed-out-all'
         ? 'Every browser session has been signed out.'
         : '',
     ),
-  ),
-);
+  );
+});
 app.get('/login/password', (c) => {
   const notice =
     c.req.query('notice') === 'signed-out-all'
@@ -1220,7 +1237,6 @@ app.all('/w/:workspace/*', async (c) => {
   const sensitive = new Set([
     'getRegistrarCredentials',
     'saveRegistrarCredentials',
-    'connectRegistrarAccount',
     'createRegistrarAccount',
     'removeRegistrarAccount',
     'getProxySettings',
@@ -1248,9 +1264,29 @@ app.all('/w/:workspace/*', async (c) => {
   } catch {
     return c.json({ error: 'Invalid API path' }, 400);
   }
-  if (!publicRequest && user && sensitive.has(apiMethod)) {
+  const connecting = apiMethod === 'connectRegistrarAccount';
+  let publicProxyOptions = false;
+  if (apiMethod === 'getProxySettings' && c.req.method === 'POST') {
+    const body = (await c.req.raw
+      .clone()
+      .json()
+      .catch(() => null)) as {
+      args?: unknown;
+    } | null;
+    // The tenant normalizes non-array args to []. Require the exact public
+    // signature here so malformed JSON cannot request the private default.
+    publicProxyOptions =
+      Array.isArray(body?.args) &&
+      body.args.length === 1 &&
+      body.args[0] === true;
+  }
+  if (!publicRequest && user && (sensitive.has(apiMethod) || connecting)) {
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
-    if (!(await new Passkeys(c.env).fresh(user)))
+    if (
+      !connecting &&
+      !publicProxyOptions &&
+      !(await new Passkeys(c.env).fresh(user))
+    )
       return c.json(
         {
           error: 'Confirm your identity before continuing.',

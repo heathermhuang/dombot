@@ -139,11 +139,13 @@ export async function migrateLegacyProxies(): Promise<number> {
 }
 
 /** What the Proxy settings page shows: the one managed proxy and who uses it. */
-export function getProxySettings(): ProxySettings {
+export function getProxySettings(connectionOnly = false): ProxySettings {
   const profile = getProxyProfile();
   return {
     managed: managedProxyInfo(),
-    proxy: profile ? { url: profile.url, egressIp: profile.egressIp } : null,
+    proxy: profile
+      ? { url: connectionOnly ? '' : profile.url, egressIp: profile.egressIp }
+      : null,
     users: proxyUsers().map((a) => ({
       accountId: a.id,
       registrar: a.registrar,
