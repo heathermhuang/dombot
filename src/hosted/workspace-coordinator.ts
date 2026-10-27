@@ -1,3 +1,4 @@
+import type { AdminInventoryQuery } from '../shared/admin-inventory';
 import { DurableObject } from 'cloudflare:workers';
 import {
   MaintenanceScheduler,
@@ -199,6 +200,12 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
 
   async syncMonitor(revision?: string) {
     return worker.syncMonitor(this.env, revision);
+  }
+
+  async adminInventory(query: AdminInventoryQuery) {
+    const work = worker.adminInventory(this.env, query);
+    this.ctx.waitUntil(work.then(() => {}).catch(() => {}));
+    return work;
   }
 
   async adminSnapshot() {

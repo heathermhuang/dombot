@@ -1,11 +1,14 @@
+import {
+  readWorkspace,
+  ObservationFailure,
+  type ProbeReport,
+} from './workspace-observation';
 import { z } from 'zod';
 import {
   syncDiagnosticsSchema,
   SYNC_RETENTION_MS,
   type SyncEvent,
 } from '../shared/sync-monitor';
-import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
-import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
 import { escapeHtml } from './views';
 
 export const SYNC_ALERT_RECIPIENT = 'heathermhuang@gmail.com';
@@ -118,51 +121,17 @@ export async function ingestSyncEvent(
 
 async function observe(env: HostedEnv, row: Check): Promise<void> {
   const now = Date.now();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const controller = new AbortController();
-  let phase = 'configuration';
-  let httpStatus: number | null = null;
+  let probe: ProbeReport | undefined;
   try {
-    const work = async () => {
-      const configured = await workspaceFor(env, row.workspace_id);
-      if (!configured) throw Error('Unavailable');
-      const url = new URL(
-        'https://workspace.internal/platform-internal/sync-monitor',
-      );
-      if (row.revision) url.searchParams.set('revision', row.revision);
-      const request = new Request(url, { signal: controller.signal });
-      request.headers.set(
-        PROOF_HEADER,
-        await signGatewayRequest(
-          await workspaceKey(env, row.workspace_id),
-          row.workspace_id,
-          null,
-          request,
-        ),
-      );
-      phase = 'transport';
-      const response = await workspaceService(env, configured.binding).fetch(
-        request,
-      );
-      httpStatus = response.status;
-      phase = 'response';
-      if (!response.ok) throw Error('Unavailable');
-      return responseSchema.parse(await response.json());
-    };
-    const result = await Promise.race([
-      work(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          controller.abort();
-          reject(Error('Observation timeout'));
-        }, 8000);
-      }),
-    ]);
-    if (timer) {
-      clearTimeout(timer);
-      timer = undefined;
-    }
-    phase = 'persistence';
+    const observed = await readWorkspace(
+      env,
+      row.workspace_id,
+      'sync-monitor',
+      (value) => responseSchema.parse(value),
+      { revision: row.revision ?? undefined },
+    );
+    probe = observed.probe;
+    const result = observed.value;
     let seq = row.seq,
       revision = row.revision;
     if ('diagnostics' in result && result.diagnostics) {
@@ -189,8 +158,15 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
       throw Error('Diagnostics missing');
     const updates = [
       env.CONTROL_DB.prepare(
-        'INSERT INTO sync_monitor_checks(workspace_id,revision,seq,checked_at) VALUES(?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET revision=excluded.revision,seq=excluded.seq,checked_at=excluded.checked_at,errors=0,error_since=NULL,error_alerted=0',
-      ).bind(row.workspace_id, revision, seq, now),
+        'INSERT INTO sync_monitor_checks(workspace_id,revision,seq,checked_at,probe_json,last_failure_json) VALUES(?,?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET revision=excluded.revision,seq=excluded.seq,checked_at=excluded.checked_at,errors=0,error_since=NULL,error_alerted=0,probe_json=excluded.probe_json,last_failure_json=COALESCE(excluded.last_failure_json,sync_monitor_checks.last_failure_json)',
+      ).bind(
+        row.workspace_id,
+        revision,
+        seq,
+        Date.now(),
+        JSON.stringify(probe),
+        probe.failure ? JSON.stringify(probe.failure) : null,
+      ),
     ];
     if (row.error_alerted)
       updates.push(
@@ -204,32 +180,41 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
         ),
       );
     await env.CONTROL_DB.batch(updates);
-  } catch {
+  } catch (error) {
     const errors = row.errors + 1,
       since = row.error_since ?? now;
+    const failedProbe =
+      error instanceof ObservationFailure
+        ? error.probe
+        : {
+            at: now,
+            durationMs: Date.now() - now,
+            attempts: probe?.attempts ?? 0,
+            backend: probe?.backend ?? 'unknown',
+            readMs: probe?.readMs ?? null,
+            failure: {
+              observedAt: now,
+              durationMs: Date.now() - now,
+              attempt: probe?.attempts ?? 0,
+              phase: 'persistence',
+              code: 'diagnostic_persistence',
+              httpStatus: null,
+            },
+          };
+    const detail = { ...failedProbe.failure, since, probe: failedProbe };
     const updates = [
       env.CONTROL_DB.prepare(
-        'INSERT INTO sync_monitor_checks(workspace_id,checked_at,errors,error_since,error_alerted) VALUES(?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET checked_at=excluded.checked_at,errors=excluded.errors,error_since=excluded.error_since,error_alerted=excluded.error_alerted',
-      ).bind(row.workspace_id, now, errors, since, errors >= 2 ? 1 : 0),
+        'INSERT INTO sync_monitor_checks(workspace_id,checked_at,errors,error_since,error_alerted,probe_json,last_failure_json) VALUES(?,?,?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET checked_at=excluded.checked_at,errors=excluded.errors,error_since=excluded.error_since,error_alerted=excluded.error_alerted,probe_json=excluded.probe_json,last_failure_json=excluded.last_failure_json',
+      ).bind(
+        row.workspace_id,
+        Date.now(),
+        errors,
+        since,
+        errors >= 2 ? 1 : 0,
+        JSON.stringify(failedProbe),
+        JSON.stringify(failedProbe.failure),
+      ),
     ];
-    const detail = {
-      code: controller.signal.aborted
-        ? 'observation_timeout'
-        : phase === 'response' && httpStatus !== null && httpStatus >= 400
-          ? 'observation_http_error'
-          : phase === 'response'
-            ? 'invalid_diagnostics'
-            : phase === 'persistence'
-              ? 'diagnostic_persistence'
-              : phase === 'configuration'
-                ? 'observer_configuration'
-                : 'observer_transport',
-      since,
-      observedAt: now,
-      durationMs: Date.now() - now,
-      phase,
-      httpStatus,
-    };
     if (errors >= 2)
       updates.push(
         insertAlert(
@@ -251,8 +236,6 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
           `${row.workspace_id}:unavailable:${since}`,
         )
         .run();
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 
@@ -371,7 +354,9 @@ export async function monitorDynadotSync(env: HostedEnv): Promise<void> {
         .bind(MAX_USERS)
         .all<Check>()
     ).results;
-    for (let i = 0; i < rows.length; i += 4)
+    // Stop starting work before the next cron; leave older checkpoints first
+    // in line next time. A slow fleet cannot create overlapping collectors.
+    for (let i = 0; i < rows.length && Date.now() - now < 90_000; i += 4)
       await Promise.all(rows.slice(i, i + 4).map((row) => observe(env, row)));
     await deliverSyncAlerts(env);
     await env.CONTROL_DB.batch([

@@ -36,6 +36,7 @@ export interface DomBotSchedule {
   noRetry(): void;
 }
 export interface DomBotEngine {
+  adminInventory(env: DomBotEnvironment, query: unknown): Promise<unknown>;
   maintenanceState(env: DomBotEnvironment): Promise<DomBotMaintenanceState>;
   syncMonitor(env: DomBotEnvironment, revision?: string): Promise<unknown>;
   fetch(

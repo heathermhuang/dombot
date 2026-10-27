@@ -332,3 +332,35 @@ describe('production Dynadot collector and email outbox', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+it('retains a brief first probe failure even when retry and later checks succeed', async () => {
+  fetch
+    .mockResolvedValueOnce(
+      new Response('private upstream payload', { status: 503 }),
+    )
+    .mockResolvedValueOnce(Response.json({ diagnostics: null }));
+  await monitorDynadotSync(env);
+  const row = await db
+    .prepare(
+      'SELECT errors,probe_json,last_failure_json FROM sync_monitor_checks WHERE workspace_id=?',
+    )
+    .bind(workspace)
+    .first<{ errors: number; probe_json: string; last_failure_json: string }>();
+  expect(row?.errors).toBe(0);
+  expect(JSON.parse(row!.probe_json)).toMatchObject({ attempts: 2 });
+  expect(JSON.parse(row!.last_failure_json)).toMatchObject({
+    code: 'observation_http_error',
+    httpStatus: 503,
+  });
+  fetch.mockResolvedValueOnce(Response.json({ diagnostics: null }));
+  await monitorDynadotSync(env);
+  const next = await db
+    .prepare(
+      'SELECT last_failure_json FROM sync_monitor_checks WHERE workspace_id=?',
+    )
+    .bind(workspace)
+    .first<{ last_failure_json: string }>();
+  expect(next?.last_failure_json).toBe(row?.last_failure_json);
+  expect(JSON.stringify(next)).not.toContain('private upstream payload');
+  expect(send).not.toHaveBeenCalled();
+});

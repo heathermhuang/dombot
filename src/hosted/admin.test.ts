@@ -394,3 +394,38 @@ it('restricts retained sync diagnostics to the freshly authenticated sole admin'
     'Successful retries do not erase retained failures',
   );
 });
+
+it('shows only a fresh admin the targeted user inventory and audits the read', async () => {
+  for (const who of ['user', 'old', null] as const)
+    expect((await call('/admin/users/admin/domains', who)).status).toBe(
+      who === 'user' ? 403 : 303,
+    );
+  const response = await call('/admin/users/admin/domains');
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  const html = await response.text();
+  expect(html).toContain('private-holding.test');
+  expect(html).toContain('Known annual renewal subtotal');
+  expect(html).toContain('Unknown price');
+  expect(html).not.toContain('private-password-hash');
+  const audit = await db
+    .prepare(
+      'SELECT actor_id,target_user_id FROM admin_audit WHERE target_user_id=? ORDER BY created_at DESC LIMIT 1',
+    )
+    .bind('admin')
+    .first();
+  expect(audit).toMatchObject({ actor_id: 'admin', target_user_id: 'admin' });
+  const values = (
+    await db
+      .prepare('SELECT snapshot FROM admin_snapshots')
+      .all<{ snapshot: string }>()
+  ).results;
+  expect(JSON.stringify(values)).not.toContain('private-holding.test');
+});
+it('does not substitute zero when the inventory cannot be reached', async () => {
+  const response = await call('/admin/users/user/domains');
+  expect(response.status).toBe(503);
+  expect(await response.text()).toContain(
+    'no domains or prices have been replaced with zero',
+  );
+});
