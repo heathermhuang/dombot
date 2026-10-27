@@ -1,4 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
+import {
+  MaintenanceScheduler,
+  mayChangeMaintenance,
+} from './maintenance-scheduler';
 import worker from '@domains-domains/dombot-engine';
 import engineManifest from '@domains-domains/dombot-engine/manifest';
 import {
@@ -19,6 +23,16 @@ import type {
  * in-memory store, so every API/MCP request and scheduled sync must reach
  * the same runtime before its hydrate -> mutate -> flush request lock. */
 export class WorkspaceCoordinator extends DurableObject<Env> {
+  private maintenance = new MaintenanceScheduler(this.ctx.storage, () =>
+    worker.maintenanceState(this.env),
+  );
+  private get sleepPolicy() {
+    return (
+      Reflect.get(this.env, 'DOMBOT_PLATFORM_ALARMS') === 'true' &&
+      Reflect.get(this.env, 'DOMBOT_EMPTY_SLEEP') === 'true'
+    );
+  }
+
   async fetch(request: Request): Promise<Response> {
     let rejected = 'invalid';
     const admission = await verifyTenantAdmission(
@@ -40,11 +54,27 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
         },
       );
     }
+    if (this.sleepPolicy)
+      return this.maintenance.run(async () =>
+        (await mayChangeMaintenance(request))
+          ? this.maintenance.mutate(() =>
+              this.fetchAdmitted(request, admission.owner),
+            )
+          : this.fetchAdmitted(request, admission.owner),
+      );
+    return this.fetchAdmitted(request, admission.owner);
+  }
+
+  private async fetchAdmitted(
+    request: Request,
+    owner: string | null,
+  ): Promise<Response> {
     // User Workers do not need one ordinary cron per tenant. Only the new
     // platform deployments opt in; existing customer schedules stay unchanged.
     if (
       Reflect.get(this.env, 'DOMBOT_PLATFORM_ALARMS') === 'true' &&
-      admission.owner &&
+      !this.sleepPolicy &&
+      owner &&
       !(await this.ctx.storage.getAlarm())
     )
       await this.ctx.storage.setAlarm(Date.now() + 300_000);
@@ -192,18 +222,30 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
       reverse: true,
       limit: 100,
     });
-    return summarizeAdmin(
-      domains.domains,
-      imported,
-      events,
-      metadata,
-      settings.autoSyncIntervalMinutes,
-      [...operations.values()],
-    );
+    return {
+      ...summarizeAdmin(
+        domains.domains,
+        imported,
+        events,
+        metadata,
+        settings.autoSyncIntervalMinutes,
+        [...operations.values()],
+      ),
+      maintenance: {
+        policy: this.sleepPolicy,
+        ...(await this.maintenance.status()),
+      },
+    };
   }
 
   async alarm(): Promise<void> {
     if (Reflect.get(this.env, 'DOMBOT_PLATFORM_ALARMS') !== 'true') return;
+    if (this.sleepPolicy)
+      return this.maintenance.run(() =>
+        this.maintenance.alarm(() =>
+          this.executeScheduled('platform-alarm', Date.now()),
+        ),
+      );
     try {
       await this.runScheduled('platform-alarm', Date.now());
     } finally {
@@ -216,14 +258,42 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
       workspace: this.env.DOMBOT_WORKSPACE_ID,
       alarmAt: await this.ctx.storage.getAlarm(),
       release: Reflect.get(this.env, 'DOMBOT_PLATFORM_RELEASE') ?? '',
+      engine: engineManifest.version,
+      maintenance: {
+        policy: this.sleepPolicy,
+        ...(await this.maintenance.status()),
+      },
     };
   }
 
   async pausePlatformAlarm() {
-    await this.ctx.storage.deleteAlarm();
+    await this.maintenance.run(() => this.maintenance.pause());
+  }
+
+  async reconcileMaintenance() {
+    return this.maintenance.run(async () => {
+      if (this.sleepPolicy) await this.maintenance.reconcile();
+      return this.platformHealth();
+    });
+  }
+
+  async resumePlatformAlarm() {
+    return this.maintenance.run(async () => {
+      await this.maintenance.resume(this.sleepPolicy);
+      return this.platformHealth();
+    });
   }
 
   async runScheduled(cron: string, scheduledTime: number): Promise<void> {
+    return this.maintenance.run(() =>
+      this.executeScheduled(cron, scheduledTime),
+    );
+  }
+
+  private async executeScheduled(
+    cron: string,
+    scheduledTime: number,
+  ): Promise<void> {
     // RPC is available only through the private Durable Object binding.
     // The original handler uses the same request lock as fetch requests.
     const started = Date.now();

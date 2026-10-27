@@ -56,3 +56,9 @@ US$0.35/1,000, the cap represents US$3.50 before tax without free allowance, bel
 the authorized US$10 campaign budget. Never reset the campaign ID or counter to
 work around exhaustion. Real inbox and network receipts remain separate from
 local captured-message tests and provider acceptance.
+
+## Empty workspace maintenance
+
+The opt-in empty-workspace policy replaces first-visit alarm activation with
+strict work-based scheduling. See [Sleeping empty portfolios](empty-workspace-maintenance.md)
+for rollout flags, reserve qualification, operator pause and explicit rollback rearming.

@@ -281,7 +281,7 @@ describe('owner site routing and isolation', () => {
 });
 
 describe('real gateway and isolated Worker instances', () => {
-  it('starts and pauses platform alarms through private main-key admission and rejects anonymous edge authority', async () => {
+  it('retains legacy first-visit alarms when the sleep policy is off and rejects anonymous edge authority', async () => {
     const response = await api(0, 'getSettings');
     expect(response.status).toBe(200);
     const manifest = JSON.parse(
