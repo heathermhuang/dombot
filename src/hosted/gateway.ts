@@ -1265,15 +1265,21 @@ app.all('/w/:workspace/*', async (c) => {
     return c.json({ error: 'Invalid API path' }, 400);
   }
   const connecting = apiMethod === 'connectRegistrarAccount';
-  const publicProxyOptions =
-    apiMethod === 'getProxySettings' &&
-    c.req.method === 'POST' &&
-    (
-      (await c.req.raw
-        .clone()
-        .json()
-        .catch(() => null)) as { args?: unknown[] } | null
-    )?.args?.[0] === true;
+  let publicProxyOptions = false;
+  if (apiMethod === 'getProxySettings' && c.req.method === 'POST') {
+    const body = (await c.req.raw
+      .clone()
+      .json()
+      .catch(() => null)) as {
+      args?: unknown;
+    } | null;
+    // The tenant normalizes non-array args to []. Require the exact public
+    // signature here so malformed JSON cannot request the private default.
+    publicProxyOptions =
+      Array.isArray(body?.args) &&
+      body.args.length === 1 &&
+      body.args[0] === true;
+  }
   if (!publicRequest && user && (sensitive.has(apiMethod) || connecting)) {
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
     if (

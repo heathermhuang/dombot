@@ -11,7 +11,7 @@ export class DynadotActivationPending extends Error {
   }
 }
 
-function waitForActivation(signal: AbortSignal): Promise<void> {
+function waitForActivation(signal: AbortSignal, delay: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const abort = () => {
       clearTimeout(timer);
@@ -20,7 +20,7 @@ function waitForActivation(signal: AbortSignal): Promise<void> {
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', abort);
       resolve();
-    }, 30_000);
+    }, delay);
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
   });
@@ -39,6 +39,8 @@ export async function connectRegistrarWithActivationWait<T>(
   const deadline = Date.now() + 180_000;
   for (let retry = 0; ; retry++) {
     signal.throwIfAborted();
+    if (retry > 0 && Date.now() > deadline)
+      throw new DynadotActivationPending();
     try {
       return await connect();
     } catch (error) {
@@ -52,7 +54,10 @@ export async function connectRegistrarWithActivationWait<T>(
         throw new DynadotActivationPending();
       onWaiting(true);
       try {
-        await waitForActivation(signal);
+        await waitForActivation(
+          signal,
+          Math.min(30_000, deadline - Date.now()),
+        );
       } finally {
         onWaiting(false);
       }

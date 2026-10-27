@@ -95,6 +95,46 @@ describe('new Dynadot key activation', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('does not retry after the browser resumes beyond the activation deadline', async () => {
+    vi.useFakeTimers();
+    const connect = vi.fn().mockRejectedValue(unauthorized);
+    const result = connectRegistrarWithActivationWait(
+      'dynadot',
+      connect,
+      new AbortController().signal,
+      vi.fn(),
+    );
+    const check = expect(result).rejects.toThrow(DynadotActivationPending);
+    await vi.advanceTimersByTimeAsync(0);
+    vi.setSystemTime(Date.now() + 600_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await check;
+    expect(connect).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('shortens the final wait when a slow connection test used most of the window', async () => {
+    vi.useFakeTimers();
+    const connect = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        vi.setSystemTime(Date.now() + 179_000);
+        throw unauthorized;
+      })
+      .mockRejectedValue(unauthorized);
+    const result = connectRegistrarWithActivationWait(
+      'dynadot',
+      connect,
+      new AbortController().signal,
+      vi.fn(),
+    );
+    const check = expect(result).rejects.toThrow(DynadotActivationPending);
+    await vi.advanceTimersByTimeAsync(1000);
+    await check;
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each([
     ['porkbun', unauthorized],
     ['dynadot', new Error('429 Too Many Requests')],

@@ -567,7 +567,7 @@ describe('one email flow for sign-in and signup', () => {
     env.GATEWAY_KEYS = JSON.stringify({ [ids[0]]: 'a'.repeat(64) });
     const request = (
       name: string,
-      args: unknown[],
+      args: unknown,
       origin = 'https://domains.domains',
     ) =>
       gateway.fetch(
@@ -594,6 +594,17 @@ describe('one email flow for sign-in and signup', () => {
     expect(forwarded).toHaveBeenCalledTimes(2);
     expect((await request('getProxySettings', [])).status).toBe(428);
     expect((await request('getProxySettings', [false])).status).toBe(428);
+    for (const args of [
+      { 0: true },
+      { 0: true, length: 1 },
+      'true',
+      null,
+      ['true'],
+      [true, false],
+    ]) {
+      expect((await request('getProxySettings', args)).status).toBe(428);
+    }
+
     expect(
       (await request('getProxySettings', [true], 'https://elsewhere.test'))
         .status,
