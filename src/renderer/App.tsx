@@ -100,6 +100,10 @@ export default function App() {
   }, [publication]);
   useWeeklyUpdateCheck();
   const appInfo = useAppStore((s) => s.appInfo);
+  const displayedVersion =
+    webAuthMode() === 'gateway'
+      ? appInfo?.hosted?.engineVersion
+      : appInfo?.version;
   const hydrateFromCache = useAppStore((s) => s.hydrateFromCache);
   const applyPortfolioCacheUpdate = useAppStore(
     (s) => s.applyPortfolioCacheUpdate,
@@ -284,7 +288,7 @@ export default function App() {
           {/* The running version, dim, tucked into the window's top-right
               corner; opens Settings → About. Hidden below lg, where the tab
               pills hide too and the header gets tight. */}
-          {appInfo && (
+          {displayedVersion && (
             <button
               type="button"
               onClick={() => navigate('/settings?tab=about')}
@@ -299,7 +303,7 @@ export default function App() {
               <span className="mr-px font-serif text-[12px] italic opacity-60">
                 v
               </span>
-              <span className="font-mono text-[10px]">{appInfo.version}</span>
+              <span className="font-mono text-[10px]">{displayedVersion}</span>
             </button>
           )}
         </div>

@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { isDemo, isWeb } from '@/lib/platform';
+import { isDemo, isWeb, webAuthMode } from '@/lib/platform';
 import { releaseNotesUrl, updateUrl, useUpdates } from '@/lib/updates';
 import { timeAgo } from '@/lib/time';
 import { releasesNewerThan, REPOSITORY_URL } from '../../../shared/releases';
@@ -52,6 +52,148 @@ function ExtLink(props: ComponentProps<'a'>) {
  * the license.
  */
 export default function AboutSettings() {
+  return webAuthMode() === 'gateway' ? (
+    <ManagedAboutSettings />
+  ) : (
+    <ProjectAboutSettings />
+  );
+}
+
+function ManagedAboutSettings() {
+  const appInfo = useAppStore((s) => s.appInfo);
+  const loadAppInfo = useAppStore((s) => s.loadAppInfo);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => {
+    setError(null);
+    void loadAppInfo().catch(() =>
+      setError('Release information could not be loaded. Please try again.'),
+    );
+  };
+  useEffect(() => {
+    let current = true;
+    void loadAppInfo().catch(() => {
+      if (current)
+        setError('Release information could not be loaded. Please try again.');
+    });
+    return () => {
+      current = false;
+    };
+  }, [loadAppInfo]);
+  const release = appInfo?.hosted;
+  const commit = release?.sourceCommit;
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold">About domains.domains</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your hosted domain portfolio service.
+        </p>
+      </div>
+      <SettingsCard
+        title="Hosted release"
+        contentClassName="flex flex-col gap-3"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-lg font-semibold">
+              domains.domains {release?.engineVersion ?? (appInfo ? '—' : '…')}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Managed service · updates are applied automatically.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={refresh}>
+            Refresh release info
+          </Button>
+        </div>
+        {!release?.engineVersion && appInfo && !error && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Release details are unavailable.
+          </p>
+        )}
+        {commit && /^[a-f0-9]{40}$/i.test(commit) && (
+          <p className="text-sm text-muted-foreground">
+            Source revision{' '}
+            <ExtLink
+              href="/source"
+              className="font-mono text-foreground underline underline-offset-4"
+            >
+              {commit.slice(0, 7)}
+            </ExtLink>
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </SettingsCard>
+      <SettingsCard
+        title="Help and source"
+        contentClassName="flex flex-col gap-3"
+      >
+        <ul className="-mx-3 divide-y divide-border/60">
+          <ProjectLink
+            url="mailto:domains@domains.domains"
+            icon={<Bug />}
+            title="Support"
+            hint="Get help with your portfolio"
+          />
+          <ProjectLink
+            url="/source"
+            icon={<GitHubMark />}
+            title="Source and license"
+            hint="The source for this deployed service · AGPL-3.0-or-later"
+          />
+          <ProjectLink
+            url="/terms"
+            icon={<ExternalLink />}
+            title="Terms"
+            hint="Terms for the hosted service"
+          />
+          <ProjectLink
+            url="/privacy"
+            icon={<ExternalLink />}
+            title="Privacy"
+            hint="How your information is handled"
+          />
+        </ul>
+        <p className="border-t pt-3 text-xs leading-relaxed text-muted-foreground">
+          domains.domains is a hosted, multi-tenant version of{' '}
+          <ExtLink
+            href="https://github.com/aoxborrow/dombot"
+            className="underline underline-offset-2"
+          >
+            aoxborrow/dombot
+          </ExtLink>
+          .
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Hosted service and SaaS layer by{' '}
+          <ExtLink
+            href="https://github.com/heathermhuang"
+            className="underline underline-offset-2"
+          >
+            Heatherm Huang
+          </ExtLink>
+          {' · '}
+          <ExtLink
+            href="https://x.com/heathermhuang"
+            className="underline underline-offset-2"
+          >
+            X / Twitter
+          </ExtLink>
+          .
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Original DomBot © 2026 Aaron Oxborrow and contributors.
+        </p>
+      </SettingsCard>
+    </div>
+  );
+}
+
+function ProjectAboutSettings() {
   const appInfo = useAppStore((s) => s.appInfo);
   const loadAppInfo = useAppStore((s) => s.loadAppInfo);
   const settings = useAppStore((s) => s.settings);
