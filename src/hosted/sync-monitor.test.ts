@@ -138,11 +138,11 @@ describe('production Dynadot collector and email outbox', () => {
           .all<{ kind: string }>()
       ).results.map((r) => r.kind),
     ).toEqual(['failure', 'recovery']);
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][0]).toMatchObject({ to: SYNC_ALERT_RECIPIENT });
     fetch.mockResolvedValueOnce(Response.json({ unchanged: true }));
     await monitorDynadotSync(env);
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(
       (
         await db
@@ -152,22 +152,39 @@ describe('production Dynadot collector and email outbox', () => {
     ).toBe(3);
     await ingestSyncEvent(env, workspace, a);
     await deliverSyncAlerts(env);
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
     await ingestSyncEvent(env, workspace, event(4));
     await deliverSyncAlerts(env);
-    expect(send).toHaveBeenCalledTimes(3);
+    expect(send).toHaveBeenCalledTimes(1);
     await ingestSyncEvent(env, workspace, event(5, false, 'tls'));
     await deliverSyncAlerts(env);
-    expect(send).toHaveBeenCalledTimes(4);
+    expect(send).toHaveBeenCalledTimes(1);
+    await db
+      .prepare('UPDATE sync_monitor_deliveries SET at=?')
+      .bind(Date.now() - 31 * 60_000)
+      .run();
+    await deliverSyncAlerts(env);
+    expect(send).toHaveBeenCalledTimes(2);
   });
-  it('alerts on missing diagnostics and recovery, and surfaces retention gaps', async () => {
+  it('records missing diagnostics, recovery and retention gaps without health emails', async () => {
     fetch.mockResolvedValue(new Response('unavailable', { status: 503 }));
     await monitorDynadotSync(env);
     expect(send).not.toHaveBeenCalled();
     await monitorDynadotSync(env);
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).not.toHaveBeenCalled();
     await monitorDynadotSync(env);
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).not.toHaveBeenCalled();
+    const failure = await db
+      .prepare(
+        "SELECT diagnostic FROM sync_monitor_alerts WHERE kind='unavailable'",
+      )
+      .first<{ diagnostic: string }>();
+    expect(JSON.parse(failure!.diagnostic)).toMatchObject({
+      code: 'observation_http_error',
+      phase: 'response',
+      httpStatus: 503,
+    });
+    expect(failure!.diagnostic).not.toContain('unavailable');
     fetch.mockResolvedValue(
       Response.json({
         diagnostics: {
@@ -186,6 +203,7 @@ describe('production Dynadot collector and email outbox', () => {
           .all<{ kind: string }>()
       ).results.map((r) => r.kind),
     ).toEqual(['available', 'failure', 'gap', 'unavailable']);
+    expect(send).toHaveBeenCalledTimes(1);
   });
   it('claims sends once concurrently, keeps ambiguous delivery, retries at most three times', async () => {
     await ingestSyncEvent(env, workspace, event(1));
@@ -195,7 +213,11 @@ describe('production Dynadot collector and email outbox', () => {
     for (let i = 0; i < 3; i++) {
       await db
         .prepare('UPDATE sync_monitor_alerts SET attempted_at=?')
-        .bind(Date.now() - 11 * 60_000)
+        .bind(Date.now() - 31 * 60_000)
+        .run();
+      await db
+        .prepare('UPDATE sync_monitor_deliveries SET at=?')
+        .bind(Date.now() - 31 * 60_000)
         .run();
       await deliverSyncAlerts(env);
     }
@@ -207,32 +229,91 @@ describe('production Dynadot collector and email outbox', () => {
     ).toMatchObject({ status: 'uncertain', attempts: 3 });
     send.mockResolvedValue({ messageId: 'synthetic-accepted' });
   });
-  it('counts delivery attempts, including retries, against the separate hourly budget', async () => {
+  it('records one digest receipt for all included failures', async () => {
     for (let seq = 1; seq <= 12; seq++)
       await ingestSyncEvent(env, workspace, {
         ...event(seq),
         accountId: 'account-' + seq,
       });
     await deliverSyncAlerts(env);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].text).toContain('30 minutes');
+    const receipts = (
+      await db
+        .prepare(
+          "SELECT message_id FROM sync_monitor_alerts WHERE status='sent'",
+        )
+        .all<{ message_id: string }>()
+    ).results;
+    expect(receipts).toHaveLength(12);
+    expect(new Set(receipts.map((r) => r.message_id))).toEqual(
+      new Set(['synthetic-accepted']),
+    );
+  });
+  it('keeps a fleet monitoring outage and recovery dashboard-only instead of flooding email', async () => {
+    for (let i = 0; i < 39; i++) {
+      await db
+        .prepare(
+          "INSERT INTO sync_monitor_alerts(id,workspace_id,at,kind,diagnostic) VALUES(?,?,?,'unavailable',?)",
+        )
+        .bind(
+          'outage-' + i,
+          workspace,
+          Date.now(),
+          JSON.stringify({ code: 'diagnostics_unavailable' }),
+        )
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO sync_monitor_alerts(id,workspace_id,at,kind,diagnostic) VALUES(?,?,?,'available',?)",
+        )
+        .bind(
+          'restored-' + i,
+          workspace,
+          Date.now(),
+          JSON.stringify({ checkedAt: Date.now() }),
+        )
+        .run();
+    }
     await deliverSyncAlerts(env);
-    await deliverSyncAlerts(env);
-    expect(send).toHaveBeenCalledTimes(10);
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      (
+        await db
+          .prepare('SELECT COUNT(*) n FROM sync_monitor_alerts')
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(78);
+  });
+  it('groups a burst of actual Dynadot failures into one email and enforces a rolling 30-minute cooldown', async () => {
+    for (let seq = 1; seq <= 12; seq++)
+      await ingestSyncEvent(env, workspace, {
+        ...event(seq),
+        accountId: 'account-' + seq,
+      });
+    await Promise.all([deliverSyncAlerts(env), deliverSyncAlerts(env)]);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(
       (
         await db
           .prepare(
-            "SELECT COUNT(*) n FROM sync_monitor_alerts WHERE status='pending'",
+            "SELECT COUNT(*) n FROM sync_monitor_alerts WHERE status='sent'",
           )
           .first<{ n: number }>()
       )?.n,
-    ).toBe(2);
-    expect(
-      (
-        await db
-          .prepare('SELECT COUNT(*) n FROM sync_monitor_deliveries')
-          .first<{ n: number }>()
-      )?.n,
-    ).toBe(10);
+    ).toBe(12);
+    await ingestSyncEvent(env, workspace, {
+      ...event(13),
+      accountId: 'account-13',
+    });
+    await deliverSyncAlerts(env);
+    expect(send).toHaveBeenCalledTimes(1);
+    await db
+      .prepare('UPDATE sync_monitor_deliveries SET at=?')
+      .bind(Date.now() - 31 * 60_000)
+      .run();
+    await deliverSyncAlerts(env);
+    expect(send).toHaveBeenCalledTimes(2);
   });
   it('refuses delivery to a non-admin and respects the monitor switch and active lease', async () => {
     await ingestSyncEvent(env, workspace, event(1));
