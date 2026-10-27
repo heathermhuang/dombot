@@ -29,3 +29,8 @@
 
 - Settings → About and the header badge show the live hosted engine version and gateway source revision. Managed accounts use service update information; desktop and self-hosted users retain their existing release/update controls. Do not identify the hosted release using only the root package version.
 - Credit the hosted service and SaaS layer to Heatherm Huang, linking https://github.com/heathermhuang and https://x.com/heathermhuang. Keep this contribution credit separate from Aaron Oxborrow's original DomBot credit and retain the source/license notices.
+
+## Public portfolio addresses
+
+- Public handles are globally unique identities in `portfolio_addresses`, separate from immutable account IDs and private draft handles. Claiming an address never publishes content. Keep claims after unpublish, closure and suspension; do not recycle names.
+- `PUBLIC_SITE_ADDRESSES_ENABLED` requires control migration 0015 and compatible tenant public readers before activation. Preserve existing long public links. Subdomain routing and portfolio custom domains have separate DNS/TLS verification requirements; do not infer support from Sales listing custom hosts. See `docs/portfolio-addresses.md`.

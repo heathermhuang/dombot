@@ -7,11 +7,13 @@ export function PortfolioSettings({
   onChange,
   publicUrl,
   issues,
+  showAddress = true,
 }: {
   draft: PortfolioDraft;
   onChange: (patch: Partial<PortfolioDraft>) => void;
   publicUrl: string;
   issues: PortfolioIssue[];
+  showAddress?: boolean;
 }) {
   return (
     <div className="pf-settings">
@@ -108,42 +110,44 @@ export function PortfolioSettings({
             Used for the domains where you accept inquiries.
           </span>
         </label>
-        <section className="pf-evidence">
-          <h3>Public address</h3>
-          <label className="pf-field mt-4">
-            Link name
-            <Input
-              id="pf-field-handle"
-              aria-describedby={
-                issues.some((issue) => issue.field === 'handle')
-                  ? 'pf-error-handle'
-                  : undefined
-              }
-              aria-invalid={issues.some((issue) => issue.field === 'handle')}
-              value={draft.handle}
-              maxLength={40}
-              onChange={(e) =>
-                onChange({ handle: e.target.value.toLowerCase() })
-              }
-            />
-            {issues
-              .filter((issue) => issue.field === 'handle')
-              .map((issue) => (
-                <span
-                  id="pf-error-handle"
-                  key={issue.field}
-                  className="pf-warning"
-                >
-                  {issue.message}
-                </span>
-              ))}
-          </label>
-          <p className="break-all">{publicUrl}</p>
-          <p>
-            Changing the link name removes the previous address when you
-            publish.
-          </p>
-        </section>
+        {showAddress && (
+          <section className="pf-evidence">
+            <h3>Public address</h3>
+            <label className="pf-field mt-4">
+              Link name
+              <Input
+                id="pf-field-handle"
+                aria-describedby={
+                  issues.some((issue) => issue.field === 'handle')
+                    ? 'pf-error-handle'
+                    : undefined
+                }
+                aria-invalid={issues.some((issue) => issue.field === 'handle')}
+                value={draft.handle}
+                maxLength={40}
+                onChange={(e) =>
+                  onChange({ handle: e.target.value.toLowerCase() })
+                }
+              />
+              {issues
+                .filter((issue) => issue.field === 'handle')
+                .map((issue) => (
+                  <span
+                    id="pf-error-handle"
+                    key={issue.field}
+                    className="pf-warning"
+                  >
+                    {issue.message}
+                  </span>
+                ))}
+            </label>
+            <p className="break-all">{publicUrl}</p>
+            <p>
+              Changing the link name removes the previous address when you
+              publish.
+            </p>
+          </section>
+        )}
       </div>
     </div>
   );

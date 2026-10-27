@@ -1,3 +1,8 @@
+import {
+  PortfolioAddressProvider,
+  PortfolioAddressPanel,
+  usePortfolioAddress,
+} from '../components/owner-site/PortfolioAddress';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import DomainWorkspace from './DomainWorkspace';
@@ -9,7 +14,7 @@ import {
   type SiteState,
 } from '../lib/owner-site-client';
 import { publicationRequest } from '../lib/publication-client';
-import { hostPath } from '../lib/platform';
+import { hostPath, webAuthMode } from '../lib/platform';
 import {
   convertOwnerSite,
   emptyOwnerSite,
@@ -24,11 +29,7 @@ import { ProfileEditor } from '../components/owner-site/ProfileEditor';
 import { SectionsEditor } from '../components/owner-site/SectionsEditor';
 import './your-site.css';
 
-export default function YourSite({
-  inventory = false,
-}: {
-  inventory?: boolean;
-}) {
+function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
   const location = useLocation();
   const [state, setState] = useState<SiteState | null>(null);
   const [error, setError] = useState('');
@@ -67,10 +68,20 @@ export default function YourSite({
       <DomainWorkspace area="domains" />
     );
   if (!state.enabled && !isOwnerSite(state.draft))
-    return <DomainWorkspace area="page" />;
+    return (
+      <>
+        <PortfolioAddressPanel />
+        <DomainWorkspace area="page" />
+      </>
+    );
   if (state.revision && !isOwnerSite(state.draft)) {
     if (new URLSearchParams(location.search).has('legacy'))
-      return <DomainWorkspace area="page" />;
+      return (
+        <>
+          <PortfolioAddressPanel />
+          <DomainWorkspace area="page" />
+        </>
+      );
     let preview: PublishedOwnerSite | null = null;
     let conversionError = '';
     try {
@@ -127,6 +138,13 @@ export default function YourSite({
   return <SiteAuthor />;
 }
 function CreateSite({ onCreated }: { onCreated: () => void }) {
+  const {
+    state: addressState,
+    claim,
+    error: addressError,
+    reload: reloadAddress,
+  } = usePortfolioAddress();
+  const addressPending = webAuthMode() === 'gateway' && !addressState;
   const [handle, setHandle] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -144,9 +162,16 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
           setBusy(true);
           setError('');
           const draft = emptyOwnerSite();
-          draft.handle = handle;
+          draft.handle = addressState?.address?.handle ?? handle;
           draft.profile.name = name;
-          void publicationRequest('/site', 'PUT', { draft, revision: null })
+          const address =
+            addressState?.enabled && !addressState.address
+              ? claim(draft.handle)
+              : Promise.resolve();
+          void address
+            .then(() =>
+              publicationRequest('/site', 'PUT', { draft, revision: null }),
+            )
             .then(onCreated)
             .catch((e) => setError(e.message))
             .finally(() => setBusy(false));
@@ -168,15 +193,30 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
               required
               pattern="[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?"
               maxLength={40}
-              value={handle}
+              value={addressState?.address?.handle ?? handle}
+              disabled={busy || !!addressState?.address}
               onChange={(e) => setHandle(e.target.value)}
             />
             <small>
-              /p/{handle || 'your-name'} · choose once when creating the draft
+              {addressState?.enabled
+                ? `${window.location.origin}/${handle || 'yourname'}`
+                : `/p/${handle || 'your-name'}`}{' '}
+              · choose once when creating the draft
             </small>
           </label>
         </div>
-        <button disabled={busy}>Create private draft</button>
+        {addressError && (
+          <p role="alert">
+            {addressError}{' '}
+            <button type="button" onClick={reloadAddress}>
+              Retry address information
+            </button>
+          </p>
+        )}
+        {addressPending && !addressError && (
+          <p role="status">Loading address options…</p>
+        )}
+        <button disabled={busy || addressPending}>Create private draft</button>
       </form>
       <p>
         Nothing is published by creating a draft. Your inventory remains
@@ -187,6 +227,9 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
   );
 }
 function SiteAuthor() {
+  const { state: addressState } = usePortfolioAddress();
+  const publicLink = (handle: string) =>
+    addressState?.address?.url ?? hostPath(`/p/${handle}`);
   const { state, draft, status, error } = useSiteEditor();
   const location = useLocation();
   const requestedView = new URLSearchParams(location.search).get('view');
@@ -386,15 +429,12 @@ function SiteAuthor() {
       {receipt && (
         <p role="status">
           Published {receipt}.{' '}
-          <a
-            href={hostPath(`/p/${draft.handle}`)}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={publicLink(draft.handle)} target="_blank" rel="noreferrer">
             View your public profile ↗
           </a>
         </p>
       )}
+      <PortfolioAddressPanel />
       <nav className="os-tabs" aria-label="Site editor">
         <button aria-pressed={view === 'edit'} onClick={() => setView('edit')}>
           Edit site
@@ -425,6 +465,7 @@ function SiteAuthor() {
           <ProfileEditor
             draft={draft}
             lockedHandle={!!state.revision}
+            showAddress={!addressState?.enabled}
             onChange={update}
           />
           <SectionsEditor
@@ -490,8 +531,8 @@ function SiteAuthor() {
             Publish changes
           </button>
           <p>
-            This replaces the published site at /p/{draft.handle}. Draft edits
-            alone never publish.
+            This replaces the published profile at {publicLink(draft.handle)}.
+            Draft edits alone never publish.
           </p>
         </section>
       )}
@@ -501,11 +542,7 @@ function SiteAuthor() {
         </button>
         {live && (
           <>
-            <a
-              href={hostPath(`/p/${live.handle}`)}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={publicLink(live.handle)} target="_blank" rel="noreferrer">
               View live profile ↗
             </a>
             <button onClick={() => setConfirmRemove(true)}>Unpublish…</button>
@@ -536,5 +573,13 @@ function SiteAuthor() {
         )}
       </footer>
     </section>
+  );
+}
+
+export default function YourSite(props: { inventory?: boolean }) {
+  return (
+    <PortfolioAddressProvider>
+      <YourSiteContent {...props} />
+    </PortfolioAddressProvider>
   );
 }
