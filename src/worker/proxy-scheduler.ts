@@ -121,7 +121,14 @@ export async function acquireProxyLease(
           await call('release', reply.token);
         };
       }
-      if (reply.status === 'busy') throw failure('PROXY_QUEUE_BUSY');
+      if (reply.status === 'busy') {
+        // Capacity is temporary, not a registrar failure. A full sync can
+        // have more proxy reads than this tenant's four pending tickets.
+        // Wait for admission without opening a socket, widening the queue,
+        // replaying a registrar operation, or resetting the original deadline.
+        await pause(Math.min(5000, deadline - Date.now()), signal);
+        continue;
+      }
       if (reply.status !== 'waiting' || !Number.isFinite(reply.retryAfterMs))
         throw failure('PROXY_QUEUE_UNAVAILABLE');
       await pause(
