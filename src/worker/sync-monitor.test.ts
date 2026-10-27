@@ -64,5 +64,17 @@ it('reads one atomic encrypted document and rejects corruption instead of report
     alg: 'aes-gcm',
     ct: 'corrupt',
   });
-  await expect(readSyncMonitor(env)).rejects.toThrow();
+  await expect(readSyncMonitor(env)).rejects.toMatchObject({
+    name: 'SyncMonitorReadError',
+    stage: 'decryption',
+  });
+  await raw.put('sync-monitor', 'diagnostics', {
+    __sealed: 1,
+    alg: 'unexpected',
+    ct: 'invalid',
+  });
+  await expect(readSyncMonitor(env)).rejects.toMatchObject({
+    name: 'SyncMonitorReadError',
+    stage: 'envelope',
+  });
 });

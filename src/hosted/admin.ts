@@ -1,3 +1,8 @@
+import { readWorkspace } from './workspace-observation';
+import {
+  adminInventoryQuerySchema,
+  adminInventorySchema,
+} from '../shared/admin-inventory';
 import {
   SYNC_ALERT_RECIPIENT,
   isEmailAlert,
@@ -123,11 +128,12 @@ export function adminRoutes(
     env: HostedEnv,
     user: SessionUser,
     action: 'view' | 'refresh',
+    target: string | null = null,
   ) => {
     await env.CONTROL_DB.prepare(
-      'INSERT INTO admin_audit(id,actor_id,action,created_at) VALUES(?,?,?,?)',
+      'INSERT INTO admin_audit(id,actor_id,action,created_at,target_user_id) VALUES(?,?,?,?,?)',
     )
-      .bind(crypto.randomUUID(), user.id, action, Date.now())
+      .bind(crypto.randomUUID(), user.id, action, Date.now(), target)
       .run();
   };
   app.get('/', async (c) => {
@@ -201,6 +207,18 @@ export function adminRoutes(
         'SELECT * FROM sync_monitor_alerts ORDER BY at DESC,id DESC LIMIT 50',
       ).all<SyncAlert>()
     ).results;
+    const probes = (
+      await c.env.CONTROL_DB.prepare(
+        'SELECT c.workspace_id,c.checked_at,c.errors,c.probe_json,c.last_failure_json,u.email FROM sync_monitor_checks c JOIN users u ON u.workspace_id=c.workspace_id ORDER BY c.errors DESC,c.checked_at DESC LIMIT 100',
+      ).all<{
+        workspace_id: string;
+        checked_at: number;
+        errors: number;
+        probe_json: string | null;
+        last_failure_json: string | null;
+        email: string;
+      }>()
+    ).results;
     const pending = await c.env.CONTROL_DB.prepare(
       "SELECT COUNT(*) n FROM sync_monitor_alerts WHERE kind IN ('failure','test') AND status!='sent'",
     ).first<{ n: number }>();
@@ -209,6 +227,7 @@ export function adminRoutes(
       shell(`<span class="eyebrow">Operator console</span><h1>Dynadot sync monitoring</h1><p>${pill(c.env.SYNC_MONITOR_ENABLED === 'true' ? 'Enabled' : 'Disabled', c.env.SYNC_MONITOR_ENABLED !== 'true')} Last completed check: ${timestamp(control?.completed_at)}. Refresh this page for current readings.</p>
       <div class="summary">${metric('Portfolios covered', coverage?.current ?? 0, `of ${coverage?.total ?? 0} enabled, checked within 10 minutes`)}${metric('Observation errors', coverage?.unavailable ?? 0, 'Not treated as healthy')}${metric('Email deliveries outstanding', pending?.n ?? 0, 'Queued or delivery uncertain')}${metric('Retained days', 30, 'Up to 200 attempts per portfolio before collection')}</div>
       <section class="surface"><h2>Alert policy</h2><p>Actual Dynadot inventory failures and changes in failure cause are grouped and emailed to ${e(SYNC_ALERT_RECIPIENT)}. Repeated failures with the same cause remain recorded without repeated incident emails. The production cron checks every two minutes, up to 25 portfolios per run; fleet coverage currently takes approximately ${Math.max(1, Math.ceil((coverage?.total ?? 0) / 25)) * 2} minutes. No registrar calls are initiated by this monitor.</p><p>Monitoring availability, recovery and retention-gap notices stay in this dashboard, including previously queued notices. They are not emailed. Actual sync failures are grouped into at most one email every 30 minutes across all portfolios; remaining new failures stay queued for the next digest. An uncertain send may have reached the mailbox and is retried up to three times, subject to the same fleet-wide cooldown. After that, it remains visible here for operator follow-up. This view records provider acceptance, not inbox delivery.</p><p class="muted">Capture begins with engine 1.5.2-hosted.14. Earlier failures cannot be reconstructed. Successful retries do not erase retained failures. Attempts retain correlation ID, account ID, timing, trigger, route class, classified failure, HTTP status and exact engine/source version. Provider messages, credentials and domain names are excluded.</p></section>
+      <section class="surface"><h2>Observer diagnostics</h2><p class="muted">Latest probe and last classified read failure, including failures recovered by retry. A failed probe remains unknown until a read succeeds. Earlier incidents may lack detailed traces.</p><div class="scroll" tabindex="0" role="region" aria-label="Observer probe diagnostics"><table><thead><tr><th>User / last check</th><th>Observation</th><th>Probe details</th></tr></thead><tbody>${probes.map((probe) => `<tr><td>${e(probe.email)}<br>${timestamp(probe.checked_at)}</td><td>${pill(probe.errors ? 'Unavailable' : 'Read succeeded', probe.errors > 0)}</td><td><details><summary>Latest probe / last failure</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${e(JSON.stringify({ latest: probe.probe_json ? JSON.parse(probe.probe_json) : null, lastFailure: probe.last_failure_json ? JSON.parse(probe.last_failure_json) : null }, null, 2))}</pre></details></td></tr>`).join('') || '<tr><td colspan="3">No probe telemetry retained yet.</td></tr>'}</tbody></table></div></section>
       <section class="surface"><h2>Recent sync attempts</h2><p class="muted">Latest 100 across all users, retained for 30 days. Times are UTC.</p><div class="scroll" tabindex="0" role="region" aria-label="Dynadot sync attempts"><table><thead><tr><th>Time / user</th><th>Outcome</th><th>Diagnostics</th></tr></thead><tbody>${events.map((row) => `<tr><td>${timestamp(row.at)}<br><a href="/admin/users/${encodeURIComponent(row.user_id)}">${e(row.email ?? row.user_id)}</a></td><td>${pill(row.ok ? 'Succeeded' : 'Failed', !row.ok)}</td><td><details><summary>Sanitized attempt ${e(row.id.slice(0, 8))}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${e(JSON.stringify(JSON.parse(row.diagnostic), null, 2))}</pre></details></td></tr>`).join('') || '<tr><td colspan="3">No Dynadot attempts collected yet.</td></tr>'}</tbody></table></div></section>
       <section class="surface"><h2>Recent alerts & delivery</h2><div class="scroll" tabindex="0" role="region" aria-label="Dynadot alerts"><table><thead><tr><th>Time</th><th>Alert</th><th>Delivery</th></tr></thead><tbody>${alerts.map((row) => `<tr><td>${timestamp(row.at)}</td><td>${e(row.kind)}<details><summary>Alert ${e(row.id.slice(0, 8))}</summary><code>${e(row.id)}</code><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${e(JSON.stringify(JSON.parse(row.diagnostic), null, 2))}</pre></details></td><td>${pill(row.status === 'sent' ? 'Accepted by email provider' : isEmailAlert(row.kind) ? row.status : 'Dashboard only', row.status !== 'sent' && isEmailAlert(row.kind))}<br>${timestamp(row.sent_at)}</td></tr>`).join('') || '<tr><td colspan="3">No incidents or alert deliveries recorded.</td></tr>'}</tbody></table></div></section>`),
     );
@@ -304,16 +323,82 @@ export function adminRoutes(
       303,
     );
   });
+  app.get('/users/:id/domains', async (c) => {
+    const row = await c.env.CONTROL_DB.prepare(selectUsers + ' WHERE u.id=?')
+      .bind(c.req.param('id'))
+      .first<UserRow>();
+    if (!row) return c.notFound();
+    if (!row.enabled)
+      return c.html(
+        shell(
+          `<h1>${e(row.email)}</h1><p>Portfolio access is disabled.</p><a href="/admin/users/${encodeURIComponent(row.id)}">Back to user</a>`,
+        ),
+        403,
+      );
+    const rate = new Accounts(c.env.CONTROL_DB, c.env.AUTH_PEPPER);
+    if (!(await rate.rateLimit('admin-inventory:' + c.get('admin').id, 120)))
+      return c.text('Too many inventory reads. Try again shortly.', 429);
+    await audit(c.env, c.get('admin'), 'view', row.id);
+    const query = adminInventoryQuerySchema.parse({
+      q: (c.req.query('q') ?? '').slice(0, 120),
+      offset: Math.min(
+        1000000,
+        Math.max(0, Number.parseInt(c.req.query('offset') ?? '0') || 0),
+      ),
+      limit: 100,
+      state: ['owned', 'archived', 'all'].includes(c.req.query('state') ?? '')
+        ? c.req.query('state')
+        : 'owned',
+    });
+    try {
+      const { value: data } = await readWorkspace(
+        c.env,
+        row.workspace_id,
+        'admin-inventory',
+        (value) => adminInventorySchema.parse(value),
+        { body: query, timeoutMs: 20000, attempts: 1 },
+      );
+      const link = (offset: number) =>
+        `/admin/users/${encodeURIComponent(row.id)}/domains?q=${encodeURIComponent(query.q)}&state=${query.state}&offset=${offset}`;
+      const sources: Record<string, string> = {
+        api: 'Cached API quote',
+        manual: 'Manual price',
+        base: 'Bundled estimate',
+        tld: 'TLD estimate',
+        unavailable: 'Unknown price',
+      };
+      const amount = (currency: string, value: string) => {
+        const [whole, fraction] = value.split('.');
+        return `${e(currency)} ${e(whole.replace(/\B(?=(\d{3})+(?!\d))/g, ','))}${fraction === undefined ? '' : '.' + e(fraction)}`;
+      };
+      return c.html(
+        shell(`<nav><a href="/admin/users/${encodeURIComponent(row.id)}">← User status</a></nav><span class="eyebrow">Cached inventory</span><h1>${e(row.email)}</h1><p>Read ${timestamp(data.at)}. No registrar requests or price refreshes were started.</p>
+        ${!data.available ? '<p class="notice" role="status">No cached inventory is available yet. The user must sync a registrar or import holdings before a list can be shown.</p>' : ''}
+        <div class="summary">${metric('Observed owned domains', data.owned, 'Distinct cached names')}${metric('Priced names', data.priced, `${data.unpriced} unpriced or ambiguous`)}${metric('Stale API quotes', data.stalePrices, 'Older than 24 hours')}${metric('Accounts not observed', data.unobservedAccounts, `${data.failedAccounts} with cached sync errors; ${data.staleAccounts} stale`)}</div>
+        <section class="surface"><h2>Known annual renewal subtotal</h2>${data.totals.length ? data.totals.map((total) => `<p><strong>${amount(total.currency, total.amount)}</strong> / year · ${total.domains} priced names</p>`).join('') : '<p>No known prices in the cached holdings.</p>'}<p class="muted">Each currency is totalled separately. No FX conversion, tax or future registrar changes are assumed. These are cached quotes, manual rates and estimates, not an invoice. Unknown prices are excluded; ${data.ambiguous} names listed in multiple accounts are also excluded to avoid double-counting. Stale quotes remain in the subtotal and are flagged in the list. ${data.archived} archived names in history are excluded from annual totals. Unobserved accounts may contain additional holdings.</p></section>
+        <section class="surface"><h2>Domains & renewal costs</h2><form method="get"><label>Search domain, registrar or account<input name="q" type="search" value="${e(query.q)}" maxlength="120"></label><label>Cached records<select name="state"><option value="owned" ${query.state === 'owned' ? 'selected' : ''}>Owned</option><option value="archived" ${query.state === 'archived' ? 'selected' : ''}>Archived</option><option value="all" ${query.state === 'all' ? 'selected' : ''}>All</option></select></label><button>Search domains</button></form><p class="muted">${data.matched} cached rows match. Showing ${data.rows.length ? query.offset + 1 : 0}–${query.offset + data.rows.length}. Historical archived holdings are included when selected. Missing expiry dates and prices remain unknown.</p>
+        <div class="scroll" tabindex="0" role="region" aria-label="User domains and renewal costs"><table><thead><tr><th>Domain</th><th>Registrar / account</th><th>Expiry</th><th>Annual renewal</th><th>Price source / age</th></tr></thead><tbody>${data.rows.map((item) => `<tr><td><strong>${e(item.domain)}</strong><br><span class="muted">${item.departed ? 'Historical holding' : item.source === 'imported' ? 'Imported holding' : 'Registrar holding'}${item.archived ? ' · Archived' : ''}${item.ambiguous ? ' · Duplicate holding' : ''}</span></td><td>${e(item.registrar || 'Unknown')}<br>${e(item.accountLabel)}<br><span class="muted">Inventory: ${timestamp(item.inventoryAt)}${item.inventoryStale ? ' · Stale or unknown' : ''}</span></td><td>${item.expiresAt !== null ? new Date(item.expiresAt).toISOString().slice(0, 10) : 'Unknown'}</td><td>${item.renewal !== null && item.currency ? amount(item.currency, item.renewal) : 'Unknown'}${item.ambiguous ? '<br><span class="muted">Excluded from subtotal</span>' : ''}</td><td>${e(sources[item.priceSource])}<br><span class="muted">${item.priceAge === 'stale' ? 'Stale quote · ' : item.priceAge === 'estimate' ? 'Estimate · ' : item.priceAge === 'manual' ? 'Update time unknown · ' : item.priceAge === 'unknown' ? 'Quote age unknown · ' : ''}${item.quoteAt ? timestamp(item.quoteAt) : ''}</span></td></tr>`).join('') || '<tr><td colspan="5">No cached rows match this search.</td></tr>'}</tbody></table></div>
+        <nav aria-label="Domain pages">${query.offset > 0 ? `<a href="${e(link(Math.max(0, query.offset - query.limit)))}">← Previous domains</a>` : ''}${query.offset + query.limit < data.matched ? `<a href="${e(link(query.offset + query.limit))}">Next domains →</a>` : ''}</nav></section>`),
+      );
+    } catch {
+      return c.html(
+        shell(
+          `<h1>${e(row.email)}</h1><p class="notice" role="status">Cached inventory could not be read. A portfolio operation may still be in progress. Try again shortly; no domains or prices have been replaced with zero.</p><a href="/admin/users/${encodeURIComponent(row.id)}">Back to user status</a>`,
+        ),
+        503,
+      );
+    }
+  });
   app.get('/users/:id', async (c) => {
     const row = await c.env.CONTROL_DB.prepare(selectUsers + ' WHERE u.id=?')
       .bind(c.req.param('id'))
       .first<UserRow>();
     if (!row) return c.notFound();
-    await audit(c.env, c.get('admin'), 'view');
+    await audit(c.env, c.get('admin'), 'view', row.id);
     const s = snapshot(row);
     return c.html(
       shell(
-        `<h1>${e(row.email)}</h1>${rowUnavailable(row)}<p>Access: ${row.enabled ? 'Enabled' : 'Disabled'}. User ID: <code>${e(row.id)}</code><br>Portfolio ID: <code>${e(row.workspace_id)}</code></p><form action="/admin/refresh" method="post"><input type="hidden" name="q" value="${e(row.id)}"><button>Refresh this user</button></form>${s ? `<p>Observed ${timestamp(s.at)}. Owned: ${s.owned}; imported: ${s.imported}; archived: ${s.archived}.</p><section class="surface"><h2>Registrar accounts</h2><div class="scroll" tabindex="0" role="region" aria-label="Registrar status"><table><thead><tr><th>Registrar</th><th>Status / category</th><th class="number">Cached rows</th><th>Last successful sync</th></tr></thead><tbody>${s.accounts.map((a) => `<tr><td>${e(a.registrar)}<br><code>${e(a.accountId)}</code></td><td>${pill(a.state, ['failed', 'stale', 'never'].includes(a.state))} ${a.code === 'none' ? '' : e(a.code)}</td><td class="number">${a.domains}</td><td>${timestamp(a.lastSyncedAt)}</td></tr>`).join('') || '<tr><td colspan="4">No connected registrar accounts.</td></tr>'}</tbody></table></div></section><section class="surface"><h2>Recent operations</h2><p class="muted">Up to 100 events, starting with this release. Readings and event absence do not prove uptime. Scheduled entries report the resulting cached sync state, including runs skipped because data was fresh.</p><div class="scroll" tabindex="0" role="region" aria-label="Operation history"><table><thead><tr><th>When</th><th>Operation</th><th>Outcome</th><th>Duration</th></tr></thead><tbody>${s.operations.map((o) => `<tr><td>${timestamp(o.at)}</td><td>${e(o.kind)}</td><td>${pill(o.status, o.status === 'failed')} ${o.code === 'none' ? '' : e(o.code)}</td><td>${o.durationMs} ms</td></tr>`).join('') || '<tr><td colspan="4">No recorded operations yet.</td></tr>'}</tbody></table></div></section>` : '<p class="notice">No observation yet. Refresh this user to read stored counts and sync status.</p>'}`,
+        `<h1>${e(row.email)}</h1>${rowUnavailable(row)}<p>Access: ${row.enabled ? 'Enabled' : 'Disabled'}. User ID: <code>${e(row.id)}</code><br>Portfolio ID: <code>${e(row.workspace_id)}</code></p><p><a href="/admin/users/${encodeURIComponent(row.id)}/domains">View domains & renewal costs →</a></p><form action="/admin/refresh" method="post"><input type="hidden" name="q" value="${e(row.id)}"><button>Refresh this user</button></form>${s ? `<p>Observed ${timestamp(s.at)}. Owned: ${s.owned}; imported: ${s.imported}; archived: ${s.archived}.</p><section class="surface"><h2>Registrar accounts</h2><div class="scroll" tabindex="0" role="region" aria-label="Registrar status"><table><thead><tr><th>Registrar</th><th>Status / category</th><th class="number">Cached rows</th><th>Last successful sync</th></tr></thead><tbody>${s.accounts.map((a) => `<tr><td>${e(a.registrar)}<br><code>${e(a.accountId)}</code></td><td>${pill(a.state, ['failed', 'stale', 'never'].includes(a.state))} ${a.code === 'none' ? '' : e(a.code)}</td><td class="number">${a.domains}</td><td>${timestamp(a.lastSyncedAt)}</td></tr>`).join('') || '<tr><td colspan="4">No connected registrar accounts.</td></tr>'}</tbody></table></div></section><section class="surface"><h2>Recent operations</h2><p class="muted">Up to 100 events, starting with this release. Readings and event absence do not prove uptime. Scheduled entries report the resulting cached sync state, including runs skipped because data was fresh.</p><div class="scroll" tabindex="0" role="region" aria-label="Operation history"><table><thead><tr><th>When</th><th>Operation</th><th>Outcome</th><th>Duration</th></tr></thead><tbody>${s.operations.map((o) => `<tr><td>${timestamp(o.at)}</td><td>${e(o.kind)}</td><td>${pill(o.status, o.status === 'failed')} ${o.code === 'none' ? '' : e(o.code)}</td><td>${o.durationMs} ms</td></tr>`).join('') || '<tr><td colspan="4">No recorded operations yet.</td></tr>'}</tbody></table></div></section>` : '<p class="notice">No observation yet. Refresh this user to read stored counts and sync status.</p>'}`,
       ),
     );
   });

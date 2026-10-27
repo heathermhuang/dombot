@@ -2,7 +2,8 @@ import {
   verifyTenantAdmission,
   verifyGatewayRequest,
 } from '../shared/gateway-proof';
-import { mcpPreflight } from '@domains-domains/dombot-engine';
+import worker, { mcpPreflight } from '@domains-domains/dombot-engine';
+import { adminInventoryQuerySchema } from '../shared/admin-inventory';
 import engineManifest from '@domains-domains/dombot-engine/manifest';
 import { WorkspaceCoordinator } from './workspace-coordinator';
 export { WorkspaceCoordinator };
@@ -36,6 +37,7 @@ export default {
         '/platform-internal/pause',
         '/platform-internal/admin-snapshot',
         '/platform-internal/sync-monitor',
+        '/platform-internal/admin-inventory',
       ].includes(platformPath)
     ) {
       // Anonymous lander admission cannot operate platform lifecycle controls.
@@ -49,9 +51,13 @@ export default {
         return new Response('Forbidden', { status: 403 });
       if (
         platformPath === '/platform-internal/admin-snapshot' ||
-        platformPath === '/platform-internal/sync-monitor'
+        platformPath === '/platform-internal/sync-monitor' ||
+        platformPath === '/platform-internal/admin-inventory'
       ) {
-        if (request.method !== 'GET')
+        if (
+          request.method !==
+          (platformPath.endsWith('/admin-inventory') ? 'POST' : 'GET')
+        )
           return new Response('Method not allowed', { status: 405 });
         const proof = await verifyGatewayRequest(
           env.DOMBOT_GATEWAY_SECRET ?? '',
@@ -60,16 +66,96 @@ export default {
         );
         if (!proof || proof.owner !== null || proof.sales || proof.mcp)
           return new Response('Forbidden', { status: 403 });
-        return Response.json(
-          platformPath.endsWith('/sync-monitor')
-            ? await coordinator(env).syncMonitor(
-                new URL(request.url).searchParams.get('revision') ?? undefined,
-              )
-            : await coordinator(env).adminSnapshot(),
-          {
-            headers: { 'Cache-Control': 'no-store' },
-          },
-        );
+        if (platformPath.endsWith('/sync-monitor')) {
+          // One atomic D1 row does not require the owner coordinator. Keep
+          // monitoring independent of its RPC availability and request lifecycle.
+          const started = Date.now();
+          const id = request.headers.get('X-DomBot-Observation-ID');
+          const probeId = id && /^[a-f0-9-]{36}$/.test(id) ? id : undefined;
+          const debug =
+            request.headers.get('X-DomBot-Observation-Debug') === 'retry';
+          if (debug)
+            console.info(
+              'workspace-monitor-read-start',
+              JSON.stringify({ probeId }),
+            );
+          try {
+            const value = await worker.syncMonitor(
+              env,
+              new URL(request.url).searchParams.get('revision') ?? undefined,
+            );
+            if (debug || Date.now() - started > 1000)
+              console.info(
+                'workspace-monitor-read-end',
+                JSON.stringify({
+                  probeId,
+                  outcome: 'ok',
+                  durationMs: Date.now() - started,
+                }),
+              );
+            return Response.json(value, {
+              headers: {
+                'Cache-Control': 'no-store',
+                'X-DomBot-Monitor-Path': 'direct-d1',
+                'X-DomBot-Monitor-Read-Ms': String(Date.now() - started),
+              },
+            });
+          } catch (error) {
+            const candidate =
+              error && typeof error === 'object' && 'stage' in error
+                ? error.stage
+                : null;
+            const stage = [
+              'storage',
+              'envelope',
+              'decryption',
+              'validation',
+            ].includes(String(candidate))
+              ? String(candidate)
+              : 'unknown';
+            console.warn(
+              'workspace-monitor-read',
+              JSON.stringify({
+                code: 'diagnostics_read_failed',
+                probeId,
+                stage,
+                durationMs: Date.now() - started,
+              }),
+            );
+            return Response.json(
+              { error: 'Diagnostic read unavailable' },
+              {
+                status: 503,
+                headers: {
+                  'Cache-Control': 'no-store',
+                  'X-DomBot-Monitor-Path': 'direct-d1',
+                  'X-DomBot-Monitor-Failure': stage,
+                },
+              },
+            );
+          }
+        }
+        if (platformPath.endsWith('/admin-inventory')) {
+          const body = await request.text();
+          if (body.length > 2048)
+            return new Response('Request too large', { status: 413 });
+          let value: unknown;
+          try {
+            value = JSON.parse(body);
+          } catch {
+            return new Response('Invalid inventory query', { status: 400 });
+          }
+          const parsed = adminInventoryQuerySchema.safeParse(value);
+          if (!parsed.success)
+            return new Response('Invalid inventory query', { status: 400 });
+          return Response.json(
+            await coordinator(env).adminInventory(parsed.data),
+            { headers: { 'Cache-Control': 'no-store' } },
+          );
+        }
+        return Response.json(await coordinator(env).adminSnapshot(), {
+          headers: { 'Cache-Control': 'no-store' },
+        });
       }
       if (Reflect.get(env, 'DOMBOT_PLATFORM_ALARMS') !== 'true')
         return new Response('Not found', { status: 404 });

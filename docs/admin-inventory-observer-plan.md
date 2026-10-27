@@ -1,0 +1,21 @@
+# Admin inventory and observer reliability
+
+The existing sole administrator can inspect `/admin/users/:id/domains`: a searchable, paginated read of a user's cached holdings, historical archive records, expiry dates and annual renewal prices. The engine hydrates once under its request lock, projects the minimum fields and performs no registrar/price requests or cache clearing. Domain lists are never stored in control-database count snapshots. Fresh authentication and no-store responses remain; inventory views audit the target user ID.
+
+Annual known-price subtotals are separate for each currency and use decimal minor units. Unknown prices remain unknown; archived holdings and ambiguous duplicate account holdings are excluded from totals. API quote age uses its actual stored timestamp and a 24-hour freshness threshold. Missing quote timestamps are labelled unknown; TLD/base rates are estimates and manual prices retain their provenance. Stale quotes stay visible and are identified in the subtotal. Unobserved accounts can contain additional holdings, so an incomplete cache is not a complete portfolio valuation or invoice.
+
+## Visibility investigation and repair
+
+The retained incident shows eight-second observation waves, followed by recovery. The original code discarded error details and invocation logs/traces were disabled. Historical Cloudflare inspection for 27 October, 15:40–16:00 Singapore time found the portfolio actors continuing their scheduled work, but no retained observer-request trace or provider error. That evidence cannot prove the exact historical Cloudflare failure.
+
+A reproducible architectural failure was identified: the monitor read one atomic encrypted D1 document through the owner coordinator RPC. With that coordinator unavailable, the previous observer fails although the document can still be read. The private monitor path now reads D1 directly, outside the coordinator and its owner request lifecycle. A regression fixture retains the previous implementation: it fails without the coordinator, while the new path succeeds with the same database and proof requirements.
+
+The read helper retries a transient failure once, with fresh request construction, bounded deadlines, cancellation and respect for longer Retry-After values. Authentication and malformed data fail closed. The collector stops starting new batches after 90 seconds and retains checkpoint fairness. Every failed attempt, including a first failure recovered by retry, is retained with a safe stage, duration, status, request correlation ID and allowlisted runtime/backend cause. Successful reads no longer erase that evidence. Retry, slow-read and failure logs contain safe correlation metadata only. No raw provider messages, credentials or domains are logged.
+
+Inventory reads require the coordinator's consistent multi-namespace snapshot; stateless monitor reads do not. Inventory refresh remains an on-demand cache read. Monitoring availability, recovery and retention gaps remain dashboard-only. Actual sync failures retain the one-email-per-30-minute fleet-wide digest policy from PR #105.
+
+## Verification and release
+
+Checks cover exact currency totals, unknown and stale prices, duplicates, imports/archive history, no-network/no-write cache reads, private admission, sole-admin/fresh-auth denial, targeted audit records, coordinator-independent monitoring, bounded retries/cancellation and retention of recovered first failures. Controlled browser checks exercise search and pagination. Production acceptance verifies the released engine and private path, compares the paginated owner inventory and currency totals, then observes normal cron coverage and email counters. No real registrar failure or new alert email is induced for verification.
+
+Migration 0014 only adds nullable observation/audit metadata. Tenant engine 1.5.2-hosted.15 is additive and retains the previous renderer assets. Apply the control migration before deploying the gateway; deploy compatible tenants first. Preserve account identities, credentials, roles, settings, registry keys and unrelated service bindings. Rollback can retain the additive columns and keep monitoring under the existing quiet policy.

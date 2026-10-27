@@ -1,3 +1,5 @@
+import { getAdminInventory } from '../core/services/admin-inventory';
+import { adminInventoryQuerySchema } from '../shared/admin-inventory';
 import {
   clearLoginAttempts,
   loginSource,
@@ -510,3 +512,23 @@ export default {
     });
   },
 } satisfies ExportedHandler<Env>;
+
+/** Host-only cached inventory read. It shares the engine lock so holdings,
+ * ownership and renewal prices belong to one hydrated state. */
+export async function readAdminInventory(
+  env: Env,
+  input: unknown,
+): Promise<unknown> {
+  if (env.DOMBOT_AUTH !== 'gateway')
+    throw Error('Hosted inventory admission required');
+  const query = adminInventoryQuerySchema.parse(input);
+  return withRequestLock(async () => {
+    await bootOnce(env);
+    await hydrateStores();
+    try {
+      return getAdminInventory(query);
+    } finally {
+      await flushWrites();
+    }
+  });
+}
