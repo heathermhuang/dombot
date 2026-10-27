@@ -35,7 +35,7 @@ export const syncEventSchema = z.object({
   httpStatus: z.number().int().min(100).max(599).nullable(),
   engine: z
     .string()
-    .regex(/^[a-zA-Z0-9.\-]+$/)
+    .regex(/^[a-zA-Z0-9.-]+$/)
     .max(60),
   source: z.string().regex(/^(?:[a-f0-9]{64}|development)$/),
 });

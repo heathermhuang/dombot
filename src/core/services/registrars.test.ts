@@ -1,7 +1,11 @@
 import { configureSyncDiagnostics } from './sync-diagnostics';
-import { getStore, flushWrites } from '../storage/namespace';
 import { syncDiagnosticsSchema } from '../../shared/sync-monitor';
-import { configureStore, hydrateStores } from '../storage/namespace';
+import {
+  configureStore,
+  hydrateStores,
+  getStore,
+  flushWrites,
+} from '../storage/namespace';
 import { MemoryDocStore } from '../storage/doc-store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

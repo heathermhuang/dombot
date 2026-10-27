@@ -18,9 +18,10 @@ import {
 import type { SyncEvent } from '../shared/sync-monitor';
 let mf: Miniflare, db: D1Database, env: HostedEnv;
 const workspace = '11111111-1111-4111-8111-111111111111';
-const send = vi.fn(async (_message: EmailMessageBuilder) => ({
-  messageId: 'synthetic-accepted',
-}));
+const send = vi.fn(async (message: EmailMessageBuilder) => {
+  void message;
+  return { messageId: 'synthetic-accepted' };
+});
 const fetch = vi.fn();
 const event = (
   seq: number,
