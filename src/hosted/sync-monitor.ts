@@ -120,6 +120,8 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
   const now = Date.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const controller = new AbortController();
+  let phase = 'configuration';
+  let httpStatus: number | null = null;
   try {
     const work = async () => {
       const configured = await workspaceFor(env, row.workspace_id);
@@ -138,9 +140,12 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
           request,
         ),
       );
+      phase = 'transport';
       const response = await workspaceService(env, configured.binding).fetch(
         request,
       );
+      httpStatus = response.status;
+      phase = 'response';
       if (!response.ok) throw Error('Unavailable');
       return responseSchema.parse(await response.json());
     };
@@ -153,6 +158,11 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
         }, 8000);
       }),
     ]);
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+    phase = 'persistence';
     let seq = row.seq,
       revision = row.revision;
     if ('diagnostics' in result && result.diagnostics) {
@@ -202,52 +212,72 @@ async function observe(env: HostedEnv, row: Check): Promise<void> {
         'INSERT INTO sync_monitor_checks(workspace_id,checked_at,errors,error_since,error_alerted) VALUES(?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET checked_at=excluded.checked_at,errors=excluded.errors,error_since=excluded.error_since,error_alerted=excluded.error_alerted',
       ).bind(row.workspace_id, now, errors, since, errors >= 2 ? 1 : 0),
     ];
-    if (errors === 2)
+    const detail = {
+      code: controller.signal.aborted
+        ? 'observation_timeout'
+        : phase === 'response' && httpStatus !== null && httpStatus >= 400
+          ? 'observation_http_error'
+          : phase === 'response'
+            ? 'invalid_diagnostics'
+            : phase === 'persistence'
+              ? 'diagnostic_persistence'
+              : phase === 'configuration'
+                ? 'observer_configuration'
+                : 'observer_transport',
+      since,
+      observedAt: now,
+      durationMs: Date.now() - now,
+      phase,
+      httpStatus,
+    };
+    if (errors >= 2)
       updates.push(
         insertAlert(
           env,
           `${row.workspace_id}:unavailable:${since}`,
           row.workspace_id,
           'unavailable',
-          { code: 'diagnostics_unavailable', since },
+          detail,
           now,
         ),
       );
     await env.CONTROL_DB.batch(updates);
+    if (errors > 2)
+      await env.CONTROL_DB.prepare(
+        "UPDATE sync_monitor_alerts SET diagnostic=? WHERE id=? AND kind='unavailable'",
+      )
+        .bind(
+          JSON.stringify(detail),
+          `${row.workspace_id}:unavailable:${since}`,
+        )
+        .run();
   } finally {
     if (timer) clearTimeout(timer);
   }
 }
 
-export function syncAlertContent(
-  alert: Pick<SyncAlert, 'id' | 'kind' | 'diagnostic' | 'at'>,
-) {
-  const labels: Record<string, string> = {
-    failure: 'Dynadot sync failed',
-    recovery: 'Dynadot sync recovered',
-    gap: 'Dynadot diagnostics retention gap',
-    unavailable: 'Dynadot monitoring needs attention',
-    available: 'Dynadot monitoring restored',
-    test: 'Dynadot monitoring test',
-  };
-  const subject = `[domains.domains] ${labels[alert.kind] ?? 'Dynadot monitoring'} (${alert.id.slice(0, 8)})`;
-  const text = `${labels[alert.kind]}\nTime: ${new Date(alert.at).toISOString()}\nAlert ID: ${alert.id}\n\nSanitized diagnostics:\n${alert.diagnostic}\n\nReview retained events and delivery status: https://domains.domains/admin/sync-monitor\n\nOnly configured domain-inventory sync attempts are observed. This monitor does not initiate registrar calls.`;
-  return {
-    subject,
-    text,
-    html: `<pre style="white-space:pre-wrap">${escapeHtml(text)}</pre>`,
-  };
+// Health probes, retention gaps and recovery stay visible in the dashboard.
+// Email is reserved for actual Dynadot sync failures and explicit test sends.
+export function isEmailAlert(kind: string): boolean {
+  return kind === 'failure' || kind === 'test';
 }
+const EMAIL_COOLDOWN_MS = 30 * 60_000;
 
 export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
-  // A sending record is a durable pre-send claim. Binding API has no documented
-  // idempotency key. Ambiguous sends stay visible and are retried at most
-  // three times using a stable alert ID; delivery can be at-least-once.
+  const now = Date.now();
   await env.CONTROL_DB.prepare(
-    "UPDATE sync_monitor_alerts SET status='uncertain' WHERE status='sending' AND attempted_at<?",
+    "UPDATE sync_monitor_alerts SET status='uncertain' WHERE kind IN ('failure','test') AND status='sending' AND attempted_at<?",
   )
-    .bind(Date.now() - 10 * 60_000)
+    .bind(now - EMAIL_COOLDOWN_MS)
     .run();
+  const rows = (
+    await env.CONTROL_DB.prepare(
+      "SELECT * FROM sync_monitor_alerts WHERE kind IN ('failure','test') AND (status='pending' OR (status='uncertain' AND attempts<3 AND attempted_at<?)) ORDER BY at,id LIMIT 50",
+    )
+      .bind(now - EMAIL_COOLDOWN_MS)
+      .all<SyncAlert>()
+  ).results;
+  if (!rows.length) return;
   if (
     !env.EMAIL ||
     env.EMAIL_DELIVERY_VERIFIED !== 'true' ||
@@ -262,51 +292,65 @@ export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
   const admins: unknown = JSON.parse(env.ADMIN_USER_IDS ?? '[]');
   if (!allowed || !Array.isArray(admins) || !admins.includes(allowed.id))
     throw Error('Sync alert recipient is not the enabled administrator');
-  const recent = await env.CONTROL_DB.prepare(
-    'SELECT COUNT(*) n FROM sync_monitor_deliveries WHERE at>?',
+
+  // One atomic fleet-wide reservation, including concurrent collectors and
+  // ambiguous sends. A burst across many portfolios still sends one message.
+  const batchId = 'email-batch:' + crypto.randomUUID();
+  const slot = await env.CONTROL_DB.prepare(
+    "INSERT INTO sync_monitor_deliveries(alert_id,attempt,at) SELECT ?,1,? WHERE NOT EXISTS(SELECT 1 FROM sync_monitor_deliveries WHERE alert_id LIKE 'email-batch:%' AND at>?) RETURNING alert_id",
   )
-    .bind(Date.now() - 3600_000)
-    .first<{ n: number }>();
-  const budget = Math.max(0, 10 - (recent?.n ?? 0));
-  const rows = (
-    await env.CONTROL_DB.prepare(
-      "SELECT * FROM sync_monitor_alerts WHERE status='pending' OR (status='uncertain' AND attempts<3 AND attempted_at<?) ORDER BY at,id LIMIT ?",
-    )
-      .bind(Date.now() - 10 * 60_000, Math.min(5, budget))
-      .all<SyncAlert>()
-  ).results;
+    .bind(batchId, now, now - EMAIL_COOLDOWN_MS)
+    .first();
+  if (!slot) return;
+  const claimed: SyncAlert[] = [];
   for (const alert of rows) {
     const claim = await env.CONTROL_DB.prepare(
-      "UPDATE sync_monitor_alerts SET status='sending',attempted_at=?,attempts=attempts+1 WHERE id=? AND (status='pending' OR (status='uncertain' AND attempts<3 AND attempted_at<?)) RETURNING id,attempts",
+      "UPDATE sync_monitor_alerts SET status='sending',attempted_at=?,attempts=attempts+1 WHERE id=? AND kind IN ('failure','test') AND (status='pending' OR (status='uncertain' AND attempts<3 AND attempted_at<?)) RETURNING attempts",
     )
-      .bind(Date.now(), alert.id, Date.now() - 10 * 60_000)
-      .first();
+      .bind(now, alert.id, now - EMAIL_COOLDOWN_MS)
+      .first<{ attempts: number }>();
     if (!claim) continue;
     await env.CONTROL_DB.prepare(
       'INSERT INTO sync_monitor_deliveries(alert_id,attempt,at) VALUES(?,?,?)',
     )
-      .bind(alert.id, Number(claim.attempts), Date.now())
+      .bind(alert.id, claim.attempts, now)
       .run();
-    try {
-      const sent = await env.EMAIL.send({
-        from: { email: env.EMAIL_FROM, name: 'domains.domains system alerts' },
-        to: SYNC_ALERT_RECIPIENT,
-        headers: { 'X-DomBot-Alert-ID': alert.id },
-        ...syncAlertContent(alert),
-      });
-      await env.CONTROL_DB.prepare(
-        "UPDATE sync_monitor_alerts SET status='sent',sent_at=?,message_id=? WHERE id=?",
-      )
-        .bind(Date.now(), sent.messageId, alert.id)
-        .run();
-    } catch {
-      await env.CONTROL_DB.prepare(
-        "UPDATE sync_monitor_alerts SET status='uncertain' WHERE id=?",
-      )
-        .bind(alert.id)
-        .run();
-    }
+    claimed.push(alert);
   }
+  if (!claimed.length) return;
+  const test = claimed.every((alert) => alert.kind === 'test');
+  const title = test
+    ? 'Dynadot monitoring test'
+    : `Dynadot sync failures (${claimed.length})`;
+  const text = `${title}\n\n${claimed.map((alert) => `Time: ${new Date(alert.at).toISOString()}\nAlert ID: ${alert.id}\nSanitized diagnostics: ${alert.diagnostic}`).join('\n\n')}\n\nReview: https://domains.domains/admin/sync-monitor\n\nNew failures are grouped into at most one email every 30 minutes. Monitoring availability, recovery and retention-gap notices stay in the dashboard.`;
+  let result: EmailSendResult;
+  try {
+    result = await env.EMAIL.send({
+      from: { email: env.EMAIL_FROM, name: 'domains.domains system alerts' },
+      to: SYNC_ALERT_RECIPIENT,
+      subject: `[domains.domains] ${title}`,
+      text,
+      html: `<pre style="white-space:pre-wrap">${escapeHtml(text)}</pre>`,
+      headers: { 'X-DomBot-Alert-ID': batchId },
+    });
+  } catch {
+    await env.CONTROL_DB.batch(
+      claimed.map((alert) =>
+        env.CONTROL_DB.prepare(
+          "UPDATE sync_monitor_alerts SET status='uncertain' WHERE id=? AND status='sending'",
+        ).bind(alert.id),
+      ),
+    );
+    return;
+  }
+  // Persist the shared provider receipt atomically for the whole digest.
+  await env.CONTROL_DB.batch(
+    claimed.map((alert) =>
+      env.CONTROL_DB.prepare(
+        "UPDATE sync_monitor_alerts SET status='sent',sent_at=?,message_id=? WHERE id=? AND status='sending'",
+      ).bind(Date.now(), result.messageId, alert.id),
+    ),
+  );
 }
 
 export async function monitorDynadotSync(env: HostedEnv): Promise<void> {
@@ -338,7 +382,7 @@ export async function monitorDynadotSync(env: HostedEnv): Promise<void> {
         now - SYNC_RETENTION_MS,
       ),
       env.CONTROL_DB.prepare(
-        "DELETE FROM sync_monitor_alerts WHERE at<? AND status='sent'",
+        "DELETE FROM sync_monitor_alerts WHERE at<? AND (status='sent' OR kind NOT IN ('failure','test'))",
       ).bind(now - SYNC_RETENTION_MS),
       env.CONTROL_DB.prepare(
         'UPDATE sync_monitor_control SET completed_at=? WHERE id=1 AND lease=?',
