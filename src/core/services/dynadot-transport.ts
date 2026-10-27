@@ -2,7 +2,7 @@ const SPACING_MS = 1100;
 const RATE_LIMIT_SECONDS = 60;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
-function retrySeconds(value: string | null): number {
+export function dynadotRetrySeconds(value: string | null): number {
   if (value?.trim()) {
     const seconds = Number(value);
     if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds);
@@ -48,7 +48,7 @@ export function createDynadotFetch(
       // Let registrar-client wait outside its per-request timeout. Queued calls
       // share the cooldown without sending another request to Dynadot.
       if (limitedUntil > Date.now())
-        return new Response(null, {
+        return new Response('[dynadot:local-cooldown]', {
           status: 429,
           headers: {
             'Retry-After': String(
@@ -61,7 +61,7 @@ export function createDynadotFetch(
       const response = await send(input, init);
       const headers = new Headers(response.headers);
       if (response.status === 429) {
-        const seconds = retrySeconds(headers.get('Retry-After'));
+        const seconds = dynadotRetrySeconds(headers.get('Retry-After'));
         limitedUntil = Date.now() + seconds * 1000;
         // The library converts a missing header with Number(null), yielding 0.
         // Supply a positive delay, including for dates and invalid headers.

@@ -70,6 +70,79 @@ describe('durable cross-tenant proxy gate', () => {
       { status: 'waiting' },
     );
   });
+  it('retains provider tags and upstream cooldown through the real service boundary', async () => {
+    const bundle = await build({
+      entryPoints: ['src/hosted/proxy-scheduler.ts'],
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'browser',
+      external: ['cloudflare:*'],
+      target: 'es2022',
+    });
+    const relay = new Miniflare(
+      convertV4MiniflareOptions({
+        cf: false,
+        modules: true,
+        script: bundle.outputFiles[0].text,
+        compatibilityDate: '2026-10-01',
+        bindings: {
+          SHARED_PROXY_IP: '152.42.223.194',
+          SHARED_PROXY_MODE: 'relay',
+          SHARED_PROXY_CONCURRENCY: '4',
+        },
+        durableObjects: {
+          SHARED_PROXY_QUEUE: {
+            className: 'SharedProxyQueue',
+            useSQLite: true,
+          },
+        },
+      }),
+    );
+    try {
+      const send = async (value: object) =>
+        (
+          await relay.dispatchFetch('https://queue.test/lease', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(value),
+          })
+        ).json() as Promise<Record<string, unknown>>;
+      const a = {
+        action: 'acquire',
+        id: crypto.randomUUID(),
+        tenant: crypto.randomUUID(),
+        route: 'relay',
+        provider: 'dynadot',
+      };
+      const b = { ...a, id: crypto.randomUUID(), tenant: crypto.randomUUID() };
+      const first = await send(a);
+      expect(first.status).toBe('granted');
+      expect((await send(b)).status).toBe('waiting');
+      expect(
+        (
+          await send({
+            action: 'acquire',
+            id: crypto.randomUUID(),
+            tenant: crypto.randomUUID(),
+            route: 'relay',
+          })
+        ).status,
+      ).toBe('granted');
+      await send({
+        ...a,
+        action: 'release',
+        token: first.token,
+        retryAfterMs: 180000,
+      });
+      const deferred = await send(b);
+      expect(deferred.status).toBe('deferred');
+      expect(deferred.retryAfterMs).toBeGreaterThan(170000);
+    } finally {
+      await relay.dispose();
+    }
+  });
+
   it('rejects invalid, oversized and non-queue requests before touching the gate', async () => {
     expect((await mf.dispatchFetch('https://queue.test/lease')).status).toBe(
       404,

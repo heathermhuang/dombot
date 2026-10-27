@@ -2,6 +2,7 @@ import {
   getActiveRegistrars,
   getCachedPortfolio,
   getPortfolio,
+  retryDeferredSyncs,
 } from './registrars';
 import { getSettings } from './settings';
 import { broadcastPortfolioChanged } from '../events';
@@ -53,12 +54,16 @@ export async function syncAll(ifOlderThanMs?: number): Promise<boolean> {
   if (getActiveRegistrars().length === 0) return false;
   // Don't race a bulk job's per-item cache patches; the next tick retries.
   if (isBulkRunning()) return false;
-  if (ifOlderThanMs !== undefined) {
-    const fetchedAt = getCachedPortfolio()?.fetchedAt ?? 0;
-    if (Date.now() - fetchedAt < ifOlderThanMs) return false;
-  }
   inFlight = true;
   try {
+    const recovered = await retryDeferredSyncs();
+    if (ifOlderThanMs !== undefined) {
+      const fetchedAt = getCachedPortfolio()?.fetchedAt ?? 0;
+      if (Date.now() - fetchedAt < ifOlderThanMs) {
+        if (recovered) broadcastPortfolioChanged();
+        return recovered;
+      }
+    }
     await getPortfolio(true, 'scheduled');
     broadcastPortfolioChanged();
     console.log('[auto-sync] portfolio refreshed');

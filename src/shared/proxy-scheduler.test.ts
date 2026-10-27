@@ -234,3 +234,92 @@ describe('shared proxy admission', () => {
     expect(state.active[0]?.tenant).toBe('c');
   });
 });
+
+describe('Dynadot shared egress lane', () => {
+  const policy = { concurrency: 4, cooldownMs: 0, relayOnly: true };
+  const ticket = (id: string, provider?: 'dynadot') => ({
+    action: 'acquire' as const,
+    id,
+    tenant: id,
+    route: 'relay' as const,
+    ...(provider ? { provider } : {}),
+  });
+  it('serializes independent Dynadot clients while retaining other relay capacity', () => {
+    const state = emptyProxyQueue();
+    expect(
+      advanceProxyQueue(state, ticket('a', 'dynadot'), 0, () => 'a', policy)
+        .status,
+    ).toBe('granted');
+    expect(
+      advanceProxyQueue(state, ticket('b', 'dynadot'), 0, () => 'b', policy)
+        .status,
+    ).toBe('waiting');
+    expect(
+      advanceProxyQueue(state, ticket('other'), 0, () => 'other', policy)
+        .status,
+    ).toBe('granted');
+    advanceProxyQueue(
+      state,
+      { action: 'release', id: 'a', tenant: 'a', token: 'a' },
+      500,
+      () => '',
+      policy,
+    );
+    expect(
+      advanceProxyQueue(state, ticket('b', 'dynadot'), 1599, () => 'b', policy)
+        .status,
+    ).toBe('waiting');
+    expect(
+      advanceProxyQueue(state, ticket('b', 'dynadot'), 1600, () => 'b', policy)
+        .status,
+    ).toBe('granted');
+  });
+  it('persists upstream cooldown across tenants and restart and fences stale reports', () => {
+    let state = emptyProxyQueue();
+    advanceProxyQueue(state, ticket('a', 'dynadot'), 0, () => 'a', policy);
+    advanceProxyQueue(
+      state,
+      {
+        action: 'release',
+        id: 'a',
+        tenant: 'a',
+        token: 'a',
+        retryAfterMs: 180000,
+      },
+      100,
+      () => '',
+      policy,
+    );
+    state = JSON.parse(JSON.stringify(state));
+    expect(
+      advanceProxyQueue(state, ticket('b', 'dynadot'), 101, () => 'b', policy),
+    ).toMatchObject({ status: 'deferred', retryAfterMs: 179999 });
+    expect(state.pending).toHaveLength(0);
+    expect(
+      advanceProxyQueue(state, ticket('other'), 101, () => 'other', policy)
+        .status,
+    ).toBe('granted');
+    advanceProxyQueue(
+      state,
+      {
+        action: 'release',
+        id: 'a',
+        tenant: 'a',
+        token: 'wrong',
+        retryAfterMs: 86400000,
+      },
+      102,
+      () => '',
+      policy,
+    );
+    expect(
+      advanceProxyQueue(
+        state,
+        ticket('b', 'dynadot'),
+        180100,
+        () => 'b',
+        policy,
+      ).status,
+    ).toBe('granted');
+  });
+});

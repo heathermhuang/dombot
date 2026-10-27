@@ -18,6 +18,10 @@ function commandOf(value: unknown): ProxyQueueCommand | null {
     !uuid.test(command.tenant) ||
     (command.route !== undefined &&
       !['serial', 'relay'].includes(command.route)) ||
+    (command.provider !== undefined && command.provider !== 'dynadot') ||
+    (command.retryAfterMs !== undefined &&
+      (!Number.isSafeInteger(command.retryAfterMs) ||
+        command.retryAfterMs < 0)) ||
     (command.token !== undefined &&
       (typeof command.token !== 'string' || !uuid.test(command.token)))
   )
@@ -28,6 +32,10 @@ function commandOf(value: unknown): ProxyQueueCommand | null {
     tenant: command.tenant,
     ...(command.token ? { token: command.token } : {}),
     ...(command.route ? { route: command.route } : {}),
+    ...(command.provider ? { provider: command.provider } : {}),
+    ...(command.retryAfterMs !== undefined
+      ? { retryAfterMs: command.retryAfterMs }
+      : {}),
   };
 }
 

@@ -1,3 +1,5 @@
+import { RateLimitError } from '@aoxborrow/registrar-client';
+import { dynadotRetrySeconds } from '../core/services/dynadot-transport';
 import { connect } from 'cloudflare:sockets';
 import { Client } from 'tunnelfetch';
 import {
@@ -35,10 +37,24 @@ export function createWorkerProxyFetch(
       throw Object.assign(new Error('A secure relay is required'), {
         code: 'PROXY_QUEUE_UNAVAILABLE',
       });
+    const dynadot = new URL(url).hostname === 'api.dynadot.com';
+    let retryAfterMs: number | undefined;
     const release = await acquireProxyLease(
-      { ...settings, relayUrl },
+      {
+        ...settings,
+        relayUrl,
+        ...(dynadot ? { provider: 'dynadot' as const } : {}),
+      },
       init.signal,
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof RateLimitError) return error;
+      throw error;
+    });
+    if (release instanceof RateLimitError)
+      return new Response('[dynadot:shared-cooldown]', {
+        status: 429,
+        headers: { 'Retry-After': String(release.retryAfter ?? 60) },
+      });
     try {
       if (init.signal?.aborted)
         throw Object.assign(
@@ -46,17 +62,21 @@ export function createWorkerProxyFetch(
           { code: 'PROXY_QUEUE_CANCELLED' },
         );
       const selected = relayUrl ? { ...proxy, url: relayUrl } : proxy;
-      return await workerProxyFetch(selected, url, {
+      const response = await workerProxyFetch(selected, url, {
         ...init,
         signal: AbortSignal.any([
           ...(init.signal ? [init.signal] : []),
           AbortSignal.timeout(PROXY_NETWORK_MS),
         ]),
       });
+      if (dynadot && response.status === 429)
+        retryAfterMs =
+          dynadotRetrySeconds(response.headers.get('Retry-After')) * 1000;
+      return response;
     } finally {
       // A failed release never opens another connection: the durable lease
       // remains held until its conservative expiry and cooldown.
-      await release().catch(() => {});
+      await release(retryAfterMs).catch(() => {});
     }
   };
 }

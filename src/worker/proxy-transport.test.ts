@@ -274,3 +274,64 @@ describe('Worker proxy transport lifecycle', () => {
     expect(mock.fetch).toHaveBeenCalledOnce();
   });
 });
+
+describe('Dynadot upstream feedback', () => {
+  it('reports Retry-After under the fenced lease without API credentials or URLs', async () => {
+    const commands: Record<string, unknown>[] = [];
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const c = JSON.parse(String(init?.body));
+        commands.push(c);
+        return Response.json(
+          c.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(
+      new Response('limited', {
+        status: 429,
+        headers: { 'Retry-After': '180' },
+      }),
+    );
+    const response = await createWorkerProxyFetch({
+      ip: proxy.ip,
+      tenant: crypto.randomUUID(),
+      service,
+    })(proxy, 'https://api.dynadot.com/restful/v2/domains', {});
+    expect(response.status).toBe(429);
+    expect(commands[0].provider).toBe('dynadot');
+    expect(commands[1]).toMatchObject({
+      action: 'release',
+      retryAfterMs: 180000,
+    });
+    expect(JSON.stringify(commands)).not.toMatch(
+      /secret|dynadot.com|domains|apiKey/,
+    );
+  });
+  it('returns a distinguishable cooldown without opening a socket', async () => {
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+        Response.json(
+          JSON.parse(String(init?.body)).action === 'acquire'
+            ? { status: 'deferred', retryAfterMs: 180000 }
+            : { status: 'cancelled' },
+        ),
+      ),
+    };
+    const response = await createWorkerProxyFetch({
+      ip: proxy.ip,
+      tenant: crypto.randomUUID(),
+      service,
+    })(proxy, 'https://api.dynadot.com/restful/v2/domains', {});
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('180');
+    expect(await response.text()).toBe('[dynadot:shared-cooldown]');
+    expect(mock.fetch).not.toHaveBeenCalled();
+  });
+});

@@ -7,6 +7,7 @@ vi.mock('./registrars', () => ({
   getActiveRegistrars: () => getActiveRegistrars(),
   getCachedPortfolio: () => getCachedPortfolio(),
   getPortfolio: (...a: unknown[]) => getPortfolio(...a),
+  retryDeferredSyncs: async () => false,
 }));
 const isBulkRunning = vi.fn<() => boolean>();
 vi.mock('./bulk-jobs', () => ({ isBulkRunning: () => isBulkRunning() }));

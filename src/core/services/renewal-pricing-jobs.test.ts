@@ -82,6 +82,48 @@ describe('hosted renewal pricing', () => {
     vi.setSystemTime(Date.now() + 60_001);
     expect(await stepRenewalPricing()).toEqual({ remaining: 2, failed: 0 });
   });
+  it('bounds repeated rate limits and preserves the old quote as failed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    writeEntry('detail', 'dynadot:first.ai', {
+      renewalQuote: { renewal: 60, currency: 'USD' },
+    });
+    await getPortfolio(true);
+    pricing.mockRejectedValue(new RateLimitError('Too many requests', 60));
+    for (let i = 0; i < 3; i++) {
+      await stepRenewalPricing();
+      vi.setSystemTime(Date.now() + 60_001);
+    }
+    expect(pricing).toHaveBeenCalledTimes(3);
+    expect(getRenewalPricingStatus()).toMatchObject({
+      remaining: 2,
+      failed: 1,
+    });
+    expect(
+      readEntry<{ renewalQuote: { renewal: number } }>(
+        'detail',
+        'dynadot:first.ai',
+      )?.data.renewalQuote.renewal,
+    ).toBe(60);
+  });
+  it('retains queued prices while inventory is temporarily unavailable', async () => {
+    await getPortfolio(true);
+    const entry = readEntry('portfolio', 'dynadot')!;
+    writeEntry('portfolio', 'dynadot', {
+      ...(entry.data as object),
+      lastError: 'HTTP 429',
+    });
+    await stepRenewalPricing();
+    await flushWrites();
+    expect(await raw.get('renewal-pricing-jobs', 'dynadot')).toMatchObject({
+      pending: domains.map((d) => d.domainName),
+    });
+    expect(pricing).not.toHaveBeenCalled();
+    expect(getRenewalPricingStatus()).toMatchObject({
+      remaining: 0,
+      blocked: 3,
+    });
+  });
+
   it('keeps a large inventory sync independent of hundreds of price requests', async () => {
     listedDomains = Array.from({ length: 600 }, (_, i) =>
       createDomain({ domainName: `name-${i}.ai`, registrar: 'dynadot' }),

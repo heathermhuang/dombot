@@ -1,3 +1,4 @@
+import { RateLimitError } from '@aoxborrow/registrar-client';
 import type { ProxyRoute } from '../shared/proxy';
 import {
   PROXY_NETWORK_MS,
@@ -12,6 +13,7 @@ export interface ProxySchedulerSettings {
   service?: Pick<Fetcher, 'fetch'>;
   relayUrl?: string;
   managedUrl?: string;
+  provider?: 'dynadot';
 }
 
 /** A supplied custom proxy must never have its credentials silently replaced. */
@@ -76,7 +78,7 @@ function pause(ms: number, signal?: AbortSignal | null): Promise<void> {
 export async function acquireProxyLease(
   settings: ProxySchedulerSettings,
   signal?: AbortSignal | null,
-): Promise<() => Promise<void>> {
+): Promise<(retryAfterMs?: number) => Promise<void>> {
   if (!settings.service || !settings.tenant)
     throw failure('PROXY_QUEUE_UNAVAILABLE');
   const id = crypto.randomUUID(),
@@ -85,6 +87,7 @@ export async function acquireProxyLease(
   const call = async (
     action: ProxyQueueCommand['action'],
     token?: string,
+    retryAfterMs?: number,
   ): Promise<ProxyQueueReply> => {
     const response = await settings.service!.fetch(
       'https://proxy-scheduler.internal/lease',
@@ -97,6 +100,8 @@ export async function acquireProxyLease(
           tenant,
           ...(token ? { token } : {}),
           route: settings.relayUrl ? 'relay' : 'serial',
+          ...(settings.provider ? { provider: settings.provider } : {}),
+          ...(retryAfterMs ? { retryAfterMs } : {}),
         } satisfies ProxyQueueCommand),
         signal: AbortSignal.timeout(5000),
       },
@@ -117,10 +122,15 @@ export async function acquireProxyLease(
         )
           throw failure('PROXY_QUEUE_UNAVAILABLE');
         granted = true;
-        return async () => {
-          await call('release', reply.token);
+        return async (retryAfterMs) => {
+          await call('release', reply.token, retryAfterMs);
         };
       }
+      if (reply.status === 'deferred')
+        throw new RateLimitError(
+          'Dynadot shared connection is cooling down after an upstream rate limit.',
+          Math.max(1, Math.ceil(reply.retryAfterMs / 1000)),
+        );
       if (reply.status === 'busy') {
         // Capacity is temporary, not a registrar failure. A full sync can
         // have more proxy reads than this tenant's four pending tickets.
@@ -142,6 +152,7 @@ export async function acquireProxyLease(
     }
     throw failure('PROXY_QUEUE_TIMEOUT');
   } catch (error) {
+    if (error instanceof RateLimitError) throw error;
     if (
       error instanceof Error &&
       'code' in error &&
