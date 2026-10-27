@@ -167,6 +167,10 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
     });
   }
 
+  async syncMonitor(revision?: string) {
+    return worker.syncMonitor(this.env, revision);
+  }
+
   async adminSnapshot() {
     // These are cache reads through the engine's own auth/hydrate/flush lock.
     // No registrar API calls, customer settings changes or secret export.

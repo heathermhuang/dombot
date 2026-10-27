@@ -1,3 +1,4 @@
+import { monitorDynadotSync } from './sync-monitor';
 import { canonicalDomain } from '../shared/publication';
 import { adminRoutes, isAdmin } from './admin';
 import { receiveSalesReply } from './sales-relay';
@@ -1546,6 +1547,7 @@ export default {
   async scheduled(event: ScheduledController, env: HostedEnv) {
     let maintenanceFailed = false;
     for (const task of [
+      monitorDynadotSync,
       drainSales,
       refreshDomainControls,
       refreshSalesHostnames,

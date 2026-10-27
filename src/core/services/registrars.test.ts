@@ -1,3 +1,6 @@
+import { configureSyncDiagnostics } from './sync-diagnostics';
+import { getStore, flushWrites } from '../storage/namespace';
+import { syncDiagnosticsSchema } from '../../shared/sync-monitor';
 import { configureStore, hydrateStores } from '../storage/namespace';
 import { MemoryDocStore } from '../storage/doc-store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1220,4 +1223,29 @@ describe('getDomainDetail — nameserver resolution', () => {
     const detail = await getDomainDetail('dynadot', 'a.com', true);
     expect(detail).toBeNull();
   });
+});
+
+it('records actual Dynadot manual, MCP and scheduled inventory attempts through recovery', async () => {
+  configureSyncDiagnostics(true);
+  try {
+    listPortfolio.mockRejectedValueOnce(
+      new Error('proxy [proxy:PROXY_QUEUE_TIMEOUT] key=secret'),
+    );
+    await syncRegistrar('dynadot', undefined, 'manual');
+    listPortfolio.mockResolvedValue({ domains: [], errors: [] });
+    await syncRegistrar('dynadot', undefined, 'mcp');
+    await getPortfolio(true, 'scheduled');
+    await flushWrites();
+    const diagnostics = syncDiagnosticsSchema.parse(
+      await getStore().get('sync-monitor', 'diagnostics'),
+    );
+    expect(diagnostics.events.map((e) => [e.ok, e.code, e.trigger])).toEqual([
+      [false, 'queue_timeout', 'manual'],
+      [true, 'none', 'mcp'],
+      [true, 'none', 'scheduled'],
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain('secret');
+  } finally {
+    configureSyncDiagnostics(false);
+  }
 });

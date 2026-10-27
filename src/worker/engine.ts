@@ -1,8 +1,10 @@
 import worker from './index';
+import { readSyncMonitor } from './sync-monitor';
 import type { DomBotEngine, DomBotEnvironment } from './engine-contract';
 import { mcpPreflight as admitMcp } from './mcp-preflight';
 
 const engine: DomBotEngine = {
+  syncMonitor: readSyncMonitor,
   fetch: async (request, env, context) =>
     worker.fetch(request, env, {
       waitUntil: (work) => context.waitUntil(work),

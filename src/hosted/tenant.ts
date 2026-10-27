@@ -35,6 +35,7 @@ export default {
         '/platform-internal/health',
         '/platform-internal/pause',
         '/platform-internal/admin-snapshot',
+        '/platform-internal/sync-monitor',
       ].includes(platformPath)
     ) {
       // Anonymous lander admission cannot operate platform lifecycle controls.
@@ -46,7 +47,10 @@ export default {
         ))
       )
         return new Response('Forbidden', { status: 403 });
-      if (platformPath === '/platform-internal/admin-snapshot') {
+      if (
+        platformPath === '/platform-internal/admin-snapshot' ||
+        platformPath === '/platform-internal/sync-monitor'
+      ) {
         if (request.method !== 'GET')
           return new Response('Method not allowed', { status: 405 });
         const proof = await verifyGatewayRequest(
@@ -56,9 +60,16 @@ export default {
         );
         if (!proof || proof.owner !== null || proof.sales || proof.mcp)
           return new Response('Forbidden', { status: 403 });
-        return Response.json(await coordinator(env).adminSnapshot(), {
-          headers: { 'Cache-Control': 'no-store' },
-        });
+        return Response.json(
+          platformPath.endsWith('/sync-monitor')
+            ? await coordinator(env).syncMonitor(
+                new URL(request.url).searchParams.get('revision') ?? undefined,
+              )
+            : await coordinator(env).adminSnapshot(),
+          {
+            headers: { 'Cache-Control': 'no-store' },
+          },
+        );
       }
       if (Reflect.get(env, 'DOMBOT_PLATFORM_ALARMS') !== 'true')
         return new Response('Not found', { status: 404 });

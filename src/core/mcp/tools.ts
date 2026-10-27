@@ -700,7 +700,7 @@ export function registerTools(
         annotations: { readOnlyHint: true },
       },
       async () => {
-        const portfolio = await getPortfolio(true);
+        const portfolio = await getPortfolio(true, 'mcp');
         broadcastPortfolioChanged();
         return json(syncSummary(portfolio));
       },
@@ -950,7 +950,7 @@ export function registerTools(
         annotations: { readOnlyHint: true },
       },
       async ({ accountId, registrar }) => {
-        const portfolio = await syncRegistrar(registrar, accountId);
+        const portfolio = await syncRegistrar(registrar, accountId, 'mcp');
         broadcastPortfolioChanged();
         return json(syncSummary(portfolio));
       },
