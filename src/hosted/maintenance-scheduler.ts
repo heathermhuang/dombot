@@ -1,4 +1,5 @@
 import type { DomBotMaintenanceState } from '@domains-domains/dombot-engine';
+import type { DombotApi } from '../shared/ipc';
 
 const KEY = 'maintenance:v1';
 const INTERVAL = 300_000;
@@ -129,19 +130,28 @@ export class MaintenanceScheduler {
 
 // Unknown API/MCP/internal operations conservatively get a recovery alarm.
 // These explicit reads cannot introduce maintenance work.
-const reads = new Set([
+const reads = new Set<keyof DombotApi>([
   'getSettings',
   'getRevisions',
   'getFolders',
   'getImportedDomains',
   'getDomainEvents',
   'getRegistrarMetadata',
-  'getDomainNotes',
   'getListPrices',
-  'getRenewalPrices',
   'getBulkJob',
-  'listBulkJobs',
   'getProxySettings',
+  'getAppInfo',
+  'getMcpInfo',
+  'getUpdaterState',
+  'ping',
+  'getRegistrarCatalog',
+  'getPortfolioPricing',
+  'getManualPrices',
+  'getPurchases',
+  'previewDomainImport',
+  'exportData',
+  'listMcpClients',
+  'listPendingApprovals',
 ]);
 export async function mayChangeMaintenance(request: Request): Promise<boolean> {
   const path = new URL(request.url).pathname;
@@ -155,7 +165,7 @@ export async function mayChangeMaintenance(request: Request): Promise<boolean> {
     );
   if (request.method === 'POST' && path.startsWith('/api/')) {
     const method = path.slice('/api/'.length);
-    if (reads.has(method)) return false;
+    if (reads.has(method as keyof DombotApi)) return false;
     if (method === 'listPortfolio') {
       const body = (await request
         .clone()

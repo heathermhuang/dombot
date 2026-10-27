@@ -154,7 +154,16 @@ it('does not activate on portfolio reads, discovery or assets; unknown writes re
       body: JSON.stringify({ args }),
     });
   expect(await mayChangeMaintenance(api('listPortfolio', [false]))).toBe(false);
-  expect(await mayChangeMaintenance(api('getSettings'))).toBe(false);
+  for (const name of [
+    'getSettings',
+    'getAppInfo',
+    'getMcpInfo',
+    'getRegistrarCatalog',
+    'getPortfolioPricing',
+    'listMcpClients',
+  ])
+    expect(await mayChangeMaintenance(api(name))).toBe(false);
+  expect(await mayChangeMaintenance(api('hydrateFromCache'))).toBe(true);
   expect(await mayChangeMaintenance(api('saveRegistrarCredentials'))).toBe(
     true,
   );
