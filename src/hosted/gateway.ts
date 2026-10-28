@@ -1,3 +1,8 @@
+import {
+  addressState,
+  claimAddress,
+  publicAddressRequest,
+} from './portfolio-addresses';
 import { monitorDynadotSync } from './sync-monitor';
 import { canonicalDomain } from '../shared/publication';
 import { adminRoutes, isAdmin } from './admin';
@@ -138,6 +143,8 @@ app.use(
   }),
 );
 app.use('*', async (c, next) => {
+  const publicSiteResponse = await publicAddressRequest(c.req.raw, c.env);
+  if (publicSiteResponse) return publicSiteResponse;
   const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
   if (redirect) return redirect;
   c.header('Cache-Control', 'no-store');
@@ -1190,7 +1197,8 @@ app.all('/w/:workspace/*', async (c) => {
       !user &&
       c.req.method === 'GET' &&
       !path.startsWith('/api') &&
-      !path.startsWith('/publishing')
+      !path.startsWith('/publishing') &&
+      path !== '/site-address'
     )
       return c.redirect(
         `/login?next=${encodeURIComponent(base + path + url.search)}`,
@@ -1200,6 +1208,31 @@ app.all('/w/:workspace/*', async (c) => {
       { error: user ? 'Account access denied' : 'Not signed in' },
       user ? 403 : 401,
     );
+  }
+  if (path === '/site-address') {
+    if (!user || user.workspace_id !== id)
+      return c.json({ error: 'Not signed in' }, 401);
+    if (c.req.method === 'GET') return c.json(await addressState(c.env, id));
+    if (c.req.method !== 'PUT')
+      return c.json({ error: 'Method not allowed' }, 405);
+    if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    if (!(await account(c.env).rateLimit(`site-address:${id}`, 20)))
+      return c.json({ error: 'Try again later.' }, 429);
+    try {
+      return c.json(await claimAddress(c.env, id, await c.req.json()));
+    } catch (error) {
+      return c.json(
+        {
+          error:
+            error instanceof z.ZodError
+              ? 'Choose a lowercase address using letters, numbers and hyphens. Some names are reserved.'
+              : error instanceof Error
+                ? error.message
+                : 'Could not save the address.',
+        },
+        409,
+      );
+    }
   }
   if (
     path === '/sales/recipient' &&

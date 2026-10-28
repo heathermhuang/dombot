@@ -38,6 +38,8 @@
   ],
   "vars": {
     "ADMIN_USER_IDS": "[]",
+    "PUBLIC_SITE_ADDRESSES_ENABLED": "false",
+    "PUBLIC_SITE_SUBDOMAINS_ENABLED": "false",
     "SYNC_MONITOR_ENABLED": "false",
     "WORKSPACES": "[]",
     "SOURCE_COMMIT": "",

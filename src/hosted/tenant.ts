@@ -1,3 +1,4 @@
+import { publicSite } from './public-site';
 import {
   verifyTenantAdmission,
   verifyGatewayRequest,
@@ -31,6 +32,26 @@ export default {
       );
     }
     const platformPath = new URL(request.url).pathname;
+    if (platformPath === '/platform-internal/public-site') {
+      const proof = await verifyGatewayRequest(
+        env.DOMBOT_GATEWAY_SECRET ?? '',
+        env.DOMBOT_WORKSPACE_ID ?? '',
+        request,
+      );
+      if (
+        request.method !== 'GET' ||
+        !proof ||
+        proof.owner !== null ||
+        proof.sales ||
+        proof.mcp
+      )
+        return new Response('Forbidden', {
+          status: 403,
+          headers: { 'Cache-Control': 'no-store' },
+        });
+      return publicSite(request, env.DB);
+    }
+
     if (
       [
         '/platform-internal/reconcile',

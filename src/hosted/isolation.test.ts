@@ -99,6 +99,7 @@ beforeAll(async () => {
           },
           bindings: {
             SOURCE_COMMIT: 'a'.repeat(40),
+            PUBLIC_SITE_ADDRESSES_ENABLED: 'true',
             SALES_CUSTOM_HOSTS_ENABLED: 'true',
             AUTH_PEPPER: 'test-only-authentication-pepper-'.repeat(3),
             WORKSPACES: JSON.stringify(
@@ -161,6 +162,7 @@ beforeAll(async () => {
   await control.exec(sql('hosted/migrations/0007_sales_hostnames.sql'));
   await control.exec(sql('hosted/migrations/0010_shared_mcp.sql'));
   await control.exec(sql('hosted/migrations/0011_passkey_names.sql'));
+  await control.exec(sql('hosted/migrations/0015_portfolio_addresses.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
     await db.exec(sql('migrations/0001_docs.sql'));
@@ -189,6 +191,55 @@ afterAll(async () => {
 });
 
 describe('owner site routing and isolation', () => {
+  it('claims a short public address only for the signed-in account with a same-origin request', async () => {
+    const path = `/w/${ids[0]}/site-address`;
+    expect((await request(path)).status).toBe(401);
+    expect(
+      (await request(path, 'PUT', { handle: 'sample-owner' }, cookies[1]))
+        .status,
+    ).toBe(403);
+    const badOrigin = await gateway.fetch(
+      new Request(`http://localhost${path}`, {
+        method: 'PUT',
+        headers: {
+          Cookie: cookies[0],
+          Origin: 'https://other.example',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ handle: 'sample-owner' }),
+      }),
+    );
+    expect(badOrigin.status).toBe(403);
+    const saved = await request(
+      path,
+      'PUT',
+      { handle: 'sample-owner' },
+      cookies[0],
+    );
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).address.handle).toBe('sample-owner');
+    expect(
+      (
+        await request(
+          `/w/${ids[1]}/site-address`,
+          'PUT',
+          { handle: 'sample-owner' },
+          cookies[1],
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await request(
+          `/w/${ids[0]}/platform-internal/public-site?__public_path=/sample-owner`,
+          'GET',
+          undefined,
+          cookies[0],
+        )
+      ).status,
+    ).toBe(404);
+  });
+
   it('caps pricing below the shared quota, provides a cooldown, and reserves owner refresh slots', async () => {
     const db = await mf.getD1Database('CONTROL_DB', 'gateway');
     const bucket = Math.floor(Date.now() / 600_000);

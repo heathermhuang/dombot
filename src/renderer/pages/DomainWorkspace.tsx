@@ -1,3 +1,4 @@
+import { usePortfolioAddress } from '../components/owner-site/PortfolioAddress';
 import {
   pageMembership,
   pageMembershipLabel,
@@ -139,6 +140,7 @@ export default function DomainWorkspace({
   );
   const navigate = useNavigate();
   const location = useLocation();
+  const { state: addressState } = usePortfolioAddress();
   const requestedView = new URLSearchParams(location.search).get('view');
   const view =
     area === 'domains'
@@ -415,9 +417,11 @@ export default function DomainWorkspace({
           : changes.count > 0
             ? 'Draft saved'
             : 'No pending changes';
-  const publicUrl = window.location.origin + hostPath(`/p/${draft.handle}`);
+  const publicUrl =
+    addressState?.address?.url ??
+    window.location.origin + hostPath(`/p/${draft.handle}`);
   const liveUrl = state.published
-    ? hostPath(`/p/${state.published.handle}`)
+    ? (addressState?.address?.url ?? hostPath(`/p/${state.published.handle}`))
     : null;
   const rows = filtered.slice(
     (Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))) - 1) *
@@ -579,9 +583,7 @@ export default function DomainWorkspace({
   );
   const copyLink = () =>
     void navigator.clipboard
-      .writeText(
-        window.location.origin + (liveUrl ?? hostPath(`/p/${draft.handle}`)),
-      )
+      .writeText(new URL(liveUrl ?? publicUrl, window.location.origin).href)
       .then(() => setNotice('Page link copied.'))
       .catch(() =>
         setActionError(
@@ -1068,6 +1070,10 @@ export default function DomainWorkspace({
             draft={draft}
             onChange={change}
             publicUrl={publicUrl}
+            showAddress={
+              !addressState?.address ||
+              issues.some((issue) => issue.field === 'handle')
+            }
             issues={issues.filter((issue) => !issue.domain)}
           />
         </div>
@@ -1174,6 +1180,7 @@ export default function DomainWorkspace({
               if (published)
                 setReceipt({
                   url:
+                    addressState?.address?.url ??
                     window.location.origin + hostPath(`/p/${published.handle}`),
                   time: published.publishedAt,
                 });

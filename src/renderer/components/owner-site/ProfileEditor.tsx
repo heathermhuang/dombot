@@ -2,10 +2,12 @@ import type { OwnerSiteDraft } from '../../../shared/owner-site';
 export function ProfileEditor({
   draft,
   lockedHandle,
+  showAddress = true,
   onChange,
 }: {
   draft: OwnerSiteDraft;
   lockedHandle: boolean;
+  showAddress?: boolean;
   onChange: (draft: OwnerSiteDraft) => void;
 }) {
   const profile = draft.profile;
@@ -21,16 +23,18 @@ export function ProfileEditor({
         stays private until you select names.
       </p>
       <div className="os-fields">
-        <label>
-          Site address
-          <input
-            value={draft.handle}
-            disabled={lockedHandle}
-            onChange={(e) => onChange({ ...draft, handle: e.target.value })}
-            maxLength={40}
-          />
-          <small>/p/{draft.handle} · fixed after the first save</small>
-        </label>
+        {showAddress && (
+          <label>
+            Site address
+            <input
+              value={draft.handle}
+              disabled={lockedHandle}
+              onChange={(e) => onChange({ ...draft, handle: e.target.value })}
+              maxLength={40}
+            />
+            <small>/p/{draft.handle} · fixed after the first save</small>
+          </label>
+        )}
         <label>
           Display name
           <input
