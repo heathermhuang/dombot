@@ -1,4 +1,7 @@
-import { RateLimitError } from '@aoxborrow/registrar-client';
+import {
+  RateLimitError,
+  type RegistrarName,
+} from '@aoxborrow/registrar-client';
 import { dynadotRetrySeconds } from '../core/services/dynadot-transport';
 import { connect } from 'cloudflare:sockets';
 import { Client } from 'tunnelfetch';
@@ -19,7 +22,8 @@ import {
 } from './proxy-scheduler';
 
 export function workerProxyPolicy(settings: ProxySchedulerSettings) {
-  return (proxy: Parameters<ProxyFetch>[0]) =>
+  return (proxy: Parameters<ProxyFetch>[0], registrar?: RegistrarName) =>
+    (registrar === 'dynadot' && Boolean(settings.tenant || settings.service)) ||
     scheduledProxy(settings, proxy)
       ? { timeout: PROXY_QUEUE_WAIT_MS + PROXY_NETWORK_MS + 5000, retries: 0 }
       : {};
@@ -29,7 +33,11 @@ export function createWorkerProxyFetch(
   settings: ProxySchedulerSettings,
 ): ProxyFetch {
   return async (proxy, url, init) => {
-    if (!scheduledProxy(settings, proxy))
+    const dynadot = new URL(url).hostname === 'api.dynadot.com';
+    if (
+      !(dynadot && (settings.tenant || settings.service)) &&
+      !scheduledProxy(settings, proxy)
+    )
       return workerProxyFetch(proxy, url, init);
     const relayUrl = managedProxy(settings, proxy)
       ? settings.relayUrl
@@ -38,7 +46,6 @@ export function createWorkerProxyFetch(
       throw Object.assign(new Error('A secure relay is required'), {
         code: 'PROXY_QUEUE_UNAVAILABLE',
       });
-    const dynadot = new URL(url).hostname === 'api.dynadot.com';
     let retryAfterMs: number | undefined;
     const release = await acquireProxyLease(
       {

@@ -64,6 +64,13 @@ export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
         concurrency,
         active: state.active.length,
         queued: state.pending.length,
+        dynadotActive: state.active.filter(
+          (grant) => grant.provider === 'dynadot',
+        ).length,
+        dynadotQueued: state.pending.filter(
+          (ticket) => ticket.provider === 'dynadot',
+        ).length,
+        dynadotLimitedUntil: state.dynadotLimitedUntil ?? 0,
         availableAt: state.availableAt,
         nextExpiryAt: Math.min(
           ...state.active.map((grant) => grant.expiresAt),
@@ -143,20 +150,56 @@ export default {
     }
     const command = commandOf(value);
     if (!command) return new Response('Invalid queue request', { status: 400 });
+    const dynadot = command.provider === 'dynadot';
+    // An operator can briefly defer acquisitions while old route-specific
+    // leases drain during rollout. Releases and cancellations remain fenced.
+    const resumeAt = Number(
+      Reflect.get(env, 'DYNADOT_ADMISSION_RESUME_AT') ?? 0,
+    );
+    if (dynadot && command.action === 'acquire' && resumeAt > Date.now())
+      return Response.json({
+        status: 'deferred',
+        retryAfterMs: resumeAt - Date.now(),
+      });
+    // All Dynadot traffic shares the existing primary durable object. Route
+    // classification here is admission metadata; it never changes a proxy URL.
+    const alternate = !dynadot && command.route === 'alternate';
     const queue = env.SHARED_PROXY_QUEUE.get(
       env.SHARED_PROXY_QUEUE.idFromName(
-        env.SHARED_PROXY_IP +
-          (command.route === 'alternate' ? ':approved-alternate' : ''),
+        env.SHARED_PROXY_IP + (alternate ? ':approved-alternate' : ''),
       ),
     );
-    return queue.fetch(
-      'https://queue.internal/' +
-        (command.route === 'alternate' ? 'alternate-lease' : 'lease'),
+    const response = await queue.fetch(
+      'https://queue.internal/' + (alternate ? 'alternate-lease' : 'lease'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(command),
+        body: JSON.stringify(
+          dynadot ? { ...command, route: 'relay' } : command,
+        ),
       },
     );
+    // Older alternate clients may still hold a lease issued before rollout.
+    // Only the matching fenced token can release that legacy lease.
+    if (
+      dynadot &&
+      command.route === 'alternate' &&
+      command.action !== 'acquire'
+    ) {
+      const result = (await response.clone().json()) as { status: string };
+      if (command.action === 'cancel' || result.status === 'stale') {
+        const legacy = await env.SHARED_PROXY_QUEUE.get(
+          env.SHARED_PROXY_QUEUE.idFromName(
+            env.SHARED_PROXY_IP + ':approved-alternate',
+          ),
+        ).fetch('https://queue.internal/alternate-lease', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(command),
+        });
+        if (result.status === 'stale') return legacy;
+      }
+    }
+    return response;
   },
 } satisfies ExportedHandler<ProxySchedulerEnv>;
