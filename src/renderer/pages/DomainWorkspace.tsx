@@ -852,7 +852,7 @@ export default function DomainWorkspace({
       {area === 'page' && liveUrl && (
         <div className="pf-share">
           <a href={liveUrl} target="_blank" rel="noreferrer">
-            {window.location.origin + liveUrl}
+            {new URL(liveUrl, window.location.origin).href}
           </a>
           <Button size="sm" variant="outline" asChild>
             <a href={liveUrl} target="_blank" rel="noreferrer">

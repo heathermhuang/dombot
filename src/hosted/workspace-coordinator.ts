@@ -55,7 +55,14 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
         },
       );
     }
-    if (this.sleepPolicy)
+    // The engine serves authenticated publication reads from detached inventory
+    // plus D1. Do not put them behind a long scheduled provider request here.
+    const publicationRead =
+      request.method === 'GET' &&
+      /^\/publishing(?:\/(?:site|preview))?\/?$/.test(
+        new URL(request.url).pathname,
+      );
+    if (this.sleepPolicy && !publicationRead)
       return this.maintenance.run(async () =>
         (await mayChangeMaintenance(request))
           ? this.maintenance.mutate(() =>
