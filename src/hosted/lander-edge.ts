@@ -13,6 +13,7 @@ import {
 import { salesPublicPath } from '../shared/sales-admission';
 import { workspaceSchema, workspaceService } from './workspaces';
 import type { HostBinding } from './sales-hostnames';
+import { hostnameClaimsExist, ownsHostname } from './hostname-claims';
 import {
   legacySalesFormScript,
   legacySalesFormScriptPath,
@@ -53,6 +54,32 @@ export default {
           'Cache-Control': 'public,max-age=31536000,immutable',
         },
       });
+    if (
+      env.PORTFOLIO_CUSTOM_HOSTS_ENABLED === 'true' &&
+      env.PORTFOLIO_GATEWAY
+    ) {
+      const portfolio = await env.CONTROL_DB.prepare(
+        "SELECT 1 FROM portfolio_hostnames WHERE hostname=? AND status!='detached'",
+      )
+        .bind(url.hostname)
+        .first();
+      if (portfolio) {
+        if (
+          !['GET', 'HEAD'].includes(incoming.method) ||
+          !/^\/(?:c\/[a-z0-9-]+\/?)?$/.test(url.pathname)
+        )
+          return missing();
+        const headers = new Headers();
+        // The bridge holds no owner or tenant keys and forwards no caller identity.
+        return env.PORTFOLIO_GATEWAY.fetch(
+          new Request(url, {
+            method: incoming.method,
+            headers,
+            redirect: 'manual',
+          }),
+        );
+      }
+    }
     if (env.SALES_CUSTOM_HOSTS_ENABLED !== 'true') return missing();
     let host;
     try {
@@ -66,6 +93,17 @@ export default {
       .bind(host, Date.now())
       .first<HostBinding>();
     if (!row) return missing();
+    if (await hostnameClaimsExist(env.CONTROL_DB)) {
+      if (
+        !(await ownsHostname(
+          env.CONTROL_DB,
+          host,
+          'sales',
+          `${row.workspace_id}:${row.listing_id}:${row.epoch}`,
+        ))
+      )
+        return missing();
+    }
     if (url.protocol !== 'https:') {
       if (!['GET', 'HEAD'].includes(incoming.method))
         return new Response('HTTPS required', { status: 400 });

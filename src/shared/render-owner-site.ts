@@ -24,8 +24,9 @@ export function renderOwnerSite(
   const missing =
     (requested !== null && requested !== undefined && !collection) ||
     (!collection && catalogue && !site.catalogue.enabled);
-  const root = url.pathname.replace(/\/c\/[^/]+\/?$/, '');
-  const internal = (query = '') => `${e(root)}${query}`;
+  const root = url.pathname.replace(/\/c\/[^/]+\/?$/, '').replace(/\/$/, '');
+  const internal = (query = '') =>
+    `${e(root || (query.startsWith('/') ? '' : '/'))}${query}`;
   const collectionLink = (slug: string) =>
     preview
       ? `?collection=${e(encodeURIComponent(slug))}`

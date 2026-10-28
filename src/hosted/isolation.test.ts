@@ -163,6 +163,7 @@ beforeAll(async () => {
   await control.exec(sql('hosted/migrations/0010_shared_mcp.sql'));
   await control.exec(sql('hosted/migrations/0011_passkey_names.sql'));
   await control.exec(sql('hosted/migrations/0015_portfolio_addresses.sql'));
+  await control.exec(sql('hosted/migrations/0016_portfolio_domains.sql'));
   for (let i = 0; i < ids.length; i++) {
     const db = await mf.getD1Database('DB', `tenant${i}`);
     await db.exec(sql('migrations/0001_docs.sql'));
@@ -741,6 +742,61 @@ describe('real gateway and isolated Worker instances', () => {
       cookies[0],
     );
     expect(attack.status).toBe(403);
+  });
+  it('requires the owning browser session, same origin and fresh authentication for domain setup', async () => {
+    expect((await request(`/w/${ids[0]}/site-domains`)).status).toBe(401);
+    expect(
+      (await request(`/w/${ids[1]}/site-domains`, 'GET', undefined, cookies[0]))
+        .status,
+    ).toBe(403);
+    const read = await request(
+      `/w/${ids[0]}/site-domains`,
+      'GET',
+      undefined,
+      cookies[0],
+    );
+    expect(read.status).toBe(200);
+    expect(await read.json()).toEqual({
+      enabled: false,
+      plan: null,
+      domain: null,
+    });
+    const cross = await gateway.fetch(
+      new Request(`http://localhost/w/${ids[0]}/site-domains/plans`, {
+        method: 'POST',
+        headers: {
+          Origin: 'https://attacker.example',
+          Cookie: cookies[0],
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ hostname: 'portfolio.example', revision: null }),
+      }),
+    );
+    expect(cross.status).toBe(403);
+    const control = await mf.getD1Database('CONTROL_DB', 'gateway');
+    const hash = await tokenHash(cookies[0].split('=')[1]);
+    await control
+      .prepare('UPDATE sessions SET authenticated_at=0 WHERE token_hash=?')
+      .bind(hash)
+      .run();
+    try {
+      for (const suffix of ['/plans', '/verify', '/detach'])
+        expect(
+          (
+            await request(
+              `/w/${ids[0]}/site-domains${suffix}`,
+              'POST',
+              {},
+              cookies[0],
+            )
+          ).status,
+        ).toBe(428);
+    } finally {
+      await control
+        .prepare('UPDATE sessions SET authenticated_at=? WHERE token_hash=?')
+        .bind(Date.now(), hash)
+        .run();
+    }
   });
   it('gates bulk steps/results and hostname detachment on fresh authentication in the Workers runtime', async () => {
     const control = await mf.getD1Database('CONTROL_DB', 'gateway');
