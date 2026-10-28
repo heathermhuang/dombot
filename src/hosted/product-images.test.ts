@@ -57,7 +57,7 @@ describe('public product preview boundary', () => {
     }
     expect(fetch).not.toHaveBeenCalled();
   });
-  it('allows local images on the homepage without enabling scripts or external images', async () => {
+  it('allows local images and the same-origin demo script without inline or external scripts', async () => {
     const response = await gateway.fetch(
       new Request('https://domains.domains/'),
       {} as HostedEnv,
@@ -65,7 +65,9 @@ describe('public product preview boundary', () => {
     const policy = response.headers.get('Content-Security-Policy');
     expect(policy).toContain("default-src 'none'");
     expect(policy).toContain("img-src 'self'");
-    expect(policy).not.toContain('script-src');
+    expect(policy).toContain("script-src 'self'");
+    expect(policy).not.toContain("script-src 'unsafe-inline'");
+    expect(policy).not.toContain('connect-src');
     expect(policy).not.toContain('https:');
   });
 });
