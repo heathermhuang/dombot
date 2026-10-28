@@ -1,5 +1,44 @@
 # Dynadot sync admission reliability
 
+## One Dynadot request across hosted users
+
+All hosted Dynadot requests now use the same durable admission lane, including
+inventory, pricing and account reads from scheduled, browser and MCP syncs.
+Managed, approved alternate and other customer-supplied proxy routes no longer
+create independent Dynadot lanes or bypass admission. The queue changes neither
+the selected proxy nor its credentials. Desktop and self-hosted installations
+without the hosted scheduler retain their existing transport behavior.
+
+Only one Dynadot request can hold a lease across accounts and workspaces. It
+keeps that lease until the response body is consumed and sockets are closed,
+then leaves at least 1.1 seconds before the next Dynadot request. An upstream
+429 persists its Retry-After cooldown for all waiting Dynadot users. Other
+registrars retain the shared relay's existing concurrency. Tenant rotation,
+bounded pending tickets, cancellation, fenced releases and abandoned-lease
+expiry remain in force. Admission waits retain the 120-second deadline and
+do not open a connection while waiting; hosted Dynadot clients keep automatic
+HTTP retries disabled rather than multiplying requests under load.
+
+The existing primary durable object is reused, preserving leases and cooldown
+state. For a rollout, operators may set `DYNADOT_ADMISSION_RESUME_AT` to a future
+Unix timestamp in milliseconds. Until then, new Dynadot acquisitions defer
+without network traffic while releases and cancellations remain available.
+Deploy the scheduler first, allow old alternate leases to drain, and set the
+resume time no earlier than any retained primary/alternate upstream cooldown.
+Then deploy the matching tenant engine. Old alternate releases remain fenced
+and can close leases issued before migration. Private status endpoints expose
+Dynadot active/queued counts and cooldown time without credentials or API data.
+
+Deterministic regression checks cover eight concurrent users across all three
+route classes (one grant, seven waiting), shared cooldown across routes, a
+custom-route bypass, socket cleanup, self-hosted compatibility and release of
+old alternate leases during rollout. They send no live registrar requests.
+These controls prevent concurrent application calls; they cannot guarantee
+that every provider rate limit disappears. Dynadot also imposes account-tier
+request-rate limits: https://www.dynadot.com/domain/api-document
+
+## Earlier queue-capacity admission fix
+
 The managed relay allows four active connections and four pending queue tickets
 per workspace. A full sync of four Dynadot accounts plus Namecheap starts five
 proxied reads. When relay slots are temporarily occupied, four reads can join the
