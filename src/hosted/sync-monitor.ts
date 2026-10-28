@@ -67,15 +67,15 @@ export async function ingestSyncEvent(
   if (current && current.seq >= event.seq) return;
   const fingerprint = event.ok
     ? null
-    : [
-        event.code,
-        event.httpStatus,
-        event.route,
-        event.engine,
-        event.source,
-      ].join(':');
+    : [event.code, event.httpStatus, event.route].join(':');
+  // Older collectors appended build identity. Keep that evidence on the
+  // event, but compare only the failure cause so deployments do not reopen it.
+  const previousFingerprint = current?.fingerprint
+    ?.split(':')
+    .slice(0, 3)
+    .join(':');
   const failure =
-    !event.ok && (!current?.fingerprint || current.fingerprint !== fingerprint);
+    !event.ok && (!previousFingerprint || previousFingerprint !== fingerprint);
   const recovery = event.ok && Boolean(current?.fingerprint);
   const statements = [
     env.CONTROL_DB.prepare(
