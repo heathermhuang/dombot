@@ -32,14 +32,17 @@ import {
   PublicationInputError,
 } from './publication-store';
 import { renderPortfolio, publicHeaders } from './public-portfolio';
+import type { PublicationInputs } from './publication-inputs';
 
 type PublicationEnv = { Bindings: Env; Variables: { auth: AuthConfig } };
 const revisionSchema = z.object({ revision: z.string().uuid() }).strict();
 
 export function createPublicationRoutes(
   stateful: MiddlewareHandler<PublicationEnv>,
+  readInputs: () => PublicationInputs | null = () => null,
 ) {
   const app = new Hono<PublicationEnv>();
+  const readInventory = new WeakMap<Request, PublicationInputs>();
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     c.header('X-Robots-Tag', 'noindex, nofollow');
@@ -56,7 +59,22 @@ export function createPublicationRoutes(
       onError: (c) => c.json({ error: 'Portfolio draft is too large.' }, 413),
     }),
   );
-  app.use('*', stateful);
+  app.use('*', async (c, next) => {
+    // Reads need no mutable service state once inventory has been hydrated.
+    // Keep the authenticated read out of the provider queue; a cold start and
+    // every write retain the original serialized hydrate/flush path.
+    const input = c.req.method === 'GET' ? readInputs() : null;
+    if (input) {
+      readInventory.set(c.req.raw, input);
+      return next();
+    }
+    return stateful(c, next);
+  });
+  const inputs = (c: { req: { raw: Request } }) =>
+    readInventory.get(c.req.raw) ?? {
+      domains: getCachedPortfolio()?.domains ?? [],
+      accounts: getRegistrarMetadata(),
+    };
   const store = async (env: Env) =>
     new PublicationStore(
       env.DB,
@@ -64,12 +82,10 @@ export function createPublicationRoutes(
         await deriveEncryptionKey(parseRootSecret(env.DOMBOT_SECRET)),
       ),
     );
-  const review = (draft: z.infer<typeof draftSchema>) =>
-    reconcilePortfolio(
-      draft,
-      getCachedPortfolio()?.domains ?? [],
-      getRegistrarMetadata(),
-    );
+  const review = (
+    draft: z.infer<typeof draftSchema>,
+    input: PublicationInputs,
+  ) => reconcilePortfolio(draft, input.domains, input.accounts);
 
   app.onError((error, c) => {
     if (error instanceof PublicationInputError)
@@ -106,7 +122,7 @@ export function createPublicationRoutes(
     const result: PublicationState = {
       draft,
       revision,
-      review: review(draft),
+      review: review(draft, inputs(c)),
       published: published
         ? {
             handle: published.snapshot.handle,
@@ -116,8 +132,8 @@ export function createPublicationRoutes(
           }
         : null,
       publishedSnapshot: legacySnapshot,
-      accounts: getRegistrarMetadata()
-        .filter((a) => a.saved || a.configured)
+      accounts: inputs(c)
+        .accounts.filter((a) => a.saved || a.configured)
         .map((a) => ({
           label: `${a.displayName} · ${a.accountLabel ?? 'Default'}`,
           count: a.sync.domainCount,
@@ -142,12 +158,8 @@ export function createPublicationRoutes(
       enabled: c.env.DOMBOT_OWNER_SITE_V2 === 'true',
       publishedSnapshot: published?.snapshot ?? null,
       review: isOwnerSite(saved.draft)
-        ? reconcileOwnerSite(
-            saved.draft,
-            getCachedPortfolio()?.domains ?? [],
-            getRegistrarMetadata(),
-          )
-        : review(saved.draft),
+        ? reconcileOwnerSite(saved.draft, inputs(c).domains, inputs(c).accounts)
+        : review(saved.draft, inputs(c)),
     });
   });
   app.put('/site', async (c) => {
@@ -251,7 +263,8 @@ export function createPublicationRoutes(
             getRegistrarMetadata(),
           ),
         );
-      } else snapshot = publicSnapshot(saved.draft, review(saved.draft));
+      } else
+        snapshot = publicSnapshot(saved.draft, review(saved.draft, inputs(c)));
     } catch (err) {
       return c.json(
         {
