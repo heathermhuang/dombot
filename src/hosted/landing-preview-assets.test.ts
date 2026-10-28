@@ -25,18 +25,16 @@ describe('responsive landing product previews', () => {
     }
   });
 
-  it('provides a native mobile crop for each preview while keeping the full-size desktop link', () => {
+  it('uses the approved code-native illustrations while retaining the archived preview metadata', () => {
     const html = home(false, true);
-    expect(html.match(/<picture>/g)).toHaveLength(3);
+    expect(html).not.toContain('<picture>');
     for (const image of Object.values(productImages)) {
-      expect(html).toContain(`srcset="${image.mobile.path}"`);
-      expect(html).toContain(`href="${image.path}"`);
+      expect(image.mobile.path).toContain('-mobile-');
+      expect(image.path).toMatch(/^\/product\//);
     }
-    expect(html).toContain('media="(max-width: 600px)"');
-    expect(html).toContain('data.app · Inquiry form preview');
-    expect(html).toContain(
-      'Illustrative inquiry page. No listing is published and no form is submitted.',
-    );
+    expect(html).toContain('Interactive illustration · Sample data');
+    expect(html).toContain('Illustrative visitor page');
+    expect(html).toContain('No message is sent.');
     expect(html).not.toContain('alt="Illustrative Sales pages');
   });
 

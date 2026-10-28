@@ -1,4 +1,5 @@
 import { landingMcpScript, landingMcpScriptPath } from './landing-mcp';
+import { landingScript, landingScriptPath } from './landing-interactions';
 import {
   addressState,
   claimAddress,
@@ -182,12 +183,16 @@ app.onError((_error, c) =>
     500,
   ),
 );
-app.get(landingMcpScriptPath, (c) =>
-  c.body(landingMcpScript, 200, {
-    'Content-Type': 'text/javascript',
-    'Cache-Control': 'public, max-age=31536000, immutable',
-  }),
-);
+for (const [path, script] of [
+  [landingMcpScriptPath, landingMcpScript],
+  [landingScriptPath, landingScript],
+])
+  app.get(path, (c) =>
+    c.body(script, 200, {
+      'Content-Type': 'text/javascript',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    }),
+  );
 app.get(brandFontPath, (c) => {
   c.header('Content-Type', 'font/woff2');
   c.header('Cache-Control', 'public, max-age=31536000, immutable');
