@@ -1,3 +1,4 @@
+import { landingMcpScript, landingMcpScriptPath } from './landing-mcp';
 import {
   addressState,
   claimAddress,
@@ -161,7 +162,7 @@ app.use('*', async (c, next) => {
   c.header(
     'Content-Security-Policy',
     "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" +
-      (c.req.path === '/' ? "; img-src 'self'" : '') +
+      (c.req.path === '/' ? "; img-src 'self'; script-src 'self'" : '') +
       (c.req.path.startsWith('/auth/') ||
       c.req.path.startsWith('/account') ||
       c.req.path.startsWith('/login') ||
@@ -176,6 +177,12 @@ app.onError((_error, c) =>
     { error: 'The request could not be completed. Please try again.' },
     500,
   ),
+);
+app.get(landingMcpScriptPath, (c) =>
+  c.body(landingMcpScript, 200, {
+    'Content-Type': 'text/javascript',
+    'Cache-Control': 'public, max-age=31536000, immutable',
+  }),
 );
 app.get(brandFontPath, (c) => {
   c.header('Content-Type', 'font/woff2');
