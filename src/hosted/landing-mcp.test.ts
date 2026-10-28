@@ -2,6 +2,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import gateway from './gateway';
 import { home } from './views';
+import { landingScriptPath } from './landing-interactions';
 import {
   landingMcpContent,
   landingMcpScript,
@@ -12,16 +13,20 @@ describe('public MCP walkthrough', () => {
   it('keeps the first conversation readable without script and labels every result as illustrative', () => {
     const html = home(false, true);
     expect(html).toContain('href="#mcp"');
-    expect(html).toContain('id="mcp" aria-labelledby="mcp-heading"');
-    expect(html).toContain('aria-label="Choose an MCP example" hidden');
-    expect(html).toContain('aria-label="Renewal management example">');
-    expect(html).toContain('aria-label="Renewal budget example" hidden');
-    expect(html).toContain('aria-label="DNS inspection example" hidden');
-    expect(html).toContain('Sample MCP demo');
+    expect(html).toContain('id="mcp"');
+    expect(html).toContain('aria-labelledby="mcp-heading"');
+    expect(html).toContain('aria-label="Try an MCP example" hidden');
+    expect(html).toContain('data-agent="expiry"');
+    expect(html).toContain('data-agent="budget"');
+    expect(html).toContain('data-agent="dns"');
+    expect(html).toContain(
+      'Two domains expire within 60 days with auto-renew off.',
+    );
+    expect(html).toContain('MCP example');
     expect(html).toContain('Illustrative conversations with sample data.');
     expect(html).toContain('Paid actions stay off during early access.');
     expect(html).toContain('Renewal estimates, not guaranteed quotes.');
-    expect(html).toContain(`<script src="${landingMcpScriptPath}" defer>`);
+    expect(html).toContain(`<script src="${landingScriptPath}" defer>`);
     expect(html).not.toContain('<script>');
     for (const name of ['data.app', 'mail.app', 'sdk.io'])
       expect(landingMcpContent).toContain(name);
