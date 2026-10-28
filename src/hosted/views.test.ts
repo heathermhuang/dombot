@@ -140,11 +140,12 @@ describe('public website brand and product clarity', () => {
     expect(html).toContain(
       'Names from our public collection. Account details and statuses are illustrative.',
     );
-    expect(html.match(/<img\b/g)).toHaveLength(14);
+    // The approved MCP-first design uses HTML product illustrations and eleven registrar marks.
+    expect(html.match(/<img\b/g)).toHaveLength(11);
     expect(html).not.toContain('.example');
     expect(html).toContain('href="https://demo.dombot.ai/"');
     expect(html).toContain('Domain inventory');
-    expect(html).toContain('Renewal planning');
+    expect(html).toContain('MCP example');
     const main = html.match(/<main[^>]*>([\s\S]*?)<\/main>/)?.[1] ?? '';
     expect(main).not.toMatch(/>[^<]*(?:dombot|upstream|original demo)/i);
     expect(html).toContain('href="/signup"');
