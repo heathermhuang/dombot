@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "domains-portfolio-provisioner",
+  "main": "../src/hosted/provisioner.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "../dist/provisioning",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "CONTROL_DB",
+      "database_name": "domains-staging-control",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+    },
+  ],
+  "dispatch_namespaces": [
+    { "binding": "DISPATCHER", "namespace": "domains-portfolios" },
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "SETUPS", "class_name": "PortfolioSetup" }],
+  },
+  "migrations": [
+    { "tag": "portfolio-setup-v1", "new_sqlite_classes": ["PortfolioSetup"] },
+  ],
+  "vars": {
+    "CF_ACCOUNT_ID": "",
+    "CF_DISPATCH_NAMESPACE": "domains-portfolios",
+    "TEMPLATE_SHA256": "",
+    "ASSET_SERVICE": "domains-portfolio-provisioner",
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": false },
+  },
+}

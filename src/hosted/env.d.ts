@@ -1,4 +1,13 @@
 interface HostedEnv {
+  ON_DEMAND_ENABLED?: string;
+  ON_DEMAND_TEMPLATE_SHA256?: string;
+  ON_DEMAND_ACCOUNT_LIMIT?: string;
+  PROVISIONER?: {
+    provision(
+      workspace: string,
+      user: string,
+    ): Promise<import('./on-demand').ProvisionReceipt>;
+  };
   PORTFOLIO_CUSTOM_HOSTS_ENABLED?: string;
   PORTFOLIO_HOST_WORKSPACES?: string;
   PORTFOLIO_CF_ZONE_ID?: string;

@@ -59,6 +59,10 @@ local captured-message tests and provider acceptance.
 
 ## Empty workspace maintenance
 
+On-demand signup and post-conference reserve retirement are separate from sleeping
+existing workspaces. See [On-demand portfolio provisioning](on-demand-provisioning.md)
+for the gated replacement path, qualification and read-only retirement planning.
+
 The opt-in empty-workspace policy replaces first-visit alarm activation with
 strict work-based scheduling. See [Sleeping empty portfolios](empty-workspace-maintenance.md)
 for rollout flags, reserve qualification, operator pause and explicit rollback rearming.

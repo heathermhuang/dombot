@@ -1,4 +1,5 @@
 import { Accounts, AccountError, type VerifiedUser } from './accounts';
+import { ON_DEMAND, onDemandReady } from './on-demand';
 import { opaqueToken, passwordHash, tokenHash } from './crypto';
 import { legalReady, legalVersion } from './legal';
 import { workspaceSchema } from './workspaces';
@@ -6,6 +7,13 @@ import { authLimit, AuthEmailUnavailable } from './auth-policy';
 import { reserveCampaignEmail } from './email-campaign';
 
 export function registrationIds(env: HostedEnv): string[] {
+  if (
+    env.ON_DEMAND_ENABLED !== 'true' &&
+    /^[a-f0-9]{64}$/.test(env.ON_DEMAND_TEMPLATE_SHA256 ?? '')
+  )
+    return [];
+  if (env.ON_DEMAND_ENABLED === 'true')
+    return onDemandReady(env) ? [ON_DEMAND] : [];
   const configured = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
   const ids = (env.PUBLIC_SIGNUP_IDS ?? '')
     .split(',')
@@ -50,9 +58,17 @@ export class Registration {
     private readonly db: D1Database,
     private readonly pepper: string,
     private readonly ids: string[],
+    private readonly limit = 500,
   ) {}
   async hasCapacity(): Promise<boolean> {
     if (!this.ids.length) return false;
+    if (this.ids.includes(ON_DEMAND))
+      return Boolean(
+        await this.db
+          .prepare('SELECT 1 WHERE (SELECT count(*) FROM users)<?')
+          .bind(this.limit)
+          .first(),
+      );
     return Boolean(
       await this.db
         .prepare(
@@ -95,6 +111,8 @@ export class Registration {
       throw new AccountError(
         'This verification link is invalid, expired, or already used.',
       );
+    const workspaceId = crypto.randomUUID();
+    const lazy = this.ids.includes(ON_DEMAND);
     const id = crypto.randomUUID(),
       encoded = await passwordHash(password, this.pepper),
       hash = await tokenHash(code),
@@ -103,11 +121,31 @@ export class Registration {
       // D1 batch is transactional. Unique email and account constraints serialize
       // simultaneous claims. A consumed proof can never allocate a second slot.
       const results = await this.db.batch([
+        ...(lazy
+          ? [
+              this.db
+                .prepare(
+                  "INSERT INTO workspaces(id,label) SELECT ?,'Private portfolio' FROM signup_proofs WHERE token_hash=? AND consumed_at IS NULL AND expires_at>? AND (SELECT count(*) FROM users)<?",
+                )
+                .bind(workspaceId, hash, now, this.limit),
+              this.db
+                .prepare(
+                  'INSERT INTO pending_workspaces(workspace_id,created_at) SELECT id,? FROM workspaces WHERE id=?',
+                )
+                .bind(now, workspaceId),
+            ]
+          : []),
         this.db
           .prepare(
-            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM signup_proofs p CROSS JOIN workspaces w WHERE p.token_hash=?4 AND p.consumed_at IS NULL AND p.expires_at>?3 AND ${registrationPool(this.ids, 5)} AND ${eligible} ORDER BY w.id LIMIT 1 RETURNING id`,
+            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM signup_proofs p CROSS JOIN workspaces w WHERE p.token_hash=?4 AND p.consumed_at IS NULL AND p.expires_at>?3 AND ${lazy ? 'w.id=?5' : registrationPool(this.ids, 5)} AND ${eligible} ORDER BY w.id LIMIT 1 RETURNING id`,
           )
-          .bind(id, encoded, now, hash, registrationPoolIds(this.ids)),
+          .bind(
+            id,
+            encoded,
+            now,
+            hash,
+            lazy ? workspaceId : registrationPoolIds(this.ids),
+          ),
         this.db
           .prepare(
             'UPDATE signup_proofs SET consumed_at=?1 WHERE token_hash=?2 AND EXISTS(SELECT 1 FROM users WHERE id=?3)',
@@ -119,7 +157,7 @@ export class Registration {
           )
           .bind(id, legalVersion, now),
       ]);
-      if (!results[0].results.length)
+      if (!results[lazy ? 2 : 0].results.length)
         throw new AccountError(
           'No account was created. The link may have expired or capacity may be full.',
         );

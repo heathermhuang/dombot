@@ -1,3 +1,4 @@
+import { onDemandSchemaReady } from './on-demand';
 import { readWorkspace } from './workspace-observation';
 import {
   adminInventoryQuerySchema,
@@ -22,6 +23,7 @@ type UserRow = {
   workspace_id: string;
   created_at: number;
   enabled: number;
+  not_started?: number;
   snapshot: string | null;
   observed_at: number | null;
   attempted_at?: number | null;
@@ -61,7 +63,7 @@ export function aggregateAdmin(rows: UserRow[], now = Date.now()) {
     stale = 0,
     failed = 0,
     unavailable = 0;
-  for (const row of rows.filter((r) => r.enabled)) {
+  for (const row of rows.filter((r) => r.enabled && !r.not_started)) {
     if (row.unavailable) unavailable++;
     const s = snapshot(row);
     if (!s) continue;
@@ -78,7 +80,10 @@ export function aggregateAdmin(rows: UserRow[], now = Date.now()) {
     users: rows.length,
     enabled,
     observed,
-    unknown: enabled - observed,
+    unknown:
+      enabled -
+      observed -
+      rows.filter((r) => r.enabled && r.not_started).length,
     stale,
     failed,
     owned,
@@ -103,8 +108,8 @@ const shell = (body: string) =>
     'System administration',
     `${styles}<section class="admin"><nav aria-label="Admin navigation"><a href="/admin">Overview & users</a><a href="/admin/sync-monitor">Dynadot monitoring</a><a href="/account">Account security</a><a href="/app">My portfolio</a></nav>${body}</section>`,
   );
-const selectUsers =
-  'SELECT u.id,u.email,u.workspace_id,u.created_at,w.enabled,s.snapshot,s.observed_at,s.attempted_at,s.unavailable FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN admin_snapshots s ON s.workspace_id=w.id';
+const selectUsers = (env: HostedEnv) =>
+  `SELECT u.id,u.email,u.workspace_id,u.created_at,w.enabled,s.snapshot,s.observed_at,s.attempted_at,s.unavailable ${onDemandSchemaReady(env) ? ',EXISTS(SELECT 1 FROM pending_workspaces p WHERE p.workspace_id=w.id AND p.activated_at IS NULL) not_started' : ''} FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN admin_snapshots s ON s.workspace_id=w.id`;
 
 export function adminRoutes(
   session: (request: Request, env: HostedEnv) => Promise<SessionUser | null>,
@@ -139,7 +144,7 @@ export function adminRoutes(
   app.get('/', async (c) => {
     const rows = (
       await c.env.CONTROL_DB.prepare(
-        selectUsers + ' ORDER BY u.created_at DESC,u.id',
+        selectUsers(c.env) + ' ORDER BY u.created_at DESC,u.id',
       ).all<UserRow>()
     ).results;
     const totals = aggregateAdmin(rows);
@@ -164,7 +169,7 @@ export function adminRoutes(
     return c.html(
       shell(`<span class="eyebrow">Operator console</span><h1>System status</h1><p>Storage checked ${timestamp(Date.now())}. Portfolio readings are cached observations; refreshing reads stored inventory without contacting registrars.</p>${notices}
       <div class="summary">${metric('User accounts', totals.users, `${totals.enabled} enabled`)}${metric('Owned domains observed', totals.owned, `${totals.observed} of ${totals.enabled} enabled users`)}${metric('Need attention', totals.failed, 'Sync failed, stale or never completed')}${metric('Unknown / stale readings', totals.unknown + totals.stale, 'Refresh before relying on totals')}</div>
-      <section class="surface"><h2>System overview</h2><p>${totals.unavailable} portfolios unavailable on their last observation attempt.</p><p>${pill('Control database reachable')} ${pill(totals.unknown || totals.stale || totals.failed || totals.unavailable ? 'Attention required' : 'Snapshot coverage current', Boolean(totals.unknown || totals.stale || totals.failed || totals.unavailable))}</p><p>${capacity?.total ?? 0} unclaimed qualified signup slots. Public registration: ${c.env.PUBLIC_REGISTRATION_ENABLED === 'true' ? 'enabled' : 'disabled'}. Email delivery qualification: ${c.env.EMAIL_DELIVERY_VERIFIED === 'true' ? 'configured as verified' : 'not verified'}.</p><p class="muted">Owned counts deduplicate names within each user and include imports; archived names are excluded. The aggregate sums user holdings, so the same name held by two users counts twice. Disabled accounts are excluded. ${totals.archived} archived and ${totals.imported} imported names observed. Unknown users are never counted as zero. Totals may contain readings older than 15 minutes.</p><details><summary>Release & monitoring coverage</summary><p>Gateway source: <code>${e(c.env.SOURCE_COMMIT ?? 'Not configured')}</code></p><p>Generic runtime outcomes retain up to 100 events per portfolio. The Dynadot monitor separately retains sanitized sync attempts for 30 days, including failures followed by successful retries. Uptime, provider availability and backup recovery are not measured by this view.</p></details></section>
+      <section class="surface"><h2>System overview</h2><p>${totals.unavailable} portfolios unavailable on their last observation attempt.</p><p>${pill('Control database reachable')} ${pill(totals.unknown || totals.stale || totals.failed || totals.unavailable ? 'Attention required' : 'Snapshot coverage current', Boolean(totals.unknown || totals.stale || totals.failed || totals.unavailable))}</p><p>${onDemandSchemaReady(c.env) ? `${rows.filter((r) => r.enabled && r.not_started).length} portfolios not started; on-demand setup ${c.env.ON_DEMAND_ENABLED === 'true' ? 'enabled' : 'paused'}.` : `${capacity?.total ?? 0} unclaimed qualified signup slots.`} Public registration: ${c.env.PUBLIC_REGISTRATION_ENABLED === 'true' ? 'enabled' : 'disabled'}. Email delivery qualification: ${c.env.EMAIL_DELIVERY_VERIFIED === 'true' ? 'configured as verified' : 'not verified'}.</p><p class="muted">Owned counts deduplicate names within each user and include imports; archived names are excluded. The aggregate sums user holdings, so the same name held by two users counts twice. Disabled accounts are excluded. ${totals.archived} archived and ${totals.imported} imported names observed. Unknown users are never counted as zero. Totals may contain readings older than 15 minutes.</p><details><summary>Release & monitoring coverage</summary><p>Gateway source: <code>${e(c.env.SOURCE_COMMIT ?? 'Not configured')}</code></p><p>Generic runtime outcomes retain up to 100 events per portfolio. The Dynadot monitor separately retains sanitized sync attempts for 30 days, including failures followed by successful retries. Uptime, provider availability and backup recovery are not measured by this view.</p></details></section>
       <section class="surface"><div class="toolbar"><h2>Users & portfolios</h2><form action="/admin/refresh" method="post"><input type="hidden" name="offset" value="${offset}"><input type="hidden" name="q" value="${e(q)}"><button>Refresh these ${shown.length} users</button></form></div><form method="get" action="/admin"><label>Search email or user / portfolio ID<input type="search" name="q" value="${e(q)}" maxlength="120"></label><button>Search users</button></form><p class="muted">${filtered.length} matches. Showing ${shown.length ? offset + 1 : 0}–${Math.min(offset + PAGE_SIZE, filtered.length)}. Includes operator and test accounts.</p>
       <div class="scroll" tabindex="0" role="region" aria-label="User portfolio counts"><table><thead><tr><th>User</th><th>Access</th><th class="number">Owned</th><th>Sync status</th><th>Observation</th></tr></thead><tbody>${
         shown
@@ -174,7 +179,7 @@ export function adminRoutes(
               s?.accounts.filter((a) =>
                 ['failed', 'stale', 'never'].includes(a.state),
               ).length ?? 0;
-            return `<tr><td><a href="/admin/users/${encodeURIComponent(r.id)}">${e(r.email)}</a><br><span class="muted">Joined ${timestamp(r.created_at)}</span></td><td>${r.enabled ? 'Enabled' : 'Disabled'}</td><td class="number">${s ? s.owned : 'Unknown'}</td><td>${s ? pill(issues ? `${issues} need attention` : `${s.accounts.length} connected`, issues > 0) : '<span class="unknown state">Not observed</span>'}</td><td>${rowUnavailable(r)}${timestamp(s?.at)}${s && Date.now() - s.at > SNAPSHOT_AGE ? '<br>Stale reading' : ''}</td></tr>`;
+            return `<tr><td><a href="/admin/users/${encodeURIComponent(r.id)}">${e(r.email)}</a><br><span class="muted">Joined ${timestamp(r.created_at)}</span></td><td>${r.enabled ? 'Enabled' : 'Disabled'}</td><td class="number">${r.not_started ? '—' : s ? s.owned : 'Unknown'}</td><td>${r.not_started ? pill('Not started') : s ? pill(issues ? `${issues} need attention` : `${s.accounts.length} connected`, issues > 0) : '<span class="unknown state">Not observed</span>'}</td><td>${rowUnavailable(r)}${timestamp(s?.at)}${s && Date.now() - s.at > SNAPSHOT_AGE ? '<br>Stale reading' : ''}</td></tr>`;
           })
           .join('') || '<tr><td colspan="5">No matching users.</td></tr>'
       }</tbody></table></div><nav aria-label="User pages">${offset > 0 ? `<a href="/admin?q=${encodeURIComponent(q)}&offset=${Math.max(0, offset - PAGE_SIZE)}">← Previous</a>` : ''}${offset + PAGE_SIZE < filtered.length ? `<a href="/admin?q=${encodeURIComponent(q)}&offset=${offset + PAGE_SIZE}">Next users →</a>` : ''}</nav></section>`),
@@ -186,7 +191,7 @@ export function adminRoutes(
       'SELECT completed_at FROM sync_monitor_control WHERE id=1',
     ).first<{ completed_at: number | null }>();
     const coverage = await c.env.CONTROL_DB.prepare(
-      'SELECT COUNT(*) total,SUM(CASE WHEN c.checked_at>? AND c.errors=0 THEN 1 ELSE 0 END) current,SUM(CASE WHEN c.errors>0 THEN 1 ELSE 0 END) unavailable FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN sync_monitor_checks c ON c.workspace_id=u.workspace_id WHERE w.enabled=1',
+      `SELECT COUNT(*) total,SUM(CASE WHEN c.checked_at>? AND c.errors=0 THEN 1 ELSE 0 END) current,SUM(CASE WHEN c.errors>0 THEN 1 ELSE 0 END) unavailable FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN sync_monitor_checks c ON c.workspace_id=u.workspace_id WHERE w.enabled=1 ${onDemandSchemaReady(c.env) ? 'AND NOT EXISTS(SELECT 1 FROM pending_workspaces p WHERE p.workspace_id=w.id AND p.activated_at IS NULL)' : ''}`,
     )
       .bind(now - 10 * 60_000)
       .first<{ total: number; current: number; unavailable: number }>();
@@ -248,7 +253,7 @@ export function adminRoutes(
     );
     const rows = (
       await c.env.CONTROL_DB.prepare(
-        selectUsers + ' ORDER BY u.created_at DESC,u.id',
+        selectUsers(c.env) + ' ORDER BY u.created_at DESC,u.id',
       ).all<UserRow>()
     ).results
       .filter((r) =>
@@ -264,7 +269,7 @@ export function adminRoutes(
     for (let i = 0; i < rows.length; i += 4)
       await Promise.all(
         rows.slice(i, i + 4).map(async (row) => {
-          if (!row.enabled) return;
+          if (!row.enabled || row.not_started) return;
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {
             const work = async () => {
@@ -324,10 +329,20 @@ export function adminRoutes(
     );
   });
   app.get('/users/:id/domains', async (c) => {
-    const row = await c.env.CONTROL_DB.prepare(selectUsers + ' WHERE u.id=?')
+    const row = await c.env.CONTROL_DB.prepare(
+      selectUsers(c.env) + ' WHERE u.id=?',
+    )
       .bind(c.req.param('id'))
       .first<UserRow>();
     if (!row) return c.notFound();
+    if (row.not_started) {
+      await audit(c.env, c.get('admin'), 'view', row.id);
+      return c.html(
+        shell(
+          `<h1>${e(row.email)}</h1><p>Portfolio not started. No customer Worker or database has been allocated. Setup starts when the owner chooses registrar connection or import.</p><a href="/admin">Back to users</a>`,
+        ),
+      );
+    }
     if (!row.enabled)
       return c.html(
         shell(
@@ -390,10 +405,20 @@ export function adminRoutes(
     }
   });
   app.get('/users/:id', async (c) => {
-    const row = await c.env.CONTROL_DB.prepare(selectUsers + ' WHERE u.id=?')
+    const row = await c.env.CONTROL_DB.prepare(
+      selectUsers(c.env) + ' WHERE u.id=?',
+    )
       .bind(c.req.param('id'))
       .first<UserRow>();
     if (!row) return c.notFound();
+    if (row.not_started) {
+      await audit(c.env, c.get('admin'), 'view', row.id);
+      return c.html(
+        shell(
+          `<h1>${e(row.email)}</h1><p>Portfolio not started. No customer Worker or database has been allocated. Setup starts when the owner chooses registrar connection or import.</p><a href="/admin">Back to users</a>`,
+        ),
+      );
+    }
     await audit(c.env, c.get('admin'), 'view', row.id);
     const s = snapshot(row);
     return c.html(
