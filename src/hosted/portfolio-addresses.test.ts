@@ -150,6 +150,16 @@ const request = (path: string, options?: RequestInit) =>
   new Request(`https://domains.domains${path}`, options);
 
 describe('public portfolio addresses', () => {
+  it('reserves every literal top-level gateway route that can be a handle', () => {
+    const source = readFileSync('src/hosted/gateway.ts', 'utf8');
+    const roots = [
+      ...source.matchAll(/app\.(?:get|post|put|delete|all)\('\/([a-z0-9-]+)'/g),
+    ].map((match) => match[1]);
+    expect(roots).toContain('domains');
+    for (const root of roots)
+      expect(publicHandleSchema.safeParse(root).success, root).toBe(false);
+  });
+
   it('reserves a friendly handle without publishing any content', async () => {
     const result = await claimAddress(env, ids[0], { handle: 'my-brand' });
     expect(result.address?.url).toBe('https://domains.domains/my-brand');
@@ -177,6 +187,13 @@ describe('public portfolio addresses', () => {
     ).resolves.toMatchObject({ address: { handle: 'alice' } });
   });
   it.each([
+    'about',
+    'about-us',
+    'support',
+    'pricing',
+    'security',
+    'official',
+    'site-address',
     'admin',
     'app',
     'login',

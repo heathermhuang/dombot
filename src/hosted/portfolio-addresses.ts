@@ -3,54 +3,8 @@ import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
 import { brandFontBytes, brandFontPath } from './brand-font';
 
-// Reserve application routes and common infrastructure names across both URL forms.
-const reserved = new Set([
-  'account',
-  'accounts',
-  'admin',
-  'api',
-  'app',
-  'auth',
-  'blog',
-  'c',
-  'cdn',
-  'contact',
-  'dashboard',
-  'demo',
-  'docs',
-  'domains',
-  'email',
-  'help',
-  'join',
-  'legal',
-  'login',
-  'logout',
-  'mail',
-  'mcp',
-  'p',
-  'privacy',
-  'product',
-  'recover',
-  'recovery',
-  'register',
-  'revoke',
-  'sales',
-  'session',
-  'settings',
-  'shop',
-  'signup',
-  'source',
-  'static',
-  'status',
-  'support',
-  'terms',
-  'token',
-  'w',
-  'webmail',
-  'www',
-  'authorize',
-  'health',
-]);
+import { reservedPortfolioHandles } from './reserved-portfolio-handles';
+
 export const publicHandleSchema = z
   .string()
   .min(1)
@@ -60,7 +14,7 @@ export const publicHandleSchema = z
     'Use lowercase letters, numbers and single hyphens between words.',
   )
   .refine(
-    (name) => !name.includes('--') && !reserved.has(name),
+    (name) => !name.includes('--') && !reservedPortfolioHandles.has(name),
     'This address is reserved. Choose another name.',
   );
 

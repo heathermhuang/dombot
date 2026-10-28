@@ -7,7 +7,10 @@ the address while creating their private draft. Claiming never publishes a draft
 selects holdings, changes a domain's sale status, or changes existing publications.
 
 Names use lowercase letters, numbers and single hyphens, up to 40 characters.
-Application and infrastructure names are reserved. Claims are atomic and immutable
+Application, company/support, commercial, authorization, staff and infrastructure
+names are reserved, including `domains`, `about`, `support`, `pricing` and
+`security`. The policy is maintained in `src/hosted/reserved-portfolio-handles.ts`;
+a route-audit regression prevents literal gateway routes becoming claimable. Claims are atomic and immutable
 in this release; closure, suspension and unpublishing do not release a name.
 Existing `/w/<account-id>/p/<handle>` bookmarks remain functional.
 
