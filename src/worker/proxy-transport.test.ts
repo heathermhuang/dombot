@@ -32,6 +32,16 @@ beforeEach(() => {
 });
 
 describe('Worker proxy transport lifecycle', () => {
+  it('preserves self-hosted custom Dynadot transport without a managed queue', async () => {
+    mock.fetch.mockResolvedValue(new Response('{}'));
+    const response = await createWorkerProxyFetch({})(
+      proxy,
+      'https://api.dynadot.com/restful/v2/domains',
+      {},
+    );
+    expect(response.status).toBe(200);
+    expect(workerProxyPolicy({})(proxy, 'dynadot')).toEqual({});
+  });
   it('keeps a managed direct-egress relay inside the shared queue', async () => {
     const managed = {
       url: 'https://relay:direct-token@relay.example.test',
@@ -314,6 +324,44 @@ describe('Dynadot upstream feedback', () => {
       /secret|dynadot.com|domains|apiKey/,
     );
   });
+  it('queues Dynadot on a custom proxy even without a host route opt-in', async () => {
+    const custom = {
+      url: 'http://customer:private@custom-proxy.example:8080',
+      ip: '8.8.4.4',
+    };
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const command = JSON.parse(String(init?.body));
+        expect(command.provider).toBe('dynadot');
+        return Response.json(
+          command.action === 'acquire'
+            ? { status: 'deferred', retryAfterMs: 60000 }
+            : { status: 'cancelled' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(new Response('{}'));
+    const settings = {
+      ip: '152.42.223.194',
+      tenant: crypto.randomUUID(),
+      service,
+    };
+    const response = await createWorkerProxyFetch(settings)(
+      custom,
+      'https://api.dynadot.com/restful/v2/domains',
+      {},
+    );
+    expect(response.status).toBe(429);
+    expect(await response.text()).toBe('[dynadot:shared-cooldown]');
+    expect(service.fetch).toHaveBeenCalled();
+    expect(mock.fetch).not.toHaveBeenCalled();
+    expect(workerProxyPolicy(settings)(custom, 'dynadot')).toEqual({
+      timeout: 155000,
+      retries: 0,
+    });
+    expect(workerProxyPolicy(settings)(custom, 'namecheap')).toEqual({});
+  });
+
   it('returns a distinguishable cooldown without opening a socket', async () => {
     const service = {
       fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>

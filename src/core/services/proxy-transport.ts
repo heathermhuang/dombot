@@ -31,7 +31,10 @@ export type ProxyFetch = (
 // A host supplies a transport, never a shared open socket.
 let transport: ProxyFetch | undefined;
 let requestPolicy:
-  | ((proxy: ProxyRoute) => Pick<RegistrarOptions, 'timeout' | 'retries'>)
+  | ((
+      proxy: ProxyRoute,
+      registrar?: RegistrarName,
+    ) => Pick<RegistrarOptions, 'timeout' | 'retries'>)
   | undefined;
 export function configureProxyTransport(
   next?: ProxyFetch,
@@ -240,7 +243,7 @@ export function createProxiedRegistrar(
     // Through the proxy, its outgoing address is the Client IP Namecheap sees.
     name === 'namecheap' ? { ...credentials, clientIp: proxy.ip } : credentials,
     {
-      ...requestPolicy?.(proxy),
+      ...requestPolicy?.(proxy, name),
       fetch: wrapFetch ? wrapFetch(fetch) : fetch,
     } satisfies RegistrarOptions,
   );
