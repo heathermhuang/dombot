@@ -1,3 +1,8 @@
+import {
+  claimHostname,
+  releaseSalesHostname,
+  rememberHostnameProvider,
+} from './hostname-claims';
 import { managedHosts, operatorHosts } from '../shared/sales-managed-control';
 import { z } from 'zod';
 import { createHash, randomBytes } from 'node:crypto';
@@ -421,6 +426,13 @@ export class SalesHostnames {
         throw new Error('The domain-control TXT proof is not visible yet.');
       }
     }
+    await claimHostname(
+      this.env.CONTROL_DB,
+      hostname,
+      'sales',
+      workspace,
+      `${workspace}:${listing}:${epoch}`,
+    );
     const providerSchema = z
       .object({
         id: z.string(),
@@ -461,6 +473,13 @@ export class SalesHostnames {
     }
     if (provider.hostname !== hostname)
       throw new Error('Provider hostname mismatch.');
+    await rememberHostnameProvider(
+      this.env.CONTROL_DB,
+      hostname,
+      'sales',
+      `${workspace}:${listing}:${epoch}`,
+      provider.id,
+    );
     const ready =
       provider.status === 'active' && provider.ssl.status === 'active';
     const state = !ready
@@ -560,6 +579,13 @@ export class SalesHostnames {
       .first<{ epoch: number }>();
     if (!r) throw new Error('Binding changed. Reload before detaching.');
     await bindingWrite(this.env, workspace, hostname, listing, r.epoch, false);
+    await releaseSalesHostname(
+      this.env.CONTROL_DB,
+      hostname,
+      workspace,
+      listing,
+      epoch,
+    );
     return { status: 'detached', epoch: r.epoch };
   }
 }

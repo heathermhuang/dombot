@@ -34,3 +34,8 @@
 
 - Public handles are globally unique identities in `portfolio_addresses`, separate from immutable account IDs and private draft handles. Claiming an address never publishes content. Keep claims after unpublish, closure and suspension; do not recycle names.
 - `PUBLIC_SITE_ADDRESSES_ENABLED` requires control migration 0015 and compatible tenant public readers before activation. Preserve existing long public links. Subdomain routing and portfolio custom domains have separate DNS/TLS verification requirements; do not infer support from Sales listing custom hosts. See `docs/portfolio-addresses.md`.
+
+## Portfolio custom domains
+
+- Keep custom domains gated separately from short handles. Require a published profile, a fresh per-plan TXT ownership proof, active provider/TLS state, an exact public-edge route and a successful HTTPS visit before activation. Never forward account authority to customer hosts.
+- Migration 0016 shares hostname reservations with Sales; keep the guard effective during rollback. Unknown provider writes require reconciliation, never blind retry. Detach revokes public routing first and invalidates the old plan. See `docs/portfolio-custom-domains.md` for configuration, limits and release qualification.

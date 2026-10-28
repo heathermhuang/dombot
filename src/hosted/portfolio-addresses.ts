@@ -1,3 +1,4 @@
+import { activePortfolioHostname } from './portfolio-domains';
 import { z } from 'zod';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
@@ -27,12 +28,15 @@ export async function addressState(env: HostedEnv, workspace: string) {
   )
     .bind(workspace)
     .first<{ handle: string }>();
+  const custom = row ? await activePortfolioHostname(env, workspace) : null;
   return {
     enabled: true,
     address: row
       ? {
           handle: row.handle,
-          url: `${env.CANONICAL_ORIGIN ?? ''}/${row.handle}`,
+          url: custom
+            ? `https://${custom.hostname}/`
+            : `${env.CANONICAL_ORIGIN ?? ''}/${row.handle}`,
         }
       : null,
   };
@@ -158,6 +162,21 @@ export async function publicAddressRequest(
   const response = await workspaceService(env, configured.binding).fetch(
     forwarded,
   );
+  const custom = response.ok
+    ? await activePortfolioHostname(env, row.workspace_id)
+    : null;
+  if (custom) {
+    await response.body?.cancel();
+    const destination = new URL(
+      publicPath === `/${handle}` ? '/' : publicPath.slice(handle.length + 1),
+      `https://${custom.hostname}`,
+    );
+    destination.search = incoming.search;
+    return new Response(null, {
+      status: 308,
+      headers: { ...headers, Location: destination.href },
+    });
+  }
   const outgoing = new Headers(response.headers);
   outgoing.delete('Set-Cookie');
   outgoing.set('Cache-Control', 'no-store');

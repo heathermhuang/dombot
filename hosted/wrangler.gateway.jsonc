@@ -38,6 +38,9 @@
   ],
   "vars": {
     "ADMIN_USER_IDS": "[]",
+    "PORTFOLIO_CUSTOM_HOSTS_ENABLED": "false",
+    "PORTFOLIO_HOST_WORKSPACES": "[]",
+    "PORTFOLIO_EDGE_WORKER": "domains-sales-lander",
     "PUBLIC_SITE_ADDRESSES_ENABLED": "false",
     "PUBLIC_SITE_SUBDOMAINS_ENABLED": "false",
     "SYNC_MONITOR_ENABLED": "false",

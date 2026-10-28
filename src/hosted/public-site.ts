@@ -9,14 +9,19 @@ export async function publicSite(
 ): Promise<Response> {
   const url = new URL(request.url);
   const path = url.searchParams.get('__public_path');
-  if (!path || !/^\/[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?$/.test(path))
+  if (
+    !path ||
+    !/^\/(?:[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?|c\/[a-z0-9-]+)?$/.test(path)
+  )
     return new Response('Profile not found', {
       status: 404,
       headers: publicHeaders,
     });
   const row = await db
-    .prepare("SELECT payload FROM published_portfolios WHERE id='main'")
-    .first<{ payload: string }>();
+    .prepare(
+      "SELECT payload,revision FROM published_portfolios WHERE id='main'",
+    )
+    .first<{ payload: string; revision: string }>();
   if (!row)
     return new Response('Profile not found', {
       status: 404,
@@ -53,7 +58,11 @@ export async function publicSite(
         headers: publicHeaders,
       });
     return new Response(renderOwnerSite(parsed.data, url), {
-      headers: { ...publicHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        ...publicHeaders,
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Domains-Public-Revision': row.revision,
+      },
     });
   }
   if (path.includes('/c/'))
@@ -62,6 +71,10 @@ export async function publicSite(
       headers: publicHeaders,
     });
   return new Response(renderPortfolio(parsed.data, url), {
-    headers: { ...publicHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      ...publicHeaders,
+      'Content-Type': 'text/html; charset=utf-8',
+      'X-Domains-Public-Revision': row.revision,
+    },
   });
 }

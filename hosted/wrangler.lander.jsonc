@@ -15,9 +15,14 @@
     },
   ],
   "services": [
+    { "binding": "PORTFOLIO_GATEWAY", "service": "domains-staging" },
     { "binding": "WORKSPACE_0", "service": "domains-staging-tenant-0" },
   ],
-  "vars": { "SALES_CUSTOM_HOSTS_ENABLED": "false", "WORKSPACES": "[]" },
+  "vars": {
+    "SALES_CUSTOM_HOSTS_ENABLED": "false",
+    "PORTFOLIO_CUSTOM_HOSTS_ENABLED": "false",
+    "WORKSPACES": "[]",
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

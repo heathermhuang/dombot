@@ -1,3 +1,4 @@
+import { PortfolioDomainPanel } from '../components/owner-site/PortfolioDomainPanel';
 import {
   PortfolioAddressProvider,
   PortfolioAddressPanel,
@@ -71,6 +72,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
     return (
       <>
         <PortfolioAddressPanel />
+        <PortfolioDomainPanel />
         <DomainWorkspace area="page" />
       </>
     );
@@ -79,6 +81,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
       return (
         <>
           <PortfolioAddressPanel />
+          <PortfolioDomainPanel />
           <DomainWorkspace area="page" />
         </>
       );
@@ -435,6 +438,7 @@ function SiteAuthor() {
         </p>
       )}
       <PortfolioAddressPanel />
+      <PortfolioDomainPanel />
       <nav className="os-tabs" aria-label="Site editor">
         <button aria-pressed={view === 'edit'} onClick={() => setView('edit')}>
           Edit site

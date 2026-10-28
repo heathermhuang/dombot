@@ -1,3 +1,6 @@
+import { portfolioDomainRequest } from './portfolio-domain-routes';
+import { portfolioDomainPublicRequest } from './portfolio-domain-public';
+import { refreshPortfolioDomains } from './portfolio-domain-maintenance';
 import {
   addressState,
   claimAddress,
@@ -143,6 +146,11 @@ app.use(
   }),
 );
 app.use('*', async (c, next) => {
+  const customSiteResponse = await portfolioDomainPublicRequest(
+    c.req.raw,
+    c.env,
+  );
+  if (customSiteResponse) return customSiteResponse;
   const publicSiteResponse = await publicAddressRequest(c.req.raw, c.env);
   if (publicSiteResponse) return publicSiteResponse;
   const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
@@ -1198,7 +1206,8 @@ app.all('/w/:workspace/*', async (c) => {
       c.req.method === 'GET' &&
       !path.startsWith('/api') &&
       !path.startsWith('/publishing') &&
-      path !== '/site-address'
+      path !== '/site-address' &&
+      !path.startsWith('/site-domains')
     )
       return c.redirect(
         `/login?next=${encodeURIComponent(base + path + url.search)}`,
@@ -1208,6 +1217,27 @@ app.all('/w/:workspace/*', async (c) => {
       { error: user ? 'Account access denied' : 'Not signed in' },
       user ? 403 : 401,
     );
+  }
+  if (path === '/site-domains' || path.startsWith('/site-domains/')) {
+    if (!user || user.workspace_id !== id)
+      return c.json({ error: 'Not signed in' }, 401);
+    if (c.req.method !== 'GET') {
+      if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+      if (!(await new Passkeys(c.env).fresh(user)))
+        return c.json(
+          {
+            error: 'Confirm your identity before changing domain setup.',
+            reauth: '/account/reauth',
+          },
+          428,
+        );
+      if (!(await account(c.env).rateLimit(`portfolio-host:${id}`, 10)))
+        return c.json(
+          { error: 'Domain setup request limit reached. Try later.' },
+          429,
+        );
+    }
+    return portfolioDomainRequest(c.env, id, path, c.req.raw);
   }
   if (path === '/site-address') {
     if (!user || user.workspace_id !== id)
@@ -1633,6 +1663,7 @@ export default {
       drainSales,
       refreshDomainControls,
       refreshSalesHostnames,
+      refreshPortfolioDomains,
     ]) {
       try {
         await task(env);

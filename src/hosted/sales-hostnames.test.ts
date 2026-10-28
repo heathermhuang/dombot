@@ -3,6 +3,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFileSync, readdirSync } from 'node:fs';
 import { SalesHostnames } from './sales-hostnames';
 import edge from './lander-edge';
+import { claimHostname } from './hostname-claims';
 import {
   signGatewayRequest,
   verifyTenantAdmission,
@@ -111,6 +112,7 @@ afterAll(async () => mf?.dispose());
 beforeEach(async () => {
   await db.batch([
     db.prepare('DELETE FROM sales_hostnames'),
+    db.prepare('DELETE FROM public_hostname_claims'),
     db.prepare('DELETE FROM workspaces'),
     db
       .prepare('INSERT INTO workspaces(id,label,enabled) VALUES(?,?,1)')
@@ -343,6 +345,13 @@ describe('controlled hostname lifecycle', () => {
         Date.now() + 3600000,
       )
       .run();
+    await claimHostname(
+      db,
+      'fixture.example',
+      'sales',
+      workspace,
+      `${workspace}:${listing}:2`,
+    );
     const result = await edge.fetch!(
       new Request('https://fixture.example/', {
         headers: {

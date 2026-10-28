@@ -107,6 +107,7 @@ beforeEach(async () => {
   await hydrateStores();
   await control.batch(
     [
+      'public_hostname_claims',
       'sales_hostnames',
       'sales_domain_controls',
       'closure_requests',
