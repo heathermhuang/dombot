@@ -39,7 +39,11 @@ import {
 } from './auth-views';
 import { Accounts } from './accounts';
 import { brandFontBytes, brandFontPath } from './brand-font';
-import { productImages, previousProductImages } from './product-images';
+import {
+  productImages,
+  productImageVariants,
+  previousProductImages,
+} from './product-images';
 import { registrarLogos } from './registrar-logos';
 import { sourcePage } from './source';
 import { requestAccess, closeWorkspace } from './lifecycle';
@@ -192,6 +196,7 @@ app.get(brandFontPath, (c) => {
 app.get('/product/:image', async (c) => {
   const image = [
     ...Object.values(productImages),
+    ...productImageVariants,
     ...previousProductImages,
   ].find((entry) => entry.path === c.req.path);
   if (!image) return c.notFound();
