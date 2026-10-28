@@ -103,6 +103,10 @@ export function PortfolioDomainPanel() {
     [busy, setBusy] = useState(false),
     [confirmRemove, setConfirmRemove] = useState(false);
   const { reload: reloadAddress } = usePortfolioAddress();
+  const reloadAddressRef = useRef(reloadAddress);
+  useEffect(() => {
+    reloadAddressRef.current = reloadAddress;
+  }, [reloadAddress]);
   const reload = () => {
     if (mutating.current) return;
     const version = ++readVersion.current;
@@ -137,10 +141,15 @@ export function PortfolioDomainPanel() {
         });
     };
     load();
-    window.addEventListener('focus', load);
+    const onFocus = () => {
+      if (mutating.current) return;
+      load();
+      reloadAddressRef.current();
+    };
+    window.addEventListener('focus', onFocus);
     return () => {
       active = false;
-      window.removeEventListener('focus', load);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
   const run = async (path: string, body: unknown) => {
