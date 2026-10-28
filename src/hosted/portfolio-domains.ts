@@ -61,7 +61,8 @@ const messages: Record<string, string> = {
   'dns-proof': 'The ownership TXT record is not visible yet.',
   'dns-unavailable':
     'DNS could not be checked. Check delegation and try again.',
-  'not-published': 'Publish your profile before connecting a domain.',
+  'not-published':
+    'Choose a short public address and publish your profile before connecting a domain.',
   'provider-unavailable':
     'The domain service is temporarily unavailable. Try again later.',
   'provider-mismatch': 'The domain service needs to review this setup.',
