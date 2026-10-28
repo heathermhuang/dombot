@@ -10,7 +10,7 @@ export interface ProxyTicket {
   id: string;
   tenant: string;
   expiresAt: number;
-  route: 'serial' | 'relay';
+  route: 'serial' | 'relay' | 'alternate';
   provider?: 'dynadot';
 }
 export interface ProxyGrant extends ProxyTicket {
@@ -29,7 +29,7 @@ export type ProxyQueueCommand = {
   id: string;
   tenant: string;
   token?: string;
-  route?: 'serial' | 'relay';
+  route?: 'serial' | 'relay' | 'alternate';
   provider?: 'dynadot';
   retryAfterMs?: number;
 };

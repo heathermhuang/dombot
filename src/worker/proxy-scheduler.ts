@@ -14,6 +14,9 @@ export interface ProxySchedulerSettings {
   relayUrl?: string;
   managedUrl?: string;
   provider?: 'dynadot';
+  alternateHost?: string;
+  alternateIp?: string;
+  queueRoute?: 'alternate';
 }
 
 /** A supplied custom proxy must never have its credentials silently replaced. */
@@ -37,6 +40,20 @@ export function managedProxy(
   }
 }
 
+/** The host opts a previously qualified custom route into a separate serial
+ * gate. Never replace a customer's proxy credentials with the managed relay. */
+export function alternateProxy(
+  settings: ProxySchedulerSettings,
+  proxy: ProxyRoute,
+): boolean {
+  return Boolean(
+    settings.alternateHost &&
+    settings.alternateIp &&
+    new URL(proxy.url).host === settings.alternateHost &&
+    proxy.ip === settings.alternateIp,
+  );
+}
+
 export function scheduledProxy(
   settings: ProxySchedulerSettings,
   proxy: ProxyRoute,
@@ -44,7 +61,8 @@ export function scheduledProxy(
   const endpoint = new URL(proxy.url);
   return Boolean(
     settings.ip &&
-    (managedProxy(settings, proxy) ||
+    (alternateProxy(settings, proxy) ||
+      managedProxy(settings, proxy) ||
       (endpoint.hostname === settings.ip && endpoint.port === '12323')),
   );
 }
@@ -99,7 +117,8 @@ export async function acquireProxyLease(
           id,
           tenant,
           ...(token ? { token } : {}),
-          route: settings.relayUrl ? 'relay' : 'serial',
+          route:
+            settings.queueRoute ?? (settings.relayUrl ? 'relay' : 'serial'),
           ...(settings.provider ? { provider: settings.provider } : {}),
           ...(retryAfterMs ? { retryAfterMs } : {}),
         } satisfies ProxyQueueCommand),

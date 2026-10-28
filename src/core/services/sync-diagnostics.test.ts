@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { encodeDynadotRateLimit } from '../../shared/dynadot-rate-limit';
 import { MemoryDocStore } from '../storage/doc-store';
 import {
   configureStore,
@@ -55,6 +56,31 @@ describe('retained Dynadot attempt diagnostics', () => {
     ]);
     expect(JSON.stringify(snapshot)).not.toMatch(/private.test|secret|https:/);
   });
+  it('persists only safe provider diagnostics and keeps old records compatible', async () => {
+    const rateLimit = {
+      reason: 'concurrency' as const,
+      endpoint: 'inventory' as const,
+      format: 'json' as const,
+      retryAfterSeconds: 180,
+      retryAfterSource: 'seconds' as const,
+    };
+    recordSyncAttempt(
+      input(),
+      new Error('HTTP 429 ' + encodeDynadotRateLimit(rateLimit)),
+    );
+    recordSyncAttempt(
+      input(),
+      new Error('HTTP 429 private unclassified description'),
+    );
+    await flushWrites();
+    const snapshot = syncDiagnosticsSchema.parse(
+      await store.get('sync-monitor', 'diagnostics'),
+    );
+    expect(snapshot.events[0].rateLimit).toEqual(rateLimit);
+    expect(snapshot.events[1].rateLimit).toBeUndefined();
+    expect(JSON.stringify(snapshot)).not.toMatch(/private|description/);
+  });
+
   it('retains the last 200 attempts and reports the exact pruned sequence', async () => {
     for (let i = 0; i < 203; i++)
       recordSyncAttempt({

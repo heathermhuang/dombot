@@ -286,9 +286,35 @@ describe('tenant proxy lease client', () => {
     expect(
       scheduledProxy(
         { ip: shared.ip },
-        { url: 'http://u:p@94.116.91.250:12323', ip: '94.116.91.250' },
+        { url: 'http://u:p@8.8.4.4:12323', ip: '8.8.4.4' },
       ),
     ).toBe(false);
     expect(scheduledProxy({}, shared)).toBe(false);
   });
+});
+
+it('qualifies only the operator-approved alternate proxy without replacing its credentials', () => {
+  const settings = {
+    ip: '152.42.223.194',
+    alternateHost: '194.153.254.242:12323',
+    alternateIp: '8.8.4.4',
+  };
+  expect(
+    scheduledProxy(settings, {
+      url: 'http://customer:secret@194.153.254.242:12323/',
+      ip: '8.8.4.4',
+    }),
+  ).toBe(true);
+  expect(
+    scheduledProxy(settings, {
+      url: 'http://customer:secret@194.153.254.242:12323/',
+      ip: '8.8.8.8',
+    }),
+  ).toBe(false);
+  expect(
+    scheduledProxy(settings, {
+      url: 'http://customer:secret@8.8.8.8:12323/',
+      ip: '8.8.4.4',
+    }),
+  ).toBe(false);
 });

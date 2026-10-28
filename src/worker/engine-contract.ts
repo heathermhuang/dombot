@@ -8,6 +8,8 @@ export interface DomBotEnvironment {
   DOMBOT_PROXY_SCHEDULER_IP?: string;
   DOMBOT_PROXY_SCHEDULER?: Fetcher;
   DOMBOT_PROXY_RELAY_URL?: string;
+  DOMBOT_PROXY_ALTERNATE_HOST?: string;
+  DOMBOT_PROXY_ALTERNATE_IP?: string;
   DOMBOT_OWNER_SITE_V2?: string;
   DOMBOT_SALES_DNS_CONTROL?: string;
   SALES_DNS_CONTROL_ENABLED?: string;
