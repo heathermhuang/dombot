@@ -15,6 +15,8 @@ import { configureSyncDiagnostics } from '../core/services/sync-diagnostics';
 import {
   configureIncrementalRenewalPricing,
   stepRenewalPricing,
+  getCachedPortfolio,
+  getRegistrarMetadata,
 } from '../core/services/registrars';
 import { resetBulkMemory } from '../core/services/bulk-jobs';
 import { getSettings } from '../core/services/settings';
@@ -49,6 +51,7 @@ import { createWorkerProxyFetch, workerProxyPolicy } from './proxy-transport';
 import { configureManagedProxy } from '../core/services/managed-proxy';
 import { createPublicPortfolioRoutes } from './public-portfolio';
 import { createPublicationRoutes } from './publication-routes';
+import { PublicationReadCache } from './publication-inputs';
 import { PublicationStore } from './publication-store';
 import { publicationBackupMethods } from './publication-backup';
 import { createPublicSalesRoutes } from './public-sales';
@@ -83,6 +86,13 @@ interface Boot {
 
 let boot: Boot | null = null;
 let bootFor = '';
+const publicationReads = new PublicationReadCache();
+function capturePublicationInputs() {
+  publicationReads.capture({
+    domains: getCachedPortfolio()?.domains ?? [],
+    accounts: getRegistrarMetadata(),
+  });
+}
 
 /** The env values boot depends on. If they change under a live isolate
  *  (wrangler dev reloading .dev.vars; a secret rotated in place), the cached
@@ -111,6 +121,7 @@ async function bootOnce(env: Env): Promise<Boot> {
   const fp = bootFingerprint(env);
   if (boot && bootFor === fp) return boot;
   boot = null;
+  publicationReads.clear();
   const initialized = await (async () => {
     setAppIdentity({ version: APP_VERSION, platform: 'web' });
     const root = parseRootSecret(env.DOMBOT_SECRET);
@@ -171,6 +182,7 @@ async function hydrate(oauthOnly = false): Promise<void> {
   );
   // Idempotent and a no-op once done; its writes flush with the request's.
   if (!oauthOnly) await migrateLegacyProxies();
+  if (!oauthOnly) capturePublicationInputs();
   resetBulkMemory();
 }
 
@@ -246,6 +258,7 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
       if (salesReady)
         await reconcileSalesOutcomes(await SalesStore.from(c.env));
       await flushWrites();
+      if (!oauthOnly) capturePublicationInputs();
       if (c.req.method !== 'GET' && salesReady)
         await (
           await SalesStore.from(c.env)
@@ -361,7 +374,10 @@ app.post('/auth/logout', async (c) => {
 
 // ── the API: one route over the method table ────────────────────────────────
 
-app.route('/publishing', createPublicationRoutes(stateful));
+app.route(
+  '/publishing',
+  createPublicationRoutes(stateful, publicationReads.read),
+);
 app.route('/sales', createSalesRoutes(stateful));
 
 app.post(
@@ -523,6 +539,7 @@ export default {
           ran ? '[cron] portfolio synced' : '[cron] cache fresh; skipped',
         );
         await flushWrites();
+        capturePublicationInputs();
       });
       return new Response(null, { status: 204 });
     });
