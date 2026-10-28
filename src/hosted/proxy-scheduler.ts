@@ -17,7 +17,7 @@ function commandOf(value: unknown): ProxyQueueCommand | null {
     typeof command.tenant !== 'string' ||
     !uuid.test(command.tenant) ||
     (command.route !== undefined &&
-      !['serial', 'relay'].includes(command.route)) ||
+      !['serial', 'relay', 'alternate'].includes(command.route)) ||
     (command.provider !== undefined && command.provider !== 'dynadot') ||
     (command.retryAfterMs !== undefined &&
       (!Number.isSafeInteger(command.retryAfterMs) ||
@@ -39,10 +39,11 @@ function commandOf(value: unknown): ProxyQueueCommand | null {
   };
 }
 
-/** One durable object per outgoing proxy IP, shared by every tenant. */
+/** Primary egress gate plus a separate conservative approved-alternate gate. */
 export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
   async fetch(request: Request): Promise<Response> {
-    const relay = this.env.SHARED_PROXY_MODE === 'relay';
+    const alternate = new URL(request.url).pathname.startsWith('/alternate-');
+    const relay = !alternate && this.env.SHARED_PROXY_MODE === 'relay';
     const concurrency = relay
       ? Math.max(
           1,
@@ -52,7 +53,9 @@ export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
           ),
         )
       : 1;
-    if (new URL(request.url).pathname === '/status') {
+    if (
+      ['/status', '/alternate-status'].includes(new URL(request.url).pathname)
+    ) {
       const state =
         (await this.ctx.storage.get<ProxyQueueState>('queue')) ??
         emptyProxyQueue();
@@ -69,7 +72,8 @@ export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
       });
     }
     const command = commandOf(await request.json().catch(() => null));
-    if (!command) return new Response('Invalid queue request', { status: 400 });
+    if (!command || (alternate && command.route !== 'alternate'))
+      return new Response('Invalid queue request', { status: 400 });
     if (relay && command.action === 'acquire' && command.route !== 'relay')
       return new Response('Fixed-source relay required', { status: 409 });
     const result = await this.ctx.storage.transaction(async (storage) => {
@@ -99,10 +103,13 @@ export default {
     )
       return new Response('Not found', { status: 404 });
     const pathname = new URL(request.url).pathname;
-    if (pathname === '/status')
+    if (pathname === '/status' || pathname === '/alternate-status')
       return env.SHARED_PROXY_QUEUE.get(
-        env.SHARED_PROXY_QUEUE.idFromName(env.SHARED_PROXY_IP),
-      ).fetch('https://queue.internal/status');
+        env.SHARED_PROXY_QUEUE.idFromName(
+          env.SHARED_PROXY_IP +
+            (pathname === '/alternate-status' ? ':approved-alternate' : ''),
+        ),
+      ).fetch('https://queue.internal' + pathname);
     if (
       pathname !== '/lease' ||
       Number(request.headers.get('Content-Length') ?? 0) > 1024
@@ -137,12 +144,19 @@ export default {
     const command = commandOf(value);
     if (!command) return new Response('Invalid queue request', { status: 400 });
     const queue = env.SHARED_PROXY_QUEUE.get(
-      env.SHARED_PROXY_QUEUE.idFromName(env.SHARED_PROXY_IP),
+      env.SHARED_PROXY_QUEUE.idFromName(
+        env.SHARED_PROXY_IP +
+          (command.route === 'alternate' ? ':approved-alternate' : ''),
+      ),
     );
-    return queue.fetch('https://queue.internal/lease', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(command),
-    });
+    return queue.fetch(
+      'https://queue.internal/' +
+        (command.route === 'alternate' ? 'alternate-lease' : 'lease'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(command),
+      },
+    );
   },
 } satisfies ExportedHandler<ProxySchedulerEnv>;

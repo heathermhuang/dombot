@@ -205,3 +205,50 @@ describe('Dynadot request pacing', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('safe rejection propagation', () => {
+  it('retains typed safe diagnostics through the real SDK without leaking the raw response', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: 429,
+            error: {
+              description:
+                'You have reached the concurrent limit of your account. PRIVATE_TOKEN secret.example',
+            },
+          }),
+          { status: 429, headers: { 'Retry-After': '180' } },
+        ),
+    );
+    const provider = createRegistrar('dynadot', creds, {
+      fetch: createDynadotFetch(send),
+    });
+    let failure: unknown;
+    try {
+      await provider.listDomains({ retries: 0 });
+    } catch (e) {
+      failure = e;
+    }
+    expect(failure).toMatchObject({ name: 'RateLimitError', retryAfter: 180 });
+    expect((failure as Error).message).toContain('[dynadot429:');
+    expect((failure as Error).message).not.toMatch(
+      /PRIVATE_TOKEN|secret\.example/,
+    );
+  });
+});
+
+it('preserves the shared cooldown marker without inventing an upstream diagnostic', async () => {
+  const send = vi.fn(
+    async () =>
+      new Response('[dynadot:shared-cooldown]', {
+        status: 429,
+        headers: { 'Retry-After': '180' },
+      }),
+  );
+  const response = await createDynadotFetch(send)(
+    'https://api.dynadot.com/restful/v2/domains',
+  );
+  expect(await response.text()).toBe('[dynadot:shared-cooldown]');
+  expect(send).toHaveBeenCalledTimes(1);
+});

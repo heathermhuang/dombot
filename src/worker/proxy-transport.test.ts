@@ -335,3 +335,40 @@ describe('Dynadot upstream feedback', () => {
     expect(mock.fetch).not.toHaveBeenCalled();
   });
 });
+
+it('uses the approved alternate queue without substituting managed relay credentials', async () => {
+  const alternate = {
+    url: 'http://customer:alternate-secret@194.153.254.242:12323/',
+    ip: '8.8.4.4',
+  };
+  const calls: Record<string, unknown>[] = [];
+  const service = {
+    fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const c = JSON.parse(String(init?.body));
+      calls.push(c);
+      return Response.json(
+        c.action === 'acquire'
+          ? {
+              status: 'granted',
+              token: crypto.randomUUID(),
+              expiresAt: Date.now() + 60000,
+            }
+          : { status: 'released' },
+      );
+    }),
+  };
+  mock.fetch.mockResolvedValue(new Response('{}'));
+  await createWorkerProxyFetch({
+    ip: '152.42.223.194',
+    tenant: crypto.randomUUID(),
+    service,
+    managedUrl: 'https://relay:managed-secret@relay.example.test',
+    relayUrl: 'https://relay:managed-secret@relay.example.test',
+    alternateHost: '194.153.254.242:12323',
+    alternateIp: '8.8.4.4',
+  })(alternate, 'https://api.dynadot.com/restful/v2/domains', {});
+  expect(calls[0]).toMatchObject({ route: 'alternate', provider: 'dynadot' });
+  expect(calls[1].route).toBe('alternate');
+  expect(mock.options[0].proxy).toBe(alternate.url);
+  expect(JSON.stringify(calls)).not.toMatch(/customer|secret|dynadot.com/);
+});

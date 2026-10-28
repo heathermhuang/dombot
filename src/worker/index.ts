@@ -98,6 +98,8 @@ function bootFingerprint(env: Env): string {
     env.DOMBOT_MANAGED_PROXY_IP,
     env.DOMBOT_PROXY_SCHEDULER_IP,
     env.DOMBOT_PROXY_RELAY_URL,
+    Reflect.get(env, 'DOMBOT_PROXY_ALTERNATE_HOST'),
+    Reflect.get(env, 'DOMBOT_PROXY_ALTERNATE_IP'),
     env.CF_ACCESS_TEAM_DOMAIN,
     env.CF_ACCESS_AUD,
   ].join('\u0000');
@@ -128,6 +130,20 @@ async function bootOnce(env: Env): Promise<Boot> {
       service: env.DOMBOT_PROXY_SCHEDULER,
       relayUrl: env.DOMBOT_PROXY_RELAY_URL,
       managedUrl: env.DOMBOT_MANAGED_PROXY_URL,
+      ...(env.DOMBOT_AUTH === 'gateway' &&
+      typeof Reflect.get(env, 'DOMBOT_PROXY_ALTERNATE_HOST') === 'string' &&
+      typeof Reflect.get(env, 'DOMBOT_PROXY_ALTERNATE_IP') === 'string'
+        ? {
+            alternateHost: Reflect.get(
+              env,
+              'DOMBOT_PROXY_ALTERNATE_HOST',
+            ) as string,
+            alternateIp: Reflect.get(
+              env,
+              'DOMBOT_PROXY_ALTERNATE_IP',
+            ) as string,
+          }
+        : {}),
     };
     configureProxyTransport(
       createWorkerProxyFetch(scheduler),

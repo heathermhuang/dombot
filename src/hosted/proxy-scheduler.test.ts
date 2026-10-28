@@ -143,6 +143,98 @@ describe('durable cross-tenant proxy gate', () => {
     }
   });
 
+  it('isolates the approved alternate serial lane from the failing primary egress', async () => {
+    const bundle = await build({
+      entryPoints: ['src/hosted/proxy-scheduler.ts'],
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'browser',
+      external: ['cloudflare:*'],
+      target: 'es2022',
+    });
+    const relay = new Miniflare(
+      convertV4MiniflareOptions({
+        cf: false,
+        modules: true,
+        script: bundle.outputFiles[0].text,
+        compatibilityDate: '2026-10-01',
+        bindings: {
+          SHARED_PROXY_IP: '152.42.223.194',
+          SHARED_PROXY_MODE: 'relay',
+          SHARED_PROXY_CONCURRENCY: '4',
+        },
+        durableObjects: {
+          SHARED_PROXY_QUEUE: {
+            className: 'SharedProxyQueue',
+            useSQLite: true,
+          },
+        },
+      }),
+    );
+    try {
+      const send = async (body: object, path = '/lease') =>
+        (
+          await relay.dispatchFetch('https://queue.test' + path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+        ).json() as Promise<Record<string, unknown>>;
+      const primary = {
+        action: 'acquire',
+        id: crypto.randomUUID(),
+        tenant: crypto.randomUUID(),
+        route: 'relay',
+        provider: 'dynadot',
+      };
+      const first = await send(primary);
+      expect(first.status).toBe('granted');
+      await send({
+        ...primary,
+        action: 'release',
+        token: first.token,
+        retryAfterMs: 180000,
+      });
+      const alternate = {
+        ...primary,
+        id: crypto.randomUUID(),
+        route: 'alternate',
+      };
+      const granted = await send(alternate);
+      expect(granted.status).toBe('granted');
+      const next = {
+        ...alternate,
+        id: crypto.randomUUID(),
+        tenant: crypto.randomUUID(),
+      };
+      expect((await send(next)).status).toBe('waiting');
+      expect(await send({}, '/alternate-status')).toMatchObject({
+        mode: 'serial',
+        concurrency: 1,
+        active: 1,
+        queued: 1,
+      });
+      expect((await send({ ...primary, id: crypto.randomUUID() })).status).toBe(
+        'deferred',
+      );
+      await send({ ...alternate, action: 'release', token: granted.token });
+      expect((await send(next)).status).toBe('waiting');
+      expect(
+        (
+          await send({
+            action: 'acquire',
+            id: crypto.randomUUID(),
+            tenant: crypto.randomUUID(),
+            route: 'relay',
+          })
+        ).status,
+      ).toBe('granted');
+    } finally {
+      await relay.dispose();
+    }
+  });
+
   it('rejects invalid, oversized and non-queue requests before touching the gate', async () => {
     expect((await mf.dispatchFetch('https://queue.test/lease')).status).toBe(
       404,

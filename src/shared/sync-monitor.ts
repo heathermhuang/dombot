@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  dynadotRateLimitSchema,
+  readDynadotRateLimit,
+} from './dynadot-rate-limit';
 
 export const SYNC_RETENTION_MS = 30 * 86400_000;
 export const SYNC_EVENT_LIMIT = 200;
@@ -33,6 +37,7 @@ export const syncEventSchema = z.object({
     'unknown',
   ]),
   httpStatus: z.number().int().min(100).max(599).nullable(),
+  rateLimit: dynadotRateLimitSchema.optional(),
   engine: z
     .string()
     .regex(/^[a-zA-Z0-9.-]+$/)
@@ -67,7 +72,7 @@ export type SyncDiagnostics = z.infer<typeof syncDiagnosticsSchema>;
 // query strings, request bodies, API keys, account labels or domain names.
 export function classifySyncFailure(
   error: unknown,
-): Pick<SyncEvent, 'code' | 'httpStatus'> {
+): Pick<SyncEvent, 'code' | 'httpStatus' | 'rateLimit'> {
   const message = error instanceof Error ? error.message : String(error);
   const tag = message.match(/\[proxy:([A-Z_]+)(?::(\d{3}))?\]/);
   const status = Number(
@@ -108,5 +113,7 @@ export function classifySyncFailure(
                   : httpStatus || /dynadot|registrar/i.test(message)
                     ? 'provider'
                     : 'unknown';
-  return { code, httpStatus };
+  const rateLimit =
+    code === 'rate_limit' ? readDynadotRateLimit(error) : undefined;
+  return { code, httpStatus, ...(rateLimit ? { rateLimit } : {}) };
 }

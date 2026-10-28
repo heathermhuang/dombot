@@ -1,16 +1,13 @@
+import {
+  dynadotRetryAfter,
+  encodeDynadotRateLimit,
+  inspectDynadotRateLimit,
+} from '../../shared/dynadot-rate-limit';
 const SPACING_MS = 1100;
-const RATE_LIMIT_SECONDS = 60;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 export function dynadotRetrySeconds(value: string | null): number {
-  if (value?.trim()) {
-    const seconds = Number(value);
-    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds);
-    const date = Date.parse(value);
-    if (Number.isFinite(date) && date > Date.now())
-      return Math.ceil((date - Date.now()) / 1000);
-  }
-  return RATE_LIMIT_SECONDS;
+  return dynadotRetryAfter(value).seconds;
 }
 
 async function pause(ms: number, signal?: AbortSignal | null): Promise<void> {
@@ -92,13 +89,32 @@ export function createDynadotFetch(
         body.set(chunk, offset);
         offset += chunk.byteLength;
       }
+      const localCooldown =
+        new TextDecoder().decode(body) === '[dynadot:shared-cooldown]';
+      const safeBody =
+        response.status === 429 && !localCooldown
+          ? new TextEncoder().encode(
+              encodeDynadotRateLimit(
+                inspectDynadotRateLimit(input, response.headers, body),
+              ),
+            )
+          : body;
+      if (response.status === 429 && !localCooldown)
+        headers.set('Content-Type', 'text/plain; charset=utf-8');
       headers.delete('Content-Encoding');
       headers.delete('Content-Length');
-      return new Response(response.body === null ? null : body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      return new Response(
+        response.status === 429
+          ? safeBody
+          : response.body === null
+            ? null
+            : body,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        },
+      );
     };
     const result = pending ? pending.catch(() => undefined).then(run) : run();
     pending = result;

@@ -12,6 +12,7 @@ import {
 } from '../shared/proxy-scheduler';
 import {
   acquireProxyLease,
+  alternateProxy,
   managedProxy,
   scheduledProxy,
   type ProxySchedulerSettings,
@@ -43,6 +44,9 @@ export function createWorkerProxyFetch(
       {
         ...settings,
         relayUrl,
+        ...(alternateProxy(settings, proxy)
+          ? { queueRoute: 'alternate' as const }
+          : {}),
         ...(dynadot ? { provider: 'dynadot' as const } : {}),
       },
       init.signal,
