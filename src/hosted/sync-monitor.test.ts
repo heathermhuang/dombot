@@ -116,6 +116,75 @@ beforeEach(async () => {
   } as unknown as HostedEnv;
 });
 describe('production Dynadot collector and email outbox', () => {
+  it('keeps a continuing 429 in one incident across deployments and legacy fingerprints', async () => {
+    const first = { ...event(1, false, 'rate_limit'), httpStatus: 429 };
+    await ingestSyncEvent(env, workspace, first);
+    // Simulate a row written by the previously deployed collector.
+    await db
+      .prepare('UPDATE sync_monitor_accounts SET fingerprint=?')
+      .bind(
+        [
+          first.code,
+          first.httpStatus,
+          first.route,
+          first.engine,
+          first.source,
+        ].join(':'),
+      )
+      .run();
+    await deliverSyncAlerts(env);
+    for (let seq = 2; seq <= 3; seq++)
+      await ingestSyncEvent(env, workspace, {
+        ...first,
+        ...event(seq, false, 'rate_limit'),
+        httpStatus: 429,
+        engine: `1.5.2-hosted.${20 + seq}`,
+        source: String(seq).repeat(64),
+      });
+    await db
+      .prepare('UPDATE sync_monitor_deliveries SET at=?')
+      .bind(Date.now() - 31 * 60_000)
+      .run();
+    await deliverSyncAlerts(env);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .prepare(
+          'SELECT fingerprint,incident_id,failures FROM sync_monitor_accounts',
+        )
+        .first(),
+    ).toMatchObject({
+      fingerprint: 'rate_limit:429:managed',
+      incident_id: first.id,
+      failures: 3,
+    });
+    expect(
+      (await db.prepare('SELECT * FROM sync_monitor_events').all()).results,
+    ).toHaveLength(3);
+    expect(
+      (
+        await db
+          .prepare("SELECT * FROM sync_monitor_alerts WHERE kind='failure'")
+          .all()
+      ).results,
+    ).toHaveLength(1);
+    // A real route/cause change and a failure after recovery remain new incidents.
+    await ingestSyncEvent(env, workspace, {
+      ...event(4, false, 'rate_limit'),
+      httpStatus: 429,
+      route: 'custom',
+    });
+    await ingestSyncEvent(env, workspace, event(5, true));
+    await ingestSyncEvent(env, workspace, event(6, false, 'rate_limit'));
+    expect(
+      (
+        await db
+          .prepare("SELECT * FROM sync_monitor_alerts WHERE kind='failure'")
+          .all()
+      ).results,
+    ).toHaveLength(3);
+  });
+
   it('retains failure followed by recovery before polling; quiet on unchanged/repeated cause', async () => {
     const a = event(1),
       b = event(2),
