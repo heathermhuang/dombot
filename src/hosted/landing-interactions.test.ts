@@ -9,6 +9,27 @@ import {
 } from './landing-interactions';
 
 describe('approved MCP-first landing page', () => {
+  it('explains core portfolio capabilities and the limits of AI access', () => {
+    const html = home(false, true);
+    for (const capability of [
+      'Connect multiple accounts across 11 supported registrars',
+      'import a CSV or paste a domain list',
+      'folders and notes',
+      'Update auto-renew, transfer locks and nameservers',
+      'export the view to CSV',
+      'Select names for a public portfolio',
+      'annual estimates and monthly forecasts',
+      'price source and refresh status',
+      'Access is scoped and revocable',
+      'Paid registrations, renewals and transfers stay off',
+    ])
+      expect(html).toContain(capability);
+    expect(html).toContain(
+      'Illustrative estimates, not guaranteed registrar quotes.',
+    );
+    expect(html).not.toContain('yourname.domains.domains');
+  });
+
   it('renders readable first-screen content without requiring JavaScript', () => {
     const html = home(false, true);
     expect(html).toContain('Every domain.<br><em>One conversation.</em>');
