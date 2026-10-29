@@ -20,6 +20,7 @@
     },
   ],
   "services": [
+    { "binding": "PROVISIONER", "service": "domains-portfolio-provisioner", "entrypoint": "Provisioner" },
     { "binding": "WORKSPACE_0", "service": "domains-staging-tenant-0" },
     { "binding": "WORKSPACE_1", "service": "domains-staging-tenant-1" },
     { "binding": "WORKSPACE_2", "service": "domains-staging-tenant-2" },
@@ -38,6 +39,9 @@
   ],
   "vars": {
     "ADMIN_USER_IDS": "[]",
+    "ON_DEMAND_ENABLED": "false",
+    "ON_DEMAND_ACCOUNT_LIMIT": "500",
+    "ON_DEMAND_TEMPLATE_SHA256": "",
     "PUBLIC_SITE_ADDRESSES_ENABLED": "false",
     "PUBLIC_SITE_SUBDOMAINS_ENABLED": "false",
     "SYNC_MONITOR_ENABLED": "false",

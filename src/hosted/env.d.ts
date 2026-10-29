@@ -1,4 +1,10 @@
 interface HostedEnv {
+  ON_DEMAND_ENABLED?: string;
+  ON_DEMAND_TEMPLATE_SHA256?: string;
+  ON_DEMAND_ACCOUNT_LIMIT?: string;
+  PROVISIONER?: {
+    provision(workspace: string, user: string): Promise<import('./on-demand').ProvisionReceipt>;
+  };
   PUBLIC_SITE_ADDRESSES_ENABLED?: string;
   PUBLIC_SITE_SUBDOMAINS_ENABLED?: string;
   SYNC_MONITOR_ENABLED?: string;

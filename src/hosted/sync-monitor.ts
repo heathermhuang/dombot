@@ -1,3 +1,4 @@
+import { onDemandSchemaReady } from './on-demand';
 import {
   readWorkspace,
   ObservationFailure,
@@ -349,7 +350,7 @@ export async function monitorDynadotSync(env: HostedEnv): Promise<void> {
   try {
     const rows = (
       await env.CONTROL_DB.prepare(
-        'SELECT u.workspace_id,c.revision,COALESCE(c.seq,0) seq,COALESCE(c.errors,0) errors,c.error_since,COALESCE(c.error_alerted,0) error_alerted FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN sync_monitor_checks c ON c.workspace_id=u.workspace_id WHERE w.enabled=1 GROUP BY u.workspace_id ORDER BY COALESCE(c.checked_at,0),u.workspace_id LIMIT ?',
+        `SELECT u.workspace_id,c.revision,COALESCE(c.seq,0) seq,COALESCE(c.errors,0) errors,c.error_since,COALESCE(c.error_alerted,0) error_alerted FROM users u JOIN workspaces w ON w.id=u.workspace_id LEFT JOIN sync_monitor_checks c ON c.workspace_id=u.workspace_id WHERE w.enabled=1 ${onDemandSchemaReady(env) ? 'AND NOT EXISTS(SELECT 1 FROM pending_workspaces p WHERE p.workspace_id=w.id AND p.activated_at IS NULL)' : ''} GROUP BY u.workspace_id ORDER BY COALESCE(c.checked_at,0),u.workspace_id LIMIT ?`,
       )
         .bind(MAX_USERS)
         .all<Check>()

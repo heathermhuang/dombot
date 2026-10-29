@@ -6,7 +6,7 @@
 - Use the full `domains.domains` text wordmark on the public website and account pages. Read `.impeccable.md` for the current design direction.
 - Lead customer-facing copy with domains.domains and product tasks. Keep upstream attribution in the shared footer, source and legal notices; do not repeat it in hero text, screenshot captions, demo buttons or onboarding instructions.
 - Product previews may use owner-authorized generic domains from the public portfolio. Prefer strong dictionary words and descriptive names; avoid brand-like holdings and .example placeholders. Keep illustrative account details, renewal estimates and draft statuses labelled as sample data; do not invent asking prices or imply live publication. Never expose private registrar records or invented customer endorsements.
-- Use “account” for sign-in and access, and “portfolio” for domain holdings. Keep internal immutable tenant identities unchanged. Public registration requires verified email, published Terms and Privacy with the confirmed operator identity, and prequalified capacity; registrar charges are separate. Do not advertise open registration while these gates are off.
+- Use “account” for sign-in and access, and “portfolio” for domain holdings. Keep internal immutable tenant identities unchanged. Public registration requires verified email, published Terms and Privacy with the confirmed operator identity, and prequalified capacity or a qualified on-demand provisioner; registrar charges are separate. Do not advertise open registration while these gates are off.
 
 - Use inquiry-focused copy throughout public and account UI: “Domain inquiries”, “Get in touch” and “Open to inquiries”. Do not use availability slogans. Keep internal schema identifiers stable. Public inquiry pages refer to the contact or domain owner.
 
@@ -20,6 +20,9 @@
 - The SaaS layer is open source under AGPL-3.0-or-later; retain upstream copyright and third-party notices. Keep the public source offer at /source accessible without sign-in, and set SOURCE_COMMIT to the deployed Git revision for exact source links.
 
 ## Hosted authentication
+
+- On-demand provisioning is implemented behind `ON_DEMAND_ENABLED`; it is not enabled by source changes alone. Signup creates only control metadata. Allocate on the first credential submission or explicit import, qualify runtime identity/idle state before admission, and retain stable setup identities/keys across retries. Existing customers are never migrated or reclaimed by this path. See `docs/on-demand-provisioning.md`.
+- Conference reserve retirement is a separate, exact-manifest operation. Unowned rows and initialization records do not by themselves prove deletion eligibility. The planner is read-only, checkpoints completed reads and stops on actual provider rate limits; preserve unknown/data-bearing resources.
 
 - Run `npm ci --prefix hosted --ignore-scripts` and `node hosted/build-auth.mjs` after the normal root dependency install, before hosted typechecks/tests/bundles. Auth dependencies belong to `hosted/package.json` so they do not change the pinned tenant engine.
 - The default account journey uses ten-minute single-use email links/codes and optional passkeys. Preserve explicit legal acceptance, qualified capacity, immutable identities, existing password access, single-use challenge transactions and five-minute fresh authentication for sensitive actions. New registrar connections use the active session without a second identity check; saved credentials and other sensitive actions retain fresh authentication. Once a passkey exists, email/password sign-in must not bypass the passkey check for those sensitive actions. See `docs/passwordless-auth.md`.

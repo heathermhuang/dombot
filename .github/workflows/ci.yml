@@ -79,6 +79,10 @@ jobs:
         run: npx wrangler deploy --config hosted/wrangler.lander.jsonc --dry-run --outdir dist/lander
       - name: Bundle hosted tenant
         run: npx wrangler deploy --config hosted/wrangler.tenant.jsonc --dry-run --outdir dist/tenant
+      - name: Prepare and bundle on-demand provisioning
+        run: |
+          node scripts/prepare-on-demand.mjs
+          npx wrangler deploy --config hosted/wrangler.provisioner.jsonc --dry-run --outdir dist/provisioner
       - name: Bundle shared proxy scheduler
         run: npx wrangler deploy --config hosted/wrangler.proxy-scheduler.jsonc --dry-run --outdir dist/proxy-scheduler
       - name: Bundle the Worker without deploying

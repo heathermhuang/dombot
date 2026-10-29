@@ -1,3 +1,10 @@
+import { pendingWorkspace, activateWorkspace, accountLimit } from './on-demand';
+import {
+  portfolioStart,
+  onboardingScriptPath,
+  onboardingScript,
+  validFirstConnection,
+} from './on-demand-views';
 import { landingMcpScript, landingMcpScriptPath } from './landing-mcp';
 import { landingScript, landingScriptPath } from './landing-interactions';
 import {
@@ -256,6 +263,9 @@ app.get('/terms', (c) =>
 );
 app.get('/privacy', (c) =>
   c.html(legalPage('privacy', c.env), legalReady(c.env) ? 200 : 503),
+);
+app.get(onboardingScriptPath, (c) =>
+  c.body(onboardingScript, 200, { 'Content-Type': 'text/javascript' }),
 );
 app.get('/auth/browser.js', (c) => {
   c.header('Content-Type', 'text/javascript; charset=utf-8');
@@ -612,6 +622,7 @@ app.post('/signup', bodyLimit({ maxSize: 4096 }), async (c) => {
       c.env.CONTROL_DB,
       c.env.AUTH_PEPPER,
       registrationIds(c.env),
+      accountLimit(c.env),
     );
     if (!(await registration.hasCapacity()))
       return c.html(
@@ -662,6 +673,7 @@ app.get('/signup/verify', async (c) => {
     c.env.CONTROL_DB,
     c.env.AUTH_PEPPER,
     registrationIds(c.env),
+    accountLimit(c.env),
   ).emailFor(code);
   return email
     ? c.html(signupFinish(code, email))
@@ -706,6 +718,7 @@ app.post('/signup/verify', bodyLimit({ maxSize: 4096 }), async (c) => {
     c.env.CONTROL_DB,
     c.env.AUTH_PEPPER,
     registrationIds(c.env),
+    accountLimit(c.env),
   );
   let user;
   try {
@@ -802,6 +815,22 @@ app.post('/account/close', bodyLimit({ maxSize: 4096 }), async (c) => {
       401,
     );
   const configured = await workspaceFor(c.env, user.workspace_id);
+  if (!configured && (await pendingWorkspace(c.env, user.workspace_id))) {
+    if (
+      !(await closeWorkspace(c.env.CONTROL_DB, user, verified.credentialHash))
+    )
+      return c.text(
+        'Your account changed during closure. Sign in and try again.',
+        409,
+      );
+    c.header('Set-Cookie', sessionCookie(c.req.url, ''));
+    return c.html(
+      page(
+        'Account closed',
+        '<h1>Your account is closed.</h1><p>Contact support within 30 days if you need help recovering an accidental closure.</p>',
+      ),
+    );
+  }
   if (!configured)
     return c.text('Account is unavailable. Contact support.', 503);
   // Serialize behind current tenant operations and pause scheduled sync before
@@ -1168,7 +1197,70 @@ app.get('/.well-known/:kind/w/:workspace/*', (c) => {
 
 app.all('/w/:workspace/*', async (c) => {
   const id = c.req.param('workspace');
-  const configured = await workspaceFor(c.env, id);
+  let configured = await workspaceFor(c.env, id);
+  if (!configured && (await pendingWorkspace(c.env, id))) {
+    const user = await account(c.env).session(readSession(c.req.raw));
+    if (!user)
+      return c.req.method === 'GET'
+        ? c.redirect('/login?next=' + encodeURIComponent(`/w/${id}/`), 303)
+        : c.json({ error: 'Not signed in' }, 401);
+    if (user.workspace_id !== id)
+      return c.json({ error: 'Account access denied' }, 403);
+    const path = new URL(c.req.url).pathname.slice(`/w/${id}`.length);
+    if (path === '/' && c.req.method === 'GET') {
+      c.header(
+        'Content-Security-Policy',
+        "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      );
+      return c.html(portfolioStart(id));
+    }
+    const connecting = path === '/api/connectRegistrarAccount';
+    if ((!connecting && path !== '/start') || c.req.method !== 'POST')
+      return c.notFound();
+    if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    if (!(await account(c.env).rateLimit(`provision:${id}`, 6)))
+      return c.json(
+        { error: 'Setup request limit reached. Please try again later.' },
+        429,
+      );
+    if (connecting) {
+      if (
+        !validFirstConnection(
+          await c.req.raw
+            .clone()
+            .json()
+            .catch(() => null),
+        )
+      )
+        return c.json(
+          {
+            error:
+              'Enter the required registrar credentials before connecting.',
+          },
+          400,
+        );
+    } else {
+      const form = await c.req.parseBody();
+      if (form.reason !== 'import')
+        return c.text('Choose how to add your domains.', 400);
+    }
+    try {
+      await activateWorkspace(c.env, user, connecting ? 'registrar' : 'import');
+      configured = await workspaceFor(c.env, id);
+      if (!configured) throw Error('Portfolio not admitted');
+      if (!connecting) return c.redirect(`/w/${id}/`, 303);
+      // Continue through the usual owner/API checks and tenant connection path.
+      // The original credentials stay in this request, never in setup metadata.
+    } catch {
+      return c.json(
+        {
+          error:
+            'Your portfolio could not be prepared yet. Retry in a moment, or contact support if setup keeps failing. Your sign-in is unchanged.',
+        },
+        503,
+      );
+    }
+  }
   if (!configured) return c.json({ error: 'Portfolio not found' }, 404);
   const workspace = await c.env.CONTROL_DB.prepare(
     'SELECT id FROM workspaces WHERE id=?1 AND enabled=1',
