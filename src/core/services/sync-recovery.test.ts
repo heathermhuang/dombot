@@ -125,6 +125,62 @@ describe('inventory recovery', () => {
     ).toMatchObject({ state: 'deferred', attempts: 0 });
   });
 
+  it('does not exhaust a recovered account when a sibling triggers shared cooldown', async () => {
+    await syncRegistrar('dynadot');
+    const lastGood = Date.now();
+    // Older releases retained the completed incident's retry count on recovery.
+    writeEntry('portfolio', 'dynadot', {
+      domains: [createDomain({ domainName: 'held.com', registrar: 'dynadot' })],
+      lastSyncedAt: lastGood,
+      lastError: null,
+      recovery: { state: 'recovered', attempts: 3 },
+    });
+    await flushWrites();
+    const before = await raw.get('sync-monitor', 'diagnostics');
+    list.mockRejectedValueOnce(
+      new RateLimitError('HTTP 429 [dynadot:shared-cooldown]', 180),
+    );
+    await getPortfolio(true, 'scheduled');
+    await flushWrites();
+    const account = getRegistrarMetadata().find((m) => m.name === 'dynadot')!;
+    expect(account.sync).toMatchObject({
+      domainCount: 1,
+      lastSyncedAt: lastGood,
+      recovery: { state: 'deferred', attempts: 0 },
+    });
+    expect(await raw.get('sync-monitor', 'diagnostics')).toEqual(before);
+    vi.setSystemTime(Date.now() + 180001);
+    expect(await syncAll(86400000)).toBe(true);
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(
+      getRegistrarMetadata().find((m) => m.name === 'dynadot')!.sync,
+    ).toMatchObject({
+      lastError: null,
+      recovery: { state: 'recovered', attempts: 0 },
+    });
+  });
+
+  it('starts a new incident at one attempt after a previously recovered incident', async () => {
+    writeEntry('portfolio', 'dynadot', {
+      domains: [createDomain({ domainName: 'held.com', registrar: 'dynadot' })],
+      lastSyncedAt: Date.now(),
+      lastError: null,
+      recovery: { state: 'recovered', attempts: 3 },
+    });
+    list.mockRejectedValueOnce(
+      new RateLimitError('HTTP 429 Too many requests', 60),
+    );
+    await getPortfolio(true, 'scheduled');
+    expect(
+      getRegistrarMetadata().find((m) => m.name === 'dynadot')!.sync.recovery,
+    ).toMatchObject({ state: 'deferred', attempts: 1 });
+    vi.setSystemTime(Date.now() + 60001);
+    await syncAll(86400000);
+    expect(
+      getRegistrarMetadata().find((m) => m.name === 'dynadot')!.sync.recovery,
+    ).toMatchObject({ state: 'recovered', attempts: 0 });
+  });
+
   it('stops automatic retries after three total attempts and preserves holdings', async () => {
     list.mockRejectedValue(
       new RateLimitError('HTTP 429 Too many requests', 60),
