@@ -1,4 +1,5 @@
 interface HostedEnv {
+  DOMBOT_MANAGED_PROXY_IP?: string;
   ON_DEMAND_ENABLED?: string;
   ON_DEMAND_TEMPLATE_SHA256?: string;
   ON_DEMAND_ACCOUNT_LIMIT?: string;

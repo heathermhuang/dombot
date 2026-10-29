@@ -1212,7 +1212,9 @@ app.all('/w/:workspace/*', async (c) => {
         'Content-Security-Policy',
         "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
       );
-      return c.html(portfolioStart(id));
+      return c.html(
+        portfolioStart(id, '', c.env.DOMBOT_MANAGED_PROXY_IP ?? ''),
+      );
     }
     const connecting = path === '/api/connectRegistrarAccount';
     if ((!connecting && path !== '/start') || c.req.method !== 'POST')
