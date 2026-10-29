@@ -225,6 +225,22 @@ export async function planReserveRetirement(api, gateway, options = {}) {
   return { manifest, sha256: sha(manifest) };
 }
 
+export function providerErrorSummary(endpoint, status, errors) {
+  const number = Number(status);
+  return {
+    phase: endpoint.startsWith('/d1/') ? 'database-read' : 'worker-read',
+    status:
+      Number.isSafeInteger(number) && number >= 100 && number <= 599
+        ? number
+        : 0,
+    codes: (Array.isArray(errors) ? errors : [])
+      .map((error) => Number(error?.code))
+      .filter(
+        (code) => Number.isSafeInteger(code) && code > 0 && code < 1000000000,
+      ),
+  };
+}
+
 async function main() {
   const [account, output] = process.argv.slice(2),
     token = process.env.CLOUDFLARE_API_TOKEN;
@@ -250,7 +266,7 @@ async function main() {
       await fs.writeFile(
         output + '.error.json',
         JSON.stringify(
-          { endpoint, query, status: response.status, errors: data.errors },
+          providerErrorSummary(endpoint, response.status, data.errors),
           null,
           2,
         ),

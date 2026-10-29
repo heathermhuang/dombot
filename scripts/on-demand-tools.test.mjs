@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { sqlStatements } from './prepare-on-demand.mjs';
-import { planReserveRetirement } from './plan-reserve-retirement.mjs';
+import {
+  planReserveRetirement,
+  providerErrorSummary,
+} from './plan-reserve-retirement.mjs';
 
 describe('provisioning preparation', () => {
   it('keeps semicolons in SQL literals and strips comments without changing statements', () => {
@@ -91,5 +94,23 @@ describe('read-only reserve retirement proposal', () => {
     expect(manifest.retained).toEqual([
       { workspace: ids[1], reason: 'provider_read_unavailable', status: 500 },
     ]);
+  });
+});
+
+describe('provider failure receipts', () => {
+  it('retains bounded status/codes without writing provider-controlled messages or request data', () => {
+    const receipt = providerErrorSummary('/d1/database/private/query', 429, [
+      { code: 7429, message: 'secret; ../../file' },
+      { code: '../unsafe' },
+      { code: -1 },
+    ]);
+    expect(receipt).toEqual({
+      phase: 'database-read',
+      status: 429,
+      codes: [7429],
+    });
+    expect(JSON.stringify(receipt)).not.toMatch(
+      /secret|private|unsafe|message|query/,
+    );
   });
 });
