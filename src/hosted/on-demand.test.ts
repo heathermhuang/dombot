@@ -145,6 +145,18 @@ function request(
   );
 }
 describe('on-demand account lifecycle', () => {
+  it('shows the configured hosted Namecheap IP before allocating a tenant', async () => {
+    env.DOMBOT_MANAGED_PROXY_IP = '1.2.3.4';
+    const session = await signup();
+    const response = await request(
+      `/w/${session.user.workspace_id}/`,
+      session.token,
+    );
+    const html = await response.text();
+    expect(html).toContain('Allowlist 1.2.3.4 in your Namecheap API settings');
+    expect(html).toContain('value="1.2.3.4"');
+    expect(provision).not.toHaveBeenCalled();
+  });
   it('pauses new signup without hiding an existing unstarted portfolio', async () => {
     const s = await signup();
     env.ON_DEMAND_ENABLED = 'false';
