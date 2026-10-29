@@ -161,6 +161,13 @@ const transport: typeof fetch = async (input, init = {}) => {
     }
     return ok({ id: 'uploaded' });
   }
+  // The details endpoint returns a JSON descriptor, including a null script
+  // before content exists. Module bytes are a separate /content resource.
+  if (!url.pathname.endsWith('/content'))
+    return ok({
+      dispatch_namespace: 'fixture-namespace',
+      script: worker ? { id: 'dombot-wfp-' + workspace } : null,
+    });
   return worker
     ? new Response(module)
     : new Response('missing', { status: 404 });
