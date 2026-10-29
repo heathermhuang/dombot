@@ -707,9 +707,16 @@ async function performInventorySync(
     /\[dynadot:(shared|local)-cooldown\]/.test(syncError.message);
   if (name === 'dynadot') {
     if (syncError instanceof RateLimitError) {
+      // A recovered incident's old count is historical, including records
+      // written by releases that retained it. Never spend a new retry budget
+      // on a shared cooldown that sent no request to the registrar.
+      const previousAttempts =
+        prev?.recovery?.state === 'recovered'
+          ? 0
+          : (prev?.recovery?.attempts ?? 0);
       const attempts = sharedCooldown
-        ? (prev?.recovery?.attempts ?? 0)
-        : (trigger === 'scheduled' ? (prev?.recovery?.attempts ?? 0) : 0) + 1;
+        ? previousAttempts
+        : (trigger === 'scheduled' ? previousAttempts : 0) + 1;
       entry.recovery = {
         state: attempts >= 3 ? 'failed' : 'deferred',
         attempts,
@@ -728,7 +735,7 @@ async function performInventorySync(
     } else if (!entry.lastError && prev?.lastError) {
       entry.recovery = {
         state: 'recovered',
-        attempts: prev.recovery?.attempts ?? 0,
+        attempts: 0,
       };
     }
   }
