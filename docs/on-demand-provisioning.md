@@ -1,7 +1,8 @@
 # On-demand portfolio provisioning
 
-Implementation status: source prepared; production activation and reserve retirement
-have not happened. The conference reserve is no longer a capacity target.
+Production signup uses on-demand provisioning as of 29 October 2026. The conference
+reserve is no longer a capacity target. Reserve retirement is a separate, guarded
+operation with its own manifest, backups and completion receipts.
 
 ## Account lifecycle
 
@@ -113,3 +114,36 @@ The live registry contained 513 platform rows, 46 users and 42 enabled users;
 proposal. Cloudflare returned HTTP 429/code 7429, and inventory requests stopped.
 The remaining candidates and the stored initialization records are unqualified.
 No customer Worker/database was created, deleted or migrated during this inspection.
+
+## 29 October production activation
+
+The gateway at domains.domains runs source
+`6992a3bd5b71804ec79dc2c86be75428a984320e`, built from the previous production
+revision plus the qualified provisioning changes. The existing tenant engine
+remains `1.5.2-hosted.24-queue`; activation does not deploy unrelated mainline
+features to existing customers. The private production provisioner uses the
+existing control database and dispatch namespace, with its approved infrastructure
+token and host secrets installed as Worker secrets. Temporary token files are removed.
+
+Controlled production qualification proved that signup, repeated onboarding visits
+and rejected connection requests create no customer resources. The first explicit
+import action created one isolated Worker/database pair, and import preview passed.
+The QA account was closed through the ordinary account flow and keeps normal
+retention. The isolated canary separately exercised credential-submission forwarding
+against a fixed fixture. No real registrar connection or external email was sent
+by these qualification checks.
+
+The exact retirement manifest qualifies 476 unused reserves. The bulk classification
+decrypted initialization-only records to schema version 4 using original key custody.
+Ten older reserves instead passed the existing signed runtime's strict empty-state
+inspection, with matching trusted runtime code; their backup records explicitly
+disclose that the original encryption roots were not exported. Unknown or
+customer-bearing resources remain excluded.
+
+Migration 0018 records retirement custody in `retired_platform_workspaces`. The
+operator freezes still-unreferenced identities, archives their encrypted platform
+registry mappings, then removes them from `platform_workspaces` before deleting
+provider resources. Disabled workspace identities and the audit remain, so fleet
+updates cannot recreate retired slots. Deletion results and final customer
+preservation checks belong in the private operation receipt; this documentation
+does not replace those checks or authorize another retirement.
