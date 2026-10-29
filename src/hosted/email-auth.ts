@@ -1,4 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { ON_DEMAND, accountLimit } from './on-demand';
 import { opaqueToken, tokenHash } from './crypto';
 import { Accounts, type SessionUser } from './accounts';
 import {
@@ -199,12 +200,33 @@ export class EmailAuth {
     if (!row.user_id) {
       const ids = registrationIds(this.env);
       if (!ids.length) return null;
+      const lazy = ids.includes(ON_DEMAND);
+      const workspaceId = crypto.randomUUID();
+      if (lazy)
+        statements.push(
+          db
+            .prepare(
+              "INSERT INTO workspaces(id,label) SELECT ?,'Private portfolio' FROM email_signins p WHERE p.consumption_id=? AND NOT EXISTS(SELECT 1 FROM users WHERE email=p.email) AND (SELECT count(*) FROM users)<?",
+            )
+            .bind(workspaceId, consumption, accountLimit(this.env)),
+          db
+            .prepare(
+              'INSERT INTO pending_workspaces(workspace_id,created_at) SELECT id,? FROM workspaces WHERE id=?',
+            )
+            .bind(now, workspaceId),
+        );
       statements.push(
         db
           .prepare(
-            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM email_signins p CROSS JOIN workspaces w WHERE p.consumption_id=?4 AND ${registrationPool(ids, 5)} AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM users u WHERE u.workspace_id=w.id OR u.email=p.email) AND NOT EXISTS(SELECT 1 FROM invitations i WHERE i.workspace_id=w.id) AND NOT EXISTS(SELECT 1 FROM closure_requests r WHERE r.workspace_id=w.id) ORDER BY w.id LIMIT 1`,
+            `INSERT INTO users(id,email,workspace_id,password_hash,created_at) SELECT ?1,p.email,w.id,?2,?3 FROM email_signins p CROSS JOIN workspaces w WHERE p.consumption_id=?4 AND ${lazy ? 'w.id=?5' : registrationPool(ids, 5)} AND w.enabled=1 AND NOT EXISTS(SELECT 1 FROM users u WHERE u.workspace_id=w.id OR u.email=p.email) AND NOT EXISTS(SELECT 1 FROM invitations i WHERE i.workspace_id=w.id) AND NOT EXISTS(SELECT 1 FROM closure_requests r WHERE r.workspace_id=w.id) ORDER BY w.id LIMIT 1`,
           )
-          .bind(newId, encoded, now, consumption, registrationPoolIds(ids)),
+          .bind(
+            newId,
+            encoded,
+            now,
+            consumption,
+            lazy ? workspaceId : registrationPoolIds(ids),
+          ),
       );
       statements.push(
         db

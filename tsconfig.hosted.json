@@ -1,8 +1,14 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "types": ["node", "./hosted-configuration.d.ts"],
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "node",
+      "./hosted-configuration.d.ts",
+      "./provisioning-configuration.d.ts"
+    ],
     "noEmit": true
   },
   "include": [
@@ -15,7 +21,11 @@
     "hosted-configuration.d.ts",
     "src/shared/gateway-proof.ts",
     "src/hosted/proxy-scheduler.ts",
-    "proxy-scheduler-configuration.d.ts"
+    "proxy-scheduler-configuration.d.ts",
+    "src/hosted/provisioner.ts",
+    "provisioning-configuration.d.ts"
   ],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
 }
