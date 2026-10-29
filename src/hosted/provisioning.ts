@@ -143,8 +143,10 @@ export async function provisionPortfolio(
         signal: AbortSignal.timeout(45000),
       },
     );
-    if (response.status === 404 && (!init.method || init.method === 'GET'))
+    if (response.status === 404 && (!init.method || init.method === 'GET')) {
+      await response.body?.cancel();
       return null;
+    }
     if (!response.ok)
       throw Error(
         'Provisioning provider unavailable (' + response.status + ')',
@@ -188,7 +190,7 @@ export async function provisionPortfolio(
   const module = await readAsset('tenant.mjs');
   if ((await tokenHash(module)) !== template.moduleSha256)
     throw Error('Tenant artifact changed');
-  const previous = await api(scriptPath);
+  const previous = await api(scriptPath + '/content');
   if (previous) {
     if (!state.uploadAttempted) throw Error('Worker identity conflict');
     let source: string;
