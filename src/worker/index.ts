@@ -527,7 +527,10 @@ export default {
           return;
         }
         const ran = await syncAll(minutes * 60_000);
-        await stepRenewalPricing();
+        // Hosted continuation shares the browser quota at the gateway. Avoid
+        // an additional unmetered native step once that service is enabled.
+        if (Reflect.get(env, 'DOMBOT_CENTRAL_PRICING') !== 'true')
+          await stepRenewalPricing();
         if (await hasSales(env.DB))
           await (
             await SalesStore.from(env)

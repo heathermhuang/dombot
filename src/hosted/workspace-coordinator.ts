@@ -18,6 +18,8 @@ import type {
   ImportedDomain,
   RegistrarMeta,
   AppSettings,
+  Portfolio,
+  RenewalPricingProgress,
 } from '../shared/ipc';
 
 /** One coordinator per tenant deployment. DomBot owns a single-instance,
@@ -278,6 +280,28 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
         ...(await this.maintenance.status()),
       },
     };
+  }
+
+  async renewalPricing(step: boolean) {
+    return this.maintenance.run(async () => {
+      const maintenance = await this.maintenance.status();
+      if (maintenance.paused) return { remaining: 0, failed: 0, paused: true };
+      const settings = await this.adminRead<AppSettings>('getSettings');
+      if (
+        Reflect.get(this.env, 'DOMBOT_CENTRAL_PRICING') !== 'true' ||
+        settings.autoSyncIntervalMinutes <= 0
+      )
+        return { remaining: 0, failed: 0, disabled: true };
+      if (step) {
+        const run = () =>
+          this.adminRead<RenewalPricingProgress>('stepRenewalPricing');
+        return this.sleepPolicy ? this.maintenance.mutate(run) : run();
+      }
+      const portfolio = await this.adminRead<Portfolio>('listPortfolio', [
+        false,
+      ]);
+      return portfolio.renewalPricing ?? { remaining: 0, failed: 0 };
+    });
   }
 
   async pausePlatformAlarm() {

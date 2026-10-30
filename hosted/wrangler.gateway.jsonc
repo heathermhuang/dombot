@@ -20,7 +20,11 @@
     },
   ],
   "services": [
-    { "binding": "PROVISIONER", "service": "domains-portfolio-provisioner", "entrypoint": "Provisioner" },
+    {
+      "binding": "PROVISIONER",
+      "service": "domains-portfolio-provisioner",
+      "entrypoint": "Provisioner",
+    },
     { "binding": "WORKSPACE_0", "service": "domains-staging-tenant-0" },
     { "binding": "WORKSPACE_1", "service": "domains-staging-tenant-1" },
     { "binding": "WORKSPACE_2", "service": "domains-staging-tenant-2" },
@@ -48,6 +52,7 @@
     "PUBLIC_SITE_ADDRESSES_ENABLED": "false",
     "PUBLIC_SITE_SUBDOMAINS_ENABLED": "false",
     "SYNC_MONITOR_ENABLED": "false",
+    "RENEWAL_PRICING_ENABLED": "false",
     "WORKSPACES": "[]",
     "SOURCE_COMMIT": "",
     "PUBLIC_REGISTRATION_ENABLED": "false",

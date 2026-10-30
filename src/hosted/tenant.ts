@@ -61,6 +61,7 @@ export default {
         '/platform-internal/admin-snapshot',
         '/platform-internal/sync-monitor',
         '/platform-internal/admin-inventory',
+        '/platform-internal/renewal-pricing',
       ].includes(platformPath)
     ) {
       // Anonymous lander admission cannot operate platform lifecycle controls.
@@ -75,11 +76,15 @@ export default {
       if (
         platformPath === '/platform-internal/admin-snapshot' ||
         platformPath === '/platform-internal/sync-monitor' ||
-        platformPath === '/platform-internal/admin-inventory'
+        platformPath === '/platform-internal/admin-inventory' ||
+        platformPath === '/platform-internal/renewal-pricing'
       ) {
         if (
           request.method !==
-          (platformPath.endsWith('/admin-inventory') ? 'POST' : 'GET')
+          (platformPath.endsWith('/admin-inventory') ||
+          platformPath.endsWith('/renewal-pricing')
+            ? 'POST'
+            : 'GET')
         )
           return new Response('Method not allowed', { status: 405 });
         const proof = await verifyGatewayRequest(
@@ -89,6 +94,29 @@ export default {
         );
         if (!proof || proof.owner !== null || proof.sales || proof.mcp)
           return new Response('Forbidden', { status: 403 });
+        if (platformPath.endsWith('/renewal-pricing')) {
+          const text = await request.text();
+          if (text.length > 64)
+            return new Response('Request too large', { status: 413 });
+          let body: unknown;
+          try {
+            body = JSON.parse(text);
+          } catch {
+            return new Response('Invalid pricing request', { status: 400 });
+          }
+          if (
+            !body ||
+            typeof body !== 'object' ||
+            Object.keys(body).length !== 1 ||
+            !('step' in body) ||
+            typeof body.step !== 'boolean'
+          )
+            return new Response('Invalid pricing request', { status: 400 });
+          return Response.json(
+            await coordinator(env).renewalPricing(body.step),
+            { headers: { 'Cache-Control': 'no-store' } },
+          );
+        }
         if (platformPath.endsWith('/sync-monitor')) {
           // One atomic D1 row does not require the owner coordinator. Keep
           // monitoring independent of its RPC availability and request lifecycle.
