@@ -73,6 +73,7 @@ beforeAll(async () => {
             DOMBOT_GATEWAY_SECRET: key,
             DOMBOT_PLATFORM_ALARMS: 'true',
             DOMBOT_EMPTY_SLEEP: 'true',
+            DOMBOT_CENTRAL_PRICING: 'true',
           },
         },
       ],
@@ -91,6 +92,43 @@ beforeAll(async () => {
 }, 60000);
 afterAll(async () => {
   await mf?.dispose();
+});
+it('restricts pricing continuation to private null-owner proofs and preserves empty sleep and pause', async () => {
+  const pricing = async (
+    step: boolean,
+    owner: string | null = null,
+    secret = key,
+  ) => {
+    const request = new Request(
+      'http://localhost/platform-internal/renewal-pricing',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step }),
+      },
+    );
+    request.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(secret, id, owner, request),
+    );
+    return tenant.fetch(request);
+  };
+  expect((await pricing(false, 'test-owner')).status).toBe(403);
+  expect((await pricing(false, null, 'foreign-key'.repeat(4))).status).toBe(
+    403,
+  );
+  const status = await pricing(false);
+  expect(status.status).toBe(200);
+  expect(await status.json()).toMatchObject({ remaining: 0, failed: 0 });
+  expect((await health()).alarmAt).toBeNull();
+  await signed('/platform-internal/pause', 'POST', undefined, null);
+  expect(await (await pricing(true)).json()).toEqual({
+    remaining: 0,
+    failed: 0,
+    paused: true,
+  });
+  expect((await health()).alarmAt).toBeNull();
+  await signed('/platform-internal/resume', 'POST', undefined, null);
 });
 it('keeps empty browsing asleep, wakes for actual due work, completes it, then sleeps again', async () => {
   expect((await signed('/api/getSettings', 'POST', [])).status).toBe(200);

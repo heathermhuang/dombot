@@ -182,13 +182,62 @@ export function configureIncrementalRenewalPricing(enabled: boolean): void {
   incrementalRenewalPricing = enabled;
 }
 
+/** Reconcile cached holdings without a provider refresh. Older queues omitted
+ * uniform TLDs; finished queues also need to notice quotes aging past 24 hours.
+ * Preserve the current incident's failures, order, attempts and real cooldown. */
+function currentRenewalJob(
+  id: string,
+  entry: RegistrarPortfolioEntry,
+): RenewalPricingJob | null {
+  if (entry.lastSyncedAt == null) return null;
+  const saved = renewalJobs.get(id);
+  const current = saved?.syncedAt === entry.lastSyncedAt ? saved : undefined;
+  const missing = entry.domains
+    .filter((domain) => {
+      if (current?.failures?.[domain.domainName]) return false;
+      const detail = readEntry<DetailRecord>(
+        'detail',
+        detailKey(id, domain.domainName),
+      );
+      const quote = detail?.data.renewalQuote;
+      const at = detail?.data.renewalQuoteFetchedAt ?? 0;
+      return (
+        !quote ||
+        quote.renewal == null ||
+        !Number.isFinite(quote.renewal) ||
+        quote.renewal < 0 ||
+        !currencyInfo(quote.currency) ||
+        !Number.isFinite(at) ||
+        at > Date.now() ||
+        Date.now() - at >= 24 * 60 * 60_000
+      );
+    })
+    .map((d) => d.domainName);
+  return {
+    ...current,
+    syncedAt: entry.lastSyncedAt,
+    pending: [...new Set([...(current?.pending ?? []), ...missing])],
+    failed: current?.failed ?? 0,
+    ...(saved?.notBefore ? { notBefore: saved.notBefore } : {}),
+  };
+}
+
+function currentRenewalJobs(): [string, RenewalPricingJob][] {
+  return getActiveAccounts().flatMap((account) => {
+    if (account.registrar !== 'dynadot') return [];
+    const entry = readRegistrarEntry(account.id);
+    const job = entry && currentRenewalJob(account.id, entry);
+    return job ? [[account.id, job] as [string, RenewalPricingJob]] : [];
+  });
+}
+
 export function getRenewalPricingStatus(): RenewalPricingProgress {
   const active = new Set(getActiveAccounts().map((a) => a.id));
   let remaining = 0;
   let blocked = 0;
   let failed = 0;
   let nextAt = Infinity;
-  for (const [id, job] of Object.entries(renewalJobs.all())) {
+  for (const [id, job] of currentRenewalJobs()) {
     const entry = readRegistrarEntry(id);
     if (!active.has(id) || entry?.lastSyncedAt !== job.syncedAt) continue;
     if (entry.lastError) {
@@ -214,6 +263,10 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
   if (!incrementalRenewalPricing) return getRenewalPricingStatus();
   if (isBulkRunning())
     return { ...getRenewalPricingStatus(), nextAt: Date.now() + 15_000 };
+  for (const [id, job] of currentRenewalJobs()) {
+    if (JSON.stringify(renewalJobs.get(id)) !== JSON.stringify(job))
+      await renewalJobs.set(id, job);
+  }
   const active = new Map(getActiveAccounts().map((a) => [a.id, a]));
   let changed = false;
   const results = await Promise.allSettled(
@@ -783,27 +836,7 @@ async function performInventorySync(
       );
     }
     if (incrementalRenewalPricing && name === 'dynadot') {
-      const pending = entry.domains
-        .filter((d) => usesPerNameQuote(name, tldOf(d.domainName)))
-        .filter((d) => {
-          const detail = readEntry<DetailRecord>(
-            'detail',
-            detailKey(accountId, d.domainName),
-          );
-          const quotedAt = detail?.data.renewalQuoteFetchedAt ?? 0;
-          return (
-            detail?.data.renewalQuote?.renewal == null ||
-            Date.now() - quotedAt >= 24 * 60 * 60_000
-          );
-        })
-        .map((d) => d.domainName);
-      const previousJob = renewalJobs.get(accountId);
-      await renewalJobs.set(accountId, {
-        syncedAt: entry.lastSyncedAt,
-        pending,
-        failed: 0,
-        ...(previousJob?.notBefore ? { notBefore: previousJob.notBefore } : {}),
-      });
+      await renewalJobs.set(accountId, currentRenewalJob(accountId, entry)!);
     } else {
       await syncRenewalQuotes(name, entry.domains, accountId, generation);
     }
@@ -863,9 +896,16 @@ async function fetchRenewalQuote(
       domain,
       opts,
     );
+    const currency = currencyInfo(pricing.currency ?? 'USD')?.code;
     return {
-      renewal: typeof pricing.renewal === 'number' ? pricing.renewal : null,
-      currency: pricing.currency ?? 'USD',
+      renewal:
+        typeof pricing.renewal === 'number' &&
+        Number.isFinite(pricing.renewal) &&
+        pricing.renewal >= 0 &&
+        currency
+          ? pricing.renewal
+          : null,
+      currency: currency ?? 'USD',
     };
   } catch (err) {
     onError?.(err);

@@ -16,6 +16,7 @@ import {
   publicAddressRequest,
 } from './portfolio-addresses';
 import { monitorDynadotSync } from './sync-monitor';
+import { continueRenewalPricing, reservePricingStep } from './renewal-pricing';
 import { canonicalDomain } from '../shared/publication';
 import { adminRoutes, isAdmin } from './admin';
 import { receiveSalesReply } from './sales-relay';
@@ -1481,13 +1482,11 @@ app.all('/w/:workspace/*', async (c) => {
     const resetAt = (Math.floor(Date.now() / 600_000) + 1) * 600_000;
     // Background work shares the existing cap but cannot consume its last
     // five slots. Owner-initiated refreshes retain the full 20-slot budget.
-    const backgroundAllowed =
-      apiMethod !== 'stepRenewalPricing' ||
-      (await account(c.env).rateLimit(`pricing:${id}`, 15));
-    if (
-      !backgroundAllowed ||
-      !(await account(c.env).rateLimit(`provider:${id}`, 20))
-    )
+    const allowed =
+      apiMethod === 'stepRenewalPricing'
+        ? await reservePricingStep(c.env, id)
+        : await account(c.env).rateLimit(`provider:${id}`, 20);
+    if (!allowed)
       return c.json(
         {
           error:
@@ -1775,6 +1774,7 @@ export default {
       refreshDomainControls,
       refreshSalesHostnames,
       refreshPortfolioDomains,
+      continueRenewalPricing,
     ]) {
       try {
         await task(env);

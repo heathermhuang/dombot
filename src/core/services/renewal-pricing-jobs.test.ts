@@ -67,6 +67,81 @@ afterEach(async () => {
 });
 
 describe('hosted renewal pricing', () => {
+  it('quotes every Dynadot holding, including uniform TLDs, after each inventory generation', async () => {
+    listedDomains = ['ordinary.com', 'ordinary.net', 'premium.ai'].map(
+      (domainName) => createDomain({ domainName, registrar: 'dynadot' }),
+    );
+    expect((await getPortfolio(true)).renewalPricing?.remaining).toBe(3);
+    for (let i = 0; i < 3; i++) await stepRenewalPricing();
+    expect(pricing.mock.calls.map(([domain]) => domain)).toEqual(
+      listedDomains.map((d) => d.domainName),
+    );
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 24 * 60 * 60_000 + 1);
+    expect((await getPortfolio(true)).renewalPricing?.remaining).toBe(3);
+  });
+
+  it('repairs an older current-generation queue without a new inventory request or lost cooldown', async () => {
+    listedDomains = [
+      ...domains,
+      createDomain({ domainName: 'omitted.com', registrar: 'dynadot' }),
+    ];
+    await getPortfolio(true);
+    const syncedAt = readEntry<{ lastSyncedAt: number }>(
+      'portfolio',
+      'dynadot',
+    )!.data.lastSyncedAt;
+    const notBefore = Date.now() + 60_000;
+    await flushWrites();
+    await raw.put('renewal-pricing-jobs', 'dynadot', {
+      syncedAt,
+      pending: ['second.ai'],
+      failed: 1,
+      failures: { 'first.ai': { code: 'Error', at: Date.now() } },
+      notBefore,
+      attempts: 2,
+    });
+    configureStore(raw);
+    await hydrateStores();
+    resetRegistrarClients();
+    expect(getRenewalPricingStatus()).toMatchObject({
+      remaining: 3,
+      failed: 1,
+      nextAt: notBefore,
+    });
+    await stepRenewalPricing();
+    await flushWrites();
+    expect(await raw.get('renewal-pricing-jobs', 'dynadot')).toMatchObject({
+      syncedAt,
+      pending: ['second.ai', 'third.ai', 'omitted.com'],
+      failed: 1,
+      notBefore,
+      attempts: 2,
+    });
+    expect(pricing).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'keeps the previous quote when the provider returns invalid renewal %s',
+    async (renewal) => {
+      writeEntry('detail', 'dynadot:first.ai', {
+        renewalQuote: { renewal: 60, currency: 'USD' },
+      });
+      await getPortfolio(true);
+      pricing.mockResolvedValueOnce({ tld: 'ai', renewal, currency: 'USD' });
+      expect(await stepRenewalPricing()).toMatchObject({
+        remaining: 2,
+        failed: 1,
+      });
+      expect(
+        readEntry<{ renewalQuote: { renewal: number } }>(
+          'detail',
+          'dynadot:first.ai',
+        )?.data.renewalQuote.renewal,
+      ).toBe(60);
+    },
+  );
+
   it('persists a rate-limit cooldown without dropping the pending quote', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     await getPortfolio(true);

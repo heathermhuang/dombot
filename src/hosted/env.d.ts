@@ -19,6 +19,7 @@ interface HostedEnv {
   PUBLIC_SITE_ADDRESSES_ENABLED?: string;
   PUBLIC_SITE_SUBDOMAINS_ENABLED?: string;
   SYNC_MONITOR_ENABLED?: string;
+  RENEWAL_PRICING_ENABLED?: string;
   ADMIN_USER_IDS?: string;
   PLATFORM_ENABLED?: string;
   DISPATCHER?: DispatchNamespace;
