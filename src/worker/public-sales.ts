@@ -1,3 +1,4 @@
+import { publishedBacklinks } from './publication-links';
 import { publicShop, publicSalesCsv } from './sales-shop';
 import {
   salesFormScript,
@@ -173,6 +174,11 @@ export function createPublicSalesRoutes() {
           : null,
         admission?.sales?.purpose === 'sales-public' && admission.sales.listing
           ? {
+              backlinks: await publishedBacklinks(
+                c.env.DB,
+                snapshot,
+                c.env.DOMBOT_SALES_ORIGIN,
+              ),
               inquiryPath: '/inquiries',
               privacyUrl: new URL(
                 '/privacy',
@@ -180,6 +186,11 @@ export function createPublicSalesRoutes() {
               ).href,
             }
           : {
+              backlinks: await publishedBacklinks(
+                c.env.DB,
+                snapshot,
+                c.env.DOMBOT_SALES_ORIGIN,
+              ),
               privacyUrl: new URL(
                 '/privacy',
                 c.env.DOMBOT_SALES_ORIGIN ?? c.req.url,

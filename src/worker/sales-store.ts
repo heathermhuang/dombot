@@ -1,4 +1,5 @@
 import type { SalesListing } from '../shared/sales-api';
+import { anyPublishedSchema, isOwnerSite } from '../shared/owner-site';
 import { canonicalDomain } from '../shared/publication';
 import { z } from 'zod';
 import { aesGcmCipher, type Cipher } from '../core/storage/encrypted';
@@ -104,7 +105,10 @@ export class SalesStore {
   seal(value: unknown) {
     return this.cipher.seal(JSON.stringify(value));
   }
-  async open<T>(sealed: string, schema: z.ZodType<T>): Promise<T> {
+  async open<S extends z.ZodTypeAny>(
+    sealed: string,
+    schema: S,
+  ): Promise<z.output<S>> {
     return schema.parse(JSON.parse(await this.cipher.open(sealed)));
   }
   /** Check inside the write transaction. A false guard rolls back every statement. */
@@ -339,6 +343,7 @@ export class SalesStore {
   async prepare(
     ids: { id: string; revision: string }[],
     observe: SaleObserver,
+    shopSelection?: string[],
   ): Promise<SalesReview> {
     if (
       !ids.length ||
@@ -350,6 +355,12 @@ export class SalesStore {
         'Review between 1 and 100 distinct listings.',
       );
     const shop = await this.shop();
+    const profileRow = await this.db
+      .prepare("SELECT payload FROM published_portfolios WHERE id='main'")
+      .first<{ payload: string }>();
+    const publicProfile = profileRow
+      ? anyPublishedSchema.parse(JSON.parse(profileRow.payload))
+      : null;
     const items: SalesReview['items'] = [];
     for (const ref of ids) {
       const saved = await this.get(ref.id);
@@ -375,7 +386,24 @@ export class SalesStore {
         priceFingerprint: sourcePriceFingerprint(observation.price),
         ownershipFingerprint: observation.ownershipFingerprint,
         destinationRevision: destination?.revision ?? null,
-        includeInShop: saved.draft.includeInShop,
+        includeInShop:
+          shopSelection === undefined
+            ? saved.draft.includeInShop
+            : shopSelection.includes(ref.id) ||
+              (shop.published?.listingIds.includes(ref.id) ?? false),
+        profileImpacts:
+          publicProfile &&
+          isOwnerSite(publicProfile) &&
+          publicProfile.version === 3
+            ? publicProfile.salesLinks
+                .filter((l) => l.listingId === ref.id)
+                .flatMap((l) => [
+                  publicProfile.profile.name,
+                  ...publicProfile.collections
+                    .filter((c) => c.domainIds.includes(l.presentationId))
+                    .map((c) => c.title),
+                ])
+            : [],
         beforeIncludeInShop:
           shop.published?.listingIds.includes(ref.id) ?? false,
         controlObservedAt: observation.controlExpiresAt - 86400_000,
@@ -419,16 +447,20 @@ export class SalesStore {
     if (!r) throw new SalesError('MISSING', 'Review not found.', 404);
     return this.open(r.sealed, salesReviewSchema);
   }
-  async publish(
+  async preparePublication(
     id: string,
     observe: SaleObserver,
     jobId?: string,
-  ): Promise<{ id: string; revision: string; domain: string }[]> {
+  ): Promise<{
+    statements: D1PreparedStatement[];
+    receipt: { id: string; revision: string; domain: string }[];
+  }> {
     const row = await this.db
       .prepare('SELECT receipt,expires_at FROM sales_reviews WHERE id=?')
       .bind(id)
       .first<{ receipt: string | null; expires_at: number }>();
-    if (row?.receipt) return JSON.parse(row.receipt);
+    if (row?.receipt)
+      return { statements: [], receipt: JSON.parse(row.receipt) };
     const review = await this.review(id);
     if (!row || row.expires_at <= Date.now())
       throw conflict('This review expired. Review the latest changes.');
@@ -587,8 +619,16 @@ export class SalesStore {
         .prepare('UPDATE sales_reviews SET consumed_at=?,receipt=? WHERE id=?')
         .bind(Date.now(), JSON.stringify(receipt), id),
     );
-    await this.atomic(statements);
-    return receipt;
+    return { statements, receipt };
+  }
+  async publish(
+    id: string,
+    observe: SaleObserver,
+    jobId?: string,
+  ): Promise<{ id: string; revision: string; domain: string }[]> {
+    const prepared = await this.preparePublication(id, observe, jobId);
+    if (prepared.statements.length) await this.atomic(prepared.statements);
+    return prepared.receipt;
   }
   async availability(
     id: string,

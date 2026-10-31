@@ -1639,7 +1639,10 @@ app.all('/w/:workspace/*', async (c) => {
             listing: null,
             epoch: 0,
           }
-        : path.startsWith('/sales/') && owner && user
+        : (path.startsWith('/sales/') ||
+              path.startsWith('/publishing/change-sets')) &&
+            owner &&
+            user
           ? {
               purpose: 'sales-owner',
               recipientVerified:

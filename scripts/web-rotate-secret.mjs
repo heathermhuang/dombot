@@ -175,13 +175,13 @@ if (status.mode !== 'password' || status.rootRetirement !== true) {
 // 1–2. Export, sealed, to disk.
 await login();
 const plain = await api('exportData', []);
-if (JSON.parse(plain).publicationDraft?.version === 2) {
+if ([2,3].includes(JSON.parse(plain).publicationDraft?.version)) {
   const state = await request(`${url}/publishing/site`, {
     headers: { cookie },
   });
   if (!state.ok || !(await state.json()).enabled)
     throw new Error(
-      'Enable DOMBOT_OWNER_SITE_V2 on this compatible runtime before rotating a v2 site root key. No secret was changed.',
+      'Enable DOMBOT_OWNER_SITE_V2 on this compatible runtime or DOMBOT_OWNER_SITE_V3 on this compatible runtime before rotating a site root key. No secret was changed.',
     );
 }
 const file = `dombot-data-${new Date().toISOString().replaceAll(':', '-')}-pre-rotation.json`;

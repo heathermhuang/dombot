@@ -610,7 +610,7 @@ describe('versioned owner site database and HTTP boundary', () => {
     ).toBe(200);
     expect(
       await (await call('/p/portfolio', 'GET', undefined, false)).text(),
-    ).toContain('Browse selected holdings');
+    ).toContain('Browse selected domains');
     expect(
       (await call('/p/portfolio?collection=absent', 'GET', undefined, false))
         .status,

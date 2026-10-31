@@ -12,8 +12,9 @@ import {
 } from '../core/publication/reconcile';
 import {
   isOwnerSite,
-  selectedSite,
-  ownerSiteDraftSchema,
+  previewOwnerSite,
+  editableOwnerSiteSchema,
+  convertOwnerSiteV3,
   convertOwnerSite,
   emptyOwnerSite,
 } from '../shared/owner-site';
@@ -33,8 +34,19 @@ import {
 } from './publication-store';
 import { renderPortfolio, publicHeaders } from './public-portfolio';
 import type { PublicationInputs } from './publication-inputs';
+import { SalesStore } from './sales-store';
+import { publishingPresence } from './publishing-presence';
+import { prepareChangeSetSchema } from '../shared/publication-change-set';
+import { PublicationChangeSets } from './publication-change-sets';
+import { createVerifiedSaleObserver } from './sales-observation';
+import { verifyGatewayRequest } from '../shared/gateway-proof';
+import { SalesError } from '../shared/sales-review';
+import { bindSiteLinks } from './publication-links';
 
-type PublicationEnv = { Bindings: Env; Variables: { auth: AuthConfig } };
+type PublicationEnv = {
+  Bindings: Env;
+  Variables: { auth: AuthConfig; publishingRecipient?: boolean };
+};
 const revisionSchema = z.object({ revision: z.string().uuid() }).strict();
 
 export function createPublicationRoutes(
@@ -48,6 +60,18 @@ export function createPublicationRoutes(
     c.header('X-Robots-Tag', 'noindex, nofollow');
     if (!(await isAuthenticated(c.get('auth'), c.req.raw, c.env.DB)))
       return c.json({ error: 'Not signed in' }, 401);
+    if (
+      c.env.DOMBOT_AUTH === 'gateway' &&
+      /\/change-sets(?:\/|$)/.test(c.req.path)
+    ) {
+      const proof = await verifyGatewayRequest(
+        c.env.DOMBOT_GATEWAY_SECRET ?? '',
+        c.env.DOMBOT_WORKSPACE_ID ?? '',
+        c.req.raw,
+      );
+      if (proof?.sales?.purpose === 'sales-owner')
+        c.set('publishingRecipient', proof.sales.recipientVerified);
+    }
     if (c.req.method !== 'GET' && !sameOrigin(c.req.raw))
       return c.json({ error: 'Bad origin' }, 403);
     await next();
@@ -88,6 +112,8 @@ export function createPublicationRoutes(
   ) => reconcilePortfolio(draft, input.domains, input.accounts);
 
   app.onError((error, c) => {
+    if (error instanceof SalesError)
+      return c.json({ error: error.message, code: error.code }, error.status);
     if (error instanceof PublicationInputError)
       return c.json({ error: error.message }, 400);
     if (error instanceof PublicationConflict)
@@ -111,6 +137,28 @@ export function createPublicationRoutes(
       500,
     );
   });
+  app.get('/presence', async (c) =>
+    c.json(
+      await publishingPresence(
+        await store(c.env),
+        await SalesStore.from(c.env),
+        inputs(c),
+        c.req.query(),
+        c.env.DOMBOT_PUBLIC_BASE_PATH ?? '',
+      ),
+    ),
+  );
+  app.get('/presence/:domain', async (c) =>
+    c.json(
+      await publishingPresence(
+        await store(c.env),
+        await SalesStore.from(c.env),
+        inputs(c),
+        { names: JSON.stringify([c.req.param('domain')]) },
+        c.env.DOMBOT_PUBLIC_BASE_PATH ?? '',
+      ),
+    ),
+  );
   app.get('/', async (c) => {
     const db = await store(c.env);
     const { draft, revision } = await db.draft();
@@ -155,7 +203,13 @@ export function createPublicationRoutes(
     const published = await db.published();
     return c.json({
       ...saved,
-      enabled: c.env.DOMBOT_OWNER_SITE_V2 === 'true',
+      enabled:
+        isOwnerSite(saved.draft) && saved.draft.version === 3
+          ? c.env.DOMBOT_OWNER_SITE_V3 === 'true'
+          : c.env.DOMBOT_OWNER_SITE_V2 === 'true',
+      v3Enabled: c.env.DOMBOT_OWNER_SITE_V3 === 'true',
+      compositeEnabled: c.env.DOMBOT_COMPOSITE_PUBLISH === 'true',
+      publishedRevision: published?.revision ?? null,
       publishedSnapshot: published?.snapshot ?? null,
       review: isOwnerSite(saved.draft)
         ? reconcileOwnerSite(saved.draft, inputs(c).domains, inputs(c).accounts)
@@ -163,15 +217,19 @@ export function createPublicationRoutes(
     });
   });
   app.put('/site', async (c) => {
-    if (c.env.DOMBOT_OWNER_SITE_V2 !== 'true')
-      return c.json({ error: 'Site editing is currently disabled.' }, 403);
     const input = z
       .object({
-        draft: ownerSiteDraftSchema,
+        draft: editableOwnerSiteSchema,
         revision: z.string().uuid().nullable(),
       })
       .strict()
       .parse(await c.req.json());
+    if (
+      (input.draft.version === 3
+        ? c.env.DOMBOT_OWNER_SITE_V3
+        : c.env.DOMBOT_OWNER_SITE_V2) !== 'true'
+    )
+      return c.json({ error: 'Site editing is currently disabled.' }, 403);
     const db = await store(c.env);
     const saved = await db.draft();
     if (!isOwnerSite(saved.draft) && saved.revision)
@@ -196,6 +254,148 @@ export function createPublicationRoutes(
       : emptyOwnerSite();
     return c.json({ revision: await db.save(draft, revision) });
   });
+  app.post('/site/convert-v3', async (c) => {
+    if (c.env.DOMBOT_OWNER_SITE_V3 !== 'true')
+      return c.json({ error: 'V3 editing is disabled.' }, 403);
+    const { revision } = z
+      .object({ revision: z.string().uuid() })
+      .strict()
+      .parse(await c.req.json());
+    const db = await store(c.env),
+      saved = await db.draft();
+    if (saved.revision !== revision) throw new PublicationConflict();
+    return c.json({
+      revision: await db.save(convertOwnerSiteV3(saved.draft), revision),
+    });
+  });
+  const coordinator = async (env: Env) =>
+    new PublicationChangeSets(
+      await store(env),
+      await SalesStore.from(env),
+      env.DOMBOT_WORKSPACE_ID ?? 'self-hosted',
+      env.DOMBOT_SALES_ORIGIN,
+    );
+  const authority = async (c: {
+    env: Env;
+    get(name: 'publishingRecipient'): boolean | undefined;
+  }) => {
+    let recipient = c.env.DOMBOT_AUTH !== 'gateway';
+    if (c.env.DOMBOT_AUTH === 'gateway') {
+      const admission = c.get('publishingRecipient');
+      if (admission === undefined)
+        throw new SalesError(
+          'ADMISSION',
+          'Publishing owner admission is required.',
+          403,
+        );
+      recipient = admission;
+    }
+    return JSON.stringify({
+      tenant: c.env.DOMBOT_WORKSPACE_ID ?? 'self-hosted',
+      recipient,
+      v3: c.env.DOMBOT_OWNER_SITE_V3 === 'true',
+      composite: c.env.DOMBOT_COMPOSITE_PUBLISH === 'true',
+      sales: c.env.DOMBOT_SALES_V1 === 'true',
+    });
+  };
+  app.post('/change-sets/review', async (c) => {
+    const body = prepareChangeSetSchema.parse(await c.req.json());
+    if (
+      body?.operation?.kind !== 'withdraw' &&
+      c.env.DOMBOT_COMPOSITE_PUBLISH !== 'true'
+    )
+      return c.json({ error: 'Combined publication is disabled.' }, 403);
+    const auth = await authority(c);
+    if (body?.operation?.kind === 'publish') {
+      if (body.operation.sales?.length && c.env.DOMBOT_SALES_V1 !== 'true')
+        return c.json(
+          {
+            error:
+              'Enable Sales and verify the inquiry recipient before combined publication.',
+          },
+          409,
+        );
+      const draft = (await (await store(c.env)).draft()).draft;
+      if (
+        isOwnerSite(draft) &&
+        (draft.version === 3
+          ? c.env.DOMBOT_OWNER_SITE_V3
+          : c.env.DOMBOT_OWNER_SITE_V2) !== 'true'
+      )
+        return c.json({ error: 'Site editing is disabled.' }, 403);
+    }
+    const m = await (
+      await coordinator(c.env)
+    ).prepare(body, inputs(c), createVerifiedSaleObserver(c.env), auth);
+    if (body.operation.kind === 'publish' && !JSON.parse(auth).recipient) {
+      const sales = await SalesStore.from(c.env);
+      const changed = m.salesReviewId
+        ? (await sales.review(m.salesReviewId)).items.map((i) => i.after)
+        : [];
+      if (m.after && isOwnerSite(m.after) && m.after.version === 3)
+        for (const link of m.after.salesLinks) {
+          if (
+            !body.operation.domains.includes(
+              m.after.domainPresentations.find(
+                (d) => d.id === link.presentationId,
+              )?.domain ?? '',
+            )
+          )
+            continue;
+          const current =
+            changed.find((s) => s.id === link.listingId) ??
+            (await sales.get(link.listingId)).published;
+          if (current) changed.push(current);
+        }
+      if (
+        changed.some(
+          (s) => s.allowQuestions || ['inquiry', 'offer'].includes(s.mode),
+        )
+      )
+        return c.json(
+          {
+            error:
+              'Verify the inquiry recipient before linking or publishing inquiry paths.',
+          },
+          409,
+        );
+    }
+    return c.json(m);
+  });
+  app.post('/change-sets/:id/commit', async (c) => {
+    const { requestKey } = z
+      .object({ requestKey: z.string().uuid() })
+      .strict()
+      .parse(await c.req.json());
+    const db = await coordinator(c.env);
+    const receipt = await db.receipt(c.req.param('id'), requestKey);
+    if (receipt) return c.json(receipt);
+    const m = await db.get(c.req.param('id'));
+    if (
+      m.request.operation.kind !== 'withdraw' &&
+      c.env.DOMBOT_COMPOSITE_PUBLISH !== 'true'
+    )
+      return c.json({ error: 'Combined publication is disabled.' }, 403);
+    return c.json(
+      await db.commit(
+        m.id,
+        requestKey,
+        inputs(c),
+        createVerifiedSaleObserver(c.env),
+        await authority(c),
+      ),
+    );
+  });
+  app.get('/change-sets/:id/receipt', async (c) =>
+    c.json(
+      await (
+        await coordinator(c.env)
+      ).receipt(
+        c.req.param('id'),
+        z.string().uuid().parse(c.req.query('requestKey')),
+      ),
+    ),
+  );
   app.put('/', async (c) => {
     const input = z
       .object({ draft: draftSchema, revision: z.string().uuid().nullable() })
@@ -211,11 +411,7 @@ export function createPublicationRoutes(
     try {
       if (isOwnerSite(draft))
         return c.html(
-          renderOwnerSite(
-            { ...selectedSite(draft), publishedAt: Date.now() },
-            new URL(c.req.url),
-            true,
-          ),
+          renderOwnerSite(previewOwnerSite(draft), new URL(c.req.url), true),
           200,
           publicHeaders,
         );
@@ -247,7 +443,11 @@ export function createPublicationRoutes(
     let snapshot;
     try {
       if (isOwnerSite(saved.draft)) {
-        if (c.env.DOMBOT_OWNER_SITE_V2 !== 'true')
+        if (
+          (saved.draft.version === 3
+            ? c.env.DOMBOT_OWNER_SITE_V3
+            : c.env.DOMBOT_OWNER_SITE_V2) !== 'true'
+        )
           return c.json(
             {
               error:
@@ -255,14 +455,25 @@ export function createPublicationRoutes(
             },
             403,
           );
-        snapshot = ownerSiteSnapshot(
-          saved.draft,
+        if (saved.draft.version === 3 && saved.draft.salesLinks.length)
+          return c.json(
+            {
+              error:
+                'Use the revision-bound combined review for linked content.',
+            },
+            409,
+          );
+        ownerSiteSnapshot(
+          saved.draft.version === 3
+            ? { ...saved.draft, salesLinks: [] }
+            : saved.draft,
           reconcileOwnerSite(
             saved.draft,
             getCachedPortfolio()?.domains ?? [],
             getRegistrarMetadata(),
           ),
         );
+        snapshot = await bindSiteLinks(c.env.DB, saved.draft);
       } else
         snapshot = publicSnapshot(saved.draft, review(saved.draft, inputs(c)));
     } catch (err) {

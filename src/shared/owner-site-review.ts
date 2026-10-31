@@ -1,5 +1,6 @@
 import {
   convertOwnerSite,
+  editableSite,
   isOwnerSite,
   selectedSite,
   type AnyPublished,
@@ -11,16 +12,7 @@ type Disclosure = { label: string; value: string };
 export function siteDisclosures(
   draft: OwnerSiteDraft,
 ): Map<string, Disclosure> {
-  const site = selectedSite({
-    version: draft.version,
-    handle: draft.handle,
-    profile: draft.profile,
-    domainPresentations: draft.domainPresentations,
-    collections: draft.collections,
-    projects: draft.projects,
-    homepage: draft.homepage,
-    catalogue: draft.catalogue,
-  });
+  const site = selectedSite(draft);
   const p = site.profile;
   const rows = new Map<string, Disclosure>();
   const add = (key: string, label: string, value: string) =>
@@ -64,6 +56,13 @@ export function siteDisclosures(
       'Catalogue selection',
       site.catalogue.domainIds.map((id) => names.get(id)).join('\n'),
     );
+  if (site.version === 3)
+    for (const l of site.salesLinks)
+      add(
+        `Sales link: ${l.presentationId}`,
+        'Reviewed domain page',
+        `${l.listingId} · revision ${l.expectedPublishedRevision}`,
+      );
   for (const d of site.domainPresentations)
     add(
       `Domain: ${d.domain}`,
@@ -79,7 +78,7 @@ export function siteChanges(
   const before = published
     ? siteDisclosures(
         isOwnerSite(published)
-          ? published
+          ? editableSite(published)
           : convertOwnerSite({
               handle: published.handle,
               title: published.title,

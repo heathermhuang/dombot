@@ -4,6 +4,7 @@ import {
   selectedSite,
   type OwnerSiteDraft,
   type PublishedOwnerSite,
+  type PublishedOwnerSiteV2,
 } from '../../shared/owner-site';
 import { reconcilePortfolio } from './reconcile';
 
@@ -38,5 +39,11 @@ export function ownerSiteSnapshot(
       throw new Error(
         `${d.domain}: sync or resolve ownership, remove this reference, or explicitly mark it Previously owned.`,
       );
-  return { ...selected, publishedAt: now };
+  if (selected.version === 3 && selected.salesLinks.length)
+    throw new Error(
+      'Linked sites require the revision-bound publishing coordinator.',
+    );
+  if (selected.version === 3)
+    return { ...selected, salesLinks: [], publishedAt: now };
+  return { ...selected, publishedAt: now } satisfies PublishedOwnerSiteV2;
 }

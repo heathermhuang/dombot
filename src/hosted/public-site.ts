@@ -1,4 +1,5 @@
 import { anyPublishedSchema, isOwnerSite } from '../shared/owner-site';
+import { publicLinkedSales } from '../shared/published-sales-links';
 import { renderOwnerSite } from '../shared/render-owner-site';
 import { renderPortfolio, publicHeaders } from '../shared/render-portfolio';
 
@@ -6,6 +7,7 @@ import { renderPortfolio, publicHeaders } from '../shared/render-portfolio';
 export async function publicSite(
   request: Request,
   db: D1Database,
+  salesOrigin?: string,
 ): Promise<Response> {
   const url = new URL(request.url);
   const path = url.searchParams.get('__public_path');
@@ -57,13 +59,23 @@ export async function publicSite(
         status: 404,
         headers: publicHeaders,
       });
-    return new Response(renderOwnerSite(parsed.data, url), {
-      headers: {
-        ...publicHeaders,
-        'Content-Type': 'text/html; charset=utf-8',
-        'X-Domains-Public-Revision': row.revision,
+    return new Response(
+      renderOwnerSite(
+        parsed.data,
+        url,
+        false,
+        parsed.data.version === 3
+          ? await publicLinkedSales(db, parsed.data, salesOrigin)
+          : undefined,
+      ),
+      {
+        headers: {
+          ...publicHeaders,
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Domains-Public-Revision': row.revision,
+        },
       },
-    });
+    );
   }
   if (path.includes('/c/'))
     return new Response('Collection not found', {

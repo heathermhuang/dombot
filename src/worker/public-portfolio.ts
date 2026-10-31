@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { anyPublishedSchema, isOwnerSite } from '../shared/owner-site';
+import { publicLinkedSales } from './publication-links';
 import { renderOwnerSite } from '../shared/render-owner-site';
 import { renderPortfolio, publicHeaders } from '../shared/render-portfolio';
 export { renderPortfolio, publicHeaders } from '../shared/render-portfolio';
@@ -39,7 +40,22 @@ export function createPublicPortfolioRoutes() {
         return c.text('Collection not found', 404, publicHeaders);
       const url = new URL(c.req.url);
       url.pathname = (c.env.DOMBOT_PUBLIC_BASE_PATH ?? '') + url.pathname;
-      return c.html(renderOwnerSite(parsed.data, url), 200, publicHeaders);
+      return c.html(
+        renderOwnerSite(
+          parsed.data,
+          url,
+          false,
+          parsed.data.version === 3
+            ? await publicLinkedSales(
+                c.env.DB,
+                parsed.data,
+                c.env.DOMBOT_SALES_ORIGIN,
+              )
+            : undefined,
+        ),
+        200,
+        publicHeaders,
+      );
     }
     if (c.req.param('slug'))
       return c.text('Collection not found', 404, publicHeaders);

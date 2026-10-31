@@ -15,13 +15,13 @@ import {
   type SiteState,
 } from '../lib/owner-site-client';
 import { publicationRequest } from '../lib/publication-client';
-import { hostPath, webAuthMode } from '../lib/platform';
+import { hostPath } from '../lib/platform';
 import {
   convertOwnerSite,
   emptyOwnerSite,
   isOwnerSite,
-  ownerSiteDraftSchema,
-  selectedSite,
+  editableOwnerSiteSchema,
+  previewOwnerSite,
   type PublishedOwnerSite,
 } from '../../shared/owner-site';
 import { siteChanges } from '../../shared/owner-site-review';
@@ -29,6 +29,8 @@ import { SitePreview } from '../components/owner-site/SitePreview';
 import { ProfileEditor } from '../components/owner-site/ProfileEditor';
 import { SectionsEditor } from '../components/owner-site/SectionsEditor';
 import './your-site.css';
+import { PresenceInspector } from '../components/owner-site/PresenceInspector';
+import { PublishingWorkspace } from '../components/owner-site/PublishingWorkspace';
 
 function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
   const location = useLocation();
@@ -63,14 +65,20 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
       </section>
     );
   if (inventory)
-    return isOwnerSite(state.draft) ? (
-      <Domains hidePublication />
-    ) : (
-      <DomainWorkspace area="domains" />
+    return (
+      <>
+        <PresenceInspector />
+        {isOwnerSite(state.draft) ? (
+          <Domains hidePublication />
+        ) : (
+          <DomainWorkspace area="domains" />
+        )}
+      </>
     );
   if (!state.enabled && !isOwnerSite(state.draft))
     return (
       <>
+        <PresenceInspector />
         <PortfolioAddressPanel />
         <PortfolioDomainPanel />
         <DomainWorkspace area="page" />
@@ -80,6 +88,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
     if (new URLSearchParams(location.search).has('legacy'))
       return (
         <>
+          <PresenceInspector />
           <PortfolioAddressPanel />
           <PortfolioDomainPanel />
           <DomainWorkspace area="page" />
@@ -89,7 +98,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
     let conversionError = '';
     try {
       const converted = convertOwnerSite(state.draft);
-      preview = { ...selectedSite(converted), publishedAt: 1 };
+      preview = previewOwnerSite(converted);
     } catch (e) {
       conversionError = (e as Error).message;
     }
@@ -141,14 +150,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
   return <SiteAuthor />;
 }
 function CreateSite({ onCreated }: { onCreated: () => void }) {
-  const {
-    state: addressState,
-    claim,
-    error: addressError,
-    reload: reloadAddress,
-  } = usePortfolioAddress();
-  const addressPending = webAuthMode() === 'gateway' && !addressState;
-  const [handle, setHandle] = useState('');
+  const { state: addressState } = usePortfolioAddress();
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -157,7 +159,8 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
       <h1>Create your public profile</h1>
       <p>
         Introduce yourself without making your portfolio public. Start with a
-        name and address; add collections or projects when you need them.
+        name; add collections, projects or an optional website address in
+        Settings.
       </p>
       <form
         onSubmit={(event) => {
@@ -165,16 +168,11 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
           setBusy(true);
           setError('');
           const draft = emptyOwnerSite();
-          draft.handle = addressState?.address?.handle ?? handle;
+          draft.handle =
+            addressState?.address?.handle ??
+            `profile-${crypto.randomUUID().slice(0, 8)}`;
           draft.profile.name = name;
-          const address =
-            addressState?.enabled && !addressState.address
-              ? claim(draft.handle)
-              : Promise.resolve();
-          void address
-            .then(() =>
-              publicationRequest('/site', 'PUT', { draft, revision: null }),
-            )
+          void publicationRequest('/site', 'PUT', { draft, revision: null })
             .then(onCreated)
             .catch((e) => setError(e.message))
             .finally(() => setBusy(false));
@@ -190,36 +188,8 @@ function CreateSite({ onCreated }: { onCreated: () => void }) {
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <label>
-            Site address
-            <input
-              required
-              pattern="[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?"
-              maxLength={40}
-              value={addressState?.address?.handle ?? handle}
-              disabled={busy || !!addressState?.address}
-              onChange={(e) => setHandle(e.target.value)}
-            />
-            <small>
-              {addressState?.enabled
-                ? `${window.location.origin}/${addressState.address?.handle ?? (handle || 'yourname')}`
-                : `/p/${handle || 'your-name'}`}{' '}
-              · choose once when creating the draft
-            </small>
-          </label>
         </div>
-        {addressError && (
-          <p role="alert">
-            {addressError}{' '}
-            <button type="button" onClick={reloadAddress}>
-              Retry address information
-            </button>
-          </p>
-        )}
-        {addressPending && !addressError && (
-          <p role="status">Loading address options…</p>
-        )}
-        <button disabled={busy || addressPending}>Create private draft</button>
+        <button disabled={busy}>Create private draft</button>
       </form>
       <p>
         Nothing is published by creating a draft. Your inventory remains
@@ -241,6 +211,9 @@ function SiteAuthor() {
       ? requestedView
       : 'edit',
   );
+  const [section, setSection] = useState<
+    'profile' | 'collections' | 'domains' | 'settings'
+  >('profile');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState('');
@@ -279,10 +252,10 @@ function SiteAuthor() {
   }, []);
   const projection = useMemo(() => {
     if (!draft) return { site: null, error: '' };
-    if (!ownerSiteDraftSchema.safeParse(draft).success)
+    if (!editableOwnerSiteSchema.safeParse(draft).success)
       return { site: null, error: '' };
     try {
-      return { site: { ...selectedSite(draft), publishedAt: 1 }, error: '' };
+      return { site: previewOwnerSite(draft), error: '' };
     } catch (e) {
       return { site: null, error: (e as Error).message };
     }
@@ -305,7 +278,7 @@ function SiteAuthor() {
         )}
       </section>
     );
-  const issues = ownerSiteDraftSchema.safeParse(draft);
+  const issues = editableOwnerSiteSchema.safeParse(draft);
   const update = (value: typeof draft) => {
     setReceipt('');
     siteEditor.update(value);
@@ -327,9 +300,7 @@ function SiteAuthor() {
       <header className="os-header">
         <div>
           <span className="os-eyebrow">Public profile</span>
-          <h1>
-            {state.revision ? 'Make it yours' : 'Create your public profile'}
-          </h1>
+          <h1>{draft.profile.name}</h1>
           <p>
             Introduce yourself. Share only what you choose. A site with no
             public domains is complete.
@@ -348,6 +319,9 @@ function SiteAuthor() {
           </p>
         </div>
         <div className="os-actions">
+          <a href={publicLink(draft.handle)} target="_blank" rel="noreferrer">
+            {live ? 'View published site ↗' : 'Published address'}
+          </a>
           <button
             onClick={() => void run(() => siteEditor.flush())}
             disabled={busy || !state.enabled}
@@ -437,8 +411,6 @@ function SiteAuthor() {
           </a>
         </p>
       )}
-      <PortfolioAddressPanel />
-      <PortfolioDomainPanel />
       <nav className="os-tabs" aria-label="Site editor">
         <button aria-pressed={view === 'edit'} onClick={() => setView('edit')}>
           Edit site
@@ -465,18 +437,78 @@ function SiteAuthor() {
         </button>
       </nav>
       {view === 'edit' && (
+        <nav className="os-tabs" aria-label="Publishing workspace">
+          {(['profile', 'collections', 'domains', 'settings'] as const).map(
+            (s) => (
+              <button
+                key={s}
+                aria-pressed={section === s}
+                onClick={() => setSection(s)}
+              >
+                {
+                  {
+                    profile: 'Profile',
+                    collections: 'Collections',
+                    domains: 'Domain pages',
+                    settings: 'Settings',
+                  }[s]
+                }
+              </button>
+            ),
+          )}
+        </nav>
+      )}
+      {view === 'edit' && section === 'settings' && (
+        <>
+          <PortfolioAddressPanel />
+          <PortfolioDomainPanel />
+          {state.v3Enabled && draft.version === 2 && (
+            <section>
+              <h2>Linked domain pages (v3)</h2>
+              <p>
+                Conversion keeps selected and excluded draft sections, prices,
+                contact fields and order. It creates no Sales links and does not
+                publish.
+              </p>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    await siteEditor.flush();
+                    await publicationRequest('/site/convert-v3', 'POST', {
+                      revision: siteEditor.getSnapshot().state!.revision,
+                    });
+                    await siteEditor.discardAndReload();
+                  })
+                }
+              >
+                Save v3 draft conversion
+              </button>
+            </section>
+          )}
+        </>
+      )}
+      {view === 'edit' && section === 'domains' && (
+        <PublishingWorkspace draft={draft} state={state} />
+      )}
+      {view === 'edit' && section !== 'settings' && (
         <fieldset disabled={!state.enabled || busy}>
-          <ProfileEditor
-            draft={draft}
-            lockedHandle={!!state.revision}
-            showAddress={!addressState?.enabled}
-            onChange={update}
-          />
-          <SectionsEditor
-            draft={draft}
-            review={state.review}
-            onChange={update}
-          />
+          {section === 'profile' && (
+            <ProfileEditor
+              draft={draft}
+              lockedHandle={!!state.revision}
+              showAddress={false}
+              onChange={update}
+            />
+          )}
+          {section !== 'profile' && (
+            <SectionsEditor
+              section={section === 'domains' ? 'domains' : 'collections'}
+              draft={draft}
+              review={state.review}
+              onChange={update}
+            />
+          )}
         </fieldset>
       )}
       {view === 'preview' && (
@@ -491,6 +523,33 @@ function SiteAuthor() {
           ) : (
             <p>Resolve the selected content above to preview.</p>
           )}
+        </section>
+      )}
+      {view === 'review' && projection.site && (
+        <section aria-label="Selected-domain verification">
+          <h2>Selected-domain verification</h2>
+          {Object.entries(
+            state.review
+              .filter(
+                (r) =>
+                  projection.site!.domainPresentations.some(
+                    (d) => d.domain === r.domain && d.ownership === 'current',
+                  ) && r.ownership !== 'owned',
+              )
+              .reduce<Record<string, string[]>>((groups, r) => {
+                const key = `${r.accountLabels.join(', ') || 'Imported or unmatched'} · ${r.ownership}`;
+                (groups[key] ??= []).push(r.domain);
+                return groups;
+              }, {}),
+          ).map(([reason, names]) => (
+            <details key={reason} open>
+              <summary>
+                {reason} · {names.length}
+              </summary>
+              <p>{names.join(', ')}</p>
+              <Link to="/">Open private inventory to resolve control</Link>
+            </details>
+          ))}
         </section>
       )}
       {view === 'review' && (
@@ -520,20 +579,24 @@ function SiteAuthor() {
           ) : (
             <p>No public changes.</p>
           )}
-          <button
-            className="os-primary"
-            disabled={
-              busy || !projection.site || !issues.success || !state.enabled
-            }
-            onClick={() =>
-              void run(async () => {
-                await siteEditor.publish();
-                setReceipt(new Date().toLocaleString());
-              })
-            }
-          >
-            Publish changes
-          </button>
+          {draft.version === 3 && draft.salesLinks.length ? (
+            <PublishingWorkspace draft={draft} state={state} fullPage />
+          ) : (
+            <button
+              className="os-primary"
+              disabled={
+                busy || !projection.site || !issues.success || !state.enabled
+              }
+              onClick={() =>
+                void run(async () => {
+                  await siteEditor.publish();
+                  setReceipt(new Date().toLocaleString());
+                })
+              }
+            >
+              Publish changes
+            </button>
+          )}
           <p>
             This replaces the published profile at {publicLink(draft.handle)}.
             Draft edits alone never publish.

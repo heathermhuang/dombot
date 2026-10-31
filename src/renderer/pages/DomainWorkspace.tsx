@@ -766,7 +766,7 @@ export default function DomainWorkspace({
                   navigateView('domains');
                 }}
               >
-                Add domains
+                Import domains
               </Button>
               <Button
                 size="sm"
@@ -776,7 +776,7 @@ export default function DomainWorkspace({
                   navigateView('domains');
                 }}
               >
-                Choose profile domains
+                Choose domains
               </Button>
               {view !== 'settings' && (
                 <Button

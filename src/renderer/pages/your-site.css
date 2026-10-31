@@ -393,3 +393,32 @@
     margin-top: 10px;
   }
 }
+.os-editor [hidden] {
+  display: none !important;
+}
+.os-picker ul {
+  max-height: 240px;
+  overflow: auto;
+  padding-left: 20px;
+}
+.os-picker li {
+  overflow-wrap: anywhere;
+  padding: 4px 0;
+}
+.os-editor input,
+.os-editor textarea,
+.os-editor select {
+  font-size: 16px;
+}
+.os-editor fieldset {
+  min-width: 0;
+}
+.os-editor summary:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+.os-picker-results {
+  max-height: min(50vh, 440px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}

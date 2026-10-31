@@ -21,6 +21,8 @@ interface Env {
   DOMBOT_SALES_EDGE_SECRET?: string;
   /** Opt-in per instance. Compatible public reads/export/unpublish remain on. */
   DOMBOT_OWNER_SITE_V2?: string;
+  DOMBOT_OWNER_SITE_V3?: string;
+  DOMBOT_COMPOSITE_PUBLISH?: string;
   DOMBOT_GATEWAY_SECRET?: string;
   DOMBOT_WORKSPACE_ID?: string;
   DOMBOT_PUBLIC_BASE_PATH?: string;

@@ -49,7 +49,7 @@ export default {
           status: 403,
           headers: { 'Cache-Control': 'no-store' },
         });
-      return publicSite(request, env.DB);
+      return publicSite(request, env.DB, env.DOMBOT_SALES_ORIGIN);
     }
 
     if (

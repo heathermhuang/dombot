@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { DraftSession } from './draft-session';
 import { publicationRequest } from './publication-client';
 import {
-  ownerSiteDraftSchema,
+  editableOwnerSiteSchema,
   type OwnerSiteDraft,
   type AnyDraft,
   type AnyPublished,
@@ -14,6 +14,9 @@ export interface SiteState {
   draft: AnyDraft;
   revision: string | null;
   enabled: boolean;
+  v3Enabled?: boolean;
+  compositeEnabled?: boolean;
+  publishedRevision?: string | null;
   publishedSnapshot: AnyPublished | null;
   review: ReconciledListing[];
 }
@@ -41,11 +44,11 @@ export const siteEditor = new DraftSession<OwnerSiteDraft, EditableSiteState>(
   {
     editable: (state) => state.draft,
     issues: (draft) =>
-      ownerSiteDraftSchema.safeParse(draft).success
+      editableOwnerSiteSchema.safeParse(draft).success
         ? []
         : ['Fix the fields before saving.'],
     valid: (_draft, saved) => saved,
-    schema: ownerSiteDraftSchema,
+    schema: editableOwnerSiteSchema,
     validationMessage:
       'Fix the listed fields before saving. Your edits are still here.',
   },

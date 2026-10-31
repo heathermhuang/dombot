@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { saleMoneySchema, saleModeSchema } from './sales';
 import {
   draftSchema,
   publishedSchema,
@@ -138,18 +139,103 @@ function uniqueRecords(value: z.infer<typeof shape>, ctx: z.RefinementCtx) {
     });
 }
 export const ownerSiteDraftSchema = shape.superRefine(uniqueRecords);
-export type OwnerSiteDraft = z.infer<typeof ownerSiteDraftSchema>;
+export type OwnerSiteV2Draft = z.infer<typeof ownerSiteDraftSchema>;
+const draftLink = z
+  .object({
+    presentationId: id,
+    listingId: z.string().uuid(),
+    expectedPublishedRevision: z.string().uuid(),
+  })
+  .strict();
+const publicLink = z
+  .object({
+    presentationId: id,
+    listingId: z.string().uuid(),
+    publishedRevision: z.string().uuid(),
+    mode: saleModeSchema,
+    publicPrice: saleMoneySchema.nullable(),
+    publicMinimumOffer: saleMoneySchema.nullable(),
+  })
+  .strict();
+function linkIdentity(
+  value:
+    | OwnerSiteV2Draft
+    | {
+        domainPresentations: OwnerSiteV2Draft['domainPresentations'];
+        salesLinks: { presentationId: string }[];
+      },
+  ctx: z.RefinementCtx,
+) {
+  if (!('salesLinks' in value)) return;
+  const links = value.salesLinks;
+  if (new Set(links.map((l) => l.presentationId)).size !== links.length)
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Link each presentation only once.',
+    });
+  const presentations = new Map(
+    value.domainPresentations.map((d) => [d.id, d]),
+  );
+  for (const l of links) {
+    const d = presentations.get(l.presentationId);
+    if (
+      !d ||
+      d.ownership !== 'current' ||
+      d.availability !== 'inquiries' ||
+      d.askingPrice !== null
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Sales links require a selected current inquiry domain with no independent price.',
+      });
+  }
+}
+const v3Shape = shape
+  .extend({ version: z.literal(3), salesLinks: z.array(draftLink).max(20000) })
+  .strict();
+export const ownerSiteV3DraftSchema = v3Shape.superRefine((value, ctx) => {
+  uniqueRecords({ ...value, version: 2 }, ctx);
+  linkIdentity(value, ctx);
+  const selected = new Set([
+    ...(value.catalogue.enabled ? value.catalogue.domainIds : []),
+    ...value.collections
+      .filter((c) => value.homepage.collectionIds.includes(c.id))
+      .flatMap((c) => c.domainIds),
+    ...value.projects
+      .filter((p) => value.homepage.projectIds.includes(p.id))
+      .flatMap((p) => p.domainIds),
+  ]);
+  if (value.salesLinks.some((l) => !selected.has(l.presentationId)))
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Sales links require an explicitly selected current domain.',
+    });
+});
+export const editableOwnerSiteSchema = z.union([
+  ownerSiteDraftSchema,
+  ownerSiteV3DraftSchema,
+]);
+export type OwnerSiteV3Draft = z.infer<typeof ownerSiteV3DraftSchema>;
+export type OwnerSiteDraft = OwnerSiteV2Draft | OwnerSiteV3Draft;
 export type DomainPresentation = OwnerSiteDraft['domainPresentations'][number];
 export const isOwnerSite = (
   v: PortfolioDraft | OwnerSiteDraft | PublishedPortfolio | PublishedOwnerSite,
 ): v is OwnerSiteDraft | PublishedOwnerSite =>
-  'version' in v && v.version === 2;
-export const anyDraftSchema = z.union([ownerSiteDraftSchema, draftSchema]);
+  'version' in v && (v.version === 2 || v.version === 3);
+export const anyDraftSchema = z.union([
+  ownerSiteDraftSchema,
+  ownerSiteV3DraftSchema,
+  draftSchema,
+]);
 export type AnyDraft = z.infer<typeof anyDraftSchema>;
 
 /** Resolve only explicitly selected sections. Draft-only references never expand disclosure. */
+export function selectedSite(draft: OwnerSiteV2Draft): OwnerSiteV2Draft;
+export function selectedSite(draft: OwnerSiteV3Draft): OwnerSiteV3Draft;
+export function selectedSite(draft: OwnerSiteDraft): OwnerSiteDraft;
 export function selectedSite(draft: OwnerSiteDraft): OwnerSiteDraft {
-  const clean = ownerSiteDraftSchema.parse(draft);
+  const clean = editableOwnerSiteSchema.parse(draft);
   const pick = <T extends { id: string }>(
     records: T[],
     selected: string[],
@@ -195,13 +281,21 @@ export function selectedSite(draft: OwnerSiteDraft): OwnerSiteDraft {
       throw new Error(
         `${d.domain}: previously owned names cannot accept inquiries.`,
       );
-    if (d.availability === 'inquiries' && !clean.profile.contactEmail)
+    if (
+      d.availability === 'inquiries' &&
+      !clean.profile.contactEmail &&
+      !(
+        clean.version === 3 &&
+        clean.salesLinks.some((l) => l.presentationId === d.id)
+      )
+    )
       throw new Error(
         `${d.domain}: add a public contact email before accepting inquiries.`,
       );
   }
-  return {
-    version: 2,
+  const result = {
+    version: clean.version,
+    ...(clean.version === 3 ? { salesLinks: clean.salesLinks } : {}),
     handle: clean.handle,
     profile: {
       name: clean.profile.name,
@@ -247,6 +341,12 @@ export function selectedSite(draft: OwnerSiteDraft): OwnerSiteDraft {
       currency: v.currency,
     })),
   };
+  if (
+    clean.version === 3 &&
+    clean.salesLinks.some((l) => !selected.includes(l.presentationId))
+  )
+    throw new Error('Sales links must refer to explicitly selected domains.');
+  return editableOwnerSiteSchema.parse(result);
 }
 export const publishedOwnerSiteSchema = shape
   .extend({ publishedAt: z.number().int().positive() })
@@ -284,13 +384,84 @@ export const publishedOwnerSiteSchema = shape
       });
     }
   });
-export type PublishedOwnerSite = z.infer<typeof publishedOwnerSiteSchema>;
+export type PublishedOwnerSiteV2 = z.infer<typeof publishedOwnerSiteSchema>;
+export const publishedOwnerSiteV3Schema = shape
+  .extend({
+    version: z.literal(3),
+    salesLinks: z.array(publicLink).max(20000),
+    publishedAt: z.number().int().positive(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    uniqueRecords({ ...value, version: 2 }, ctx);
+    linkIdentity(value, ctx);
+    try {
+      const { publishedAt: _publishedAt, ...content } = value;
+      void _publishedAt;
+      const selected = selectedSite({
+        ...content,
+        salesLinks: value.salesLinks.map((l) => ({
+          presentationId: l.presentationId,
+          listingId: l.listingId,
+          expectedPublishedRevision: l.publishedRevision,
+        })),
+      });
+      if (
+        selected.domainPresentations.length !==
+          value.domainPresentations.length ||
+        selected.collections.length !== value.collections.length ||
+        selected.projects.length !== value.projects.length ||
+        (!value.catalogue.enabled && value.catalogue.domainIds.length) ||
+        value.domainPresentations.some(
+          (d) => d.availability !== 'inquiries' && d.askingPrice !== null,
+        )
+      )
+        throw new Error('Unselected public content.');
+    } catch (error) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          error instanceof Error ? error.message : 'Invalid public site.',
+      });
+    }
+  });
+export type PublishedOwnerSiteV3 = z.infer<typeof publishedOwnerSiteV3Schema>;
+export type PublishedOwnerSite = PublishedOwnerSiteV2 | PublishedOwnerSiteV3;
+export function editableSite(
+  site: OwnerSiteDraft | PublishedOwnerSite,
+): OwnerSiteDraft {
+  const { publishedAt: _publishedAt, ...content } =
+    'publishedAt' in site ? site : { ...site, publishedAt: undefined };
+  void _publishedAt;
+  return editableOwnerSiteSchema.parse(
+    site.version === 3 && 'publishedAt' in site
+      ? {
+          ...content,
+          salesLinks: site.salesLinks.map((l) => ({
+            presentationId: l.presentationId,
+            listingId: l.listingId,
+            expectedPublishedRevision: l.publishedRevision,
+          })),
+        }
+      : content,
+  );
+}
+export function convertOwnerSiteV3(input: AnyDraft): OwnerSiteV3Draft {
+  if (isOwnerSite(input) && input.version === 3)
+    return ownerSiteV3DraftSchema.parse(input);
+  return ownerSiteV3DraftSchema.parse({
+    ...convertOwnerSite(input),
+    version: 3,
+    salesLinks: [],
+  });
+}
 export const anyPublishedSchema = z.union([
   publishedOwnerSiteSchema,
+  publishedOwnerSiteV3Schema,
   publishedSchema,
 ]);
 export type AnyPublished = z.infer<typeof anyPublishedSchema>;
-export const emptyOwnerSite = (): OwnerSiteDraft => ({
+export const emptyOwnerSite = (): OwnerSiteV2Draft => ({
   version: 2,
   handle: 'portfolio',
   profile: {
@@ -310,8 +481,11 @@ export const emptyOwnerSite = (): OwnerSiteDraft => ({
 });
 
 /** Deterministic conversion is a draft operation, never a publication. */
-export function convertOwnerSite(input: AnyDraft): OwnerSiteDraft {
-  if (isOwnerSite(input)) return ownerSiteDraftSchema.parse(input);
+export function convertOwnerSite(input: AnyDraft): OwnerSiteV2Draft {
+  if (isOwnerSite(input)) {
+    if (input.version === 3) throw new Error('Use the compatible v3 editor.');
+    return ownerSiteDraftSchema.parse(input);
+  }
   const draft = draftSchema.parse(input);
   const result = emptyOwnerSite();
   result.handle = draft.handle;
@@ -356,4 +530,22 @@ export function convertOwnerSite(input: AnyDraft): OwnerSiteDraft {
     ),
   };
   return ownerSiteDraftSchema.parse(result);
+}
+
+export function previewOwnerSite(draft: OwnerSiteDraft): PublishedOwnerSite {
+  const selected = selectedSite(draft);
+  return selected.version === 2
+    ? { ...selected, publishedAt: 1 }
+    : {
+        ...selected,
+        publishedAt: 1,
+        salesLinks: selected.salesLinks.map((l) => ({
+          presentationId: l.presentationId,
+          listingId: l.listingId,
+          publishedRevision: l.expectedPublishedRevision,
+          mode: 'inquiry' as const,
+          publicPrice: null,
+          publicMinimumOffer: null,
+        })),
+      };
 }
