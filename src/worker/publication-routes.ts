@@ -36,6 +36,7 @@ import { renderPortfolio, publicHeaders } from './public-portfolio';
 import type { PublicationInputs } from './publication-inputs';
 import { SalesStore } from './sales-store';
 import { publishingPresence } from './publishing-presence';
+import { previewSalesLinks } from './preview-sales-links';
 import { prepareChangeSetSchema } from '../shared/publication-change-set';
 import { PublicationChangeSets } from './publication-change-sets';
 import { createVerifiedSaleObserver } from './sales-observation';
@@ -82,6 +83,15 @@ export function createPublicationRoutes(
       maxSize: 4 * 1024 * 1024,
       onError: (c) => c.json({ error: 'Portfolio draft is too large.' }, 413),
     }),
+  );
+  app.post('/site/preview-links', async (c) =>
+    c.json(
+      await previewSalesLinks(
+        c.env.DB,
+        await c.req.json(),
+        c.env.DOMBOT_SALES_ORIGIN,
+      ),
+    ),
   );
   app.use('*', async (c, next) => {
     // Reads need no mutable service state once inventory has been hydrated.

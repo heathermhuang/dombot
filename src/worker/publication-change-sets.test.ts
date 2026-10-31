@@ -943,3 +943,108 @@ it('qualifies the 100-name composite ceiling and rejects 101 before public mutat
     }),
   );
 }, 30000);
+
+it('resolves preview terms in one published-only batch and suppresses stale, mismatched and paused references', async () => {
+  const { previewSalesLinks } = await import('./preview-sales-links');
+  const draft = emptySale('preview.example', sourcePriceFingerprint(null));
+  draft.priceSource = {
+    kind: 'override',
+    price: { amount: '12345', currency: 'USD' },
+    reason: 'PRIVATE OVERRIDE REASON',
+  };
+  const revision = await sales.save(draft, null),
+    review = await sales.prepare([{ id: draft.id, revision }], observation);
+  await sales.publish(review.id, observation);
+  const published = (await sales.get(draft.id)).published!;
+  const queries: string[] = [];
+  const counted = {
+    prepare(sql: string) {
+      queries.push(sql);
+      return db.prepare(sql);
+    },
+  } as D1Database;
+  const refs = Array.from({ length: 200 }, (_, i) => ({
+    presentationId: `reference-${i}`,
+    domain: draft.domain,
+    listingId: draft.id,
+    publishedRevision: published.revision,
+  }));
+  const terms = await previewSalesLinks(
+    counted,
+    refs,
+    'https://public.example/w/fixture',
+  );
+  expect(queries).toHaveLength(1);
+  expect(queries[0]).not.toContain('sealed');
+  expect(terms).toHaveLength(200);
+  expect(terms[0]).toMatchObject({
+    price: { amount: '12345', currency: 'USD' },
+    url: 'https://public.example/w/fixture/d/preview.example',
+  });
+  expect(JSON.stringify(terms)).not.toContain('PRIVATE OVERRIDE');
+  expect(
+    await previewSalesLinks(
+      db,
+      [
+        { ...refs[0], publishedRevision: crypto.randomUUID() },
+        { ...refs[1], domain: 'other.example' },
+        { ...refs[2], listingId: crypto.randomUUID() },
+      ],
+      'https://public.example/w/fixture',
+    ),
+  ).toEqual([]);
+  await sales.availability(
+    draft.id,
+    (await sales.get(draft.id)).operationalRevision,
+    'paused',
+  );
+  expect(
+    await previewSalesLinks(db, refs, 'https://public.example/w/fixture'),
+  ).toEqual([]);
+});
+it('serves owner preview reads with writes disabled without entering private hydration or weakening same-origin checks', async () => {
+  const { Hono } = await import('hono'),
+    { createPublicationRoutes } = await import('./publication-routes'),
+    { buildAuthConfig } = await import('./auth');
+  let privateEntries = 0;
+  const env = {
+    DB: db,
+    DOMBOT_AUTH: 'external',
+    DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+    DOMBOT_SALES_ORIGIN: 'https://public.example/w/fixture',
+  } as Env;
+  const authConfig = await buildAuthConfig(env, root);
+  const app = new Hono<{
+    Bindings: Env;
+    Variables: { auth: import('./auth').AuthConfig };
+  }>();
+  app.use('*', async (c, next) => {
+    c.set('auth', authConfig);
+    await next();
+  });
+  app.route(
+    '/publishing',
+    createPublicationRoutes(async (_c, next) => {
+      privateEntries++;
+      await next();
+    }),
+  );
+  const call = (origin: string, body: unknown = []) =>
+    app.request(
+      'https://worker.example/publishing/site/preview-links',
+      {
+        method: 'POST',
+        headers: { Origin: origin, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      env,
+    );
+  expect((await call('https://foreign.example')).status).toBe(403);
+  const result = await call('https://worker.example');
+  expect(result.status).toBe(200);
+  expect(await result.json()).toEqual([]);
+  expect(privateEntries).toBe(0);
+  expect(
+    (await call('https://worker.example', [{ presentationId: 'bad' }])).status,
+  ).toBe(400);
+});

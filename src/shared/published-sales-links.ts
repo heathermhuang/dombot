@@ -6,7 +6,12 @@ export interface PublishedReadStatement {
 export interface PublishedReadDatabase {
   prepare(sql: string): PublishedReadStatement;
 }
-import { publishedSaleSchema, type PublishedSale } from './sales';
+import { type PublishedSale } from './sales';
+import {
+  publicSalesLinkTermsSchema,
+  publicSalesLinkTermsQuery,
+} from './public-sales-link-terms';
+import type { z } from 'zod';
 import {
   publishedOwnerSiteV3Schema,
   type PublishedOwnerSiteV3,
@@ -23,9 +28,7 @@ export async function publicLinkedSales(
   const rows = ids.length
     ? (
         await db
-          .prepare(
-            'SELECT p.payload,d.availability,d.control_expires_at FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id IN (SELECT value FROM json_each(?))',
-          )
+          .prepare(publicSalesLinkTermsQuery)
           .bind(JSON.stringify(ids))
           .all<{
             payload: string;
@@ -34,9 +37,12 @@ export async function publicLinkedSales(
           }>()
       ).results
     : [];
-  const byId = new Map<string, { sale: PublishedSale; actionable: boolean }>();
+  const byId = new Map<
+    string,
+    { sale: z.infer<typeof publicSalesLinkTermsSchema>; actionable: boolean }
+  >();
   for (const r of rows) {
-    const parsed = publishedSaleSchema.safeParse(JSON.parse(r.payload));
+    const parsed = publicSalesLinkTermsSchema.safeParse(JSON.parse(r.payload));
     if (parsed.success)
       byId.set(parsed.data.id, {
         sale: parsed.data,

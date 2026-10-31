@@ -226,7 +226,34 @@ const publication = new fixture.PublicationStore(
   db,
   await fixture.aesGcmCipher(await fixture.deriveEncryptionKey(rootKey)),
 );
-await publication.save(profile, null);
+if (process.argv.includes('--linked')) {
+  const current = await sales.db
+    .prepare('SELECT id FROM published_sales WHERE domain=?')
+    .bind('canopy.example')
+    .first();
+  const sale = (await sales.get(current.id)).published;
+  const linked = fixture.convertOwnerSiteV3(profile);
+  linked.domainPresentations = [
+    {
+      id: 'linked-canopy',
+      domain: 'canopy.example',
+      ownership: 'current',
+      availability: 'inquiries',
+      description: 'Synthetic linked-page preview. No real inquiry is sent.',
+      askingPrice: null,
+      currency: 'USD',
+    },
+  ];
+  linked.catalogue = { enabled: true, domainIds: ['linked-canopy'] };
+  linked.salesLinks = [
+    {
+      presentationId: 'linked-canopy',
+      listingId: sale.id,
+      expectedPublishedRevision: sale.revision,
+    },
+  ];
+  await publication.save(linked, null);
+} else await publication.save(profile, null);
 console.log(
   JSON.stringify({
     localOnly: true,
