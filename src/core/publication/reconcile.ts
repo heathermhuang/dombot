@@ -40,6 +40,7 @@ export function reconcilePortfolio(
       );
       const healthy =
         matchedAccounts.length > 0 &&
+        matches.every((d) => d.source !== 'imported' && !d.deleted) &&
         matchedAccounts.every(
           (a) =>
             a?.configured &&

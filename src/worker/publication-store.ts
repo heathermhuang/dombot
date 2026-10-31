@@ -43,6 +43,12 @@ export class PublicationStore {
 
   async save(draft: AnyDraft, expected: string | null): Promise<string> {
     const previous = await this.draft();
+    if (
+      isOwnerSite(previous.draft) &&
+      previous.draft.version === 3 &&
+      (!isOwnerSite(draft) || draft.version !== 3)
+    )
+      throw new PublicationConflict();
     if (previous.revision !== expected) throw new PublicationConflict();
     if (isOwnerSite(previous.draft) && !isOwnerSite(draft))
       throw new PublicationConflict();
@@ -91,6 +97,19 @@ export class PublicationStore {
       : null;
   }
 
+  async prepareDraft(
+    draft: AnyDraft,
+    revision: string,
+  ): Promise<D1PreparedStatement> {
+    return this.db
+      .prepare(
+        "UPDATE portfolio_drafts SET revision=?,sealed=? WHERE id='main'",
+      )
+      .bind(
+        revision,
+        await this.cipher.seal(JSON.stringify(anyDraftSchema.parse(draft))),
+      );
+  }
   async publish(snapshot: AnyPublished, expected: string): Promise<void> {
     snapshot = anyPublishedSchema.parse(snapshot);
     // Checking the revision and publishing are ONE database statement. A stale
@@ -136,7 +155,15 @@ export class PublicationStore {
             await this.cipher.seal(JSON.stringify(anyDraftSchema.parse(draft))),
           )
       : this.db.prepare("DELETE FROM portfolio_drafts WHERE id = 'main'");
+    const hasReviews = await this.db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='publication_change_sets'",
+      )
+      .first();
     await this.db.batch([
+      ...(hasReviews
+        ? [this.db.prepare('DELETE FROM publication_change_sets')]
+        : []),
       this.db.prepare("DELETE FROM published_portfolios WHERE id = 'main'"),
       write,
     ]);

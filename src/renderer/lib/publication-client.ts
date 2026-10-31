@@ -6,6 +6,7 @@ export async function publicationRequest<T>(
   path = '',
   method = 'GET',
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   // Bound reads through body consumption too. A stalled read must release the
   // session's in-flight load so the workspace can show recovery controls.
@@ -22,7 +23,13 @@ export async function publicationRequest<T>(
     const response = await fetch(hostPath(`/publishing${path}`), {
       method,
       credentials: 'same-origin',
-      ...(controller ? { signal: controller.signal } : {}),
+      ...(controller
+        ? {
+            signal: signal
+              ? AbortSignal.any([signal, controller.signal])
+              : controller.signal,
+          }
+        : {}),
       ...(body === undefined
         ? {}
         : {

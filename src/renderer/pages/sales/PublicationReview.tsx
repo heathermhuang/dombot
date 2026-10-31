@@ -155,6 +155,14 @@ function PublicationReviewView() {
               .map((item) => (
                 <section key={item.id}>
                   <h2>{item.after.domain}</h2>
+                  {!!item.profileImpacts?.length && (
+                    <p role="status">
+                      Linked surfaces: {item.profileImpacts.join(', ')}.
+                      Publishing these terms separately makes their old price
+                      and inquiry action unavailable until you explicitly review
+                      and rebind them in Public profile → Domain pages.
+                    </p>
+                  )}
                   <dl>
                     <dt>Public field</dt>
                     <dd>

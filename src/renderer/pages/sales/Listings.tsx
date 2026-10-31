@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type {
   SalesHealth,
-  SalesInventory,
   SalesListing,
   SalesPage,
 } from '../../../shared/sales-api';
@@ -23,6 +22,7 @@ import {
 } from './shared';
 import BulkActions from './BulkActions';
 import BulkJobs from './BulkJobs';
+import { InventoryPicker } from '../../components/owner-site/InventoryPicker';
 
 export default function Listings() {
   const [cursor, setCursor] = useState(''),
@@ -30,8 +30,7 @@ export default function Listings() {
     [searchQ, setSearchQ] = useState(''),
     [filter, setFilter] = useState('All'),
     [mode, setMode] = useState(''),
-    [create, setCreate] = useState(false),
-    [inventoryQuery, setInventoryQuery] = useState('');
+    [create, setCreate] = useState(false);
   const [jobsRevision, setJobsRevision] = useState(0);
   const [selection, setSelection] = useState<Set<string>>(new Set()),
     [domains, setDomains] = useState<Set<string>>(new Set()),
@@ -42,9 +41,6 @@ export default function Listings() {
       `/listings?cursor=${cursor}&q=${encodeURIComponent(searchQ)}&mode=${encodeURIComponent(mode)}&state=${encodeURIComponent(filter)}`,
     ),
     health = useSalesData<SalesHealth>('/health');
-  const inventory = useSalesData<SalesPage<SalesInventory>>(
-    `/inventory?q=${encodeURIComponent(inventoryQuery)}`,
-  );
   const action = useSalesAction(),
     navigate = useNavigate();
   useEffect(() => {
@@ -122,34 +118,13 @@ export default function Listings() {
           <p>
             Choose up to 100 names from your inventory. New drafts stay private.
           </p>
-          <label className="sales-field">
-            Find inventory
-            <input
-              value={inventoryQuery}
-              onChange={(e) => {
-                setInventoryQuery(e.target.value);
-                setDomains(new Set());
-              }}
-            />
-          </label>
-          <SalesFeedback error={inventory.error} loading={inventory.loading} />
-          {inventory.data?.items.map((r) => (
-            <label className="checkbox-label" key={r.domain}>
-              <input
-                type="checkbox"
-                checked={domains.has(r.domain)}
-                onChange={() => toggle(r.domain, domains, setDomains)}
-              />
-              <span>
-                {r.domain}{' '}
-                <small className="small">
-                  {r.available ? 'Control observed' : r.reason}
-                </small>
-              </span>
-            </label>
-          ))}
+          <InventoryPicker
+            selected={[...domains]}
+            onChange={(names) => setDomains(new Set(names))}
+            limit={100}
+          />
           <button
-            disabled={!domains.size || action.busy}
+            disabled={!domains.size || domains.size > 100 || action.busy}
             className="primary"
             onClick={() =>
               void action.run(async () => {
@@ -173,8 +148,7 @@ export default function Listings() {
             Create {domains.size || ''} private drafts
           </button>
           <p className="small">
-            Showing the first 100 matching inventory names. Refine search to
-            choose another batch.
+            Selection is exact across pages. Draft preparation does not publish.
           </p>
         </section>
       )}

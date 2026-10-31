@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   canonicalDomain,
   type ReconciledListing,
@@ -15,7 +16,9 @@ export function SectionsEditor({
   draft,
   review,
   onChange,
+  section,
 }: {
+  section?: 'collections' | 'domains';
   draft: OwnerSiteDraft;
   review: ReconciledListing[];
   onChange: (draft: OwnerSiteDraft) => void;
@@ -82,7 +85,7 @@ export function SectionsEditor({
   };
   return (
     <>
-      <section>
+      <section hidden={section === 'domains'}>
         <h2>Collections</h2>
         <p>
           Give a selection context. Include it on your site only when it is
@@ -209,7 +212,7 @@ export function SectionsEditor({
           Add collection
         </button>
       </section>
-      <section>
+      <section hidden={section === 'domains'}>
         <h2>Projects</h2>
         <p>
           Show what you are building. Links and project descriptions are your
@@ -338,7 +341,7 @@ export function SectionsEditor({
           Add project
         </button>
       </section>
-      <section>
+      <section hidden={section === 'domains'}>
         <h2>Optional catalogue</h2>
         <label className="os-check">
           <input
@@ -390,7 +393,7 @@ export function SectionsEditor({
           </>
         )}
       </section>
-      <section>
+      <section hidden={section === 'collections'}>
         <h2>Domain details</h2>
         <p>
           One availability and price per domain, shared across every collection.
@@ -417,6 +420,41 @@ export function SectionsEditor({
                   ? 'Open to inquiries'
                   : 'Not accepting inquiries'}
             </summary>
+            {draft.version === 3 &&
+              draft.salesLinks
+                .filter((l) => l.presentationId === d.id)
+                .map((l) => (
+                  <p key={l.listingId}>
+                    Commercial terms come only from the reviewed{' '}
+                    <Link to={`/sales/listings/${l.listingId}`}>
+                      domain inquiry page
+                    </Link>
+                    .{' '}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          ...draft,
+                          salesLinks: draft.salesLinks.filter(
+                            (v) => v.presentationId !== d.id,
+                          ),
+                          domainPresentations: draft.domainPresentations.map(
+                            (v) =>
+                              v.id === d.id
+                                ? {
+                                    ...v,
+                                    availability: 'not-for-sale',
+                                    askingPrice: null,
+                                  }
+                                : v,
+                          ),
+                        })
+                      }
+                    >
+                      Remove Sales link in this draft
+                    </button>
+                  </p>
+                ))}
             <div className="os-fields">
               <label>
                 Ownership assertion
@@ -494,6 +532,10 @@ export function SectionsEditor({
                   <label>
                     Asking price (optional)
                     <input
+                      disabled={
+                        draft.version === 3 &&
+                        draft.salesLinks.some((l) => l.presentationId === d.id)
+                      }
                       type="number"
                       min="0.01"
                       step="any"

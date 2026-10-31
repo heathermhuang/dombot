@@ -1,0 +1,130 @@
+{
+  "localOnly": true,
+  "fixtureNames": 1004,
+  "environment": "Same Mac, Chromium, loopback Miniflare; warm origins, light theme, 1280px; five sequential reloads per pinned engine",
+  "baseline": "1.5.2-hosted.28",
+  "candidate": "1.5.2-hosted.29",
+  "providerCallsDenied": true,
+  "samples": [
+    {
+      "label": "before",
+      "run": 1,
+      "readyMs": 511,
+      "domContentLoadedMs": 62.099999994039536,
+      "fcpMs": 80,
+      "initialRequests": 21,
+      "transferBytes": 445049,
+      "scriptBytes": 388724
+    },
+    {
+      "label": "before",
+      "run": 2,
+      "readyMs": 551.5,
+      "domContentLoadedMs": 75.69999998807907,
+      "fcpMs": 100,
+      "initialRequests": 21,
+      "transferBytes": 445049,
+      "scriptBytes": 388724
+    },
+    {
+      "label": "before",
+      "run": 3,
+      "readyMs": 513.8000000119209,
+      "domContentLoadedMs": 79.09999999403954,
+      "fcpMs": 96,
+      "initialRequests": 21,
+      "transferBytes": 445049,
+      "scriptBytes": 388724
+    },
+    {
+      "label": "before",
+      "run": 4,
+      "readyMs": 508.09999999403954,
+      "domContentLoadedMs": 67.30000001192093,
+      "fcpMs": 88,
+      "initialRequests": 21,
+      "transferBytes": 445049,
+      "scriptBytes": 388724
+    },
+    {
+      "label": "before",
+      "run": 5,
+      "readyMs": 480.59999999403954,
+      "domContentLoadedMs": 61.69999998807907,
+      "fcpMs": 88,
+      "initialRequests": 21,
+      "transferBytes": 445049,
+      "scriptBytes": 388724
+    },
+    {
+      "label": "after",
+      "run": 1,
+      "readyMs": 455.30000001192093,
+      "domContentLoadedMs": 74.5,
+      "fcpMs": 92,
+      "initialRequests": 21,
+      "transferBytes": 487905,
+      "scriptBytes": 431448
+    },
+    {
+      "label": "after",
+      "run": 2,
+      "readyMs": 534.7000000178814,
+      "domContentLoadedMs": 77.2000000178814,
+      "fcpMs": 96,
+      "initialRequests": 21,
+      "transferBytes": 487905,
+      "scriptBytes": 431448
+    },
+    {
+      "label": "after",
+      "run": 3,
+      "readyMs": 536.5999999940395,
+      "domContentLoadedMs": 75.7999999821186,
+      "fcpMs": 92,
+      "initialRequests": 21,
+      "transferBytes": 487905,
+      "scriptBytes": 431448
+    },
+    {
+      "label": "after",
+      "run": 4,
+      "readyMs": 535,
+      "domContentLoadedMs": 64.7999999821186,
+      "fcpMs": 84,
+      "initialRequests": 21,
+      "transferBytes": 487905,
+      "scriptBytes": 431448
+    },
+    {
+      "label": "after",
+      "run": 5,
+      "readyMs": 531.5999999940395,
+      "domContentLoadedMs": 76.69999998807907,
+      "fcpMs": 96,
+      "initialRequests": 21,
+      "transferBytes": 487905,
+      "scriptBytes": 431448
+    }
+  ],
+  "summary": {
+    "before": {
+      "readyMs": 511,
+      "domContentLoadedMs": 67.30000001192093,
+      "fcpMs": 88,
+      "initialRequests": 21,
+      "transferBytes": 445049,
+      "scriptBytes": 388724
+    },
+    "after": {
+      "readyMs": 534.7000000178814,
+      "domContentLoadedMs": 75.7999999821186,
+      "fcpMs": 92,
+      "initialRequests": 21,
+      "transferBytes": 487905,
+      "scriptBytes": 431448
+    },
+    "readyMedianChangePercent": 4.637964778450376,
+    "passesTwentyPercentMedianBar": true
+  }
+}

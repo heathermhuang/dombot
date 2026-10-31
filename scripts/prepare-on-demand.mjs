@@ -11,7 +11,16 @@ export function sqlStatements(sql) {
   let current = '',
     quote = '',
     comment = '',
+    word = '',
+    triggerDepth = 0,
     statements = [];
+  const finishWord = () => {
+    if (/^\s*CREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER\b/i.test(current)) {
+      if (/^(BEGIN|CASE)$/i.test(word)) triggerDepth++;
+      else if (/^END$/i.test(word)) triggerDepth--;
+    }
+    word = '';
+  };
   for (let i = 0; i < sql.length; i++) {
     const c = sql[i],
       next = sql[i + 1];
@@ -39,26 +48,33 @@ export function sqlStatements(sql) {
       continue;
     }
     if (c === '-' && next === '-') {
+      finishWord();
       comment = '--';
       i++;
       continue;
     }
     if (c === '/' && next === '*') {
+      finishWord();
       comment = '/*';
       i++;
       continue;
     }
     if (c === "'" || c === '"' || c === '`') {
+      finishWord();
       quote = c;
       current += c;
       continue;
     }
-    if (c === ';') {
+    if (/[a-z0-9_]/i.test(c)) word += c;
+    else finishWord();
+    if (c === ';' && triggerDepth === 0) {
       if (current.trim()) statements.push(current.trim());
       current = '';
     } else current += c;
   }
-  if (quote || comment === '/*') throw Error('Incomplete SQL');
+  finishWord();
+  if (quote || comment === '/*' || triggerDepth !== 0)
+    throw Error('Incomplete SQL');
   if (current.trim()) statements.push(current.trim());
   return statements;
 }

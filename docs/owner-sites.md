@@ -91,3 +91,53 @@ Synthetic browser checks and automated regressions demonstrate software behavior
 They are not customer interviews, sales lift, independent review or formal CSO clearance.
 The consenting owner/visitor study in [the plan](owner-site-plan.md) remains the gate
 for broad enablement. No external participants are contacted by this implementation.
+
+## Integrated publishing runtime
+
+The owner-only presence inspector uses existing inventory and bounded reads. It
+never calls providers or publishes holdings. Searches and pages preserve exact
+tab-local selections; saved drafts recover separately. Profile-only, standalone
+Sales and shop-only workflows remain available. Address setup is optional in
+Settings.
+
+Install tenant migration `0008_publication_change_sets.sql` before combined review
+or withdrawal. `DOMBOT_OWNER_SITE_V3` gates explicit v3 conversion/content writes;
+`DOMBOT_COMPOSITE_PUBLISH` gates content-adding combined commits. Both default off.
+Existing v2, Sales and inquiry flags retain their scope.
+
+Combined review freezes exact domain fields and memberships over the published
+baseline. Unrelated saved edits stay pending. Profile, Sales, explicit shop
+membership, events, review consumption and receipt commit in one guarded D1 batch.
+Persisted generations fence standalone dependency writers. Reviews expire after
+15 minutes. Retry the same operation key or fetch its receipt after response loss.
+The initial limits are 100 exact names, 800 statements and a 750,000-byte review
+payload. Oversized operations are rejected without truncation; separate batches
+never imply global atomicity. Concurrent unrelated dependency writes can require
+review again. DNS, provider and mail writes are outside this transaction.
+
+V3 links bind to reviewed Sales revisions/terms. Changed, paused, sold or expired
+pages suppress linked prices and actions, without an email fallback. Standalone
+Sales reviews identify affected profile links. Independent email prices retain
+legacy fractional amounts. A linked inquiry does not expose the account email.
+
+Withdrawal removes exact names from tenant public references, Sales and shop
+membership. It preserves holdings, private descriptions, conversations, hostname
+reservations and unrelated drafts. Empty collections become excluded drafts;
+v2/v3 retain profile-only output. The final legacy name unpublishes the legacy
+page. Receipts exclude external marketplaces, DNS and cached copies. Inspection,
+export, pause, withdrawal and unpublish retain access/revision checks with writes
+disabled.
+
+V3 stays inside backup envelope version 9. Validate cross-object link identities
+before restore; restore privately, revoke public projections, invalidate reviews
+and receipts, and require rebinding. After any v3 write, rollback must retain a
+v3-compatible reader/backup runtime. Root rotation either qualifies compatibility
+before changing the key or safely rejects before mutation.
+
+Release compatible readers with new writes off, then qualify only an existing
+controlled QA tenant. Broader opt-in enablement remains held until a consenting,
+owner-selected pilot completes seven days and at least five owner workflows,
+including price maintenance and withdrawal. Insufficient workflows retain the
+hold without an automatic retry loop. This is a manual release gate, not a new
+automation. Real inquiry delivery needs the existing controlled-mailbox workflow
+and fresh receipts; synthetic tests establish neither delivery nor usefulness.

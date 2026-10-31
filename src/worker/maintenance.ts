@@ -9,6 +9,7 @@ import type { DomBotMaintenanceState } from './engine-contract';
 // Presence in any of these tables conservatively preserves the old cadence,
 // including publication drafts and records still subject to retention.
 export const MAINTENANCE_TABLES = [
+  'publication_change_sets',
   'portfolio_drafts',
   'published_portfolios',
   'sale_drafts',
@@ -32,6 +33,8 @@ export const MAINTENANCE_TABLES = [
   'sales_control_leases',
 ] as const;
 const infrastructure = new Set([
+  'publication_dependencies',
+  'publication_authority',
   'docs',
   'd1_migrations',
   'login_attempts',

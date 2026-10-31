@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { InventoryPicker } from './InventoryPicker';
 import type {
   DomainPresentation,
   OwnerSiteDraft,
@@ -7,7 +7,6 @@ import type { ReconciledListing } from '../../../shared/publication';
 
 export function DomainPicker({
   draft,
-  review,
   selected,
   onChange,
 }: {
@@ -16,97 +15,34 @@ export function DomainPicker({
   selected: string[];
   onChange: (records: DomainPresentation[], ids: string[]) => void;
 }) {
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const records = new Map(draft.domainPresentations.map((d) => [d.domain, d]));
-  const names = [
-    ...new Set([...records.keys(), ...review.map((d) => d.domain)]),
-  ]
-    .filter((v) => v.includes(query.toLowerCase()))
-    .sort();
-  const checks = new Map(review.map((v) => [v.domain, v.ownership]));
+  const byDomain = new Map(draft.domainPresentations.map((d) => [d.domain, d]));
   return (
-    <div className="os-picker">
-      <label>
-        Find domains in your private portfolio
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-        />
-      </label>
-      <p>
-        Only checked names enter this selection. Availability is set under
-        Domain details.
-      </p>
-      {names.slice((page - 1) * 60, page * 60).map((name) => {
-        const d = records.get(name);
-        const checked = !!d && selected.includes(d.id);
-        return (
-          <label className="os-check" key={name}>
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={() => {
-                const record =
-                  d ??
-                  ({
-                    id: `domain-${crypto.randomUUID()}`,
-                    domain: name,
-                    ownership: 'current',
-                    availability: 'not-for-sale',
-                    description: '',
-                    askingPrice: null,
-                    currency: 'USD',
-                  } satisfies DomainPresentation);
-                onChange(
-                  d
-                    ? draft.domainPresentations
-                    : [...draft.domainPresentations, record],
-                  checked
-                    ? selected.filter((id) => id !== record.id)
-                    : [...selected, record.id],
-                );
-              }}
-            />
-            <span>
-              {name}
-              <small>
-                {d?.ownership === 'historical'
-                  ? 'Previously owned · owner assertion'
-                  : checks.get(name) === 'owned'
-                    ? 'Fresh ownership check'
-                    : 'Sync or ownership check needed'}
-              </small>
-            </span>
-          </label>
+    <InventoryPicker
+      selected={draft.domainPresentations
+        .filter((d) => selected.includes(d.id))
+        .map((d) => d.domain)}
+      onChange={(names) => {
+        const added = names
+          .filter((n) => !byDomain.has(n))
+          .map((domain) => ({
+            id: `domain-${crypto.randomUUID()}`,
+            domain,
+            ownership: 'current' as const,
+            availability: 'not-for-sale' as const,
+            description: '',
+            askingPrice: null,
+            currency: 'USD',
+          }));
+        const records = [...draft.domainPresentations, ...added];
+        onChange(
+          records,
+          names.map((n) => records.find((d) => d.domain === n)!.id),
         );
-      })}
-      {!names.length && (
-        <p>
-          No matching names. A profile-only site needs no registrar connection.
-        </p>
-      )}
-      <div className="os-actions">
-        <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-          Previous
-        </button>
-        <span>
-          Page {page} of {Math.max(1, Math.ceil(names.length / 60))}
-        </span>
-        <button
-          disabled={page * 60 >= names.length}
-          onClick={() => setPage(page + 1)}
-        >
-          Next
-        </button>
-      </div>
-    </div>
+      }}
+    />
   );
 }
+
 export function SelectionOrder({
   draft,
   ids,

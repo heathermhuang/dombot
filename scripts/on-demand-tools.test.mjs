@@ -6,6 +6,23 @@ import {
 } from './plan-reserve-retirement.mjs';
 
 describe('provisioning preparation', () => {
+  it('keeps complete trigger bodies, nested CASE and quoted END text together', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const sql =
+      "CREATE TABLE x(n INTEGER); CREATE TABLE changes(n INTEGER); CREATE TRIGGER bump AFTER INSERT ON x BEGIN INSERT INTO changes VALUES(CASE WHEN NEW.n>0 THEN 1 ELSE 0 END); UPDATE changes SET n=n+length('END;'); END; INSERT INTO x VALUES(1);";
+    const statements = sqlStatements(sql);
+    expect(statements).toHaveLength(4);
+    const db = new DatabaseSync(':memory:');
+    try {
+      for (const statement of statements) db.exec(statement);
+      expect(db.prepare('SELECT n FROM changes').get().n).toBe(5);
+    } finally {
+      db.close();
+    }
+    expect(() =>
+      sqlStatements('CREATE TRIGGER bad AFTER INSERT ON x BEGIN SELECT 1;'),
+    ).toThrow('Incomplete SQL');
+  });
   it('keeps semicolons in SQL literals and strips comments without changing statements', () => {
     expect(
       sqlStatements(

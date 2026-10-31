@@ -52,7 +52,7 @@ export function publicationBackupMethods(
             'Invalid public portfolio draft in this backup. Nothing was imported.',
           );
         draft = parsed.data;
-        if (isOwnerSite(draft) && !v2WritesEnabled)
+        if (isOwnerSite(draft) && draft.version === 2 && !v2WritesEnabled)
           throw new BundleError(
             'Enable the compatible owner site editor before restoring a v2 backup. Nothing was imported.',
           );
@@ -65,6 +65,23 @@ export function publicationBackupMethods(
         throw new BundleError(
           'The sales migration/runtime is required before restoring this backup. Nothing was imported.',
         );
+      if (draft && isOwnerSite(draft) && draft.version === 3) {
+        const presentations = new Map(
+          draft.domainPresentations.map((d) => [d.id, d.domain]),
+        );
+        const listings = new Map(
+          salesBackup?.drafts.map((d) => [d.id, d.domain]),
+        );
+        if (
+          draft.salesLinks.some(
+            (l) =>
+              listings.get(l.listingId) !== presentations.get(l.presentationId),
+          )
+        )
+          throw new BundleError(
+            'Invalid v3 Sales-link identities. Nothing was imported.',
+          );
+      }
       if (sales && !salesBackup && (await hasSalesData(sales.db)))
         throw new BundleError(
           'This backup has no domain inquiry data, but this account already has domain inquiry data. Export a complete backup from the source account before restoring. Nothing was imported.',

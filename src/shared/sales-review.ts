@@ -19,6 +19,7 @@ export const salesReviewSchema = z
             operationalRevision: z.string().uuid(),
             includeInShop: z.boolean(),
             beforeIncludeInShop: z.boolean(),
+            profileImpacts: z.array(z.string().max(200)).max(101).default([]),
             controlObservedAt: z.number().int().nonnegative(),
             before: publishedSaleSchema.nullable(),
             after: publishedSaleSchema,
