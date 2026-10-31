@@ -23,11 +23,13 @@ export async function publicationRequest<T>(
     const response = await fetch(hostPath(`/publishing${path}`), {
       method,
       credentials: 'same-origin',
-      ...(controller
+      ...(controller || signal
         ? {
-            signal: signal
-              ? AbortSignal.any([signal, controller.signal])
-              : controller.signal,
+            signal: controller
+              ? signal
+                ? AbortSignal.any([signal, controller.signal])
+                : controller.signal
+              : signal,
           }
         : {}),
       ...(body === undefined

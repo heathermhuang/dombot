@@ -87,3 +87,29 @@ load. Full browser timing at 20,000 names is not established by those API fixtur
 The first CI unit run completed 1,884 tests and exposed only the budget receipt's
 macOS-specific temporary path. The corrected test uses `os.tmpdir()` and retains
 the same publication and rejection assertions. The pinned archive was rebuilt.
+
+## Preview correction
+
+A final review found that the iframe preview omitted linked commercial prices
+while the exact review text displayed them. The follow-up engine resolves the
+current published revision and operational eligibility in one allowlisted query,
+reconciles asynchronous results against the current reference, and displays
+frozen staged Sales terms during combined review. Preview actions remain disabled;
+stale, paused, mismatched and failed reads suppress unchecked terms without email
+fallback. The same renderer now sorts linked prices with independent fractional
+prices without changing either amount. New behavioral regressions cover these
+paths and flags-off same-origin preview reads without private hydration.
+
+The shared public/preview query selects only the minimal commercial projection,
+not descriptions, categories, seller fields or encrypted Sales drafts. The
+existing 100-name combined-commit limits and publication schema are unchanged.
+Use `node scripts/publication-local-qualification.mjs --large --linked` for the
+local synthetic linked-price preview fixture; providers and mail stay blocked.
+
+The follow-up candidate is engine `1.5.2-hosted.30` (source digest
+`2b4fed4aa02301e0c7494c9e1e8ab12ac36f948738b0718090a7c9e30df5f52b`).
+Its full local run passed 1,891 tests with one existing skip across 179 suites.
+The paired browser fixture displayed the exact synthetic USD 14,800 linked price,
+with zero active inquiry links and zero mailto links in the iframe. The screenshot
+is `receipts/candidate-30-linked-preview.png`. Native final-build zoom and broader
+reader promotion remain explicit external gates while the Mac/approval are held.

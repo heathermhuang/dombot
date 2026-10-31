@@ -16,6 +16,19 @@ export function renderOwnerSite(
   sales = new Map<string, ResolvedSiteLink>(),
 ): string {
   const domains = new Map(site.domainPresentations.map((d) => [d.id, d]));
+  const linkedIds = new Set(
+    site.version === 3 ? site.salesLinks.map((l) => l.presentationId) : [],
+  );
+  const priceOf = (id: string) => {
+    const d = domains.get(id)!;
+    if (linkedIds.has(id)) {
+      const p = sales.get(id)?.price;
+      return p ? { amount: Number(p.amount), currency: p.currency } : null;
+    }
+    return d.askingPrice === null
+      ? null
+      : { amount: d.askingPrice, currency: d.currency };
+  };
   const pathSlug = url.pathname.match(/\/c\/([^/]+)\/?$/)?.[1];
   const requested = pathSlug ?? url.searchParams.get('collection');
   const collection =
@@ -45,9 +58,7 @@ export function renderOwnerSite(
       : `<a href="${e(href)}" rel="noopener noreferrer">${e(label)}${arrow ? ' ↗' : ''}</a>`;
   const row = (id: string) => {
     const d = domains.get(id)!;
-    const linked =
-      site.version === 3 &&
-      site.salesLinks.some((l) => l.presentationId === id);
+    const linked = linkedIds.has(id);
     const resolved = sales.get(id);
     return `<article class="domain"><div><h3>${e(d.domain)}</h3>${d.description ? `<p>${e(d.description)}</p>` : ''}</div><div class="availability">${linked ? (resolved ? `${e(salePriceLabel(resolved.price))} ${link('View domain page', resolved.url)}` : 'Inquiries currently unavailable') : d.ownership === 'historical' ? 'Previously owned' : d.availability === 'not-for-sale' ? 'Not accepting inquiries' : `${d.askingPrice === null ? '' : `<strong>${e(d.currency)} ${d.askingPrice.toLocaleString('en-US')}</strong> `}${link('Inquire', `mailto:${site.profile.contactEmail}?subject=${encodeURIComponent(`Inquiry: ${d.domain}`)}`)}`}</div></article>`;
   };
@@ -86,14 +97,17 @@ export function renderOwnerSite(
           a.domain.length - b.domain.length || a.domain.localeCompare(b.domain),
       );
     if (sort === 'price')
-      selected.sort((a, b) =>
-        a.askingPrice === null
-          ? 1
-          : b.askingPrice === null
+      selected.sort((a, b) => {
+        const p = priceOf(a.id),
+          q = priceOf(b.id);
+        return !p
+          ? !q
+            ? 0
+            : 1
+          : !q
             ? -1
-            : a.currency.localeCompare(b.currency) ||
-              a.askingPrice - b.askingPrice,
-      );
+            : p.currency.localeCompare(q.currency) || p.amount - q.amount;
+      });
     const pages = Math.max(1, Math.ceil(selected.length / 60));
     const page = Math.max(
       1,

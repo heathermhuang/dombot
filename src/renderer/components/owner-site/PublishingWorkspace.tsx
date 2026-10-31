@@ -368,7 +368,10 @@ export function PublishingWorkspace({
           </p>
           {review.after && isOwnerSite(review.after) && (
             <>
-              <SitePreview site={review.after} />
+              <SitePreview
+                site={review.after}
+                stagedSales={terms?.items.map((i) => i.after)}
+              />
               {siteChanges(
                 editableSite(review.after),
                 state.publishedSnapshot,
@@ -388,8 +391,10 @@ export function PublishingWorkspace({
               <p key={l.presentationId}>
                 Reviewed domain page {l.listingId} · {saleModeLabel(l.mode)} ·{' '}
                 {salePriceLabel(l.publicPrice)} · minimum offer{' '}
-                {salePriceLabel(l.publicMinimumOffer)} · revision{' '}
-                {l.publishedRevision}
+                {l.publicMinimumOffer
+                  ? salePriceLabel(l.publicMinimumOffer)
+                  : 'None'}{' '}
+                · revision {l.publishedRevision}
               </p>
             ))}
           {!review.after && (
@@ -404,7 +409,9 @@ export function PublishingWorkspace({
               <p>
                 {saleModeLabel(i.after.mode)} ·{' '}
                 {salePriceLabel(i.after.publicPrice)} · minimum offer{' '}
-                {salePriceLabel(i.after.publicMinimumOffer)}
+                {i.after.publicMinimumOffer
+                  ? salePriceLabel(i.after.publicMinimumOffer)
+                  : 'None'}
               </p>
               <p>{i.after.description}</p>
               <p>
