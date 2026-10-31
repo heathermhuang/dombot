@@ -312,3 +312,20 @@ describe('currencies', () => {
     });
   });
 });
+
+it('counts portal snapshots separately from base, TLD and manual prices', () => {
+  const d = domain({ domainName: 'portal.test' });
+  const result = summarize(
+    [d],
+    Object.fromEntries([price(d, 45, 'portal')]),
+    'USD',
+  );
+  expect(result).toMatchObject({
+    priced: 1,
+    portal: 1,
+    base: 0,
+    tld: 0,
+    manual: 0,
+    yearly: 45,
+  });
+});

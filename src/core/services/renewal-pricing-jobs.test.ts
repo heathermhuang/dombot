@@ -96,6 +96,7 @@ describe('hosted renewal pricing', () => {
     await raw.put('renewal-pricing-jobs', 'dynadot', {
       syncedAt,
       pending: ['second.ai'],
+      quoteStrategy: 'rest-single-search-v1',
       failed: 1,
       failures: { 'first.ai': { code: 'Error', at: Date.now() } },
       notBefore,
@@ -157,7 +158,7 @@ describe('hosted renewal pricing', () => {
     vi.setSystemTime(Date.now() + 60_001);
     expect(await stepRenewalPricing()).toEqual({ remaining: 2, failed: 0 });
   });
-  it('bounds repeated rate limits and preserves the old quote as failed', async () => {
+  it('bounds fast rate-limit retries without draining the quote queue', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     writeEntry('detail', 'dynadot:first.ai', {
       renewalQuote: { renewal: 60, currency: 'USD' },
@@ -170,15 +171,24 @@ describe('hosted renewal pricing', () => {
     }
     expect(pricing).toHaveBeenCalledTimes(3);
     expect(getRenewalPricingStatus()).toMatchObject({
-      remaining: 2,
-      failed: 1,
+      remaining: 3,
+      failed: 0,
     });
+    expect(getRenewalPricingStatus().nextAt).toBeGreaterThan(
+      Date.now() + 20 * 60_000,
+    );
+    await stepRenewalPricing();
+    expect(pricing).toHaveBeenCalledTimes(3);
+    const retryAt = getRenewalPricingStatus().nextAt!;
+    pricing.mockResolvedValue({ tld: 'ai', renewal: 70, currency: 'USD' });
+    vi.setSystemTime(retryAt + 1);
+    expect(await stepRenewalPricing()).toEqual({ remaining: 2, failed: 0 });
     expect(
       readEntry<{ renewalQuote: { renewal: number } }>(
         'detail',
         'dynadot:first.ai',
       )?.data.renewalQuote.renewal,
-    ).toBe(60);
+    ).toBe(70);
   });
   it('retains queued prices while inventory is temporarily unavailable', async () => {
     await getPortfolio(true);
@@ -291,4 +301,54 @@ describe('hosted renewal pricing', () => {
     expect(result.renewalPricing).toBeUndefined();
     expect(pricing).toHaveBeenCalledTimes(3);
   });
+});
+
+it('retries legacy-strategy failures once without losing cooldown, attempt count or the last failure record', async () => {
+  await getPortfolio(true);
+  const syncedAt = readEntry<{ lastSyncedAt: number }>('portfolio', 'dynadot')!
+    .data.lastSyncedAt;
+  const notBefore = Date.now() + 60_000;
+  const prior = { code: 'quote_unavailable', at: Date.now() };
+  await flushWrites();
+  await raw.put('renewal-pricing-jobs', 'dynadot', {
+    syncedAt,
+    pending: ['second.ai'],
+    failed: 1,
+    failures: { 'first.ai': prior },
+    notBefore,
+    attempts: 2,
+  });
+  configureStore(raw);
+  await hydrateStores();
+  resetRegistrarClients();
+  expect(getRenewalPricingStatus()).toMatchObject({
+    remaining: 3,
+    failed: 0,
+    nextAt: notBefore,
+  });
+  await stepRenewalPricing();
+  await flushWrites();
+  expect(await raw.get('renewal-pricing-jobs', 'dynadot')).toMatchObject({
+    quoteStrategy: 'rest-single-search-v1',
+    pending: ['second.ai', 'first.ai', 'third.ai'],
+    failed: 1,
+    failures: { 'first.ai': prior },
+    notBefore,
+    attempts: 2,
+  });
+  expect(pricing).not.toHaveBeenCalled();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(notBefore + 1);
+  await stepRenewalPricing();
+  await stepRenewalPricing();
+  await stepRenewalPricing();
+  await flushWrites();
+  expect(getRenewalPricingStatus()).toEqual({ remaining: 0, failed: 0 });
+  expect(await raw.get('renewal-pricing-jobs', 'dynadot')).toMatchObject({
+    failed: 0,
+    failures: {},
+  });
+  pricing.mockClear();
+  await stepRenewalPricing();
+  expect(pricing).not.toHaveBeenCalled();
 });

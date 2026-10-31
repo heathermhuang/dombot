@@ -92,7 +92,11 @@ export function projectAdminInventory(
         ? time(domain.syncedAt)
         : (account?.sync.lastSyncedAt ?? null);
     const quoteAt =
-      pricing?.source === 'api' ? (input.quoteTimes[key] ?? null) : null;
+      pricing?.source === 'api'
+        ? (input.quoteTimes[key] ?? null)
+        : pricing?.source === 'portal'
+          ? time(pricing.observedAt)
+          : null;
     return {
       domain: name,
       registrar: domain.importedRegistrarLabel || domain.registrar,
@@ -115,7 +119,7 @@ export function projectAdminInventory(
         ? 'unavailable'
         : pricing.source === 'manual'
           ? 'manual'
-          : pricing.source === 'api'
+          : pricing.source === 'api' || pricing.source === 'portal'
             ? quoteAt === null
               ? 'unknown'
               : at - quoteAt > STALE_AFTER_MS

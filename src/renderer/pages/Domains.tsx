@@ -244,6 +244,7 @@ const RENEWAL = 'renewal';
 
 const SOURCE_LABEL: Record<RenewalPricing['source'], string> = {
   api: 'registrar quote',
+  portal: 'registrar portal snapshot',
   tld: 'account rate',
   base: 'built-in list price',
   manual: 'manual',
@@ -266,7 +267,7 @@ export function RenewalCell({
   return (
     <span
       className="font-medium tabular-nums"
-      title={`Renewal source: ${SOURCE_LABEL[info.source]}`}
+      title={`Renewal source: ${SOURCE_LABEL[info.source]}${info.source === 'portal' && info.observedAt ? ` · checked ${new Date(info.observedAt).toLocaleDateString()}` : ''}`}
     >
       {priceMoney(info.renewal, info.currency)}
     </span>

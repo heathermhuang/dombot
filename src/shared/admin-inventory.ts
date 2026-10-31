@@ -27,7 +27,14 @@ export const adminInventoryRowSchema = z.object({
     .string()
     .regex(/^[A-Z]{3}$/)
     .nullable(),
-  priceSource: z.enum(['api', 'tld', 'base', 'manual', 'unavailable']),
+  priceSource: z.enum([
+    'api',
+    'portal',
+    'tld',
+    'base',
+    'manual',
+    'unavailable',
+  ]),
   quoteAt: count.nullable(),
   priceAge: z.enum([
     'current',
