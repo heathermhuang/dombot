@@ -375,13 +375,15 @@ export function adminRoutes(
       );
       const link = (offset: number) =>
         `/admin/users/${encodeURIComponent(row.id)}/domains?q=${encodeURIComponent(query.q)}&state=${query.state}&offset=${offset}`;
-      const sources: Record<string, string> = {
-        api: 'Cached API quote',
-        manual: 'Manual price',
-        base: 'Bundled estimate',
-        tld: 'TLD estimate',
-        unavailable: 'Unknown price',
-      };
+      const sources: Record<(typeof data.rows)[number]['priceSource'], string> =
+        {
+          api: 'Cached API quote',
+          portal: 'Registrar portal snapshot',
+          manual: 'Manual price',
+          base: 'Bundled estimate',
+          tld: 'TLD estimate',
+          unavailable: 'Unknown price',
+        };
       const amount = (currency: string, value: string) => {
         const [whole, fraction] = value.split('.');
         return `${e(currency)} ${e(whole.replace(/\B(?=(\d{3})+(?!\d))/g, ','))}${fraction === undefined ? '' : '.' + e(fraction)}`;
@@ -389,7 +391,7 @@ export function adminRoutes(
       return c.html(
         shell(`<nav><a href="/admin/users/${encodeURIComponent(row.id)}">← User status</a></nav><span class="eyebrow">Cached inventory</span><h1>${e(row.email)}</h1><p>Read ${timestamp(data.at)}. No registrar requests or price refreshes were started.</p>
         ${!data.available ? '<p class="notice" role="status">No cached inventory is available yet. The user must sync a registrar or import holdings before a list can be shown.</p>' : ''}
-        <div class="summary">${metric('Observed owned domains', data.owned, 'Distinct cached names')}${metric('Priced names', data.priced, `${data.unpriced} unpriced or ambiguous`)}${metric('Stale API quotes', data.stalePrices, 'Older than 24 hours')}${metric('Accounts not observed', data.unobservedAccounts, `${data.failedAccounts} with cached sync errors; ${data.staleAccounts} stale`)}</div>
+        <div class="summary">${metric('Observed owned domains', data.owned, 'Distinct cached names')}${metric('Priced names', data.priced, `${data.unpriced} unpriced or ambiguous`)}${metric('Stale quotes', data.stalePrices, 'Older than 24 hours')}${metric('Accounts not observed', data.unobservedAccounts, `${data.failedAccounts} with cached sync errors; ${data.staleAccounts} stale`)}</div>
         <section class="surface"><h2>Known annual renewal subtotal</h2>${data.totals.length ? data.totals.map((total) => `<p><strong>${amount(total.currency, total.amount)}</strong> / year · ${total.domains} priced ${total.domains === 1 ? 'name' : 'names'}</p>`).join('') : '<p>No known prices in the cached holdings.</p>'}<p class="muted">Each currency is totalled separately. No FX conversion, tax or future registrar changes are assumed. These are cached quotes, manual rates and estimates, not an invoice. Unknown prices are excluded; ${data.ambiguous} names listed in multiple accounts are also excluded to avoid double-counting. Stale quotes remain in the subtotal and are flagged in the list. ${data.archived} archived names in history are excluded from annual totals. Unobserved accounts may contain additional holdings.</p></section>
         <section class="surface"><h2>Domains & renewal costs</h2><form method="get"><label>Search domain, registrar or account<input name="q" type="search" value="${e(query.q)}" maxlength="120"></label><label>Cached records<select name="state"><option value="owned" ${query.state === 'owned' ? 'selected' : ''}>Owned</option><option value="archived" ${query.state === 'archived' ? 'selected' : ''}>Archived</option><option value="all" ${query.state === 'all' ? 'selected' : ''}>All</option></select></label><button>Search domains</button></form><p class="muted">${data.matched} cached ${data.matched === 1 ? 'row matches' : 'rows match'}. Showing ${data.rows.length ? query.offset + 1 : 0}–${query.offset + data.rows.length}. Historical archived holdings are included when selected. Missing expiry dates and prices remain unknown.</p>
         <div class="scroll" tabindex="0" role="region" aria-label="User domains and renewal costs"><table><thead><tr><th>Domain</th><th>Registrar / account</th><th>Expiry</th><th>Annual renewal</th><th>Price source / age</th></tr></thead><tbody>${data.rows.map((item) => `<tr><td><strong>${e(item.domain)}</strong><br><span class="muted">${item.departed ? 'Historical holding' : item.source === 'imported' ? 'Imported holding' : 'Registrar holding'}${item.archived ? ' · Archived' : ''}${item.ambiguous ? ' · Duplicate holding' : ''}</span></td><td>${e(item.registrar || 'Unknown')}<br>${e(item.accountLabel)}<br><span class="muted">Inventory: ${timestamp(item.inventoryAt)}${item.inventoryStale ? ' · Stale or unknown' : ''}</span></td><td>${item.expiresAt !== null ? new Date(item.expiresAt).toISOString().slice(0, 10) : 'Unknown'}</td><td>${item.renewal !== null && item.currency ? amount(item.currency, item.renewal) : 'Unknown'}${item.ambiguous ? '<br><span class="muted">Excluded from subtotal</span>' : ''}</td><td>${e(sources[item.priceSource])}<br><span class="muted">${item.priceAge === 'stale' ? 'Stale quote · ' : item.priceAge === 'estimate' ? 'Estimate · ' : item.priceAge === 'manual' ? 'Update time unknown · ' : item.priceAge === 'unknown' ? 'Quote age unknown · ' : ''}${item.quoteAt ? timestamp(item.quoteAt) : ''}</span></td></tr>`).join('') || '<tr><td colspan="5">No cached rows match this search.</td></tr>'}</tbody></table></div>
