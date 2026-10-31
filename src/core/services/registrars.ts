@@ -34,7 +34,10 @@ import { recordSync } from './domain-history';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { createProxiedRegistrar, proxyFailureMessage } from './proxy-transport';
-import { createDynadotFetch } from './dynadot-transport';
+import {
+  createDynadotFetch,
+  clearDynadotPricingCapabilities,
+} from './dynadot-transport';
 import { Namespace } from '../storage/namespace';
 import { recordSyncAttempt } from './sync-diagnostics';
 import type { SyncTrigger } from '../../shared/sync-monitor';
@@ -59,6 +62,7 @@ import {
 } from './cache';
 import {
   resolvePricing,
+  clearPortalQuotesForAccount,
   setTldRate,
   tldOf,
   usesPerNameQuote,
@@ -163,7 +167,9 @@ function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
 const clients = new Map<string, RegistrarClient>();
 const inventoryInFlight = new Map<string, Promise<void>>();
 
+const RENEWAL_QUOTE_STRATEGY = 'rest-single-search-v1';
 interface RenewalPricingJob {
+  quoteStrategy?: string;
   syncedAt: number;
   pending: string[];
   failed: number;
@@ -184,7 +190,8 @@ export function configureIncrementalRenewalPricing(enabled: boolean): void {
 
 /** Reconcile cached holdings without a provider refresh. Older queues omitted
  * uniform TLDs; finished queues also need to notice quotes aging past 24 hours.
- * Preserve the current incident's failures, order, attempts and real cooldown. */
+ * Retry the previous lookup strategy's failures once; retain their records
+ * until success, and preserve order, attempts and the real cooldown. */
 function currentRenewalJob(
   id: string,
   entry: RegistrarPortfolioEntry,
@@ -192,9 +199,12 @@ function currentRenewalJob(
   if (entry.lastSyncedAt == null) return null;
   const saved = renewalJobs.get(id);
   const current = saved?.syncedAt === entry.lastSyncedAt ? saved : undefined;
+  const retryPriorFailures = Boolean(
+    current && current.quoteStrategy !== RENEWAL_QUOTE_STRATEGY,
+  );
   const missing = entry.domains
     .filter((domain) => {
-      if (current?.failures?.[domain.domainName]) return false;
+      if (current?.failures?.[domain.domainName]) return retryPriorFailures;
       const detail = readEntry<DetailRecord>(
         'detail',
         detailKey(id, domain.domainName),
@@ -216,6 +226,7 @@ function currentRenewalJob(
   return {
     ...current,
     syncedAt: entry.lastSyncedAt,
+    quoteStrategy: RENEWAL_QUOTE_STRATEGY,
     pending: [...new Set([...(current?.pending ?? []), ...missing])],
     failed: current?.failed ?? 0,
     ...(saved?.notBefore ? { notBefore: saved.notBefore } : {}),
@@ -231,6 +242,16 @@ function currentRenewalJobs(): [string, RenewalPricingJob][] {
   });
 }
 
+function failedRenewals(job: RenewalPricingJob): number {
+  const keys = Object.keys(job.failures ?? {});
+  const pending = new Set(job.pending);
+  // A prior failed quote being retried is pending. Retain its failure record
+  // until an actual successful read replaces it, and retain unattributed counts.
+  return (
+    Math.max(0, job.failed - keys.length) +
+    keys.filter((key) => !pending.has(key)).length
+  );
+}
 export function getRenewalPricingStatus(): RenewalPricingProgress {
   const active = new Set(getActiveAccounts().map((a) => a.id));
   let remaining = 0;
@@ -242,11 +263,11 @@ export function getRenewalPricingStatus(): RenewalPricingProgress {
     if (!active.has(id) || entry?.lastSyncedAt !== job.syncedAt) continue;
     if (entry.lastError) {
       blocked += job.pending.length;
-      failed += job.failed;
+      failed += failedRenewals(job);
       continue;
     }
     remaining += job.pending.length;
-    failed += job.failed;
+    failed += failedRenewals(job);
     if (job.pending.length > 0) nextAt = Math.min(nextAt, job.notBefore ?? 0);
   }
   return {
@@ -321,22 +342,33 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
       if (
         (failure instanceof RateLimitError ||
           (failure instanceof RegistrarError && failure.shouldRetry())) &&
-        (localCooldown || (job.attempts ?? 0) < 2)
+        (failure instanceof RateLimitError ||
+          localCooldown ||
+          (job.attempts ?? 0) < 2)
       ) {
+        // A global/provider throttle is not a per-domain quote failure.
+        // After three real rejections, leave the queue intact and retry slowly.
         const seconds =
           failure instanceof RateLimitError
-            ? Math.max(60, failure.retryAfter ?? 60)
+            ? Math.max(
+                60,
+                failure.retryAfter ?? 60,
+                !localCooldown && (job.attempts ?? 0) >= 2 ? 30 * 60 : 0,
+              )
             : 30;
         await renewalJobs.set(id, {
           ...job,
           notBefore: Date.now() + seconds * 1000,
-          attempts: (job.attempts ?? 0) + (localCooldown ? 0 : 1),
+          attempts: localCooldown
+            ? (job.attempts ?? 0)
+            : Math.min(3, (job.attempts ?? 0) + 1),
         });
         changed = true;
         return;
       }
       if (quote?.renewal != null) writeRenewalQuote(id, domain, quote);
       const failures = { ...job.failures };
+      const wasFailed = Object.hasOwn(failures, domain);
       if (quote?.renewal == null)
         failures[domain] = {
           code: failure instanceof Error ? failure.name : 'quote_unavailable',
@@ -346,7 +378,11 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
       await renewalJobs.set(id, {
         ...job,
         pending: job.pending.slice(1),
-        failed: job.failed + (quote?.renewal == null ? 1 : 0),
+        failed: Math.max(
+          0,
+          job.failed +
+            (quote?.renewal == null ? (wasFailed ? 0 : 1) : wasFailed ? -1 : 0),
+        ),
         failures,
         notBefore: 0,
         attempts: 0,
@@ -383,7 +419,15 @@ function buildProvider(
   proxy: ProxyRoute | null,
 ): Registrar {
   if (factory) return factory(name, credentials, accountId);
-  const wrapFetch = name === 'dynadot' ? createDynadotFetch : undefined;
+  const wrapFetch =
+    name === 'dynadot'
+      ? (send: typeof globalThis.fetch) =>
+          createDynadotFetch(send, {
+            accountId,
+            apiKey: credentials.apiKey ?? '',
+            routeKey: JSON.stringify(proxy),
+          })
+      : undefined;
   return proxy
     ? createProxiedRegistrar(name, credentials, proxy, wrapFetch)
     : createRegistrar(
@@ -1292,12 +1336,14 @@ export async function removeRegistrarAccount(accountId: string): Promise<void> {
   accountById(accountId);
   invalidateAccount(accountId);
   await setStoredCredentials(accountId, {});
+  await clearDynadotPricingCapabilities(accountId);
   clearRegistrarData(accountId);
   await removeAccountRecord(accountId);
 }
 
 /** Drops a registrar's cached portfolio slice and every one of its detail entries. */
 function clearRegistrarData(name: string): void {
+  clearPortalQuotesForAccount(name);
   void renewalJobs.delete(name);
   clearEntry('portfolio', name);
   const prefix = `${name}:`;
@@ -1618,6 +1664,7 @@ export async function saveRegistrarCredentials(
   delete clean.proxyUrl;
   delete clean.proxyIp;
   await setStoredCredentials(account.id, clean);
+  if (name === 'dynadot') await clearDynadotPricingCapabilities(account.id);
   if (useProxy !== undefined)
     await setAccountProxy(
       account.id,

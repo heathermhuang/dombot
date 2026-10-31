@@ -274,6 +274,8 @@ export default function Renewals() {
         renewals.
         {summary.base + summary.tld > 0 &&
           ` ${summary.base + summary.tld} use a base or TLD rate.`}{' '}
+        {!!summary.portal &&
+          ` ${summary.portal} use saved registrar portal snapshots.`}
         Confirm current prices with your registrar before spending.
         {!!renewalPricing?.failed &&
           ` Across your portfolio, ${renewalPricing.failed} price updates failed; last saved estimates remain visible.`}

@@ -129,6 +129,7 @@ vi.mock('./registrar-state', () => ({
 const setTldRate = vi.fn();
 const resolvePricing = vi.fn();
 vi.mock('./pricing', () => ({
+  clearPortalQuotesForAccount: vi.fn(),
   usesPerNameQuote: () => false,
   tldOf: (d: string) => d.slice(d.indexOf('.') + 1),
   normalizeTld: (t: string) => t.trim().replace(/^\.+/, '').toLowerCase(),

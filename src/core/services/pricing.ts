@@ -10,7 +10,7 @@ import { toRenewalPrice, type RenewalPrice } from '../../shared/renewal-prices';
 import { RENEWAL_PRICES_NAMESPACE } from '../storage/names';
 
 // Renewal-price resolver backing the Renewals dashboard and the Domains renewal
-// column. Prices come from four layers, most-accurate first:
+// column. Prices come from five layers, most-accurate first:
 //
 //   1. manual override — a price the user typed in (kept in domain-prices).
 //   2. per-name API quote — only for registrars that price a *specific* domain,
@@ -25,7 +25,10 @@ import { RENEWAL_PRICES_NAMESPACE } from '../storage/names';
 //      rate limit made that impractical, so it takes the base rate too.) This
 //      quote is fetched as part of the domain Sync and stored with the
 //      domain's detail — see registrars.ts; it isn't fetched here.
-//   3. TLD rate — the account's own price for a TLD (kept in tld-rates).
+//   3. Dated portal snapshot — an account-scoped, verified registrar portal
+//      observation, kept separately from user overrides and automatic API quotes.
+//      A genuine API quote retains priority.
+//   4. TLD rate — the account's own price for a TLD (kept in tld-rates).
 //      GoDaddy Sync fills this from one v3 availability quote per TLD, which
 //      is priced for the authenticated shopper, so it carries whatever
 //      discount the account holds (a Discount Domain Club membership, say)
@@ -33,7 +36,7 @@ import { RENEWAL_PRICES_NAMESPACE } from '../storage/names';
 //      users.getPricing, one call per TLD, which is likewise the price for the
 //      authenticated user rather than the public list price. Applies to every
 //      name at that account/TLD that did not already resolve via (1) or (2).
-//   4. base database — the standard per-TLD rate that fills everything else
+//   5. base database — the standard per-TLD rate that fills everything else
 //      (see base-pricing.ts). This is a local lookup, so the vast majority of
 //      domains resolve with no network call at all.
 //
@@ -84,6 +87,26 @@ export interface RenewalQuote {
 // override follows the name when it moves between accounts. Stored as a USD
 // number before schema 3 (see `toRenewalPrice`).
 const overrides = new Namespace<RenewalPrice>(RENEWAL_PRICES_NAMESPACE);
+
+// Operator-verified snapshots from the authenticated registrar portal. Keep
+// them account-scoped and local; a later API quote always supersedes them.
+interface PortalQuote {
+  renewal: number;
+  currency: string;
+  observedAt: number;
+}
+const portalQuotes = new Namespace<PortalQuote>('registrar-portal-quotes', {
+  cache: true,
+  local: true,
+});
+
+/** Account-derived snapshots must not survive an account's identity reset. */
+export function clearPortalQuotesForAccount(accountId: string): void {
+  const prefix = `${accountId}:`;
+  for (const key of Object.keys(portalQuotes.all())) {
+    if (key.startsWith(prefix)) void portalQuotes.delete(key);
+  }
+}
 
 /**
  * A renewal price read from a data bundle, re-checked; null when it doesn't
@@ -142,6 +165,33 @@ export function resolvePricing(
       renewal: quote.renewal,
       currency: quote.currency,
       source: 'api',
+    };
+  }
+
+  const portal = portalQuotes.get(
+    `${accountId ?? registrar}:${toAscii(domain)}`,
+  );
+  const portalCurrency =
+    typeof portal?.currency === 'string'
+      ? toCurrencyCode(portal.currency)
+      : null;
+  if (
+    portal &&
+    typeof portal.renewal === 'number' &&
+    Number.isFinite(portal.renewal) &&
+    portal.renewal >= 0 &&
+    portalCurrency &&
+    Number.isFinite(portal.observedAt) &&
+    portal.observedAt > 0 &&
+    portal.observedAt <= Date.now()
+  ) {
+    return {
+      domain,
+      registrar,
+      renewal: portal.renewal,
+      currency: portalCurrency,
+      source: 'portal',
+      observedAt: portal.observedAt,
     };
   }
 

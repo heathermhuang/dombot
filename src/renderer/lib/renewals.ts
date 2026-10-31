@@ -147,6 +147,8 @@ export interface RenewalSummary {
   tld: number;
   /** Priced domains using a manual override. */
   manual: number;
+  /** Dated portal snapshots, distinct from automatic API quotes. */
+  portal?: number;
   /** Sum of known annual renewals in `currency`. */
   yearly: number;
   /** Committed spend: known renewals for auto-renew-on domains only. */
@@ -166,6 +168,7 @@ export function summarize(
   let base = 0;
   let tld = 0;
   let manual = 0;
+  let portal = 0;
   let yearly = 0;
   let yearlyAutoRenew = 0;
   let inCurrency = 0;
@@ -183,6 +186,7 @@ export function summarize(
     if (p?.source === 'base') base += 1;
     if (p?.source === 'tld') tld += 1;
     if (p?.source === 'manual') manual += 1;
+    if (p?.source === 'portal') portal += 1;
   }
 
   return {
@@ -193,6 +197,7 @@ export function summarize(
     base,
     tld,
     manual,
+    ...(portal ? { portal } : {}),
     yearly,
     yearlyAutoRenew,
     avgPerDomain: inCurrency > 0 ? yearly / inCurrency : 0,

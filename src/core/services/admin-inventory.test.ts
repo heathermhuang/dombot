@@ -226,3 +226,18 @@ it('excludes archived holdings from annual costs and includes historical archive
     renewal: null,
   });
 });
+
+it('retains portal provenance and its original observation date for freshness', () => {
+  const observedAt = now - 2 * 86400_000;
+  const data = project([domain('portal.test')], {
+    'dynadot:portal.test': {
+      ...price('portal.test', 45, 'USD', 'portal'),
+      observedAt,
+    },
+  });
+  expect(data.rows[0]).toMatchObject({
+    priceSource: 'portal',
+    quoteAt: observedAt,
+    priceAge: 'stale',
+  });
+});

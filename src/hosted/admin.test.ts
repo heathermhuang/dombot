@@ -429,3 +429,44 @@ it('does not substitute zero when the inventory cannot be reached', async () => 
     'no domains or prices have been replaced with zero',
   );
 });
+
+it('renders dated portal provenance through the actual admin inventory route', async () => {
+  const tdb = await mf.getD1Database('DB', 'tenant');
+  const observedAt = Date.now() - 2 * 86400_000;
+  for (const [ns, key, value] of [
+    [
+      'imported-domains',
+      'portal-holding.test',
+      { addedAt: observedAt, updatedAt: observedAt, registrar: 'godaddy' },
+    ],
+    [
+      'registrar-portal-quotes',
+      'godaddy:portal-holding.test',
+      { renewal: 45.5, currency: 'USD', observedAt },
+    ],
+  ] as const) {
+    await tdb
+      .prepare('INSERT INTO docs(ns,key,value,updated_at) VALUES(?,?,?,?)')
+      .bind(ns, key, JSON.stringify(value), Date.now())
+      .run();
+  }
+  try {
+    const response = await call('/admin/users/admin/domains?q=portal-holding');
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Registrar portal snapshot');
+    expect(html).toContain('USD 45.50');
+    expect(html).toContain('Stale quote');
+    expect(html).toContain(new Date(observedAt).toISOString().slice(0, 10));
+  } finally {
+    await tdb
+      .prepare('DELETE FROM docs WHERE (ns=? AND key=?) OR (ns=? AND key=?)')
+      .bind(
+        'imported-domains',
+        'portal-holding.test',
+        'registrar-portal-quotes',
+        'godaddy:portal-holding.test',
+      )
+      .run();
+  }
+});

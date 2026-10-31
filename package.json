@@ -93,8 +93,8 @@
     "wrangler": "^4.146.0"
   },
   "dependencies": {
-    "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-0.9.2-hosted.4.tgz",
-    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-1.5.2-hosted.27.tgz",
+    "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-0.9.2-hosted.5.tgz",
+    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-1.5.2-hosted.28.tgz",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "^1.31.0",

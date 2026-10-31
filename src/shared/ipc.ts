@@ -631,6 +631,7 @@ export interface McpClient {
  *  - `api`         a direct, name-accurate quote from the registrar (captures
  *                  premium renewals). Only registrars that price a *specific*
  *                  owned domain qualify.
+ *  - `portal`      a dated snapshot verified in the authenticated registrar portal.
  *  - `tld`         the account's own annual rate for this TLD, captured on Sync
  *                  — it reflects whatever discount that account holds (e.g. a
  *                  GoDaddy Discount Domain Club membership).
@@ -641,7 +642,8 @@ export interface McpClient {
  *  - `unavailable` no price: nothing in the API, a TLD rate, the base database,
  *                  or a manual override covers this domain yet.
  */
-export type PriceSource = 'api' | 'tld' | 'base' | 'manual' | 'unavailable';
+export type PriceSource =
+  'api' | 'portal' | 'tld' | 'base' | 'manual' | 'unavailable';
 
 /** A domain's annual renewal price (USD), with provenance. */
 export interface RenewalPricing {
@@ -652,6 +654,8 @@ export interface RenewalPricing {
   renewal: number | null;
   currency: string;
   source: PriceSource;
+  /** When a registrar portal snapshot was observed; not an automatic API refresh. */
+  observedAt?: number;
 }
 
 // ── Domain operations ───────────────────────────────────────────────────────

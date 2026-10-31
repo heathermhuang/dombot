@@ -93,6 +93,7 @@ export interface RenewalEstimate {
   amount: number;
   currency: string;
   source: PriceSource;
+  observedAt?: number;
 }
 
 /** The per-name data DomBot keeps beside the registrar's, keyed as the
@@ -253,7 +254,14 @@ export function queryPortfolio(
   const renewalOf = (d: Domain): RenewalEstimate | null => {
     const p = extras.pricing?.[domainKey(d)];
     return p && p.renewal != null
-      ? { amount: p.renewal, currency: p.currency, source: p.source }
+      ? {
+          amount: p.renewal,
+          currency: p.currency,
+          source: p.source,
+          ...(p.source === 'portal' && p.observedAt
+            ? { observedAt: p.observedAt }
+            : {}),
+        }
       : null;
   };
 
