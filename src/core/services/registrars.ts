@@ -34,7 +34,10 @@ import { recordSync } from './domain-history';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { createProxiedRegistrar, proxyFailureMessage } from './proxy-transport';
-import { createDynadotFetch } from './dynadot-transport';
+import {
+  createDynadotFetch,
+  clearDynadotPricingCapabilities,
+} from './dynadot-transport';
 import { Namespace } from '../storage/namespace';
 import { recordSyncAttempt } from './sync-diagnostics';
 import type { SyncTrigger } from '../../shared/sync-monitor';
@@ -415,7 +418,15 @@ function buildProvider(
   proxy: ProxyRoute | null,
 ): Registrar {
   if (factory) return factory(name, credentials, accountId);
-  const wrapFetch = name === 'dynadot' ? createDynadotFetch : undefined;
+  const wrapFetch =
+    name === 'dynadot'
+      ? (send: typeof globalThis.fetch) =>
+          createDynadotFetch(send, {
+            accountId,
+            apiKey: credentials.apiKey ?? '',
+            routeKey: JSON.stringify(proxy),
+          })
+      : undefined;
   return proxy
     ? createProxiedRegistrar(name, credentials, proxy, wrapFetch)
     : createRegistrar(
@@ -1324,6 +1335,7 @@ export async function removeRegistrarAccount(accountId: string): Promise<void> {
   accountById(accountId);
   invalidateAccount(accountId);
   await setStoredCredentials(accountId, {});
+  await clearDynadotPricingCapabilities(accountId);
   clearRegistrarData(accountId);
   await removeAccountRecord(accountId);
 }
@@ -1650,6 +1662,7 @@ export async function saveRegistrarCredentials(
   delete clean.proxyUrl;
   delete clean.proxyIp;
   await setStoredCredentials(account.id, clean);
+  if (name === 'dynadot') await clearDynadotPricingCapabilities(account.id);
   if (useProxy !== undefined)
     await setAccountProxy(
       account.id,
