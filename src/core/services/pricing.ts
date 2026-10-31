@@ -100,6 +100,14 @@ const portalQuotes = new Namespace<PortalQuote>('registrar-portal-quotes', {
   local: true,
 });
 
+/** Account-derived snapshots must not survive an account's identity reset. */
+export function clearPortalQuotesForAccount(accountId: string): void {
+  const prefix = `${accountId}:`;
+  for (const key of Object.keys(portalQuotes.all())) {
+    if (key.startsWith(prefix)) void portalQuotes.delete(key);
+  }
+}
+
 /**
  * A renewal price read from a data bundle, re-checked; null when it doesn't
  * hold. A bundle before v7 stores a USD number, which becomes a USD amount.

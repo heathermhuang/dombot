@@ -65,3 +65,19 @@ describe('verified registrar portal snapshots', () => {
     ).toMatchObject({ renewal: 17, source: 'base' });
   });
 });
+
+it('clears only the reset account snapshots while preserving user overrides', async () => {
+  await seed({ renewal: 45.5, currency: 'USD', observedAt }, 'account-a');
+  await seed({ renewal: 46, currency: 'USD', observedAt }, 'account-b');
+  pricing.setManualPrice('unrelated.io', { amount: '80', currency: 'USD' });
+  pricing.clearPortalQuotesForAccount('account-a');
+  expect(
+    pricing.resolvePricing('godaddy', 'premium.work', undefined, 'account-a')
+      .source,
+  ).toBe('base');
+  expect(
+    pricing.resolvePricing('godaddy', 'premium.work', undefined, 'account-b')
+      .source,
+  ).toBe('portal');
+  expect(pricing.getManualPrices()).toHaveProperty('unrelated.io');
+});

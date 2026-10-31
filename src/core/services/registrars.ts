@@ -62,6 +62,7 @@ import {
 } from './cache';
 import {
   resolvePricing,
+  clearPortalQuotesForAccount,
   setTldRate,
   tldOf,
   usesPerNameQuote,
@@ -1342,6 +1343,7 @@ export async function removeRegistrarAccount(accountId: string): Promise<void> {
 
 /** Drops a registrar's cached portfolio slice and every one of its detail entries. */
 function clearRegistrarData(name: string): void {
+  clearPortalQuotesForAccount(name);
   void renewalJobs.delete(name);
   clearEntry('portfolio', name);
   const prefix = `${name}:`;
