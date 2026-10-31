@@ -1,12 +1,17 @@
 # Current hosted registrar dependency
 
-The hosted engine pins `@aoxborrow/registrar-client@0.9.2-hosted.2` from the local
+The hosted engine pins `@aoxborrow/registrar-client@0.9.2-hosted.4` from the local
 archive. This is a reviewed MIT-licensed fork of the registry's 0.9.2 release,
-not an upstream-published version. `registrar-client-0.9.2-hosted.2.json` records
+not an upstream-published version. `registrar-client-0.9.2-hosted.4.json` records
 upstream integrity, the patch series and archive hashes. Source and unchanged public types
 are included; `HOSTED-PATCH.md` in the archive records the ESM/CJS build commands.
 
-The patch requests Dynadot's required two-year `.ai` price-only renewal quote,
+The hosted.4 patch adds a narrow read-only fallback for owned `.in` names rejected
+by Core per-name pricing: use the exact account-owned renewal quote, never a generic
+TLD estimate. The package preserves HTTP error privacy, authentication/rate-limit
+failures, sandbox routing and all paid-operation behavior.
+
+The earlier patch requests Dynadot's required two-year `.ai` price-only renewal quote,
 normalizes its fee to an annual estimate, and preserves transient/rate-limit
 errors so the hosted job respects cooldowns. Paid register/renew operations are
 unchanged. `src/core/services/dynadot-pricing.test.ts` exercises the installed
