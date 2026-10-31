@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { aesGcmCipher } from '../core/storage/encrypted';
 import { deriveEncryptionKey } from './keys';
@@ -929,7 +931,7 @@ it('qualifies the 100-name composite ceiling and rejects 101 before public mutat
   ).rejects.toThrow();
   const { writeFileSync } = await import('node:fs');
   writeFileSync(
-    '/private/tmp/dombot-publishing-budget-measurement.json',
+    join(tmpdir(), 'dombot-publishing-budget-measurement.json'),
     JSON.stringify({
       names: 100,
       maxDescription: 400,

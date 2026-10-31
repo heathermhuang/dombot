@@ -6,7 +6,7 @@ gates; it does not claim launch readiness, inquiry delivery or independent usefu
 
 The isolated implementation starts from hosted fork `7a9a44c`; the dirty primary
 checkout is preserved. Candidate engine is `1.5.2-hosted.29`, source digest
-`bff949286f4af7b6aed1ab46f912824fc5e2b3d641f644dd1f0a94b7ac9d7216`.
+`9236b4a50b337c75334387deb04c84a2ba289a2691e245c75ad2eaa6e88abe3d`.
 The archive, installed engine and web assets pass `engine:verify`.
 
 ## Code and local checks
@@ -74,3 +74,16 @@ The final responsive matrix also records all four widths in both themes under
 `receipts/candidate-*.png`; the 1,000-name picker retained `sample000.example`
 across cursor navigation. The inspector is available in legacy/inventory flows
 without requiring conversion.
+
+The normalized five-run before/after browser comparison used the same 1,004-name
+synthetic inventory, light theme, 1280px viewport and warm loopback origins. Median
+editor readiness changed from 511.0 ms to 534.7 ms (+4.64%, within the 20% bar),
+with 21 initial requests on both versions. Transferred initial resources changed
+from 445,049 to 487,905 bytes. These synthetic timings are not customer latency.
+The 1,000/20,000-name presence fixtures returned the same bounded 76,734-byte
+page; the first CI observation measured about 187/1,057 ms under its four-worker
+load. Full browser timing at 20,000 names is not established by those API fixtures.
+
+The first CI unit run completed 1,884 tests and exposed only the budget receipt's
+macOS-specific temporary path. The corrected test uses `os.tmpdir()` and retains
+the same publication and rejection assertions. The pinned archive was rebuilt.
