@@ -119,6 +119,7 @@ describe('durable cross-tenant proxy gate', () => {
         active: 0,
         queued: 0,
         dynadotCircuit: circuit,
+        dynadotRecoveryScope: 'managed',
       });
       expect(JSON.stringify(status)).not.toContain(String(grant.token));
       const invalid = await runtime.dispatchFetch('https://queue.test/lease', {

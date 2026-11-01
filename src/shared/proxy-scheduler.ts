@@ -18,6 +18,7 @@ export interface DynadotCircuitStatus {
   notBefore: number;
 }
 interface DynadotCircuit extends DynadotCircuitStatus {
+  recoveryScope?: DynadotScope;
   observedAt: number;
   probeToken?: string;
 }
@@ -40,14 +41,20 @@ function reopenCircuit(
   state: ProxyQueueState,
   now: number,
   retryAfterMs = 0,
+  observedScope: DynadotScope = 'unknown',
 ): void {
   const prior = state.dynadotCircuit;
+  const recoveryScope = prior?.recoveryScope ?? observedScope;
   const probes = (prior?.probes ?? 0) + (prior?.state === 'half_open' ? 1 : 0);
   const delay = [30 * 60_000, 2 * 3600_000, 6 * 3600_000][Math.min(probes, 2)];
   // Stable positive jitter, chosen only on transition and persisted with the hold.
   const jitter = 1 + ((now % 101) + 1) / 1020;
   state.dynadotCircuit = {
-    state: probes >= 3 ? 'attention_required' : 'open',
+    state:
+      probes >= 3 || recoveryScope !== 'managed'
+        ? 'attention_required'
+        : 'open',
+    recoveryScope,
     reason: 'failed_request_ip',
     scope: 'global',
     probes,
@@ -125,6 +132,16 @@ export function advanceProxyQueue(
     cooldownMs: PROXY_COOLDOWN_MS,
   },
 ): ProxyQueueReply {
+  // The former global circuit did not retain the recovery target. Its one
+  // operator-seeded incident was verified managed egress; other legacy origins
+  // cannot safely prove IP recovery and require operator verification.
+  if (state.dynadotCircuit && !state.dynadotCircuit.recoveryScope) {
+    state.dynadotCircuit.recoveryScope = state.dynadotRestrictionSeedAt
+      ? 'managed'
+      : 'unknown';
+    if (state.dynadotCircuit.recoveryScope === 'unknown')
+      state.dynadotCircuit.state = 'attention_required';
+  }
   state.pending = state.pending.filter(
     (ticket) =>
       ticket.expiresAt > now && (!policy.relayOnly || ticket.route === 'relay'),
@@ -186,12 +203,14 @@ export function advanceProxyQueue(
       ) {
         if (
           released.purpose === 'inventory' &&
+          released.scope === 'managed' &&
+          circuit.recoveryScope === 'managed' &&
           command.outcome === 'inventory_success'
         )
           delete state.dynadotCircuit;
         else reopenCircuit(state, now, command.retryAfterMs);
       } else if (command.outcome === 'failed_request_ip') {
-        reopenCircuit(state, now, command.retryAfterMs);
+        reopenCircuit(state, now, command.retryAfterMs, released.scope);
       }
     }
     state.availableAt =
@@ -221,7 +240,9 @@ export function advanceProxyQueue(
     circuit &&
     (circuit.state !== 'open' ||
       circuit.notBefore > now ||
-      command.purpose !== 'inventory')
+      command.purpose !== 'inventory' ||
+      command.scope !== 'managed' ||
+      circuit.recoveryScope !== 'managed')
   ) {
     state.pending = state.pending.filter((ticket) => !matches(ticket));
     return {
@@ -273,7 +294,9 @@ export function advanceProxyQueue(
         (!state.dynadotCircuit ||
           (state.dynadotCircuit.state === 'open' &&
             now >= state.dynadotCircuit.notBefore &&
-            ticket.purpose === 'inventory')));
+            ticket.purpose === 'inventory' &&
+            ticket.scope === 'managed' &&
+            state.dynadotCircuit.recoveryScope === 'managed')));
     // Rotate tenants rather than letting one portfolio occupy every turn.
     const next = state.pending.findIndex(
       (ticket) => eligible(ticket) && ticket.tenant !== state.lastTenant,
@@ -326,7 +349,7 @@ export function seedDynadotRestriction(
     (state.dynadotRestrictionSeedAt ?? 0) > observedAt
   )
     return 'mismatch';
-  if (!state.dynadotCircuit) reopenCircuit(state, now);
+  if (!state.dynadotCircuit) reopenCircuit(state, now, 0, 'managed');
   state.dynadotRestrictionSeedAt = observedAt;
   return 'applied';
 }
