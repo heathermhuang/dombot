@@ -22,6 +22,8 @@ import {
 import { syncAll } from './auto-sync';
 import { writeEntry } from './cache';
 import { configureSyncDiagnostics } from './sync-diagnostics';
+import { encodeDynadotRateLimit } from '../../shared/dynadot-rate-limit';
+import { setRegistrarEnabled } from './registrar-state';
 const list = vi.fn();
 let raw: MemoryDocStore;
 beforeEach(async () => {
@@ -57,6 +59,106 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 describe('inventory recovery', () => {
+  it('recovers a previously stopped restricted account natively and preserves local holds without failure events', async () => {
+    const lastGood = Date.now() - 86400000;
+    const restriction = {
+      state: 'open' as const,
+      reason: 'failed_request_ip' as const,
+      scope: 'global' as const,
+      probes: 0,
+      notBefore: Date.now() + 1800000,
+    };
+    writeEntry('portfolio', 'dynadot', {
+      domains: [createDomain({ domainName: 'held.com', registrar: 'dynadot' })],
+      lastSyncedAt: lastGood,
+      lastError: 'Dynadot failed-request IP restriction',
+      lastErrorAt: Date.now(),
+      recovery: {
+        state: 'failed',
+        attempts: 3,
+        retryAt: restriction.notBefore,
+        restriction,
+      },
+    });
+    await syncRegistrar('dynadot');
+    expect(list).not.toHaveBeenCalled();
+    vi.setSystemTime(restriction.notBefore + 1);
+    const extended = { ...restriction, notBefore: Date.now() + 10000 };
+    list.mockRejectedValueOnce(
+      new RateLimitError(
+        '[dynadot:shared-cooldown]' +
+          encodeDynadotRateLimit({
+            reason: 'failed_request_ip',
+            endpoint: 'inventory',
+            format: 'empty',
+            retryAfterSeconds: 10,
+            retryAfterSource: 'fallback',
+            circuit: extended,
+          }),
+        10,
+      ),
+    );
+    await syncAll(86400000);
+    await flushWrites();
+    expect(await raw.get('sync-monitor', 'diagnostics')).toBeNull();
+    expect(
+      getRegistrarMetadata().find((m) => m.name === 'dynadot')!.sync,
+    ).toMatchObject({
+      lastSyncedAt: lastGood,
+      domainCount: 1,
+      recovery: { attempts: 3, state: 'deferred', retryAt: extended.notBefore },
+    });
+    vi.setSystemTime(extended.notBefore + 1);
+    await syncAll(86400000);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(
+      getRegistrarMetadata().find((m) => m.name === 'dynadot')!.sync,
+    ).toMatchObject({
+      lastError: null,
+      recovery: { state: 'recovered', attempts: 0 },
+      lastSyncedAt: Date.now(),
+    });
+    const diagnostics = (await raw.get('sync-monitor', 'diagnostics')) as {
+      events: { trigger: string; ok: boolean; lastGoodAt: number }[];
+    };
+    expect(diagnostics.events).toHaveLength(1);
+    expect(diagnostics.events[0]).toMatchObject({
+      trigger: 'scheduled',
+      ok: true,
+      lastGoodAt: Date.now(),
+    });
+  });
+  it('does not send native recovery for disabled accounts or manually bypass exhausted recovery', async () => {
+    const restriction = {
+      state: 'attention_required' as const,
+      reason: 'failed_request_ip' as const,
+      scope: 'global' as const,
+      probes: 3,
+      notBefore: Date.now() - 1,
+    };
+    writeEntry('portfolio', 'dynadot', {
+      domains: [],
+      lastSyncedAt: 1,
+      lastError: 'restricted',
+      recovery: { state: 'failed', attempts: 6, restriction },
+    });
+    await syncRegistrar('dynadot');
+    await getPortfolio(true, 'scheduled');
+    expect(list).not.toHaveBeenCalled();
+    writeEntry('portfolio', 'dynadot', {
+      domains: [],
+      lastSyncedAt: 1,
+      lastError: 'restricted',
+      recovery: {
+        state: 'deferred',
+        attempts: 3,
+        restriction: { ...restriction, state: 'open', probes: 0 },
+      },
+    });
+    setRegistrarEnabled('dynadot', false);
+    await syncAll(86400000);
+    expect(list).not.toHaveBeenCalled();
+  });
   it('deduplicates overlapping manual and scheduled inventory work', async () => {
     let finish!: (v: unknown[]) => void;
     list.mockImplementationOnce(() => new Promise((r) => (finish = r)));

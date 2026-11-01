@@ -8,6 +8,7 @@ import {
 const bytes = (value: string) => new TextEncoder().encode(value);
 describe('safe Dynadot 429 diagnostics', () => {
   it.each([
+    ['Too many failed requests from your IP address.', 'failed_request_ip'],
     [
       'You have reached the maximum allowed requests within the concurrent limit of your account.',
       'concurrency',
@@ -77,6 +78,16 @@ describe('safe Dynadot 429 diagnostics', () => {
       readDynadotRateLimit(new Error('[dynadot429:' + 'x'.repeat(500) + ']')),
     ).toBeUndefined();
   });
+});
+
+it('classifies the single-name REST search as pricing', () => {
+  expect(
+    inspectDynadotRateLimit(
+      'https://api.dynadot.com/restful/v2/domains/private.example/search?show_price=true',
+      new Headers(),
+      bytes('Too many failed requests from your IP address.'),
+    ),
+  ).toMatchObject({ reason: 'failed_request_ip', endpoint: 'pricing' });
 });
 
 it('keeps malformed and out-of-range retry headers bounded', () => {

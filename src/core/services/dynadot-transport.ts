@@ -1,6 +1,13 @@
+import {
+  RateLimitError,
+  InvalidResponseError,
+} from '@aoxborrow/registrar-client';
 import { Namespace } from '../storage/namespace';
 import {
   dynadotRetryAfter,
+  dynadotCircuitSchema,
+  dynadotPurpose,
+  validDynadotInventory,
   encodeDynadotRateLimit,
   inspectDynadotRateLimit,
 } from '../../shared/dynadot-rate-limit';
@@ -12,7 +19,8 @@ interface PricingCapabilities {
 }
 const pricingCapabilities = new Namespace<PricingCapabilities>(
   'dynadot-pricing-capabilities',
-  { cache: true, local: true },
+  // Proven rejections are configuration evidence, not disposable inventory cache.
+  { local: true },
 );
 export interface DynadotPricingContext {
   accountId: string;
@@ -78,11 +86,9 @@ function cachedCapability(
   const until = request.classic
     ? meta.classicRejectedUntil
     : meta.unsupportedTlds?.[request.tld ?? ''];
-  if (
-    typeof until !== 'number' ||
-    !Number.isFinite(until) ||
-    until <= Date.now()
-  )
+  // Keep the legacy deadline fields readable, but elapsed time alone cannot
+  // regenerate known rejected calls. Key changes/explicit refresh clear them.
+  if (typeof until !== 'number' || !Number.isFinite(until) || until <= 0)
     return null;
   return request.classic
     ? new Response('Cached classic pricing authentication rejection', {
@@ -241,14 +247,74 @@ export function createDynadotFetch(
           await pricingCapabilities.set(pricingContext.accountId, next);
         }
       }
-      const localCooldown =
-        new TextDecoder().decode(body) === '[dynadot:shared-cooldown]';
+      const localCooldown = new TextDecoder()
+        .decode(body)
+        .includes('[dynadot:shared-cooldown]');
+      let circuit;
+      try {
+        circuit = dynadotCircuitSchema.parse(
+          JSON.parse(headers.get('X-DomBot-Dynadot-Circuit') ?? 'null'),
+        );
+      } catch {
+        /* no host circuit metadata */
+      }
+      headers.delete('X-DomBot-Dynadot-Circuit');
+      const purpose = dynadotPurpose(
+        new URL(input instanceof Request ? input.url : input),
+        init?.method ?? (input instanceof Request ? input.method : 'GET'),
+      );
+      if (
+        !localCooldown &&
+        response.status !== 429 &&
+        purpose === 'inventory' &&
+        !validDynadotInventory(response.status, body)
+      ) {
+        if (circuit)
+          throw new RateLimitError(
+            'Dynadot inventory recovery outcome uncertain. ' +
+              encodeDynadotRateLimit({
+                reason: 'failed_request_ip',
+                endpoint: 'inventory',
+                format: 'json',
+                outcome: 'uncertain',
+                circuit,
+                retryAfterSeconds: Math.max(
+                  1,
+                  Math.ceil((circuit.notBefore - Date.now()) / 1000),
+                ),
+                retryAfterSource: 'fallback',
+              }),
+          );
+        // Keep real business errors for the SDK, but never treat malformed success as an empty account.
+        if (response.ok) {
+          let code;
+          try {
+            code = JSON.parse(new TextDecoder().decode(body))?.code;
+          } catch {
+            /* malformed */
+          }
+          if (code === 200 || code === undefined)
+            throw new InvalidResponseError(
+              'Dynadot inventory payload is invalid. Cached domains are preserved.',
+            );
+        }
+      }
+      const diagnostic = inspectDynadotRateLimit(input, response.headers, body);
       const safeBody =
         response.status === 429 && !localCooldown
           ? new TextEncoder().encode(
-              encodeDynadotRateLimit(
-                inspectDynadotRateLimit(input, response.headers, body),
-              ),
+              encodeDynadotRateLimit({
+                ...diagnostic,
+                ...(circuit
+                  ? {
+                      circuit,
+                      outcome:
+                        diagnostic.reason === 'failed_request_ip'
+                          ? ('failed_request_ip' as const)
+                          : ('uncertain' as const),
+                    }
+                  : {}),
+              }),
             )
           : body;
       if (response.status === 429 && !localCooldown)

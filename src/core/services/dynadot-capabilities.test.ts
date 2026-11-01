@@ -7,6 +7,8 @@ import {
   configureStore,
   hydrateStores,
   exportNamespaces,
+  clearCacheNamespaces,
+  flushWrites,
 } from '../storage/namespace';
 import { MemoryDocStore } from '../storage/doc-store';
 const context = {
@@ -103,14 +105,55 @@ it('never intercepts a paid renewal even if a price-only lookup was rejected', a
   expect(paid).toHaveBeenCalledTimes(1);
 });
 
-it('expires persisted capability evidence instead of blocking a key forever', async () => {
+it('retains proven rejection evidence beyond generic TTL across restart', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   const rejected = vi
     .fn<typeof fetch>()
     .mockResolvedValue(Response.json({ Response: { Error: 'invalid key' } }));
   await (await createDynadotFetch(rejected, context)(classic)).text();
   vi.setSystemTime(Date.now() + 24 * 60 * 60_000 + 1);
+  clearCacheNamespaces();
+  await flushWrites();
+  configureStore(store);
+  await hydrateStores();
   const send = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}));
   await createDynadotFetch(send, context)(classic);
-  expect(send).toHaveBeenCalledTimes(1);
+  expect(send).not.toHaveBeenCalled();
+});
+
+it('preserves REST inventory and supported pricing after classic rejection on the real SDK', async () => {
+  const { createRegistrar } = await import('@aoxborrow/registrar-client');
+  const calls: string[] = [];
+  const send = vi.fn<typeof fetch>(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    calls.push(url.pathname);
+    if (url.pathname === '/api3.json')
+      return Response.json({ Response: { Error: 'invalid key' } });
+    if (url.pathname === '/restful/v2/domains')
+      return Response.json({ code: 200, data: { domain_info_list: [] } });
+    return Response.json({
+      code: 200,
+      data: {
+        domain_name: 'owned.io',
+        available: 'No',
+        premium: 'yes',
+        price_list: [
+          { currency: 'USD', unit: '(price/1 year)', renewal_price: '90' },
+        ],
+      },
+    });
+  });
+  const make = () =>
+    createRegistrar(
+      'dynadot',
+      { apiKey: context.apiKey, apiSecret: 'fixture' },
+      { fetch: createDynadotFetch(send, context), retries: 0 },
+    );
+  expect((await make().getPricing('owned.io')).renewal).toBe(90);
+  configureStore(store);
+  await hydrateStores();
+  expect(await make().listDomains()).toEqual([]);
+  expect((await make().getPricing('owned.io')).renewal).toBe(90);
+  expect(calls.filter((p) => p === '/api3.json')).toHaveLength(1);
+  expect(calls.filter((p) => p.endsWith('/search'))).toHaveLength(2);
 });

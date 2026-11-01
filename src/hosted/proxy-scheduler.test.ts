@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 let mf: Miniflare;
 beforeAll(async () => {
@@ -33,6 +36,106 @@ afterAll(async () => {
 });
 
 describe('durable cross-tenant proxy gate', () => {
+  it('persists a restriction across runtime restart and keeps legacy aliases blocked without token disclosure', async () => {
+    const bundle = await build({
+      entryPoints: ['src/hosted/proxy-scheduler.ts'],
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'browser',
+      external: ['cloudflare:*'],
+      target: 'es2022',
+    });
+    const storage = await mkdtemp(join(tmpdir(), 'dombot-circuit-test-'));
+    const options = convertV4MiniflareOptions({
+      cf: false,
+      modules: true,
+      script: bundle.outputFiles[0].text,
+      compatibilityDate: '2026-10-01',
+      resourcePersistencePath: storage,
+      bindings: {
+        SHARED_PROXY_IP: 'fixture',
+        SHARED_PROXY_MODE: 'relay',
+        SHARED_PROXY_CONCURRENCY: '4',
+      },
+      durableObjects: {
+        SHARED_PROXY_QUEUE: { className: 'SharedProxyQueue', useSQLite: true },
+      },
+    });
+    let runtime = new Miniflare(options);
+    const send = async (value: object, path = '/lease') =>
+      (
+        await runtime.dispatchFetch('https://queue.test' + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(value),
+        })
+      ).json() as Promise<Record<string, unknown>>;
+    try {
+      const first = {
+        action: 'acquire',
+        id: crypto.randomUUID(),
+        tenant: crypto.randomUUID(),
+        provider: 'dynadot',
+        purpose: 'inventory',
+        scope: 'managed',
+        route: 'relay',
+      };
+      const grant = await send(first);
+      const released = await send({
+        ...first,
+        action: 'release',
+        token: grant.token,
+        outcome: 'failed_request_ip',
+        retryAfterMs: 7200000,
+      });
+      expect(released).toMatchObject({
+        status: 'released',
+        circuit: { state: 'open', scope: 'global', probes: 0 },
+      });
+      const circuit = released.circuit;
+      await runtime.dispose();
+      runtime = new Miniflare(options);
+      const replies = await Promise.all(
+        ['relay', 'alternate', 'serial'].map((route) =>
+          send({
+            action: 'acquire',
+            id: crypto.randomUUID(),
+            tenant: crypto.randomUUID(),
+            route,
+            provider: 'dynadot',
+          }),
+        ),
+      );
+      expect(replies.every((r) => r.status === 'deferred')).toBe(true);
+      expect(
+        replies.every(
+          (r) => JSON.stringify(r.circuit) === JSON.stringify(circuit),
+        ),
+      ).toBe(true);
+      expect(Number(replies[0].retryAfterMs)).toBeGreaterThan(7100000);
+      const status = await send({}, '/status');
+      expect(status).toMatchObject({
+        active: 0,
+        queued: 0,
+        dynadotCircuit: circuit,
+      });
+      expect(JSON.stringify(status)).not.toContain(String(grant.token));
+      const invalid = await runtime.dispatchFetch('https://queue.test/lease', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...first,
+          purpose: 'caller-selected',
+          scope: 'arbitrary-secret',
+        }),
+      });
+      expect(invalid.status).toBe(400);
+    } finally {
+      await runtime.dispose();
+      await rm(storage, { recursive: true });
+    }
+  });
   it('admits exactly one of simultaneous independent tenant requests and fences release', async () => {
     const commands = Array.from({ length: 8 }, () => ({
       action: 'acquire',
