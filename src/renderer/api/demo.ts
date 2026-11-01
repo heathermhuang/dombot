@@ -31,7 +31,11 @@ import { marketListings, syncMarkets } from '../../core/services/markets/sync';
 import { marketAdapter } from '../../core/services/markets/accounts';
 import { syncDomainTraffic } from '../../core/services/markets/traffic';
 import { localDay } from '../../shared/domain-events';
-import { rememberRegistrationLookups } from '../../core/services/registration-lookup';
+import {
+  cachedRegistered,
+  rememberRegistrationLookups,
+} from '../../core/services/registration-lookup';
+import { toAscii } from '../../shared/domain-name';
 import { setNotes, setPurchase, setSale } from '../../core/services/purchases';
 import {
   setAlertsDismissed,
@@ -545,7 +549,30 @@ export async function createDemoApi(
   recordSaleAccounts();
   demo.setLatency(options.latencyMs ?? 150);
 
-  const table: ApiTable = { ...coreMethods, ...demoMethods };
+  const table: ApiTable = {
+    ...coreMethods,
+    ...demoMethods,
+    // Archive must not send the demo's sample names to public RDAP servers.
+    // Keep the seeded Deleted example; all other sample names are registered.
+    lookupRegistrations: {
+      ...coreMethods.lookupRegistrations,
+      handler: async (names) => {
+        const registered = cachedRegistered();
+        return Object.fromEntries(
+          names.map((name) => [
+            toAscii(name),
+            {
+              registered: registered.get(toAscii(name)) ?? true,
+              registrar: null,
+              created: null,
+              expires: null,
+              checkedAt: new Date().toISOString(),
+            },
+          ]),
+        );
+      },
+    },
+  };
   const api: Record<string, unknown> = {};
   for (const name of Object.keys(table) as ApiMethodName[]) {
     api[name] = (...args: unknown[]) =>

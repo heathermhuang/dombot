@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { uninstallDemo } from '../../core/demo';
 import { setBulkAutoDrive } from '../../core/services/bulk-jobs';
 import { createDemoApi } from './demo';
@@ -10,9 +10,23 @@ import { createDemoApi } from './demo';
 afterEach(() => {
   uninstallDemo();
   setBulkAutoDrive(false);
+  vi.unstubAllGlobals();
 });
 
 describe('createDemoApi', () => {
+  it('answers Archive registration lookups without external requests', async () => {
+    const { api } = await createDemoApi({ latencyMs: 0, sampleChanges: true });
+    const fetch = vi.fn(() => {
+      throw new Error('demo must not request public RDAP');
+    });
+    vi.stubGlobal('fetch', fetch);
+    const names = (await api.getDomainEvents()).map((event) => event.domain);
+    const rows = await api.lookupRegistrations([...names, 'fresh-sample.test']);
+    expect(rows['fresh-sample.test'].registered).toBe(true);
+    expect(Object.values(rows).some((row) => !row.registered)).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('boots with a full portfolio and answers like a web host', async () => {
     const { api, demo } = await createDemoApi({ latencyMs: 0, size: 40 });
     expect(await api.ping()).toBe('pong');
