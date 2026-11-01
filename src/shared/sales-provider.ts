@@ -1,5 +1,5 @@
 import { canonicalDomain } from './publication';
-import type { SaleDestination } from './sales';
+import type { SaleDestination } from './hosted-sales';
 import { SalesError } from './sales-review';
 
 const hosts: Record<SaleDestination['provider'], string[]> = {

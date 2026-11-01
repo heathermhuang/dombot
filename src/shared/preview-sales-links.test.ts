@@ -9,7 +9,7 @@ import {
   type PreviewSalesTerm,
 } from './preview-sales-links';
 import { renderOwnerSite } from './render-owner-site';
-import { publishedSaleSchema } from './sales';
+import { publishedSaleSchema } from './hosted-sales';
 const id = '11111111-1111-4111-8111-111111111111',
   revision = '22222222-2222-4222-8222-222222222222';
 function site() {

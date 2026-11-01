@@ -14,7 +14,7 @@ import {
   conversationStatusSchema,
   availabilitySchema,
   publishedSaleSchema,
-} from '../shared/sales';
+} from '../shared/hosted-sales';
 import {
   saleOutcomeSchema,
   salesPublicationEventSchema,

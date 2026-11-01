@@ -102,6 +102,7 @@ beforeAll(async () => {
             PUBLIC_SITE_ADDRESSES_ENABLED: 'true',
             SALES_CUSTOM_HOSTS_ENABLED: 'true',
             AUTH_PEPPER: 'test-only-authentication-pepper-'.repeat(3),
+            SHARED_MCP_MANAGEMENT_ENABLED: 'true',
             WORKSPACES: JSON.stringify(
               ids.map((id, i) => ({
                 id,
@@ -162,6 +163,7 @@ beforeAll(async () => {
   await control.exec(sql('hosted/migrations/0007_sales_hostnames.sql'));
   await control.exec(sql('hosted/migrations/0010_shared_mcp.sql'));
   await control.exec(sql('hosted/migrations/0011_passkey_names.sql'));
+  await control.exec(sql('hosted/migrations/0021_shared_mcp_permissions.sql'));
   await control.exec(sql('hosted/migrations/0015_portfolio_addresses.sql'));
   await control.exec(sql('hosted/migrations/0016_portfolio_domains.sql'));
   for (let i = 0; i < ids.length; i++) {
@@ -872,6 +874,117 @@ describe('real gateway and isolated Worker instances', () => {
       .prepare("DELETE FROM sales_hostnames WHERE hostname='freshness.example'")
       .run();
   });
+  it('delegates explicitly approved management tools without granting another tenant or paid-operation authority', async () => {
+    await api(0, 'updateSettings', [{ mcpEnabled: true }]);
+    const verifier = 'management-pkce-'.repeat(5),
+      challenge = Buffer.from(
+        await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(verifier),
+        ),
+      ).toString('base64url');
+    const registered = await request('/register', 'POST', {
+      client_name: 'Management test',
+      redirect_uris: ['http://127.0.0.1:4567/callback'],
+      token_endpoint_auth_method: 'none',
+    });
+    const client = (await registered.json()) as { client_id: string };
+    const params = new URLSearchParams({
+      client_id: client.client_id,
+      redirect_uri: 'http://127.0.0.1:4567/callback',
+      response_type: 'code',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      resource: 'http://localhost/mcp',
+      scope: 'portfolio:read domains:write',
+    });
+    const authorization = await request('/authorize?' + params);
+    expect(authorization.status).toBe(303);
+    const consent = await request(
+      authorization.headers.get('location')!,
+      'GET',
+      undefined,
+      cookies[0],
+    );
+    expect(consent.status).toBe(200);
+    const html = await consent.text();
+    expect(html).toContain('granting management access');
+    const id = html.match(/name="id" value="([a-f0-9]+)"/)![1],
+      csrf = html.match(/name="csrf" value="([a-f0-9]+)"/)![1];
+    const approved = await request(
+      '/oauth/consent',
+      'POST',
+      { id, csrf, decision: 'approve' },
+      cookies[0],
+    );
+    expect(approved.status).toBe(303);
+    const code = new URL(approved.headers.get('location')!).searchParams.get(
+      'code',
+    );
+    const exchanged = await request('/token', 'POST', {
+      grant_type: 'authorization_code',
+      client_id: client.client_id,
+      code,
+      code_verifier: verifier,
+      redirect_uri: 'http://127.0.0.1:4567/callback',
+      resource: 'http://localhost/mcp',
+    });
+    expect(exchanged.status).toBe(200);
+    const token = ((await exchanged.json()) as { access_token: string })
+      .access_token;
+    const rpc = (method: string, params?: unknown) =>
+      gateway.fetch(
+        new Request('http://localhost/mcp', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + token,
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        }),
+      );
+    const listed = (await (await rpc('tools/list')).json()) as {
+      result: { tools: { name: string }[] };
+    };
+    const names = listed.result.tools.map((t) => t.name);
+    expect(names).toContain('domain_listing_set');
+    expect(names).toContain('domain_transfer_out_approve');
+    expect(names).not.toContain('domain_renew');
+    const created = (await (
+      await rpc('tools/call', {
+        name: 'folder_create',
+        arguments: {
+          name: 'Management test sentinel',
+          description: '',
+          color: 'blue',
+        },
+      })
+    ).json()) as { result: { isError?: boolean; content: { text: string }[] } };
+    expect(created.result.isError).not.toBe(true);
+    const ownerFolders = (await (await api(0, 'getFolders')).json()) as {
+      result: { folders: { id: string; name: string }[] };
+    };
+    const folder = ownerFolders.result.folders.find(
+      (f) => f.name === 'Management test sentinel',
+    );
+    expect(folder).toBeDefined();
+    expect(await (await api(1, 'getFolders')).text()).not.toContain(
+      'Management test sentinel',
+    );
+    expect(
+      (
+        await rpc('tools/call', {
+          name: 'domain_renew',
+          arguments: { domain: 'synthetic.example' },
+        })
+      ).status,
+    ).toBe(403);
+    await api(0, 'deleteFolder', [folder!.id]);
+    await request('/revoke', 'POST', { client_id: client.client_id, token });
+    expect((await rpc('tools/list')).status).toBe(401);
+  });
+
   it('connects two accounts through one MCP URL with isolated, revocable read-only grants', async () => {
     const control = await mf.getD1Database('CONTROL_DB', 'gateway');
     const verifier = 'shared-pkce-'.repeat(6);
@@ -904,10 +1017,10 @@ describe('real gateway and isolated Worker instances', () => {
       await (await request('/.well-known/oauth-protected-resource/mcp')).json(),
     ).toMatchObject({
       resource: 'http://localhost/mcp',
-      scopes_supported: ['portfolio:read'],
+      scopes_supported: ['portfolio:read', 'domains:write'],
     });
     const invalidScope = new URLSearchParams(params);
-    invalidScope.set('scope', 'domains:write');
+    invalidScope.set('scope', 'domains:spend');
     expect((await request('/authorize?' + invalidScope)).status).toBe(400);
     const sharedTokens: string[] = [];
     const mcp = (
@@ -1068,10 +1181,12 @@ describe('real gateway and isolated Worker instances', () => {
     expect((await mcp(sharedTokens[0], 'tools/list')).status).toBe(404);
     await api(0, 'updateSettings', [{ mcpEnabled: true }]);
     const pairs = (await (await api(0, 'listMcpClients')).json()) as {
-      result: { clientId: string }[];
+      result: { clientId: string; clientName: string }[];
     };
-    const sharedId = pairs.result.find((r) =>
-      r.clientId.startsWith('shared:'),
+    const sharedId = pairs.result.find(
+      (r) =>
+        r.clientId.startsWith('shared:') &&
+        r.clientName === 'Shared test assistant',
     )!.clientId;
     await api(1, 'revokeMcpClient', [sharedId]);
     expect((await mcp(sharedTokens[0], 'tools/list')).status).toBe(200);

@@ -5,7 +5,11 @@ import { z } from 'zod';
 export const MCP_DELEGATION_TOKEN = 'gateway-mcp-delegation';
 const mcpSchema = z.object({
   clientId: z.string().uuid(),
-  scopes: z.tuple([z.literal('portfolio:read')]),
+  scopes: z
+    .array(z.enum(['portfolio:read', 'domains:write']))
+    .min(1)
+    .max(2)
+    .refine((s) => new Set(s).size === s.length),
   expiresAt: z.number().int().positive(),
 });
 export type McpDelegation = z.infer<typeof mcpSchema>;

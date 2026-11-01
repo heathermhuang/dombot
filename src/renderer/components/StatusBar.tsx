@@ -1,13 +1,11 @@
-import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { getPricingRetryAt, subscribePricingRetry } from '../api/http';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { CircleAlert, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '../store/app';
-import { timeAgo } from '../lib/time';
-import { isStale, staleAccounts, useSyncState } from '../lib/sync-state';
+import { syncSummary, useSyncState, type SyncLevel } from '../lib/sync-state';
+import { SYNC_TONE, SyncStatusLabel, SyncTime } from './SyncStatus';
 import { ModeToggle } from './mode-toggle';
 import {
   isDemo,
@@ -27,11 +25,6 @@ import {
 export default function StatusBar() {
   const mcpInfo = useAppStore((s) => s.mcpInfo);
   const loadMcpInfo = useAppStore((s) => s.loadMcpInfo);
-  const renewalPricing = useAppStore((s) => s.renewalPricing);
-  const pricingRetryAt = useSyncExternalStore(
-    subscribePricingRetry,
-    getPricingRetryAt,
-  );
   const registrars = useAppStore((s) => s.registrars);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const navigate = useNavigate();
@@ -55,7 +48,7 @@ export default function StatusBar() {
     : null;
 
   return (
-    <footer className="relative z-40 flex min-h-8 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1 sm:py-0 border-t bg-background px-4 text-xs text-muted-foreground select-none">
+    <footer className="relative z-40 flex min-h-8 shrink-0 flex-wrap items-center justify-between gap-3 py-1 sm:py-0 border-t bg-background px-4 text-xs text-muted-foreground select-none">
       <div className="flex items-center gap-4">
         {isWeb() && <SessionStatus />}
         <button
@@ -79,48 +72,38 @@ export default function StatusBar() {
         </button>
       </div>
 
-      {/* Keep controls in the wrapping flow so a pricing cooldown cannot
-          overlap the theme picker on narrow tablets. */}
+      {/* Centered on the bar itself, independent of the side groups' widths.
+          Hidden on phones, where the side groups already fill the bar. */}
       <ModeToggle bare className="hidden sm:inline-flex" />
 
       <div className="flex flex-wrap items-center justify-end gap-3">
-        {renewalPricing &&
-          (renewalPricing.remaining > 0 ||
-            renewalPricing.failed > 0 ||
-            !!renewalPricing.blocked) && (
-            <span
-              role="status"
-              title="Renewal prices update separately. Last saved prices stay visible while new quotes are fetched."
-            >
-              {renewalPricing.remaining > 0
-                ? pricingRetryAt
-                  ? `Renewal prices paused · retry at ${new Date(pricingRetryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                  : `Updating renewal prices · ${renewalPricing.remaining} left`
-                : renewalPricing.blocked
-                  ? `${renewalPricing.blocked} renewal prices waiting for inventory recovery`
-                  : `${renewalPricing.failed} renewal prices could not update`}
-            </span>
-          )}
+        <PricingStatus />
         <SyncStatus />
       </div>
     </footer>
   );
 }
 
+/** A warning keeps its colour on hover, a touch brighter. */
+const TONE_HOVER: Record<SyncLevel, string> = {
+  ok: '',
+  warn: 'hover:text-amber-500 hover:brightness-125 dark:hover:text-amber-400',
+  error: 'hover:text-destructive hover:brightness-125',
+};
+
 /**
- * The sync status, with one light for all of it: how many enabled accounts
- * synced (a link to Settings → Registrars) and when. Syncing itself is on the
- * Domains page and in Settings → Registrars (and the menu on phones). Red
- * with an alert icon when an account failed, amber while some haven't synced
- * yet or not in over a week. The time is the latest sync of any account, amber only once
- * even that is old. Below lg the words shorten so they clear the
- * centered theme toggle.
+ * The sync status, with one light for all of it: how many enabled registrar
+ * and market accounts synced (a link to Settings → Sync, which lists any
+ * that need you) and when. Syncing itself is on the Domains page and in
+ * Settings (and the menu on phones). Red with an alert icon when an account
+ * failed, amber while some haven't synced yet or not in over a week. The
+ * time is the latest sync of any account, amber only once even that is old.
+ * Below lg the words shorten so they clear the centered theme toggle.
  */
 function SyncStatus() {
   const navigate = useNavigate();
-  const registrars = useAppStore((s) => s.registrars);
   const state = useSyncState();
-  const { syncing, lastSyncedAt } = state;
+  const { syncing, lastSyncedAt, accounts, unit, loaded } = state;
 
   // The desktop app menu's Sync Now does what the Domains page's Sync does,
   // or says why it can't (just synced, a bulk job running, nothing set up).
@@ -139,101 +122,25 @@ function SyncStatus() {
     [],
   );
 
-  // Hidden until the registrar metadata is known.
-  if (registrars === null) return null;
+  // Hidden until both kinds of account are known, so the count doesn't jump.
+  if (!loaded) return null;
 
-  // Only enabled accounts count: a disabled one keeps its credentials but
-  // never syncs. One counts as synced when its last sync succeeded within the
-  // staleness window; syncing one account doesn't vouch for the others.
-  const enabled = registrars.filter((r) => r.configured && r.enabled);
-  const unit =
-    multiAccountRegistrars(registrars).size > 0 ? 'accounts' : 'registrars';
-  const stale = staleAccounts(enabled).length;
-  const synced =
-    enabled.filter(
-      (r) => r.sync.lastSyncedAt != null && r.sync.lastError == null,
-    ).length - stale;
-  const failed = enabled.filter((r) => r.sync.lastError != null).length;
-  const one = (n: number) => (n === 1 ? unit.replace(/s$/, '') : unit);
-  const tone =
-    failed > 0
-      ? 'text-destructive hover:text-destructive hover:brightness-125'
-      : (enabled.length === 0 || synced < enabled.length) &&
-        'text-amber-600 hover:text-amber-600 hover:brightness-125 dark:text-amber-400 dark:hover:text-amber-400';
-
-  let light = (
-    <span
-      className={cn(
-        'size-2 rounded-full',
-        enabled.length > 0 && synced === enabled.length
-          ? 'bg-brand'
-          : 'bg-amber-500 dark:bg-amber-400',
-      )}
-      aria-hidden
-    />
-  );
-  if (syncing)
-    light = <RefreshCw className="size-3 animate-spin" aria-hidden />;
-  else if (failed > 0) light = <CircleAlert className="size-3.5" aria-hidden />;
-
-  const label = syncing
-    ? 'Syncing…'
-    : enabled.length === 0
-      ? `No ${unit} to sync`
-      : failed > 0
-        ? `${failed} of ${enabled.length} ${one(enabled.length)} failed`
-        : stale > 0
-          ? `${stale} of ${enabled.length} ${one(enabled.length)} stale`
-          : `${synced}/${enabled.length} ${unit} synced`;
-  const short = syncing
-    ? 'Syncing…'
-    : enabled.length === 0
-      ? `No ${unit}`
-      : failed > 0
-        ? `${failed} failed`
-        : stale > 0
-          ? `${stale} stale`
-          : `${synced}/${enabled.length} synced`;
-
+  const summary = syncSummary(accounts, unit);
   return (
     <div className="flex items-center gap-3">
       <button
         type="button"
-        onClick={() => navigate('/settings?tab=registrars')}
-        aria-label={`${short}${lastSyncedAt === null ? '' : `. Last synced ${new Date(lastSyncedAt).toLocaleString()}`}`}
+        onClick={() => navigate('/settings?tab=sync')}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-sm hover:text-foreground',
-          !syncing && tone,
+          !syncing && [SYNC_TONE[summary.level], TONE_HOVER[summary.level]],
         )}
-        title={
-          enabled.length === 0
-            ? `No ${unit} set up — open registrar settings`
-            : failed > 0
-              ? `${failed} ${one(failed)} failed to sync — open registrar settings`
-              : stale > 0
-                ? `${stale} ${one(stale)} not synced in over a week — open registrar settings`
-                : synced === enabled.length
-                  ? `All ${unit} synced. Publication readiness also requires fresh verification — open registrar settings`
-                  : `${enabled.length - synced} ${one(enabled.length - synced)} not synced yet — open registrar settings`
-        }
+        title={`${summary.title} — open sync settings`}
       >
-        {light}
-        <span className="hidden lg:inline">{label}</span>
-        <span className="lg:hidden">{short}</span>
+        <SyncStatusLabel summary={summary} syncing={syncing} short />
       </button>
-      {lastSyncedAt !== null && enabled.length > 0 && !syncing && (
-        <span
-          className={cn(
-            '-ml-1.5 hidden sm:inline',
-            isStale(lastSyncedAt) && 'text-amber-600 dark:text-amber-400',
-          )}
-          title={`Last synced ${new Date(lastSyncedAt).toLocaleString()}`}
-        >
-          <span aria-hidden className="mr-1.5 text-muted-foreground">
-            ·
-          </span>
-          {timeAgo(lastSyncedAt)}
-        </span>
+      {lastSyncedAt !== null && summary.total > 0 && !syncing && (
+        <SyncTime at={lastSyncedAt} className="-ml-1.5" />
       )}
     </div>
   );
@@ -301,6 +208,26 @@ function SessionStatus() {
     <span className="inline-flex items-center gap-1.5">
       {dot}
       {link('Sign out', () => void signOut())}
+    </span>
+  );
+}
+
+function PricingStatus() {
+  const p = useAppStore((s) => s.renewalPricing);
+  const retry = useSyncExternalStore(subscribePricingRetry, getPricingRetryAt);
+  if (!p || (!p.remaining && !p.failed && !p.blocked)) return null;
+  return (
+    <span
+      role="status"
+      title="Last saved renewal prices remain visible while quotes update."
+    >
+      {p.remaining
+        ? retry
+          ? `Renewal prices paused · retry at ${new Date(retry).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          : `Updating renewal prices · ${p.remaining} left`
+        : p.blocked
+          ? `${p.blocked} renewal prices waiting for inventory recovery`
+          : `${p.failed} renewal prices could not update`}
     </span>
   );
 }

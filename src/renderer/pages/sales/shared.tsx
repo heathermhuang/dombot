@@ -5,7 +5,7 @@ import './sales.css';
 import { useSalesData } from '../../lib/sales-client';
 import { webAuthMode } from '../../lib/platform';
 
-export { salePriceLabel, saleModeLabel } from '../../../shared/sales';
+export { salePriceLabel, saleModeLabel } from '../../../shared/hosted-sales';
 export function SalesShell({ children }: { children: ReactNode }) {
   const recipient = useSalesData<{ verified?: boolean; address?: string }>(
     webAuthMode() === 'gateway' ? '/recipient' : '/capabilities',
@@ -14,12 +14,12 @@ export function SalesShell({ children }: { children: ReactNode }) {
     <div className="sales">
       <nav aria-label="Sales navigation" className="sales-nav">
         {[
-          ['/sales', 'Sales pages'],
+          ['/public-listings', 'Sales pages'],
           ['/sales/inbox', 'Inbox'],
           ['/sales/shop', 'Sales shop'],
           ['/sales/channels', 'Channels'],
         ].map(([to, label]) => (
-          <NavLink key={to} to={to} end={to === '/sales'}>
+          <NavLink key={to} to={to} end={to === '/public-listings'}>
             {label}
           </NavLink>
         ))}

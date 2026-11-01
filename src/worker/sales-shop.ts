@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { shopDraftSchema, publishedSaleSchema } from '../shared/sales';
+import { shopDraftSchema, publishedSaleSchema } from '../shared/hosted-sales';
 import { SalesError } from '../shared/sales-review';
 
 const amount = z

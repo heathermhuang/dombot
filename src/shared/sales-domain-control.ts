@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { saleDomainSchema } from './sales';
+import { saleDomainSchema } from './hosted-sales';
 
 // Match gateway admission's bounded allowance for separate Cloudflare clocks.
 export const salesControlClockToleranceMs = 5_000;

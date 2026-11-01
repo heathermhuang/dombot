@@ -13,7 +13,10 @@ import { migrateLegacyProxies } from '../services/proxies';
 import { sanitizeBundleDiagnostics } from './sanitize-diagnostics';
 import {
   LEGACY_IMPORTED_NAMESPACE,
-  hiddenFolderAssignments,
+  withoutBuiltInFolders,
+  isLegacyBuiltInFolder,
+  LEGACY_EVENT_TYPES,
+  withoutLegacyEvents,
   upgradeLegacyNamespaces,
 } from './migrations';
 import {
@@ -60,7 +63,9 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // the rename, which import maps across).
 // v9 introduces the explicit host sales backup extension. Older runtimes must
 // reject it rather than silently losing conversations and sales settings.
-export const BUNDLE_VERSION = 9;
+// v10 retains upstream schema-5 history and marketplaces alongside hosted extensions.
+// Older hosted builds must reject it instead of dropping unknown namespaces.
+export const BUNDLE_VERSION = 10;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
@@ -115,7 +120,9 @@ export function parseBundle(
     );
   }
   if (
-    ![1, 2, 3, 4, 5, 6, 7, 8, BUNDLE_VERSION].includes(head.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, BUNDLE_VERSION].includes(
+      head.version as number,
+    )
   ) {
     throw new BundleError(
       `This file was made by a newer DomBot (format v${String(head.version)}). Update and try again.`,
@@ -140,11 +147,37 @@ export function parseBundle(
   if ((head.version as number) < 4) {
     head.namespaces = upgradeLegacyNamespaces(head.namespaces);
   }
-  // v4's Archive folder is v5's Hidden folder (migration 2).
+  // The built-in Archive and Hidden folders, and the `dropped` and
+  // `archived` events, are gone (storage migration 5): any file can hold them.
   const folderAssignments = head.namespaces['domain-folders'];
-  if ((head.version as number) < 5 && folderAssignments) {
+  if (folderAssignments) {
+    head.namespaces['hosted-legacy-folders'] = {
+      ...head.namespaces['hosted-legacy-folders'],
+      ...Object.fromEntries(
+        Object.entries(folderAssignments).filter(([, id]) =>
+          isLegacyBuiltInFolder(id),
+        ),
+      ),
+    };
     head.namespaces['domain-folders'] =
-      hiddenFolderAssignments(folderAssignments);
+      withoutBuiltInFolders(folderAssignments);
+  }
+  const legacyEvents = head.namespaces[EVENTS_NAMESPACE];
+  if (legacyEvents) {
+    const removed = Object.fromEntries(
+      Object.entries(legacyEvents).filter(
+        ([, value]) =>
+          value &&
+          typeof value === 'object' &&
+          LEGACY_EVENT_TYPES.has(String(Reflect.get(value, 'type'))),
+      ),
+    );
+    if (Object.keys(removed).length)
+      head.namespaces['hosted-legacy-events'] = {
+        ...head.namespaces['hosted-legacy-events'],
+        ...removed,
+      };
+    head.namespaces[EVENTS_NAMESPACE] = withoutLegacyEvents(legacyEvents);
   }
   // A v8 file from main before the rename has `manual-domains` (migration 4).
   const legacyImported = head.namespaces[LEGACY_IMPORTED_NAMESPACE];

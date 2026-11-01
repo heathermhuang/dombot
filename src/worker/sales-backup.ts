@@ -4,7 +4,7 @@ import {
   destinationSchema,
   shopDraftSchema,
   conversationStatusSchema,
-} from '../shared/sales';
+} from '../shared/hosted-sales';
 import { SalesStore } from './sales-store';
 import { leadPayloadSchema, bodySchema } from './sales-inquiry-store';
 import {

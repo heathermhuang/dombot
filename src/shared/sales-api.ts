@@ -4,7 +4,7 @@ import type {
   SaleDestination,
   SaleMoney,
   SaleShop,
-} from './sales';
+} from './hosted-sales';
 export interface SalesListing {
   hasPreviousPublication: boolean;
   lastInquiryAt: number | null;

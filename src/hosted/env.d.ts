@@ -48,6 +48,7 @@ interface HostedEnv {
   LANDING_ASSETS?: Fetcher;
   CANONICAL_ORIGIN?: string;
   MCP_POLICIES?: string;
+  SHARED_MCP_MANAGEMENT_ENABLED?: string;
   PUBLIC_PORTFOLIO_PATH?: string;
   PUBLIC_PORTFOLIO_ORIGIN?: string;
   AUTH_PEPPER: string;

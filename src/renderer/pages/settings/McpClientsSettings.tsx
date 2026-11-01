@@ -113,7 +113,7 @@ export default function McpClientsSettings() {
                     : 'Approved agents can read and change your domains. The server only accepts connections from this computer.'}
             </p>
             {gated && (
-              <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+              <p className="mt-2 text-sm text-amber-500 dark:text-amber-400">
                 This deployment sits behind an external gate (Cloudflare Access
                 or a platform login), which MCP clients can&apos;t pass. For MCP
                 to work, the gate must exclude the MCP paths — see the
@@ -153,7 +153,7 @@ export default function McpClientsSettings() {
       <SettingsCard title="Paired clients">
         {clients.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No clients paired yet. Connect one and approve it to see it here.
+            No clients paired yet. Connect one and approve it when asked.
           </p>
         ) : (
           <ul className="flex flex-col">
@@ -165,6 +165,8 @@ export default function McpClientsSettings() {
                     <p className="text-sm font-medium">{c.clientName}</p>
                     <p className="text-xs text-muted-foreground">
                       Paired {formatDate(c.pairedAt)}
+                      {c.scopes &&
+                        ` · ${c.scopes.includes('domains:write') ? 'Management access' : 'Read only'}`}
                     </p>
                   </div>
                   <Button

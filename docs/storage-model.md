@@ -33,26 +33,35 @@ new Namespace('domain-events'); // default: kept, exported
 namespace needs no entry in a hand-kept list. Encryption stays an explicit
 set passed to `EncryptedDocStore`.
 
-| Older name                               | Name                    | Flags  | Keyed by                   | Holds                                             |
-| ---------------------------------------- | ----------------------- | ------ | -------------------------- | ------------------------------------------------- |
-| `cache-portfolio`                        | `registrar-domains`     | cache  | account                    | each account's name list, as reported             |
-| `cache-detail`                           | `registrar-details`     | cache  | account + name             | per-domain detail from the registrar              |
-| `tld-rates`                              | `registrar-tld-rates`   | cache  | account or registrar + TLD | fetched renewal rates                             |
-| `registration-lookups`                   | `rdap-lookups`          | cache  | name                       | public RDAP registration data                     |
-| `registrar-accounts`                     | _(unchanged)_           |        | account id                 | connected accounts                                |
-| `credentials`                            | `registrar-credentials` | sealed | account id                 | API keys                                          |
-| `proxies`                                | `registrar-proxies`     | sealed | proxy id                   | proxy profiles                                    |
-| `registrar-state`                        | `registrars`            |        | fixed keys                 | which registrars are switched on                  |
-| —                                        | `registrar-last-sync`   |        | account id                 | names (and expiries) each account's last sync saw |
-| —                                        | `imported-domains`      |        | name                       | names you add that no connected registrar reports |
-| —                                        | `domain-notes`          |        | note id                    | notes on a domain, or on one of its events        |
-| `domain-purchases` + `portfolio-changes` | `domain-events`         |        | event id                   | purchases, sales, arrivals, moves, drops          |
-| `folders` (`assignments` key)            | `domain-folders`        |        | name                       | name → folder id                                  |
-| `folders` (`folders` key)                | `folders`               |        | folder id                  | folder definitions                                |
-| `pricing-overrides`                      | `domain-prices`         |        | name                       | your manual renewal price, with its currency      |
-| —                                        | `domain-list-prices`    |        | name                       | your BIN price, minimum offer, and floor          |
-| `settings`, `bulk-jobs`, `mcp`           | _(unchanged)_           |        |                            | app-level                                         |
-| `meta`                                   | _(unchanged)_           | local  |                            | this install only                                 |
+| Older name                               | Name                      | Flags  | Keyed by                   | Holds                                             |
+| ---------------------------------------- | ------------------------- | ------ | -------------------------- | ------------------------------------------------- |
+| `cache-portfolio`                        | `registrar-domains`       | cache  | account                    | each account's name list, as reported             |
+| `cache-detail`                           | `registrar-details`       | cache  | account + name             | per-domain detail from the registrar              |
+| `tld-rates`                              | `registrar-tld-rates`     | cache  | account or registrar + TLD | fetched renewal rates                             |
+| `registration-lookups`                   | `rdap-lookups`            | cache  | name                       | public RDAP registration data                     |
+| `registrar-accounts`                     | _(unchanged)_             |        | account id                 | connected accounts                                |
+| `credentials`                            | `registrar-credentials`   | sealed | account id                 | API keys                                          |
+| `proxies`                                | `registrar-proxies`       | sealed | proxy id                   | proxy profiles                                    |
+| `registrar-state`                        | `registrars`              |        | fixed keys                 | which registrars are switched on                  |
+| —                                        | `registrar-last-sync`     |        | account id                 | names (and expiries) each account's last sync saw |
+| —                                        | `imported-domains`        |        | name                       | names you add that no connected registrar reports |
+| —                                        | `domain-notes`            |        | note id                    | notes on a domain, or on one of its events        |
+| `domain-purchases` + `portfolio-changes` | `domain-events`           |        | event id                   | purchases, sales, arrivals, moves, drops          |
+| `folders` (`assignments` key)            | `domain-folders`          |        | name                       | name → folder id                                  |
+| `folders` (`folders` key)                | `folders`                 |        | folder id                  | folder definitions                                |
+| `pricing-overrides`                      | `domain-prices`           |        | name                       | your manual renewal price, with its currency      |
+| —                                        | `domain-list-prices`      |        | name                       | your BIN price, minimum offer, and floor          |
+| —                                        | `market-accounts`         |        | account id                 | connected market accounts (docs/markets.md)       |
+| —                                        | `market-credentials`      | sealed | account id                 | market API keys                                   |
+| —                                        | `market-listings`         | cache  | account + name             | each market account's listings as last synced     |
+| —                                        | `market-last-sync`        |        | account id                 | when each market account last synced, and errors  |
+| —                                        | `market-sales`            |        | account + sale id          | market sale records (never auth codes)            |
+| —                                        | `market-stats`            |        | account id                 | daily views and leads per market account          |
+| —                                        | `market-domain-stats`     |        | account + name             | per-name views and leads, days with traffic only  |
+| —                                        | `market-search-snapshots` |        | account + name             | weekly snapshots of GoDaddy search counts         |
+| —                                        | `exchange-rates`          | cache  | month or day               | ECB rates since the shipped archive               |
+| `settings`, `bulk-jobs`, `mcp`           | _(unchanged)_             |        |                            | app-level                                         |
+| `meta`                                   | _(unchanged)_             | local  |                            | this install only                                 |
 
 Clear cache wipes every `cache` namespace, `registrar-tld-rates` and
 `rdap-lookups` included; the next sync refetches them.
@@ -90,12 +99,12 @@ export const DomainEventType = {
   Purchased: 'purchased', // bought from someone (aftermarket, private)
   Sold: 'sold',
   Renewed: 'renewed', // renewals DomBot makes or sync sees
-  Dropped: 'dropped', // you let it go; or the lookup found it gone (see below)
-  Archived: 'archived', // no longer yours, reason unspecified
   // Something sync saw.
   Added: 'added', // the name appeared in an account
   Removed: 'removed', // the name is gone from an account
   Moved: 'moved', // gone from one of your accounts, appeared in another
+  // A setting changed (auto-renew, privacy, nameservers…): never an alert.
+  Changed: 'changed',
 } as const;
 export type DomainEventType =
   (typeof DomainEventType)[keyof typeof DomainEventType];
@@ -104,8 +113,9 @@ export const DomainEventSource = {
   User: 'user',
   Sync: 'sync',
   Import: 'import',
-  Lookup: 'lookup', // the registration check (the automatic drop only)
+  Lookup: 'lookup', // the registration check (none written today)
   Agent: 'agent', // an MCP client, on your behalf
+  Bulk: 'bulk', // a bulk job you started
 } as const;
 export type DomainEventSource =
   (typeof DomainEventSource)[keyof typeof DomainEventSource];
@@ -124,14 +134,20 @@ interface DomainEvent {
   amount?: string | null; // canonical decimal, e.g. "19.99", "1500" (money.ts)
   currency?: CurrencyCode | null; // ISO 4217, from CURRENCIES
   years?: number | null; // registered, purchased, renewed: term length
+  expires?: string; // removed: the expiry sync last saw, when it had passed (a lapse)
   resolves?: string; // a user event closing a sync-detected one
+  marketSale?: string; // sold: the market-sales key it came from (docs/markets.md)
   dismissed?: boolean; // sync alert acknowledged with no action
+  dropped?: boolean; // removed: you marked it dropped; counts as dismissed
+  setting?: DomainSetting; // changed: autoRenew, privacy, lock, nameservers, …
+  before?: boolean | string[]; // changed: the old value, when DomBot knew it
+  after?: boolean | string[]; // changed: the new value
 }
 ```
 
-- **Repeats are normal.** Drop a name and buy it back: two `purchased`
+- **Repeats are normal.** Let a name go and buy it back: two `purchased`
   events. The cost basis shown in the table is the latest `purchased` or
-  `registered` since the last `sold` or `dropped`.
+  `registered` since the last `sold`.
 - **No separate transfer type.** DomBot sees accounts, not registrar
   transfers, so a transfer always lands as one of the sync events: to another
   of your accounts (even at another registrar) is `moved`; to someone else is
@@ -160,12 +176,13 @@ number` (ms epoch, like `createdAt`, `startedAt`, `fetchedAt`); a calendar
   a yearly view divides by `years` instead of charging it all to one year.
 - **You vs. sync.** `added` and `removed` only say that a name appeared in or
   disappeared from an account; they don't say why. The user events say what
-  happened (`purchased`, `sold`, `dropped`), usually resolving a sync one.
+  happened (`purchased`, `sold`), usually resolving a sync one.
 - **Sync writes, you resolve.** A sync that no longer sees a name writes
   `removed` (`source: 'sync'`) and raises an alert. Marking it Sold writes
-  `sold` with `resolves: <removed id>`; Dropped writes `dropped` the same
-  way; Dismiss sets `dismissed` on the `removed` event and records nothing
-  else. Baselining (the first sync of an account creates no alerts) is a
+  `sold` with `resolves: <removed id>`; Dismiss sets `dismissed` on the
+  `removed` event and records nothing else. A name that leaves after its
+  expiry date writes `removed` with `expires` and `dismissed` already set: it
+  lapsed, and there's nothing to review. Baselining (the first sync of an account creates no alerts) is a
   `trackedSince` timestamp on the account's
   `registrar-accounts` record, also shown as "Tracking changes since" on the
   Activity page.
@@ -180,8 +197,9 @@ number` (ms epoch, like `createdAt`, `startedAt`, `fetchedAt`); a calendar
   and `removed`).
 - **Renewals.** Each renewal is one `renewed` event, dated the day it
   was seen, with `accountId` and `years`:
-  - **DomBot's.** A renew op the registrar confirms (row action, bulk renew,
-    MCP `domain_renew`) writes `source: 'user'`. The amount is only what the
+  - **DomBot's.** A renew op the registrar confirms writes `source: 'user'`
+    from a row action, `'bulk'` from bulk renew, and `'agent'` from MCP
+    `domain_renew`. The amount is only what the
     registrar charged, when its response carries a `charge`; otherwise none.
     Bulk renew writes a slice's events in one `putEvents`. An `unknown`
     outcome writes nothing; sync records it once the expiry moves.
@@ -204,6 +222,32 @@ number` (ms epoch, like `createdAt`, `startedAt`, `fetchedAt`); a calendar
   - Renewals are never alerts, and don't change Owned / Archive. An event
     without an amount is priced when read (manual price → quote → TLD rate →
     base database), as an estimate.
+- **Settings changes.** A write that changes a name's setting writes one
+  `changed` event, dated the day it was made, with `accountId`, the
+  `setting`, its `after` and, when DomBot knew it, its `before`. It's the
+  name's record of when auto-renew went off (how you let a name go,
+  [owned-and-archive.md](owned-and-archive.md)), when nameservers moved, and
+  who did it.
+  - **Where they're written.** `applyDomainOp` writes them, so a row control
+    (`source: 'user'`), a bulk job (`'bulk'`, a slice's events in one
+    `putEvents`, like renewals) and the MCP `domain_*` tools (`'agent'`) all
+    record the same way. The MCP-only `domain_dns_set` and
+    `domain_contacts_set` write their own (`dns`: the records; `contacts`: the
+    roles changed, never the contact details). An imported name's auto-renew,
+    edited in the app (`'user'`) or by a CSV import (`'import'`, with its
+    `importId`), writes one too.
+  - **What's recorded.** Only a confirmed change: a failure, a skip, or an
+    `unknown` outcome writes nothing. A setting DomBot knew was already at
+    the new value writes nothing either, so a bulk "auto-renew on" over a
+    mixed selection records only the names it changed. `before` comes from
+    the cache (the fetched detail, then the list row) and is left out when
+    the list doesn't carry that setting reliably. Forwarding is a full
+    replace and its old rules aren't kept, so it never has a `before`.
+    On/off settings are booleans; lists (nameservers, forwarding rules, DNS
+    records, contact roles) are short readable lines.
+  - **Never alerts.** They don't need review and don't change Owned /
+    Archive. Activity shows them as **Changed**, with a **Changes** filter by
+    setting.
 - **CSV import edits, it doesn't append.** A purchase in an imported row
   updates the name's current purchase or registration in place (type, date,
   amount, years), and a sale updates the current sale, so importing the same
@@ -213,74 +257,52 @@ number` (ms epoch, like `createdAt`, `startedAt`, `fetchedAt`); a calendar
   ([#145](https://github.com/aoxborrow/dombot/issues/145)) can union
   `domain-events` by id instead of overwriting it.
 
-## Owned, Archive, and Hidden
+## Owned and Archive
 
-The Domains page switches between **Owned** and **Archive**. Archive is a list
-of domains you no longer own, not a timeline; the timeline is the Activity page
-(below).
+The Domains page switches between **Owned** and **Archive**. Archive holds
+only names you no longer have; nothing you hold goes there by hand. Not
+renewing a name means turning off its auto-renew at the registrar. The full
+design is [owned-and-archive.md](owned-and-archive.md); the code is
+`src/shared/ownership.ts` (`standingOf`).
 
-Two separate questions, which the old Hidden → Archive folder had merged:
+- **Nothing about it is stored but the events.** Owned's states (Expiring,
+  Sold awaiting transfer) and Archive's labels are worked out when shown,
+  from the event log, the row, and the registration lookup.
+- **A name an account holds is always Owned.** A sale recorded on it shows a
+  Sold pill until the buyer takes it; auto-renew off within 30 days of expiry
+  shows Expiring, beside the registrar's Expired, Grace and Redemption pills.
+- **Archive labels, in order:** Sold (a sale on record since the name last
+  arrived), Deleted (the lookup says nobody holds it), Expired (it left after
+  its last known expiry: the `expires` on its `removed`), and Removed (it left
+  early with no sale; the one to review, as Sold or Dismiss).
+- **Imported names** reach Archive through a sale, the lookup, or 90 days
+  past their expiry date. No sync sees them leave.
+- **`added` brings a name back** to Owned, and a sale before it is history.
+  A `moved` that finds a departed name in another account does the same for
+  the removal.
 
-- **Do you still own it?** Owned or Archive, from events.
-- **Do you want to see it?** The built-in Hidden folder.
+### The lookup
 
-### Owned and Archive
-
-A name is in **Archive** once its latest ownership event is `sold`,
-`dropped`, `archived`, or an unresolved `removed`; `added` brings it back.
-Everything else is **Owned**. Purchases, registrations, and moves between
-your accounts aren't ownership events, so recording what you paid for a sold
-name leaves it in Archive. Archive is derived from events, never from a
-folder.
-
-- **Three manual actions: Sold, Dropped, Archived.** Each moves the name to
-  Archive at once, whatever its registration status (a sale in progress, a
-  name you've decided not to renew that is still in your account). Sold also
-  records the price. Archived is the same as Dropped without saying why.
-  "Move back to Owned" deletes that event (user events are editable).
-- **A sync that no longer sees a name** writes `removed`, which also moves the
-  name to Archive, shown as "Removed from registrar" until you label it (Sold,
-  Dropped, Archived) or dismiss the alert. It never marks the name Dropped,
-  so someone who manages names elsewhere and doesn't sync for months comes
-  back to unlabeled names, never to wrong labels.
-- **The one automatic label** (not built yet; waits on
-  [#105](https://github.com/aoxborrow/dombot/issues/105)). The registration
-  check (`rdap-lookups`) writes
-  `dropped` with `source: 'lookup'` only when both hold:
-  1. RDAP gives a definite "not registered": a 404 from the registry's own RDAP
-     server. A network error, timeout, any other status, or a 404 from the
-     `rdap.org` redirector itself (which may mean it has no server for that
-     TLD) counts as unknown and changes nothing.
-  2. Today is past the name's last expiry date as DomBot knew it (from the
-     registrar data before the name left).
-
-  A real registration can't be missing before it expires, so a faulty lookup
-  can't drop a name you still hold.
+`rdap-lookups` (the registration check) is a cache. Its definite "not
+registered" makes a departed or expired imported name Deleted; it writes no
+event. A network error, timeout, any other status, or a 404 from the
+`rdap.org` redirector itself counts as unknown and changes nothing. All RDAP
+should move to one central module
+([#105](https://github.com/aoxborrow/dombot/issues/105)).
 
 - **No derived "transferred" label.** RDAP only shows the registrar; an expired
   name sold or auctioned at the same registrar never changes registrar, and
   the registrant is redacted under GDPR (and registrar-scoped where present),
   so ownership can't be read from it.
-- **All RDAP goes through one module** (the same issue). Every registration
-  lookup in the app uses a single central RDAP client, so bootstrap, caching, rate limits, and
-  the "definite not registered" rule live in one place.
 
 ### Delete
 
-**Delete** removes everything DomBot holds about a name: its events, notes,
-folder, price override, and imported-domain entry. It's for mistakes and names
-you never want to see again, not for recording what happened (that's Sold,
-Dropped, or Archived). If a connected registrar still reports the name, the
-next sync brings it back as a fresh name with no history.
-
-### Hidden
-
-**Hidden** is a built-in folder, like Archive was before it became an
-ownership action. It's for names you still own but don't want in the default
-list: personal names, or expiring ones you're letting go and don't want to
-mark. A name is in one folder at most, so hiding it moves it out of its
-current folder into Hidden. Hidden names are left out of Owned by default and
-come back with the folder filter; they still sync and still raise alerts.
+**Delete** removes everything DomBot holds about a name: its
+events, notes, folder, prices, and imported-domain entry. It's only for names
+no connected account holds (imported names and Archive names), and it's for
+mistakes and names you never want to see again, not for recording what
+happened. A name an account holds can't be deleted; turn its auto-renew off
+to let it go.
 
 ## Activity and alerts
 
@@ -288,19 +310,31 @@ come back with the folder filter; they still sync and still raise alerts.
 
 A top-level **Activity** page (beside Domains and Renewals) lists every domain
 event in one table, newest first: date, domain, what happened, account(s),
-amount, source (you, sync, import, lookup), and status. It filters by event
-type, domain, account, date range, and "Needs review", and reuses the Domains
+amount or setting changed, and source (you, sync, import, lookup, agent,
+bulk). It filters by event type, setting changed, domain, account, source, and
+date range; a switch shows All or Needs review
+([unrecorded-activity.md](unrecorded-activity.md)). It reuses the Domains
 table's sorting, paging, and sticky header. A domain's row menu gets "Activity",
 which opens the same table filtered to that name.
+
+- **New and Needs review.** A new row is an alert nobody has answered or
+  dismissed (`isOpenAlert`), highlighted like unread mail; the bell and the
+  Activity tab count them. Needs review (`needsReviewIds` in
+  `src/shared/review.ts`) lists every new one and every arrival or departure
+  still missing its money, dismissed or not: a departure is answered by a lapse,
+  a sale for that holding, or Mark dropped; an arrival by a registration or
+  purchase for its holding. An alert written already dismissed (no
+  `updatedAt`: an import of a lapsed name) is its writer's answer.
 
 - **One row per event.** A resolved alert keeps its outcome ("Sold", "Came
   back", "Dismissed") with Undo, so a misclick is visible and fixable; the
   resolving event is its own row too. Nothing disappears.
-- **Review actions inline.** `removed`: Sold, Dropped, Archived, Dismiss.
-  `added`: Purchase details (the dialog offers the registration fee), Dismiss.
-  Both need review, but an arrival only asks what you paid, so it's the
-  lowest-priority alert (dismiss or ignore one you don't care about). `moved`
-  is info only.
+- **Answers inline.** On a row that needs review, right after the name:
+  `added`: Record registration (one click, at the registrar's fee) and Record
+  purchase…; `removed`: Record sale… and Mark dropped (`dropped` on the
+  event: it left and no money came back); and Dismiss while it's new. The ⋯
+  menu has every option, and the selection bar the one-click ones. `moved` is
+  info only.
 - **Your own actions are rows too** (purchases, sales, imports), so Activity is
   the ledger a financial dashboard
   ([#112](https://github.com/aoxborrow/dombot/issues/112)) would build on.
@@ -311,18 +345,17 @@ which opens the same table filtered to that name.
 ### The bell
 
 The header bell always opens a dropdown, and never goes away (it shows at zero
-too). It groups items by severity:
+too). Every row has one shape: an icon colored by how much it needs you, what
+happened, and when. In order: a new DomBot release (green), amounts in
+currencies DomBot can't convert (gray), market sales waiting on you (amber),
+registrar and market sync failures (red, the only red), then the names that
+left or arrived that are still new, in their Activity Type colors (blue in,
+plain out). It only tells you; the answers are on Activity.
 
-- **Error:** registrar sync failures, expired or rejected credentials.
-- **Needs review:** unresolved `removed` events, with their actions.
-- **Added:** unresolved `added` events, with their actions. The
-  lowest-priority alert: listed after departures, and never enough on their
-  own to color the badge.
-- **Info:** `moved` events and other recent results.
-
-Its badge counts errors plus review items and takes the color of the most
-severe one: red for errors, amber for departures, gray when only new names
-are waiting. "View all activity" opens the Activity page.
+Its header says "N new", and its badge counts everything, colored as the rows:
+red with a sync error, amber with a sale to act on, plain for names, green for
+an update. "View activity" opens Needs review, and a name's row opens it on
+that name.
 
 ## Imported domains and notes
 
@@ -385,8 +418,8 @@ Worker's per-isolate boot, which every request awaits.
 **Migration 1:**
 
 1. Split `folders`: the `folders` key stays, the `assignments` map becomes one
-   `domain-folders` entry per name (the legacy `__hidden__` Archive id is
-   normalized on the way).
+   `domain-folders` entry per name (the legacy built-in folder ids are
+   dropped on the way since migration 5).
 2. For each renamed namespace: `list(old)` → `putMany(new, …)` →
    `clear(old)`. Skipped when `old` is empty, so a rerun is harmless.
    `pricing-overrides` is re-keyed from `${accountId ?? registrar}:${name}`
@@ -411,14 +444,9 @@ copy-then-clear makes that safe, and the only exposure is a write landing in
 a new namespace in the moment another isolate is still copying into it, which
 is limited to the first requests after deploying this release.
 
-**Migration 2** (the domain history):
-
-1. Every `domain-folders` entry pointing at `__archive__` is repointed at the
-   Hidden folder (`__hidden__`). Archive began as Hidden, and that's what
-   these assignments mean: names you still own and don't want to see. Archive
-   leaves the folder model and becomes an ownership action.
-2. Set `schemaVersion = 2`. A v4 bundle from before this release gets the same
-   step on import.
+**Migration 2** (the domain history) repointed `__archive__` folder
+assignments at the built-in Hidden folder (`__hidden__`). Migration 5 removes
+both, so the step now only sets `schemaVersion = 2`.
 
 **Migration 3** (renewal prices in any currency, [domain-import-export.md](domain-import-export.md#renewal-prices-in-any-currency)):
 
@@ -427,6 +455,19 @@ is limited to the first requests after deploying this release.
    value that doesn't hold is dropped.
 2. Set `schemaVersion = 3`. A bundle before v7 gets the same conversion on
    import.
+
+**Migration 4** moved `manual-domains` to `imported-domains`.
+
+**Migration 5** (Archive holds only names you no longer have,
+[owned-and-archive.md](owned-and-archive.md)):
+
+1. Every `dropped` and `archived` event is deleted. A held name that was
+   marked comes back to Owned; one that left is labeled from the facts.
+2. Every `domain-folders` entry pointing at `__hidden__` (or `__archive__`)
+   is deleted, so those names go back to no folder.
+3. Set `schemaVersion = 5`. A bundle of any version gets the same two
+   deletions on import, so the bundle version is unchanged: an older build
+   reading a newer file loses nothing.
 
 ## Data bundle versions
 
@@ -459,14 +500,16 @@ import; today that's only `meta`. An unknown namespace in a file is skipped.
 
 ## Future work
 
-- **The automatic drop** (`source: 'lookup'`, above) waits on the central RDAP
-  module ([#105](https://github.com/aoxborrow/dombot/issues/105)).
-- **Every domain change writes an event:** auto-renew, privacy, lock,
-  nameservers and forwarding, from the app, bulk jobs and MCP
-  ([#151](https://github.com/aoxborrow/dombot/issues/151)).
+- **The central RDAP module**
+  ([#105](https://github.com/aoxborrow/dombot/issues/105)): one path for
+  Deleted, and a later expiry from RDAP updating an imported name's date.
+- **Changes made at the registrar.** A setting changed outside DomBot
+  (Cloudflare and 101domain auto-renew can only be changed there) shows only
+  as a new value after sync. `registrar-last-sync` could keep each name's
+  settings beside its expiry, so sync writes `changed` with `source: 'sync'`.
 - **Bulk Record purchase** on Activity and Domains
   ([#148](https://github.com/aoxborrow/dombot/issues/148)). The other bulk
-  review actions (Mark as Sold, Mark as Dropped, Archive, Dismiss review) are
+  answers (Record registration, Record sale, Mark dropped, Dismiss) are
   built.
 - **Venues** ([#109](https://github.com/aoxborrow/dombot/issues/109)).
   `registered`, `purchased`, and `sold` get a `venueId`. The list is every

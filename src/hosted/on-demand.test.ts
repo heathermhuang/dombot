@@ -257,7 +257,7 @@ describe('on-demand account lifecycle', () => {
     expect(invalid.status).toBe(400);
     expect(provision).not.toHaveBeenCalled();
   });
-  it.each(['registrar', 'import'])(
+  it.each(['registrar', 'market', 'import'])(
     'allocates only after the owner chooses %s and admits the qualified resource with a sealed key',
     async (reason) => {
       const s = await signup(),
@@ -267,7 +267,7 @@ describe('on-demand account lifecycle', () => {
           ? await request(path, s.token, reason)
           : await gateway.fetch(
               new Request(
-                `https://domains.domains/w/${s.user.workspace_id}/api/connectRegistrarAccount`,
+                `https://domains.domains/w/${s.user.workspace_id}/api/${reason === 'market' ? 'connectMarketAccount' : 'connectRegistrarAccount'}`,
                 {
                   method: 'POST',
                   headers: {
@@ -277,7 +277,7 @@ describe('on-demand account lifecycle', () => {
                   },
                   body: JSON.stringify({
                     args: [
-                      'dynadot',
+                      reason === 'market' ? 'afternic' : 'dynadot',
                       { apiKey: 'test-only', apiSecret: 'test-only' },
                     ],
                   }),
@@ -287,6 +287,7 @@ describe('on-demand account lifecycle', () => {
             );
       expect(r.status).toBe(reason === 'import' ? 303 : 200);
       expect(provision).toHaveBeenCalledWith(s.user.workspace_id, s.user.id);
+      expect(await db.prepare('SELECT reason FROM pending_workspaces WHERE workspace_id=?').bind(s.user.workspace_id).first('reason')).toBe(reason);
       expect(await workspaceKey(env, s.user.workspace_id)).toBe(key);
       expect(
         await db

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { saleMoneySchema, saleModeSchema } from './sales';
+import { saleMoneySchema, saleModeSchema } from './hosted-sales';
 import {
   draftSchema,
   draftObjectSchema,

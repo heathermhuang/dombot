@@ -42,6 +42,7 @@
     },
   ],
   "vars": {
+    "SHARED_MCP_MANAGEMENT_ENABLED": "false",
     "ADMIN_USER_IDS": "[]",
     "ON_DEMAND_ENABLED": "false",
     "ON_DEMAND_ACCOUNT_LIMIT": "500",

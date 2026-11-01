@@ -44,6 +44,16 @@ const infrastructure = new Set([
 ]);
 const noMaintenance = new Set(['settings', 'folders', 'mcp', 'sync-monitor']);
 const workNamespaces = new Set([
+  'market-accounts',
+  'market-credentials',
+  'market-listings',
+  'market-last-sync',
+  'market-sales',
+  'market-stats',
+  'market-domain-stats',
+  'market-search-snapshots',
+  'hosted-legacy-events',
+  'hosted-legacy-folders',
   'registrar-credentials',
   'registrar-accounts',
   'registrar-proxies',

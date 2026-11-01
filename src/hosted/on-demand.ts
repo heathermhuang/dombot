@@ -47,7 +47,7 @@ export type ProvisionReceipt = z.infer<typeof provisionReceipt>;
 export async function activateWorkspace(
   env: HostedEnv,
   user: SessionUser,
-  reason: 'registrar' | 'import',
+  reason: 'registrar' | 'market' | 'import',
 ) {
   if (!onDemandReady(env))
     throw Error(

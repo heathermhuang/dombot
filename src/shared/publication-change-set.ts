@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { saleDomainSchema } from './sales';
+import { saleDomainSchema } from './hosted-sales';
 export const changeSetScopeSchema = z
   .object({
     kind: z.literal('publish'),

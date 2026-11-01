@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { publishedSaleSchema, saleMoneySchema, salePriceLabel } from './sales';
+import { publishedSaleSchema, saleMoneySchema, salePriceLabel } from './hosted-sales';
 import { salesEscape as e } from './render-sales-lander';
 
 /** Only public terms and conversation content; never owner notes or portfolio data. */

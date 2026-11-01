@@ -10,8 +10,10 @@ import {
 } from '@/components/ui/select';
 import GeneralSettings from './settings/GeneralSettings';
 import RegistrarsSettings from './settings/RegistrarsSettings';
+import MarketsSettings from './settings/MarketsSettings';
 import McpClientsSettings from './settings/McpClientsSettings';
-import DataSettings from './settings/DataSettings';
+import SyncSettings from './settings/SyncSettings';
+import ImportExportSettings from './settings/ImportExportSettings';
 import FoldersSettings from './settings/FoldersSettings';
 import ProxySettings from './settings/ProxySettings';
 import AboutSettings from './settings/AboutSettings';
@@ -22,9 +24,11 @@ import AboutSettings from './settings/AboutSettings';
 const SECTIONS = [
   { value: 'general', label: 'General' },
   { value: 'registrars', label: 'Registrars' },
-  { value: 'proxy', label: 'Proxy' },
-  { value: 'data', label: 'Data & sync' },
+  { value: 'markets', label: 'Markets' },
+  { value: 'sync', label: 'Sync' },
+  { value: 'import-export', label: 'Import/Export' },
   { value: 'folders', label: 'Folders' },
+  { value: 'proxy', label: 'Proxy' },
   { value: 'mcp', label: 'MCP' },
   { value: 'about', label: 'About' },
 ] as const;
@@ -67,10 +71,7 @@ export default function Settings() {
           {/* Phones: a compact section picker that stays one line no matter how
               many sections there are. Desktop: the vertical sidebar list. */}
           <Select value={tab} onValueChange={setTab}>
-            <SelectTrigger
-              className="w-full md:hidden"
-              aria-label="Settings section"
-            >
+            <SelectTrigger className="w-full md:hidden">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -105,6 +106,9 @@ export default function Settings() {
           <TabsContent value="registrars">
             <RegistrarsSettings />
           </TabsContent>
+          <TabsContent value="markets">
+            <MarketsSettings />
+          </TabsContent>
           <TabsContent value="proxy">
             <ProxySettings />
           </TabsContent>
@@ -114,8 +118,11 @@ export default function Settings() {
           <TabsContent value="mcp">
             <McpClientsSettings />
           </TabsContent>
-          <TabsContent value="data">
-            <DataSettings />
+          <TabsContent value="sync">
+            <SyncSettings />
+          </TabsContent>
+          <TabsContent value="import-export">
+            <ImportExportSettings />
           </TabsContent>
           <TabsContent value="about">
             <AboutSettings />

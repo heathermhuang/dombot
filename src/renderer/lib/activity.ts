@@ -6,28 +6,51 @@ import {
 import type { Domain, RegistrarMeta } from '../../shared/ipc';
 import { toUnicode } from '../../shared/domain-name';
 import { formatMoney, type NumberFormatId } from '../../shared/money';
+import {
+  conversionText,
+  type ExchangeRates,
+} from '../../shared/exchange-rates';
+import { changeText } from '../../shared/domain-changes';
 import { accountName } from './domain-history';
-import type { SyncFailure } from '../../shared/notifications';
+import {
+  marketSyncFailures,
+  type SyncFailure,
+} from '../../shared/notifications';
+import type { MarketAccountView, MarketInfo } from '../../shared/markets';
 
 // Helpers for the Activity page and the header bell (docs/storage-model.md,
 // "Activity and alerts"): what needs review, what went wrong, and how to say
 // what each event means.
 
+/**
+ * A new row on Activity, like unread mail: a faint brand tint and a 3px bar
+ * down its left edge. The bar is the first cell's inset shadow, important so
+ * it wins over the checkbox cell's `shadow-none!` (the table's column rules).
+ */
+export const NEW_ROW_TINT =
+  'bg-brand/[0.06] hover:bg-brand/[0.1] [&>td:first-child]:shadow-[inset_3px_0_0_var(--color-brand)]!';
+
 /** An account whose last sync failed (see shared/notifications.ts). */
 export type SyncProblem = SyncFailure;
 
-/** Accounts whose last sync failed. */
+/** Accounts whose last sync failed: registrar accounts, then market ones. */
 export function syncProblems(
   registrars: RegistrarMeta[] | null,
+  markets: MarketAccountView[] | null = null,
+  catalog: MarketInfo[] = [],
 ): SyncProblem[] {
-  return (registrars ?? [])
-    .filter((r) => r.configured && r.enabled && r.sync.lastError)
-    .map((r) => ({
-      accountId: r.accountId ?? r.name,
-      account: accountName(registrars, r.accountId ?? r.name) ?? r.displayName,
-      message: r.sync.lastError!,
-      at: r.sync.lastErrorAt,
-    }));
+  return [
+    ...(registrars ?? [])
+      .filter((r) => r.configured && r.enabled && r.sync.lastError)
+      .map((r) => ({
+        accountId: r.accountId ?? r.name,
+        account:
+          accountName(registrars, r.accountId ?? r.name) ?? r.displayName,
+        message: r.sync.lastError!,
+        at: r.sync.lastErrorAt,
+      })),
+    ...marketSyncFailures(markets, catalog),
+  ];
 }
 
 /** The event that resolved each alert, by the alert's id. */
@@ -42,12 +65,11 @@ export const VERB: Record<DomainEvent['type'], string> = {
   registered: 'Registered',
   purchased: 'Purchased',
   sold: 'Sold',
-  dropped: 'Dropped',
-  archived: 'Archived',
   renewed: 'Renewed',
   added: 'Added',
   removed: 'Removed',
   moved: 'Moved',
+  changed: 'Changed',
 };
 
 export const SOURCE_LABEL: Record<DomainEvent['source'], string> = {
@@ -56,6 +78,7 @@ export const SOURCE_LABEL: Record<DomainEvent['source'], string> = {
   import: 'Import',
   lookup: 'Lookup',
   agent: 'Agent',
+  bulk: 'Bulk',
 };
 
 /** The day an event happened: its date, or the day it was recorded. */
@@ -75,12 +98,20 @@ export function eventAccounts(e: DomainEvent): string[] {
   );
 }
 
-/** "$2,500 · 2 yr", or null when there's nothing to say. */
+/**
+ * "$2,500 · 2 yr", "Auto-renew: on → off", what became of a departure that
+ * needs no answer ("Expired 2026-09-30", a lapse; "Dropped", marked), or null
+ * when there's nothing to say.
+ */
 export function eventDetails(
   e: DomainEvent,
   numberFormat: NumberFormatId,
   preferredCurrency: string,
 ): string | null {
+  if (e.type === DomainEventType.Changed) return changeText(e);
+  if (e.type === DomainEventType.Removed && e.dropped) return 'Dropped';
+  if (e.type === DomainEventType.Removed && e.expires)
+    return `Expired ${e.expires}`;
   const parts: string[] = [];
   if (e.amount && e.currency)
     parts.push(
@@ -88,6 +119,29 @@ export function eventDetails(
     );
   if (e.years) parts.push(`${e.years} yr`);
   return parts.length ? parts.join(' · ') : null;
+}
+
+/**
+ * The Details hover for an amount in another currency than yours: "€1,200 ≈
+ * $1,301 at the March 2024 average (ECB) · 2 yr", converted at the event's
+ * date (an undated one at the newest rate), or that DomBot can't convert it.
+ * Null when there's nothing to convert; the row keeps its own amount.
+ */
+export function eventConversion(
+  e: DomainEvent,
+  numberFormat: NumberFormatId,
+  preferredCurrency: string,
+  fx: ExchangeRates,
+): string | null {
+  if (!e.amount || !e.currency || e.currency === preferredCurrency) return null;
+  const money = (amount: string, currency: string) =>
+    formatMoney(amount, currency, preferredCurrency, numberFormat);
+  const original = money(e.amount, e.currency);
+  const c = fx.convert(e.amount, e.currency, preferredCurrency, e.date);
+  const years = e.years ? ` · ${e.years} yr` : '';
+  return c
+    ? `${conversionText(original, money(String(c.amount), preferredCurrency), c, e.date)}${years}`
+    : `${original}${years} (DomBot can’t convert ${e.currency})`;
 }
 
 /**

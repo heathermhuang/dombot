@@ -1,7 +1,7 @@
 import { useListingDraft } from '../../lib/sales-drafts';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { SaleDraft, SaleDestination } from '../../../shared/sales';
+import type { SaleDraft, SaleDestination } from '../../../shared/hosted-sales';
 import type { SalesListingDetail } from '../../../shared/sales-api';
 import type { SalesReview } from '../../../shared/sales-review';
 import { sourcePriceFingerprint } from '../../../core/publication/sales';
@@ -62,7 +62,7 @@ function ListingEditorView() {
   const source = remote.data?.observation.price;
   return (
     <SalesShell>
-      <Link className="link" to="/sales">
+      <Link className="link" to="/public-listings">
         ← Sales pages
       </Link>
       <div className="sales-heading">

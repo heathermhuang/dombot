@@ -5,15 +5,31 @@
  */
 
 import type { ReleaseFeed } from './releases';
+import type { RateRows } from './exchange-rates';
 import type {
   Domain as ProviderDomain,
   ConnectionResult,
   DomainForward,
+  DomainForwardHttps,
   EmailForward,
   RegistrarName,
+  TransferOutStatus,
 } from '@aoxborrow/registrar-client';
 import type { NumberFormatId } from './money';
 import type { DomainEvent } from './domain-events';
+import type {
+  MarketAccountView,
+  MarketBulkJob,
+  MarketBulkOp,
+  MarketBulkTarget,
+  MarketId,
+  MarketInfo,
+  MarketListing,
+  MarketListingChange,
+  MarketSale,
+  MarketTraffic,
+  MarketWriteResult,
+} from './markets';
 
 export type { DomainEvent, DomainNote } from './domain-events';
 
@@ -39,8 +55,8 @@ export type Domain = ProviderDomain & {
   accountId?: string;
   accountLabel?: string;
   /**
-   * Set on a row DomBot kept after the name left the registrar (Sold, Dropped,
-   * or Archive). It is not at the registrar, so registrar actions do not apply.
+   * Set on a row DomBot kept after the name left your accounts (Archive). It
+   * is not at the registrar, so registrar actions do not apply.
    */
   departed?: boolean;
   /**
@@ -137,6 +153,7 @@ export const IpcChannels = {
   applyDomainOp: 'domain:apply',
   getUrlForwarding: 'domain:getUrlForwarding',
   getEmailForwarding: 'domain:getEmailForwarding',
+  getTransferOut: 'domain:getTransferOut',
   startBulk: 'bulk:start',
   cancelBulk: 'bulk:cancel',
   getBulkJob: 'bulk:get',
@@ -145,6 +162,7 @@ export const IpcChannels = {
   stepRenewalPricing: 'pricing:step',
   getManualPrices: 'pricing:getManualPrices',
   setManualPrice: 'pricing:setManualPrice',
+  getExchangeRates: 'rates:get',
   openExternal: 'app:openExternal',
   saveTextFile: 'app:saveTextFile',
   exportData: 'data:export',
@@ -188,11 +206,34 @@ export const IpcChannels = {
   updateImportedDomain: 'importedDomains:update',
   getListPrices: 'listPrices:list',
   setListPrices: 'listPrices:set',
+  getMarketCatalog: 'markets:catalog',
+  listMarketAccounts: 'markets:listAccounts',
+  connectMarketAccount: 'markets:connectAccount',
+  renameMarketAccount: 'markets:renameAccount',
+  setMarketAccountEnabled: 'markets:setEnabled',
+  getMarketCredentials: 'markets:getCredentials',
+  saveMarketCredentials: 'markets:saveCredentials',
+  removeMarketAccount: 'markets:removeAccount',
+  syncMarketAccount: 'markets:syncAccount',
+  getMarketListings: 'markets:listings',
+  getMarketSales: 'markets:sales',
+  getMarketTraffic: 'markets:traffic',
+  writeMarketListings: 'markets:writeListings',
+  pushMarketPrices: 'markets:pushPrices',
+  deleteMarketListings: 'markets:deleteListings',
+  relistMarketListings: 'markets:relist',
+  startMarketBulk: 'markets:bulkStart',
+  advanceMarketBulk: 'markets:bulkAdvance',
+  cancelMarketBulk: 'markets:bulkCancel',
+  setMarketSaleAuthCode: 'markets:saleAuthCode',
+  sendMarketSaleMessage: 'markets:saleMessage',
+  getMarketListingDefaults: 'markets:getDefaults',
+  setMarketListingDefaults: 'markets:setDefaults',
   getDomainEvents: 'domainEvents:list',
-  setDispositions: 'domainEvents:setDispositions',
   markSold: 'domainEvents:markSold',
-  restoreOwned: 'domainEvents:restoreOwned',
   setAlertsDismissed: 'domainEvents:setAlertsDismissed',
+  setDeparturesDropped: 'domainEvents:setDeparturesDropped',
+  setSaleTransferred: 'domainEvents:setSaleTransferred',
   deleteUserEvent: 'domainEvents:deleteUserEvent',
   deleteDomains: 'domainEvents:deleteDomains',
   getRegistrationQuote: 'pricing:registrationQuote',
@@ -298,7 +339,8 @@ export type CredentialValues = Record<string, string>;
  */
 export interface AppSettings {
   /**
-   * Background portfolio-sync interval in minutes; `0` disables auto-sync.
+   * Background sync interval for every registrar and market account, in
+   * minutes; `0` disables auto-sync.
    * Applied live when changed. See services/auto-sync.ts. `DOMBOT_SYNC_INTERVAL_MINUTES`,
    * when set, overrides this (a dev/testing escape hatch).
    */
@@ -385,6 +427,8 @@ export interface DomainPurchase {
   saleDate?: string | null;
   saleAmount?: string | null;
   saleCurrency?: string | null;
+  /** The sale's fees, in `saleCurrency`; null when unknown. */
+  saleFees?: string | null;
 }
 
 /** One purchase record to save or import. `domainName` is not stored on the record. */
@@ -412,9 +456,13 @@ export interface OwnershipItem {
 
 export interface SaleInput {
   domainName: string;
+  /** The `sold` event to edit, for a sale before the latest (a buyback). */
+  eventId?: string;
   saleDate: string | null;
   amount: string | null;
   currency: string | null;
+  /** Fees, in `currency`; blank is unknown. Omitted keeps what's stored. */
+  fees?: string | null;
   notes: string;
   /** The sync `removed` alert this answers; closes it. */
   resolves?: string;
@@ -457,8 +505,13 @@ export interface ImportRow {
   line: number;
   /** `toAscii(name)`. */
   domain: string;
-  status?: 'owned' | 'sold' | 'dropped' | 'archived' | 'removed';
-  /** A folder name; "Hidden" is the built-in one. */
+  /**
+   * `sold` records a sale. `ignored`: a word for a state DomBot works out
+   * from the expiry date (Expired, Dropped, …), kept only to warn when the
+   * row has no expiry. Owned and a blank cell write nothing.
+   */
+  status?: 'sold' | 'ignored';
+  /** A folder name. */
   folder?: string;
   notes?: string;
   registration?: {
@@ -622,6 +675,8 @@ export interface McpPendingApproval {
 
 /** A client that has been paired with the MCP server. */
 export interface McpClient {
+  /** Explicitly granted hosted permissions, when reported by the gateway. */
+  scopes?: string[];
   clientId: string;
   clientName: string;
   pairedAt: number;
@@ -674,6 +729,9 @@ export interface UrlForwardInput {
   /** Destination URL. */
   url: string;
   type: 'temporary' | 'permanent';
+  /** Whether the source host answers on HTTPS. Unset keeps the rule's current
+   *  mode; only some registrars accept a value (see registrar-client). */
+  https?: DomainForwardHttps;
 }
 
 export type DomainOp =
@@ -694,9 +752,27 @@ export type DomainOp =
       skipIfExisting?: boolean;
     }
   | { kind: 'authCode' }
-  | { kind: 'renew'; years: number };
+  | { kind: 'renew'; years: number }
+  /** Release a pending transfer-out (see `DomainTransferOut`) now. */
+  | { kind: 'approveTransfer' };
 
 export type DomainOpKind = DomainOp['kind'];
+
+/**
+ * A domain's outbound transfer as its registrar reports it: the request the
+ * gaining registrar made with the auth code. While it's `pending` the
+ * registrar holds the name for the owner to answer (Dynadot five days)
+ * before letting it go on its own. Dates are ISO timestamps.
+ */
+export interface DomainTransferOut {
+  status: TransferOutStatus;
+  /** The registrar's own label for it. */
+  rawStatus: string;
+  requestedAt: string | null;
+  /** When the request lapses or the registrar releases it unanswered. */
+  expiresAt: string | null;
+  completedAt: string | null;
+}
 
 export interface DomainTarget {
   accountId?: string;
@@ -857,31 +933,6 @@ export const FOLDER_COLORS: FolderColor[] = [
 ];
 
 /**
- * The built-in Hidden folder: names you still own but don't want in the usual
- * list (personal names, expiring ones you're letting go). Not stored in the
- * folders list and has no color, but a valid assignment target; like any
- * folder, a name is in it or in one other folder, never both. Hidden names
- * stay out of Owned until the folder filter selects Hidden.
- *
- * Before the domain history work the same idea was the Archive folder
- * (`'__archive__'`, and before that `'__hidden__'`); migration 2 moves those
- * assignments here. Archive is now an ownership action, not a folder.
- */
-export const HIDDEN_FOLDER_ID = '__hidden__';
-
-/** "Hidden" for the built-in folder; null for a user folder or no folder. */
-export function builtInFolderName(
-  id: string | null | undefined,
-): string | null {
-  return id === HIDDEN_FOLDER_ID ? 'Hidden' : null;
-}
-
-/** True for the built-in Hidden folder. */
-export function isHiddenFolder(id: string | null | undefined): boolean {
-  return id === HIDDEN_FOLDER_ID;
-}
-
-/**
  * Future per-folder configuration that cascades to the folder's domains. Kept
  * as an optional bag so new keys are purely additive; empty/absent today. The
  * motivating case is `forSale` — not yet acted on anywhere.
@@ -978,6 +1029,9 @@ export interface DombotApi {
    *  Computed locally (base rates + TLD rates + Sync-captured quotes +
    *  manual overrides). */
   getPortfolioPricing: () => Promise<Record<string, RenewalPricing>>;
+  /** The exchange rates fetched since the shipped archive, keyed by month or
+   *  day; convert with `ExchangeRates` (docs/exchange-rates.md). */
+  getExchangeRates: () => Promise<RateRows>;
   /** Every manual renewal price, keyed by the normalized domain name, for
    *  names you own or not (the CSV export reads Archive names' prices here). */
   getManualPrices: () => Promise<Record<string, RenewalPriceInput>>;
@@ -1031,6 +1085,9 @@ export interface DombotApi {
   getUrlForwarding: (target: DomainTarget) => Promise<DomainForward[]>;
   /** A domain's current email forwarding rules, read live (not cached). */
   getEmailForwarding: (target: DomainTarget) => Promise<EmailForward[]>;
+  /** A domain's latest outbound transfer, read live (not cached); null when
+   *  there is none. Rejects when the registrar can't report one. */
+  getTransferOut: (target: DomainTarget) => Promise<DomainTransferOut | null>;
 
   // Bulk jobs
   /** Start applying `op` to every target. Rejects if a job is already running.
@@ -1182,36 +1239,121 @@ export interface DombotApi {
     inputs: ListPriceInput[],
   ) => Promise<Record<string, ListPrice>>;
 
+  // Markets (docs/markets.md). Account changes return every account after.
+  /** The markets DomBot supports, for Settings → Markets. */
+  getMarketCatalog: () => Promise<MarketInfo[]>;
+  listMarketAccounts: () => Promise<MarketAccountView[]>;
+  /** Tests the credentials, saves the account, then syncs it. */
+  connectMarketAccount: (
+    market: MarketId,
+    credentials: Record<string, string>,
+    label?: string,
+  ) => Promise<MarketAccountView[]>;
+  renameMarketAccount: (
+    accountId: string,
+    label: string,
+  ) => Promise<MarketAccountView[]>;
+  /** Turning an account on syncs it. */
+  setMarketAccountEnabled: (
+    accountId: string,
+    enabled: boolean,
+  ) => Promise<MarketAccountView[]>;
+  getMarketCredentials: (accountId: string) => Promise<Record<string, string>>;
+  /** Tests the new credentials, saves them, then syncs. */
+  saveMarketCredentials: (
+    accountId: string,
+    credentials: Record<string, string>,
+  ) => Promise<MarketAccountView[]>;
+  removeMarketAccount: (accountId: string) => Promise<MarketAccountView[]>;
+  /** One account, or every enabled one when `accountId` is left out. */
+  syncMarketAccount: (accountId?: string) => Promise<MarketAccountView[]>;
+  /** Synced listings of enabled market accounts. */
+  getMarketListings: () => Promise<MarketListing[]>;
+  /** Every recorded market sale, newest first. */
+  getMarketSales: () => Promise<MarketSale[]>;
+  /** Account views and leads by day, and each listed name's totals. */
+  getMarketTraffic: () => Promise<MarketTraffic>;
+  /** List or update names on a market account; only the fields given change. */
+  writeMarketListings: (
+    accountId: string,
+    changes: MarketListingChange[],
+  ) => Promise<MarketWriteResult[]>;
+  /** Make the market's prices match DomBot's asking prices for these names. */
+  pushMarketPrices: (
+    accountId: string,
+    names: string[],
+  ) => Promise<MarketWriteResult[]>;
+  deleteMarketListings: (
+    accountId: string,
+    names: string[],
+  ) => Promise<MarketWriteResult[]>;
+  relistMarketListings: (
+    accountId: string,
+    names: string[],
+    mode?: 'RESYNC' | 'REACTIVATE',
+  ) => Promise<MarketWriteResult[]>;
+  /**
+   * Start a market bulk job, for writes too large to wait on (markets that
+   * write one name per call). One at a time; runs beside registrar jobs.
+   */
+  startMarketBulk: (
+    targets: MarketBulkTarget[],
+    op: MarketBulkOp,
+  ) => Promise<MarketBulkJob>;
+  /**
+   * The market job's progress. On a host that doesn't drive jobs itself
+   * (web), each call also runs it for a few seconds; poll it.
+   */
+  advanceMarketBulk: () => Promise<MarketBulkJob | null>;
+  cancelMarketBulk: (jobId: string) => Promise<void>;
+  /** Send a sale its auth code; without one, DomBot gets it from the registrar. */
+  setMarketSaleAuthCode: (
+    accountId: string,
+    saleId: string,
+    authCode?: string,
+  ) => Promise<{ name: string; fetched: boolean }>;
+  sendMarketSaleMessage: (
+    accountId: string,
+    saleId: string,
+    message: string,
+  ) => Promise<void>;
+  getMarketListingDefaults: (
+    accountId: string,
+  ) => Promise<Record<string, unknown>>;
+  setMarketListingDefaults: (
+    accountId: string,
+    settings: Record<string, unknown>,
+  ) => Promise<void>;
+
   // Domain history (docs/storage-model.md). Each change returns the whole log.
   /** Every domain event, oldest first. */
   getDomainEvents: () => Promise<DomainEvent[]>;
-  /**
-   * Mark names Dropped or Archived on `date` (blank: today). Each `resolves`
-   * closes the alert it answers.
-   */
-  setDispositions: (
-    items: OwnershipItem[],
-    type: 'dropped' | 'archived',
-    date?: string | null,
-  ) => Promise<DomainEvent[]>;
   /** Mark names Sold with no price, dated `date` (blank: today). */
   markSold: (
     items: OwnershipItem[],
     date?: string | null,
   ) => Promise<DomainEvent[]>;
-  /**
-   * "Move back to Owned": undo each name's Sold, Dropped, or Archived event.
-   * Names only removed by their registrar are skipped.
-   */
-  restoreOwned: (domainNames: string[]) => Promise<DomainEvent[]>;
   /** Acknowledge sync alerts with no action, or bring them back. */
   setAlertsDismissed: (
     ids: string[],
     dismissed: boolean,
   ) => Promise<DomainEvent[]>;
+  /** Mark departures dropped (no money came back), or not after all. */
+  setDeparturesDropped: (
+    ids: string[],
+    dropped: boolean,
+  ) => Promise<DomainEvent[]>;
+  /** Mark a sale's name handed over to the buyer, or not after all. */
+  setSaleTransferred: (
+    id: string,
+    transferred: boolean,
+  ) => Promise<DomainEvent[]>;
   /** Undo one of your own events. Sync events can't be deleted. */
   deleteUserEvent: (id: string) => Promise<DomainEvent[]>;
-  /** Delete everything DomBot holds about each name. */
+  /**
+   * Delete everything DomBot holds about each name no connected account
+   * holds (imported and Archive names).
+   */
   deleteDomains: (domainNames: string[]) => Promise<DomainEvent[]>;
   /** This registrar's registration fee for a name that just arrived. */
   getRegistrationQuote: (

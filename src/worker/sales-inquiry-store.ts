@@ -8,7 +8,7 @@ import {
   type SaleInquiry,
   type PublishedSale,
   type DeliveryState,
-} from '../shared/sales';
+} from '../shared/hosted-sales';
 import { conflict, SalesError } from '../shared/sales-review';
 import { saleOutcomeSchema, SALE_RETENTION } from '../shared/sales-events';
 import { SalesStore } from './sales-store';

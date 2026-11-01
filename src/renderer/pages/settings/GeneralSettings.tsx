@@ -192,7 +192,7 @@ export default function GeneralSettings() {
           <>
             <SettingsField
               label="Preferred currency"
-              description="The default for new amounts. Saved amounts keep their own currency."
+              description="Totals and reports are shown in this currency, and new amounts start in it. Saved amounts keep their own currency."
             >
               <div>
                 <div className="w-full max-w-72">

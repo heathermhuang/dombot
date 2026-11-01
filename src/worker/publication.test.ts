@@ -233,8 +233,9 @@ describe('publication database and HTTP boundary', () => {
     expect(await sealed.get('registrar-domains', accountId)).toMatchObject({
       data: { domains: [{ domainName: 'visible.com', accountId }] },
     });
-    expect(await sealed.list('domain-folders')).toEqual({
-      'visible.com': '__hidden__',
+    expect(await sealed.list('domain-folders')).toEqual({});
+    expect(await sealed.list('hosted-legacy-folders')).toEqual({
+      'visible.com': '__archive__',
     });
     expect(await sealed.get('domain-prices', 'visible.com')).toEqual({
       amount: '25.00',

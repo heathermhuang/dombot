@@ -1,6 +1,6 @@
 import { useShopDraft } from '../../lib/sales-drafts';
 import { useEffect, useState } from 'react';
-import type { SaleShop } from '../../../shared/sales';
+import type { SaleShop } from '../../../shared/hosted-sales';
 import type {
   SalesShopState,
   SalesListing,

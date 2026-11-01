@@ -18,7 +18,7 @@ import type { PresencePage } from '../../../shared/publishing-presence';
 import type { SalesListing } from '../../../shared/sales-api';
 import type { SalesReview } from '../../../shared/sales-review';
 import type { PublicationReceipt } from '../../../shared/publication-change-set';
-import { salePriceLabel, saleModeLabel } from '../../../shared/sales';
+import { salePriceLabel, saleModeLabel } from '../../../shared/hosted-sales';
 import { siteChanges } from '../../../shared/owner-site-review';
 import { SitePreview } from './SitePreview';
 

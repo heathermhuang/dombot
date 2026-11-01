@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { canonicalDomain } from '../shared/publication';
-import { inquirySchema, salePriceLabel, saleModeLabel } from '../shared/sales';
+import { inquirySchema, salePriceLabel, saleModeLabel } from '../shared/hosted-sales';
 import {
   renderSalesLander,
   salesPage,

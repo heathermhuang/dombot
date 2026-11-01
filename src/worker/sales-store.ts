@@ -16,7 +16,7 @@ import {
   type SaleDestination,
   type SaleShop,
   type PublishedSale,
-} from '../shared/sales';
+} from '../shared/hosted-sales';
 import {
   salesReviewSchema,
   conflict,

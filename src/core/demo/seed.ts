@@ -40,22 +40,32 @@ export interface DemoFolder {
   domains: string[];
 }
 
+/** The asking price you set in DomBot for a name (Pricing). */
+export interface DemoAskingPrice {
+  /** Whole USD; null for offers only. */
+  amount: string | null;
+  minOffer: string | null;
+  floor: string | null;
+}
+
 export interface DemoSeed {
   accounts: DemoAccount[];
   records: DemoDomainRecord[];
   folders: DemoFolder[];
+  /** About two thirds of the names, all in For Sale (or Dropping/Transfer). */
+  askingPrices: Record<string, DemoAskingPrice>;
   /** `${accountId}:${domainName}` → USD, for the "manual price" source. */
   manualPrices: Record<string, number>;
 }
 
 export const DEFAULT_DEMO_SEED = 20260907;
-export const DEFAULT_DEMO_SIZE = 524;
+export const DEFAULT_DEMO_SIZE = 250;
 /** How many domains may share a name with another (on a different TLD). */
 const MAX_LABEL_REPEATS = 2;
 
 // ── the registrars in the demo ───────────────────────────────────────────────
-// Shares sum to 1. NameSilo, NameBright and Name.com are left unconfigured
-// so the settings page shows both states. Gandi is connected and also has a
+// Shares sum to 1. Name.com is left unconfigured so the settings page shows
+// both states. Gandi is connected and also has a
 // name you added by hand (api/demo.ts), so both kinds show side by side.
 // Namecheap has two accounts with account names, to show how siblings read.
 // A registrar's first account keeps the default id (the registrar name); a
@@ -67,7 +77,7 @@ const ACCOUNTS: (Omit<DemoAccount, 'id'> & { id?: string })[] = [
     registrar: 'godaddy',
     label: 'Default',
     credentials: { apiToken: 'demo_gd_3f9a1c7e2b4d5a6f8e1c9b7d3a2f4e6c' },
-    share: 0.33,
+    share: 0.28,
   },
   {
     registrar: 'porkbun',
@@ -76,7 +86,7 @@ const ACCOUNTS: (Omit<DemoAccount, 'id'> & { id?: string })[] = [
       apiKey: 'pk1_demo_0c7d5b3a9e1f2c4d6b8a0e2f4c6d8a1b',
       secretApiKey: 'sk1_demo_8a2b4c6d0e2f4a6b8c0d2e4f6a8b0c2d',
     },
-    share: 0.25,
+    share: 0.22,
   },
   {
     registrar: 'cloudflare',
@@ -85,7 +95,7 @@ const ACCOUNTS: (Omit<DemoAccount, 'id'> & { id?: string })[] = [
       apiToken: 'demo_cf_Zt7Qk9x2Lm4Pv8Rw1Ny6Hb3Jd5Fg0Sc',
       accountId: '0123456789abcdef0123456789abcdef',
     },
-    share: 0.17,
+    share: 0.15,
   },
   {
     registrar: 'dynadot',
@@ -94,7 +104,7 @@ const ACCOUNTS: (Omit<DemoAccount, 'id'> & { id?: string })[] = [
       apiKey: 'demo_dyn_7f3e9c1a5b2d8e4f',
       apiSecret: 'demo_dyn_secret_2b8d4f6a1c3e5a7b',
     },
-    share: 0.12,
+    share: 0.1,
   },
   {
     registrar: 'namecheap',
@@ -131,6 +141,27 @@ const ACCOUNTS: (Omit<DemoAccount, 'id'> & { id?: string })[] = [
     label: 'Default',
     credentials: { apiKey: 'demo_gandi_pat_6d1f3b8e2a4c7e9f0b5d' },
     share: 0.03,
+  },
+  {
+    registrar: 'namesilo',
+    label: 'Default',
+    credentials: { apiKey: 'demo_ns_4c8e2a6b0d9f1e3a5c7b' },
+    share: 0.05,
+  },
+  {
+    registrar: 'namebright',
+    label: 'Default',
+    credentials: {
+      clientId: 'demo-namebright',
+      clientSecret: 'demo_nb_secret_9e7c5a3b1d2f4a6c',
+    },
+    share: 0.03,
+  },
+  {
+    registrar: '101domain',
+    label: 'Default',
+    credentials: { apiKey: 'demo_101_2f6a0c4e8b1d3f5a7c9e' },
+    share: 0.04,
   },
 ];
 
@@ -779,8 +810,13 @@ const REGISTRANT: Contact = {
 
 // ── generator ────────────────────────────────────────────────────────────────
 
+/** Asking prices, whole USD: mostly mid-range, a few high. */
+const ASKING_PRICES = [
+  1495, 1995, 2500, 2995, 3500, 4800, 5995, 7500, 8800, 12500, 19500, 35000,
+] as const;
+
 /** mulberry32: small, fast, good enough for a demo. */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -791,7 +827,7 @@ function rng(seed: number): () => number {
   };
 }
 
-function pick<T>(r: () => number, list: readonly T[]): T {
+export function pick<T>(r: () => number, list: readonly T[]): T {
   return list[Math.floor(r() * list.length)];
 }
 
@@ -914,8 +950,8 @@ export function generateDemoSeed(
       used.add(domainName);
       usedLabels.add(domainName.slice(0, domainName.indexOf('.')));
 
-      // Expiry: most within the next 18 months, a handful overdue, and a few
-      // far out (multi-year renewals). A small slice of the overdue sits in the
+      // Expiry: most within the next 18 months, a few overdue (about 2.5%)
+      // or due within 30 days (5%), and a few far out (multi-year renewals). A small slice of the overdue sits in the
       // registry grace and redemption windows so those lifecycle states show in
       // the demo. Created 1–9 years ago. Each branch consumes exactly one r()
       // so the rest of the seed stays put.
@@ -925,13 +961,13 @@ export function generateDemoSeed(
       if (roll < 0.006) {
         daysOut = -35 - Math.floor(r() * 40); // ~35–74 days past due
         lifecycle = 'redemption';
-      } else if (roll < 0.024) {
+      } else if (roll < 0.016) {
         daysOut = -1 - Math.floor(r() * 28); // within the ~30-day grace window
         lifecycle = 'grace';
-      } else if (roll < 0.05) {
+      } else if (roll < 0.025) {
         daysOut = -Math.floor(r() * 25) - 1;
         lifecycle = 'expired';
-      } else if (roll < 0.15) {
+      } else if (roll < 0.075) {
         daysOut = Math.floor(r() * 30);
         lifecycle = 'active';
       } else if (roll < 0.85) {
@@ -1014,40 +1050,77 @@ export function generateDemoSeed(
     }
   }
 
-  // Folders: a few themes, each holding a slice of the portfolio.
+  // Folders and asking prices. Personal and Projects are never for sale.
+  // About two thirds of the portfolio has an asking price in DomBot: those
+  // are For Sale, except a few on their way out (Dropping, Transfer), which
+  // mix priced and unpriced names.
   const names = records.map((x) => x.domainName);
   const byTld = (tlds: string[]) =>
     names.filter((n) => tlds.includes(n.slice(n.indexOf('.') + 1)));
+  const personal = names.filter((_, i) => i % 13 === 0).slice(0, 12);
+  const projects = byTld(['dev', 'app', 'sh', 'tech'])
+    .filter((n) => !personal.includes(n))
+    .slice(0, 20);
+  const keep = new Set([...personal, ...projects]);
+  const rest = names.filter((n) => !keep.has(n));
+  const dropping = rest.filter((_, i) => i % 17 === 6).slice(0, 8);
+  const transfer = rest.filter((_, i) => i % 19 === 2).slice(0, 6);
+  const pricedCount = Math.round((names.length * 2) / 3);
+  const priced = new Set(
+    // Every name not kept back, in a seeded order, the first two thirds.
+    [...rest]
+      .sort((a, b) => hash(`${a}${seed}`) - hash(`${b}${seed}`))
+      .slice(0, pricedCount),
+  );
+  const askingPrices: Record<string, DemoAskingPrice> = {};
+  for (const name of names) {
+    if (!priced.has(name)) continue;
+    const amount = pick(r, ASKING_PRICES);
+    // A few take offers only: no Buy Now price, just a minimum offer.
+    const offersOnly = r() < 0.08;
+    askingPrices[name] = {
+      amount: offersOnly ? null : String(amount),
+      minOffer:
+        offersOnly || r() < 0.7
+          ? String(Math.max(100, Math.round((amount * 0.3) / 50) * 50))
+          : null,
+      floor:
+        !offersOnly && r() < 0.35
+          ? String(Math.round((amount * 0.6) / 50) * 50)
+          : null,
+    };
+  }
+  const inOther = new Set([...dropping, ...transfer]);
   const folders: DemoFolder[] = [
     {
-      name: 'Open to inquiries',
+      name: 'For Sale',
       color: 'green',
       description: 'Listed, or should be',
-      domains: names.filter((_, i) => i % 8 === 3).slice(0, 60),
+      domains: names.filter((n) => priced.has(n) && !inOther.has(n)),
     },
     {
       name: 'Personal',
       color: 'blue',
-      description: 'Not accepting inquiries',
-      domains: names.filter((_, i) => i % 9 === 0).slice(0, 24),
+      description: 'Not for sale at any price',
+      domains: personal,
     },
     {
       name: 'Projects',
       color: 'violet',
       description: 'Things that shipped, or nearly did',
-      domains: byTld(['dev', 'app', 'sh', 'tech']),
+      domains: projects,
     },
     {
       name: 'Dropping',
       color: 'orange',
       description: 'Letting these expire',
-      domains: names.filter((_, i) => i % 17 === 6).slice(0, 8),
+      domains: dropping,
     },
     {
       name: 'Transfer',
       color: 'red',
       description: 'Moving to a cheaper registrar',
-      domains: names.filter((_, i) => i % 19 === 2).slice(0, 6),
+      domains: transfer,
     },
   ];
   // A domain lives in one folder at most; earlier folders win.
@@ -1067,5 +1140,5 @@ export function generateDemoSeed(
       Math.round((base ?? 12) * (0.8 + r() * 0.5) * 100) / 100;
   }
 
-  return { accounts, records, folders, manualPrices };
+  return { accounts, records, folders, askingPrices, manualPrices };
 }

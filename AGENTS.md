@@ -42,3 +42,9 @@
 
 - Keep custom domains gated separately from short handles. Require a published profile, a fresh per-plan TXT ownership proof, active provider/TLS state, an exact public-edge route and a successful HTTPS visit before activation. Never forward account authority to customer hosts.
 - Migration 0016 shares hostname reservations with Sales; keep the guard effective during rollback. Unknown provider writes require reconciliation, never blind retry. Detach revokes public routing first and invalidates the old plan. See `docs/portfolio-custom-domains.md` for configuration, limits and release qualification.
+
+## Upstream feature parity
+
+- domains.domains provides the complete upstream DomBot feature set as a hosted service, plus hosted capabilities upstream lacks. Full upstream integration is the default; a selective patch release must never be described as full upstream sync.
+- Use upstream Domains/Owned/Listings/Archive, Sales, market adapters/settings, reporting and MCP tools as the primary application. Hosted public-page compatibility must not replace upstream's marketplace listing or Sales screens.
+- Preserve tenant isolation, encrypted credentials, existing data/public URLs and explicit publication. Keep a pinned parity inventory and test upstream API/tool/page coverage. Import upstream backups and retain hosted historical records; bump backup format before an older hosted binary could silently discard new namespaces.

@@ -267,7 +267,7 @@ results report is the retry surface.
 - Electron: a `setInterval` honoring `autoSyncIntervalMinutes`.
 - Worker: an **hourly** Cron Trigger (`"crons": ["0 * * * *"]`) →
   `scheduled()` → `syncAll()`, which reads `autoSyncIntervalMinutes` and
-  returns immediately unless the last sync is older than that interval. The
+  skips ordinary refreshes unless the last sync is older than that interval. The
   cron cadence is the _floor_ — it matches the shortest option the Settings
   control offers ("Every hour") — and the setting decides the actual
   frequency, so the web host honors every interval the desktop does. A
@@ -376,11 +376,11 @@ migration is credentials, which used to be one safeStorage-encrypted blob
 Idempotent, and covered by tests that seed a plaintext blob, an encrypted
 blob, and an unreadable one.
 
-**Desktop → web transfer.** Settings → Sync exports a JSON bundle of every
+**Desktop → web transfer.** Settings → Import/Export exports a JSON bundle of every
 exported namespace (`src/core/storage/bundle.ts`), optionally sealed with a
 passphrase in the browser (`src/shared/bundle-seal.ts`, PBKDF2 + AES-GCM, so
 the key stretching never runs on the Worker). The other instance imports it
-from Settings → Sync, so a desktop user can move to their own instance
+from Settings → Import/Export, so a desktop user can move to their own instance
 without re-entering keys or redoing folders.
 
 ### Cloud-agnostic seams

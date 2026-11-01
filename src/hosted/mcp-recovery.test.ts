@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { Accounts } from './accounts';
 import { opaqueToken, passwordHash, tokenHash } from './crypto';
 import gateway from './gateway';
+import { verifyGatewayRequest } from '../shared/gateway-proof';
+const delegatedScopes: string[][] = [];
 
 const origin = 'https://domains.domains';
 const password = 'controlled-original-password';
@@ -34,6 +36,7 @@ beforeAll(async () => {
     '0005_passwordless_passkeys.sql',
     '0010_shared_mcp.sql',
     '0011_passkey_names.sql',
+    '0021_shared_mcp_permissions.sql',
   ])
     await db.exec(
       readFileSync('hosted/migrations/' + file, 'utf8')
@@ -53,6 +56,12 @@ beforeEach(async () => {
   const tenant = {
     async fetch(input: RequestInfo | URL) {
       const request = input as Request;
+      const admission = await verifyGatewayRequest(
+        'controlled-gateway-key-'.repeat(3),
+        ids[0],
+        request,
+      );
+      if (admission?.mcp) delegatedScopes.push(admission.mcp.scopes);
       return Response.json({
         result:
           new URL(request.url).pathname === '/api/getSettings'
@@ -63,6 +72,7 @@ beforeEach(async () => {
   } as Fetcher;
   env = {
     CONTROL_DB: db,
+    SHARED_MCP_MANAGEMENT_ENABLED: 'true',
     AUTH_PEPPER: 'controlled-mcp-recovery-pepper-'.repeat(3),
     GATEWAY_KEYS: JSON.stringify(
       Object.fromEntries(
@@ -80,6 +90,7 @@ beforeEach(async () => {
     WORKSPACE_0: tenant,
     WORKSPACE_1: tenant,
   } as HostedEnv;
+  delegatedScopes.length = 0;
   accounts = new Accounts(db, env.AUTH_PEPPER);
   sessions = [];
   const encoded = await passwordHash(password, env.AUTH_PEPPER);
@@ -133,7 +144,7 @@ function post(path: string, body: unknown, session?: string, database = db) {
     { ...env, CONTROL_DB: database },
   );
 }
-async function consent(i = 0) {
+async function consent(i = 0, permissions?: string) {
   const challenge = Buffer.from(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
   ).toString('base64url');
@@ -148,6 +159,7 @@ async function consent(i = 0) {
           code_challenge: challenge,
           code_challenge_method: 'S256',
           resource: origin + '/mcp',
+          ...(permissions ? { scope: permissions } : {}),
         }),
     ),
     env,
@@ -161,6 +173,8 @@ async function consent(i = 0) {
   );
   expect(page.status).toBe(200);
   const html = await page.text();
+  if (permissions?.includes('domains:write'))
+    expect(html).toContain('granting management access');
   return {
     id: html.match(/name="id" value="([a-f0-9]+)"/)![1],
     csrf: html.match(/name="csrf" value="([a-f0-9]+)"/)![1],
@@ -442,4 +456,71 @@ describe('password recovery revokes shared SaaS MCP authority atomically', () =>
     expect((await mcpAdmission(token)).status).toBe(200);
     expect((await exchange(code)).status).toBe(200);
   });
+});
+
+it('persists explicit management consent and never upgrades a read-only grant from request parameters', async () => {
+  const ro = await grant(0);
+  expect((await mcpAdmission(ro)).status).toBe(200);
+  expect(delegatedScopes.at(-1)).toEqual(['portfolio:read']);
+  const form = await consent(0, 'domains:write portfolio:read');
+  const approved = await post('/oauth/consent', form, sessions[0]);
+  expect(approved.status).toBe(303);
+  const code = new URL(approved.headers.get('location')!).searchParams.get(
+    'code',
+  )!;
+  const response = await exchange(code);
+  expect(response.status).toBe(200);
+  const rw = (await response.json()) as { scope: string; access_token: string };
+  expect(rw.scope).toBe('portfolio:read domains:write');
+  expect((await mcpAdmission(rw.access_token)).status).toBe(200);
+  expect(delegatedScopes.at(-1)).toEqual(['portfolio:read', 'domains:write']);
+  const forged = await gateway.fetch(
+    new Request(origin + '/mcp?scope=domains:write', {
+      headers: {
+        Authorization: 'Bearer ' + ro,
+        Accept: 'application/json, text/event-stream',
+      },
+    }),
+    env,
+  );
+  expect(forged.status).toBe(200);
+  expect(delegatedScopes.at(-1)).toEqual(['portfolio:read']);
+  const stored = await db
+    .prepare('SELECT scope FROM mcp_grants ORDER BY created_at')
+    .all<{ scope: string }>();
+  expect(stored.results.map((r) => r.scope)).toContain('portfolio:read');
+  expect(stored.results.map((r) => r.scope)).toContain(
+    'portfolio:read domains:write',
+  );
+});
+
+it('keeps existing read grants usable while the management rollout gate is off', async () => {
+  const read = await grant(0);
+  env.SHARED_MCP_MANAGEMENT_ENABLED = 'false';
+  const discovery = await gateway.fetch(
+    new Request(origin + '/.well-known/oauth-authorization-server'),
+    env,
+  );
+  expect(
+    ((await discovery.json()) as { scopes_supported: string[] })
+      .scopes_supported,
+  ).toEqual(['portfolio:read']);
+  expect((await mcpAdmission(read)).status).toBe(200);
+  const challenge = Buffer.from(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
+  ).toString('base64url');
+  const request = new Request(
+    origin +
+      '/authorize?' +
+      new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: 'http://127.0.0.1:4567/callback',
+        response_type: 'code',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+        resource: origin + '/mcp',
+        scope: 'portfolio:read domains:write',
+      }),
+  );
+  expect((await gateway.fetch(request, env)).status).toBe(400);
 });

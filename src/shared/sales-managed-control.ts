@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { saleDomainSchema } from './sales';
+import { saleDomainSchema } from './hosted-sales';
 
 /** Operator deployment metadata, never accepted from a seller request or backup. */
 const lease = {

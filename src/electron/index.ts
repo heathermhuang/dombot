@@ -21,6 +21,10 @@ import {
 import { isStdioShimMode, runStdioShim } from './mcp/stdio';
 import { startAutoSync, stopAutoSync } from '../core/services/auto-sync';
 import {
+  enableRateFetch,
+  refreshExchangeRates,
+} from '../core/services/exchange-rates';
+import {
   abandonInterruptedBulk,
   cancelBulk,
   setBulkAutoDrive,
@@ -196,8 +200,9 @@ function runApp(): void {
     // can touch one. Also runs the one-time legacy-credentials migration.
     await initStorage();
     configureProxyTransport(desktopProxyFetch);
-    // Bulk jobs: the desktop drives them in-process, and a job left running
-    // by a crash/quit is closed out (never silently resumed — renew is money).
+    // Bulk jobs: the desktop drives them in-process, and a registrar job left
+    // running by a crash/quit is closed out (never silently resumed — renew
+    // is money); a market job carries on with the names it hadn't sent.
     setBulkAutoDrive(true);
     abandonInterruptedBulk();
     forwardCoreEventsToWindows();
@@ -230,6 +235,9 @@ function runApp(): void {
     // Keep the cache the MCP tools serve warm without a manual Sync
     // (DOMBOT_SYNC_INTERVAL_MINUTES=0 disables).
     startAutoSync();
+    // The first background sync is a day away; rates are checked now too.
+    enableRateFetch();
+    void refreshExchangeRates();
   });
 
   app.on('will-quit', () => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SaleDestination } from '../../../shared/sales';
+import type { SaleDestination } from '../../../shared/hosted-sales';
 import {
   salesRequest,
   useSalesData,

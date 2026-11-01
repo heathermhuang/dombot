@@ -35,16 +35,29 @@ import {
 } from '../services/purchases';
 import { getManualPrices, setManualPrice } from '../services/pricing';
 import {
-  restoreOwned,
   setAlertsDismissed,
-  setDispositions,
+  setDeparturesDropped,
+  setSaleTransferred,
 } from '../services/domain-history';
-import { applyDomainOp } from '../services/domain-ops';
-import { eventsFor, listEvents, nameNote } from '../services/domain-events';
-import { notifications } from '../../shared/notifications';
+import { applyDomainOp, getTransferOut } from '../services/domain-ops';
+import {
+  eventsFor,
+  listEvents,
+  nameNote,
+  putEvents,
+} from '../services/domain-events';
+import { changeEvent } from '../services/domain-changes';
+import { dnsRecordLine, type SettingChange } from '../../shared/domain-changes';
+import {
+  marketSyncFailures,
+  notifications,
+  reviewAlerts,
+  type SyncFailure,
+} from '../../shared/notifications';
 import {
   DomainEventSource,
   DomainEventType,
+  DomainSetting,
   localDay,
   type DomainEvent,
 } from '../../shared/domain-events';
@@ -59,13 +72,17 @@ import { broadcastPortfolioChanged } from '../events';
 import { assertDomainName, toAscii } from '../../shared/domain-name';
 import {
   FOLDER_COLORS,
-  HIDDEN_FOLDER_ID,
   type DomainOp,
   type FolderColor,
   type Portfolio,
 } from '../../shared/ipc';
 import { importedRows } from '../../shared/imported-domains';
-import { archiveRows, ownershipByDomain } from '../../shared/ownership';
+import {
+  archiveRows,
+  ownershipByDomain,
+  standingOf,
+} from '../../shared/ownership';
+import { cachedRegistered } from '../services/registration-lookup';
 import {
   DEFAULT_LIMIT,
   MAX_LIMIT,
@@ -76,6 +93,10 @@ import {
   type QueryArgs,
   type QueryResult,
 } from './portfolio-query';
+import { registerMarketTools } from './market-tools';
+import { marketListings, marketSales } from '../services/markets/sync';
+import { marketAccountViews } from '../services/markets/accounts';
+import { marketCatalog } from '../services/markets/registry';
 
 // Serialize a service result as a pretty-printed JSON text block — the simplest
 // MCP tool payload. (Dates become ISO strings via JSON.stringify.)
@@ -88,16 +109,27 @@ function json(data: unknown) {
 // Runs a cache-backed write (via a service fn that patches the portfolio/detail
 // caches on success) and, when the registrar reports success, notifies open
 // windows so an open Domains table reflects the change without a manual Sync.
+// With `change`, a success also goes in the name's history, as the agent's.
 // The raw OperationResult is returned so the caller sees the provider's message.
-async function cachedWrite(op: () => Promise<OperationResult>) {
+async function cachedWrite(
+  op: () => Promise<OperationResult>,
+  change?: { domain: string; accountId: string; change: SettingChange },
+) {
   const result = await op();
+  if (result.success && change)
+    putEvents([
+      changeEvent(change.domain, change.change, DomainEventSource.Agent, {
+        accountId: change.accountId,
+      }),
+    ]);
   if (result.success) broadcastPortfolioChanged();
   return json(result);
 }
 
 // Runs a per-domain op through the shared dispatcher (services/domain-ops.ts) —
 // the exact path the table's row controls use — so capability gating, cache
-// patching, and the window notification are identical. Returns the provider's
+// patching, the window notification, and the history are identical (recorded
+// as the agent's). Returns the provider's
 // message plus the classified `status` (ok / failed / unsupported / …); `success`
 // is kept for callers that only check a boolean.
 async function domainOp(
@@ -109,6 +141,7 @@ async function domainOp(
   const r = await applyDomainOp(
     { registrar, domainName: domain, accountId },
     op,
+    { source: DomainEventSource.Agent },
   );
   return json({
     accountId: r.target?.accountId ?? accountId,
@@ -142,10 +175,12 @@ function resolveRegistrar(
     }
     // A name that left your accounts is in Archive: syncing won't bring it
     // back, so say that instead.
-    const left = ownershipByDomain(eventsFor(key)).get(key);
-    if (left?.label) {
+    const o = ownershipByDomain(eventsFor(key), marketSales()).get(key);
+    const row = o && archiveRows(new Map([[key, o]]), [], null)[0];
+    const label = row && standingOf(row, o, cachedRegistered().get(key)).label;
+    if (label) {
       throw new Error(
-        `"${domainName}" is in Archive (${left.label}) and none of your accounts reports it, so there's no registrar to act on. Pass "registrar" if it's in an account DomBot doesn't sync. If it just came back to one of your accounts, run portfolio_sync.`,
+        `"${domainName}" is in Archive (${label}) and none of your accounts reports it, so there's no registrar to act on. Pass "registrar" if it's in an account DomBot doesn't sync. If it just came back to one of your accounts, run portfolio_sync.`,
       );
     }
     throw new Error(
@@ -223,6 +258,7 @@ const contactSet = z.object({
   tech: contact.optional(),
   billing: contact.optional(),
 });
+const CONTACT_ROLES = ['registrant', 'admin', 'tech', 'billing'] as const;
 
 // A single DNS record in provider-agnostic form.
 const dnsRecord = z.object({
@@ -268,6 +304,12 @@ const domainForward = z.object({
     .enum(['temporary', 'permanent'])
     .describe(
       'Redirect style: "temporary" (302) or "permanent" (301). Both show the destination URL in the address bar.',
+    ),
+  https: z
+    .enum(['off', 'on', 'only'])
+    .optional()
+    .describe(
+      'Whether the SOURCE host answers on HTTPS: "off" (HTTP only), "on" (HTTP and HTTPS), "only" (HTTPS, redirecting HTTP to it). The destination scheme is part of `url`. Omit it to keep the rule\'s current mode (or the registrar default for a new rule). Only Gandi lets you choose; Cloudflare accepts "on" (always on); other registrars reject a value. On Gandi, turning HTTPS on can leave the forward unreachable until its certificate is issued.',
     ),
 });
 
@@ -354,7 +396,7 @@ const queryShape = {
     .enum(['owned', 'archive', 'all'])
     .optional()
     .describe(
-      'Which names to cover, like the Domains page’s Owned / Archive switch (default "owned"). "owned": names you hold, Hidden ones included. "archive": names you sold, dropped, or archived, or that left your accounts; rows say why in `archiveLabel`. "all": both.',
+      'Which names to cover, like the Domains page’s Owned / Archive switch (default "owned"). "owned": names you hold, including ones whose auto-renew is off and ones you sold that the buyer hasn’t taken yet. "archive": names you no longer have; rows say why in `archiveLabel` (sold, deleted, expired, dropped, or removed). "all": both.',
     ),
   accountId,
   registrar: registrar.optional().describe('Only this registrar.'),
@@ -372,7 +414,7 @@ const queryShape = {
     .string()
     .optional()
     .describe(
-      'Only domains in this folder — a folder name or id, or "Hidden" for the built-in Hidden folder. Unknown folder → no rows.',
+      'Only domains in this folder — a folder name or id. Unknown folder → no rows.',
     ),
   nameContains: z
     .string()
@@ -385,6 +427,79 @@ const queryShape = {
     .optional()
     .describe(
       'Only domains with a nameserver containing this substring (case-insensitive). Needs the domain enriched with detail; un-enriched domains without list nameservers are excluded.',
+    ),
+  listedOn: z
+    .enum(['afternic', 'atom', 'sedo'])
+    .optional()
+    .describe(
+      'Only names listed on this market (any listing status), as of the last market_sync.',
+    ),
+  notListedOn: z
+    .enum(['afternic', 'atom', 'sedo'])
+    .optional()
+    .describe(
+      'Only names not listed on this market: the ones you could list there.',
+    ),
+  askingPrice: z
+    .array(z.enum(['forSale', 'bin', 'minOffer', 'floor', 'none']))
+    .optional()
+    .describe(
+      'Only names whose asking price (set in DomBot) has any of these: `forSale` (any of a BIN price, minimum offer or floor price), `bin` (a BIN price), `minOffer` (a minimum offer), `floor` (a floor price, never shown to buyers), `none` (none of them, so not for sale).',
+    ),
+  binMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Only names with a BIN price of at least this whole amount (no price → excluded).',
+    ),
+  binMax: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Only names with a BIN price of at most this whole amount (no price → excluded).',
+    ),
+  minOfferMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Only names with a minimum offer of at least this whole amount (no minimum offer → excluded).',
+    ),
+  minOfferMax: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Only names with a minimum offer of at most this whole amount (no minimum offer → excluded).',
+    ),
+  floorMin: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Only names with a floor price of at least this whole amount (no floor price → excluded).',
+    ),
+  floorMax: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Only names with a floor price of at most this whole amount (no floor price → excluded).',
+    ),
+  priceCurrency: z
+    .string()
+    .length(3)
+    .optional()
+    .describe(
+      'With the BIN price, minimum offer and floor bounds: only match asking prices in this currency code, e.g. "USD". Amounts are never converted; without it, each name’s amount is compared in its own currency.',
     ),
   autoRenew: z.boolean().optional().describe('Filter by auto-renew on/off.'),
   locked: z.boolean().optional().describe('Filter by transfer lock on/off.'),
@@ -441,7 +556,7 @@ const queryShape = {
 function runQuery(args: QueryArgs): QueryResult {
   const { domains, fetchedAt, registrars, errors } = getMergedPortfolio();
   const { folders, assignments } = getFolders();
-  const ownership = ownershipByDomain(listEvents());
+  const ownership = ownershipByDomain(listEvents(), marketSales());
   // As on the Domains page: synced names, then imported names no account
   // reports, then names in Archive that neither covers (from the event log).
   const listed = [...domains, ...importedRows(getImportedDomains(), domains)];
@@ -457,8 +572,22 @@ function runQuery(args: QueryArgs): QueryResult {
       purchases: getPurchases(),
       listPrices: getListPrices(),
       pricing: getPortfolioPricing(),
+      registered: cachedRegistered(),
+      listedMarkets:
+        args.listedOn || args.notListedOn ? listedMarkets() : undefined,
     },
   );
+}
+
+/** Each listed name's markets, from the last market sync. */
+function listedMarkets(): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const l of marketListings()) {
+    const set = out.get(l.name) ?? new Set<string>();
+    set.add(l.market);
+    out.set(l.name, set);
+  }
+  return out;
 }
 
 /** Compact per-registrar sync status for the sync tools: what synced, how many
@@ -489,11 +618,8 @@ function syncSummary(portfolio: Portfolio) {
 //
 // Folders are DomBot-local (services/folders.ts, the same store Settings →
 // Folders and the Domains table write), so these tools never reach a registrar.
-// A folder is named by its name or id; "Hidden" is the built-in folder, which
-// can hold domains but can't be renamed or deleted. Names are matched
-// case-insensitively, so the tools keep them unique.
-
-const HIDDEN_NAME = 'Hidden';
+// A folder is named by its name or id. Names are matched case-insensitively,
+// so the tools keep them unique.
 
 const folderParam = z
   .string()
@@ -510,16 +636,14 @@ const folderName = z
 
 type FolderRef = { id: string; name: string };
 
-/** The folder with this id (Hidden included), or null. */
+/** The folder with this id, or null. */
 function folderById(id: string | null | undefined): FolderRef | null {
   if (!id) return null;
-  if (id === HIDDEN_FOLDER_ID) return { id, name: HIDDEN_NAME };
   const folder = getFolders().folders.find((f) => f.id === id);
   return folder ? { id: folder.id, name: folder.name } : null;
 }
 
-/** The folder a name or id names, or a guiding error. "Hidden" resolves to
- *  the built-in folder. */
+/** The folder a name or id names, or a guiding error. */
 function resolveFolder(param: string): FolderRef {
   const folder = folderById(resolveFolderId(param, getFolders().folders));
   if (!folder) {
@@ -530,21 +654,9 @@ function resolveFolder(param: string): FolderRef {
   return folder;
 }
 
-/** resolveFolder, refusing the built-in Hidden folder (for rename/delete). */
-function resolveUserFolder(param: string, action: string) {
-  const folder = resolveFolder(param);
-  if (folder.id === HIDDEN_FOLDER_ID) {
-    throw new Error(`Hidden is a built-in folder and can't be ${action}.`);
-  }
-  return folder;
-}
-
-/** Throws when `name` would collide with another folder (or Hidden). */
+/** Throws when `name` would collide with another folder. */
 function assertFolderNameFree(name: string, exceptId?: string): void {
   const lower = name.toLowerCase();
-  if (lower === HIDDEN_NAME.toLowerCase()) {
-    throw new Error(`"${name}" is the built-in Hidden folder's name.`);
-  }
   const clash = getFolders().folders.find(
     (f) => f.id !== exceptId && f.name.toLowerCase() === lower,
   );
@@ -587,10 +699,20 @@ function assertInPortfolio(domain: string): string {
 
 /** A name's Owned / Archive state, as portfolio_query rows report it. */
 function ownershipOf(key: string) {
-  const o = ownershipByDomain(eventsFor(key)).get(key);
-  return o?.label
-    ? { ownership: 'archive' as const, archiveLabel: o.label }
-    : { ownership: 'owned' as const, archiveLabel: null };
+  const o = ownershipByDomain(eventsFor(key), marketSales()).get(key);
+  const { domains } = getMergedPortfolio();
+  const listed = [...domains, ...importedRows(getImportedDomains(), domains)];
+  const row =
+    listed.find((d) => toAscii(d.domainName) === key) ??
+    (o ? archiveRows(new Map([[key, o]]), listed, null)[0] : undefined);
+  const s = row
+    ? standingOf(row, o, cachedRegistered().get(key))
+    : { archived: false, label: null, salePending: false };
+  return {
+    ownership: s.archived ? ('archive' as const) : ('owned' as const),
+    archiveLabel: s.label,
+    salePending: s.salePending,
+  };
 }
 
 /** A name's purchase and sale, as portfolio_query rows report them. */
@@ -612,23 +734,31 @@ function moneyOf(key: string) {
             date: p.saleDate ?? null,
             amount: p.saleAmount ?? null,
             currency: p.saleCurrency ?? null,
+            fees: p.saleFees ?? null,
           }
         : null,
   };
 }
 
-/** Accounts whose last sync failed, for the needs-review list (as the bell's
- *  syncProblems). */
-function syncFailures() {
-  return getRegistrarMetadata()
-    .filter((r) => r.configured && r.enabled && r.sync.lastError)
-    .map((r) => ({
-      accountId: r.accountId ?? r.name,
-      account: r.accountLabel ?? r.name,
-      message: r.sync.lastError!,
-      at: r.sync.lastErrorAt,
-    }));
+/** Registrar and market accounts whose last sync failed, for the
+ *  needs-review list (as the bell's syncProblems). */
+function syncFailures(): SyncFailure[] {
+  return [
+    ...getRegistrarMetadata()
+      .filter((r) => r.configured && r.enabled && r.sync.lastError)
+      .map((r) => ({
+        accountId: r.accountId ?? r.name,
+        account: r.accountLabel ?? r.name,
+        message: r.sync.lastError!,
+        at: r.sync.lastErrorAt,
+      })),
+    ...marketSyncFailures(marketAccountViews(), marketCatalog()),
+  ];
 }
+
+/** Which currencies an amount may be in, for each tool that takes one. */
+const CURRENCY_HELP =
+  'One of the 30 currencies DomBot converts, the European Central Bank’s reference currencies (USD, EUR, GBP, JPY, CAD, AUD and others); an amount already stored in another currency may keep it.';
 
 const resolvesParam = z
   .string()
@@ -686,7 +816,7 @@ export function registerTools(
       {
         title: 'Query portfolio',
         description:
-          'List, search, and filter your whole portfolio — every configured registrar plus the names you imported — the primary way to read the portfolio. Covers the names you own by default; pass `ownership` for Archive (sold, dropped, archived, or gone from your accounts) or both. Filter by registrar, source (synced or imported), TLD, folder, name, nameserver, auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort (including by estimated renewal price) and page the results. With no filters it returns every name you own (paged), so use it as a plain list too. Each row says `ownership` (owned/archive), `archiveLabel`, `hidden` (in the Hidden folder: still yours, still renews), `source` (`imported`: no connected account reports it), and `inAccount` (false for an imported name or an Archive name no account reports — the registrar-backed domain_* tools can’t act on those). Rows also carry what DomBot keeps per name: `paid` (date, amount, currency, registered or purchased), `sold`, `notes`, `askingPrice` (BIN price, minimum offer, floor), and `renewalPrice` (DomBot’s yearly estimate and its source, as domain_renewal_price). Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, staleAccounts, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete; `staleAccounts` lists accounts whose own last sync is old even if another synced since (`stale` is true then too). Rows carry only the fields you need — call domain_get for a single domain’s full record.',
+          'List, search, and filter your whole portfolio — every configured registrar plus the names you imported — the primary way to read the portfolio. Covers the names you own by default; pass `ownership` for Archive (names you no longer have) or both. To let a name go, turn its auto-renew off with domain_set_autorenew; nothing you hold goes to Archive by hand. Filter by registrar, source (synced or imported), TLD, folder, name, nameserver, market listing, asking price (for sale or not, BIN price, minimum offer and floor, with ranges), auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort (including by estimated renewal price) and page the results. With no filters it returns every name you own (paged), so use it as a plain list too. Each row says `ownership` (owned/archive), `archiveLabel` (sold, deleted: the lookup says nobody holds it, expired: it left after expiry, dropped: it left early and you marked it dropped, or removed: it left early with no sale, the one to review), `expiring` (owned, auto-renew off, expiring within 30 days), `salePending` (a sale recorded on a name you still hold), `source` (`imported`: no connected account reports it), and `inAccount` (false for an imported name or an Archive name no account reports — the registrar-backed domain_* tools can’t act on those). Rows also carry what DomBot keeps per name: `paid` (date, amount, currency, registered or purchased), `sold`, `notes`, `askingPrice` (BIN price, minimum offer, floor), and `renewalPrice` (DomBot’s yearly estimate and its source, as domain_renewal_price). Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, staleAccounts, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete; `staleAccounts` lists accounts whose own last sync is old even if another synced since (`stale` is true then too — registrar_sync just those, or portfolio_sync). Rows carry only the fields you need — call domain_get for a single domain’s full record.',
         inputSchema: queryShape,
         annotations: { readOnlyHint: true },
       },
@@ -704,7 +834,7 @@ export function registerTools(
         annotations: { readOnlyHint: true },
       },
       async () => {
-        const portfolio = await getPortfolio(true, 'mcp');
+        const portfolio = await getPortfolio(true);
         broadcastPortfolioChanged();
         return json(syncSummary(portfolio));
       },
@@ -718,7 +848,7 @@ export function registerTools(
       {
         title: 'List folders',
         description:
-          'List your folders — DomBot’s own groupings of domains, as in Settings → Folders — with each one’s id, name, description, color, and how many domains it holds. Includes the built-in Hidden folder (id "__hidden__", `builtIn: true`), which holds names you own but keep out of the usual list. Use a folder’s name or id with folder_rename, folder_delete, domain_set_folder, and portfolio_query’s `folder` filter.',
+          'List your folders — DomBot’s own groupings of domains, as in Settings → Folders — with each one’s id, name, description, color, and how many domains it holds. Use a folder’s name or id with folder_rename, folder_delete, domain_set_folder, and portfolio_query’s `folder` filter.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
       },
@@ -732,17 +862,8 @@ export function registerTools(
               name: f.name,
               description: f.description,
               color: f.color,
-              builtIn: false,
               domainCount: counts[f.id] ?? 0,
             })),
-            {
-              id: HIDDEN_FOLDER_ID,
-              name: HIDDEN_NAME,
-              description: 'Names you own but keep out of the usual list.',
-              color: null,
-              builtIn: true,
-              domainCount: counts[HIDDEN_FOLDER_ID] ?? 0,
-            },
           ],
         });
       },
@@ -754,7 +875,7 @@ export function registerTools(
       {
         title: 'Create a folder',
         description:
-          'Create a folder to group domains in. The name must not match an existing folder (case-insensitive) or "Hidden". Returns the new folder with its id; assign domains to it with domain_set_folder.',
+          'Create a folder to group domains in. The name must not match an existing folder (case-insensitive). Returns the new folder with its id; assign domains to it with domain_set_folder.',
         inputSchema: {
           name: folderName,
           description: z
@@ -780,7 +901,7 @@ export function registerTools(
           description: description?.trim() ?? '',
           color: color ?? 'blue',
         });
-        return localWrite({ ...folder, builtIn: false, domainCount: 0 });
+        return localWrite({ ...folder, domainCount: 0 });
       },
     );
 
@@ -790,12 +911,12 @@ export function registerTools(
       {
         title: 'Rename a folder',
         description:
-          'Rename a folder. Its domains stay in it. The built-in Hidden folder can’t be renamed, and the new name must not match another folder (case-insensitive).',
+          'Rename a folder. Its domains stay in it. The new name must not match another folder (case-insensitive).',
         inputSchema: { folder: folderParam, name: folderName },
         annotations: { readOnlyHint: false, idempotentHint: true },
       },
       async ({ folder, name }) => {
-        const target = resolveUserFolder(folder, 'renamed');
+        const target = resolveFolder(folder);
         assertFolderNameFree(name, target.id);
         updateFolder(target.id, { name });
         return localWrite({ id: target.id, name, previousName: target.name });
@@ -808,7 +929,7 @@ export function registerTools(
       {
         title: 'Delete a folder',
         description:
-          'Delete a folder. Its domains aren’t deleted or changed at any registrar — they just go back to no folder. The built-in Hidden folder can’t be deleted. Returns how many domains were unassigned.',
+          'Delete a folder. Its domains aren’t deleted or changed at any registrar — they just go back to no folder. Returns how many domains were unassigned.',
         inputSchema: { folder: folderParam },
         annotations: {
           readOnlyHint: false,
@@ -817,7 +938,7 @@ export function registerTools(
         },
       },
       async ({ folder }) => {
-        const target = resolveUserFolder(folder, 'deleted');
+        const target = resolveFolder(folder);
         const unassigned =
           folderCounts(getFolders().assignments)[target.id] ?? 0;
         deleteFolder(target.id);
@@ -829,10 +950,16 @@ export function registerTools(
     server.registerTool(
       'portfolio_alerts',
       {
-        title: 'List what needs review',
+        title: 'List alerts',
         description:
-          'What needs you, as the app’s bell shows it: accounts whose last sync failed (`sync-error`), names that left an account (`departure`, high priority: sold? dropped?), and names that arrived (`arrival`, low priority: what did you pay?). Most severe first, then newest. Answer a departure with domain_sale_set or domain_ownership_set and an arrival with domain_purchase_set, passing the alert’s `eventId` as `resolves`; or dismiss alerts with portfolio_alert_dismiss. A sync error clears on the account’s next good sync. Local — no registrar calls. Returns { total, counts, alerts }: `total` counts the matching alerts before paging, `counts` every alert by kind.',
+          'What’s new, as the app’s bell shows it: registrar or market accounts whose last sync failed (`sync-error`), names that left an account (`departure`: did you sell it?), and names that arrived (`arrival`: what did you pay?) that nobody has answered or dismissed yet. Most severe first, then newest. With `needsReview: true`, instead every arrival and departure the Activity page’s Needs review lists: the new ones, and the dismissed ones still missing their money (`dismissed: true`); no sync errors. Answer a departure with domain_sale_set and an arrival with domain_purchase_set (`kind` registered or purchased), passing the alert’s `eventId` as `resolves`; mark a departure that brought no money dropped, or dismiss alerts, with portfolio_alert_dismiss. A sync error clears on the account’s next good sync. Local — no registrar calls. Returns { total, counts, alerts }: `total` counts the matching alerts before paging, `counts` every alert listed by kind.',
         inputSchema: {
+          needsReview: z
+            .boolean()
+            .optional()
+            .describe(
+              'true: every arrival and departure still missing its money, dismissed or not (default false: what’s new).',
+            ),
           kind: z
             .enum(['sync-error', 'departure', 'arrival'])
             .optional()
@@ -855,8 +982,10 @@ export function registerTools(
         },
         annotations: { readOnlyHint: true },
       },
-      async ({ kind, limit, offset }) => {
-        const all = notifications(listEvents(), syncFailures());
+      async ({ needsReview, kind, limit, offset }) => {
+        const all = needsReview
+          ? reviewAlerts(listEvents())
+          : notifications(listEvents(), syncFailures());
         const counts = { 'sync-error': 0, departure: 0, arrival: 0 };
         for (const n of all) counts[n.kind] += 1;
         const matching = kind ? all.filter((n) => n.kind === kind) : all;
@@ -875,7 +1004,7 @@ export function registerTools(
       {
         title: 'Dismiss alerts',
         description:
-          'Dismiss sync alerts ("added" or "removed") without recording anything, as the app’s Dismiss review does, or bring them back with `dismissed: false`. Takes alert ids (`eventId`) from portfolio_alerts or domain_history; ids that aren’t alerts are skipped. A sync error can’t be dismissed. Local — no registrar calls. Returns which of the ids are still open.',
+          'Dismiss sync alerts ("added" or "removed") without recording anything, as the app’s Dismiss does, or bring them back with `dismissed: false`. A dismissed alert is no longer new, but stays in Needs review until its money is recorded. With `dropped: true`, instead mark departures dropped, as the app’s Mark dropped does: the name left and no money came back (let go early, or moved to a registrar DomBot doesn’t sync). That answers it for good and gives it Archive’s Dropped label; `dropped: false` undoes it. Takes alert ids (`eventId`) from portfolio_alerts or domain_history; ids that aren’t alerts (or, for `dropped`, departures) are skipped. A sync error can’t be dismissed. Local — no registrar calls. Returns which of the ids are still new.',
         inputSchema: {
           alertIds: z
             .array(z.string().max(40))
@@ -886,16 +1015,25 @@ export function registerTools(
             .boolean()
             .optional()
             .describe('false brings them back (default true).'),
+          dropped: z
+            .boolean()
+            .optional()
+            .describe(
+              'true marks departures dropped instead of dismissing; false undoes it.',
+            ),
         },
         annotations: { readOnlyHint: false, idempotentHint: true },
       },
-      async ({ alertIds, dismissed }) => {
-        setAlertsDismissed(alertIds, dismissed ?? true);
+      async ({ alertIds, dismissed, dropped }) => {
+        if (dropped !== undefined) setDeparturesDropped(alertIds, dropped);
+        else setAlertsDismissed(alertIds, dismissed ?? true);
         const open = new Set(
           notifications(listEvents(), []).map((n) => n.eventId),
         );
         return localWrite({
-          dismissed: dismissed ?? true,
+          ...(dropped !== undefined
+            ? { dropped }
+            : { dismissed: dismissed ?? true }),
           stillOpen: alertIds.filter((id) => open.has(id)),
         });
       },
@@ -954,7 +1092,7 @@ export function registerTools(
         annotations: { readOnlyHint: true },
       },
       async ({ accountId, registrar }) => {
-        const portfolio = await syncRegistrar(registrar, accountId, 'mcp');
+        const portfolio = await syncRegistrar(registrar, accountId);
         broadcastPortfolioChanged();
         return json(syncSummary(portfolio));
       },
@@ -1004,9 +1142,9 @@ export function registerTools(
           domains: z
             .array(z.string())
             .min(1)
-            .max(100)
+            .max(scopes === undefined ? Number.MAX_SAFE_INTEGER : 100)
             .describe(
-              '1–100 domain names to check, e.g. ["example.com", "example.net"]',
+              'Domain names to check, e.g. ["example.com", "example.net"]',
             ),
         },
         annotations: { readOnlyHint: true },
@@ -1132,13 +1270,13 @@ export function registerTools(
       {
         title: 'Set a domain’s folder',
         description:
-          'For a single domain: put it in a folder (by name or id; "Hidden" for the built-in Hidden folder), or pass `folder: null` to take it out of its folder. A domain is in at most one folder, so this replaces any current one. DomBot-local — no registrar call. The domain must be in your portfolio (owned or Archive); run portfolio_sync if it was added recently.',
+          'For a single domain: put it in a folder (by name or id), or pass `folder: null` to take it out of its folder. A domain is in at most one folder, so this replaces any current one. DomBot-local — no registrar call. The domain must be in your portfolio (owned or Archive); run portfolio_sync if it was added recently.',
         inputSchema: {
           domain,
           folder: folderParam
             .nullable()
             .describe(
-              'A folder name or id from folder_list, "Hidden", or null for no folder.',
+              'A folder name or id from folder_list, or null for no folder.',
             ),
         },
         annotations: { readOnlyHint: false, idempotentHint: true },
@@ -1212,7 +1350,9 @@ export function registerTools(
             .string()
             .max(10)
             .optional()
-            .describe('ISO 4217 code, e.g. "USD". Required unless clearing.'),
+            .describe(
+              `ISO 4217 code, e.g. "USD". Required unless clearing. ${CURRENCY_HELP}`,
+            ),
         },
         annotations: { readOnlyHint: false, idempotentHint: true },
       },
@@ -1260,7 +1400,9 @@ export function registerTools(
             .string()
             .max(10)
             .optional()
-            .describe('ISO 4217 code, e.g. "USD" (default USD).'),
+            .describe(
+              `ISO 4217 code, e.g. "USD" (default USD). ${CURRENCY_HELP}`,
+            ),
         },
         annotations: { readOnlyHint: false, idempotentHint: true },
       },
@@ -1274,47 +1416,6 @@ export function registerTools(
           domain: key,
           renewalPrice: getManualPrices()[key] ?? null,
         });
-      },
-    );
-
-  if (allow('domain_ownership_set'))
-    server.registerTool(
-      'domain_ownership_set',
-      {
-        title: 'Set a domain’s ownership',
-        description:
-          'For a single domain: mark it "dropped" (you let it go) or "archived" (you no longer track it in DomBot), which moves it to Archive whatever the registrar reports; or "owned" to undo your Sold, Dropped, or Archived mark (the app’s Move back to Owned; undoing Sold deletes the recorded sale). To mark it sold, use domain_sale_set. A name in Archive only because sync saw it leave an account can’t be moved back this way. DomBot-local — nothing changes at the registrar; dropping here doesn’t cancel a registration (turn auto-renew off for that). Recorded in the domain’s history as done by an agent. Returns the name’s `ownership` and `archiveLabel`.',
-        inputSchema: {
-          domain,
-          ownership: z
-            .enum(['dropped', 'archived', 'owned'])
-            .describe(
-              '"dropped" or "archived" moves it to Archive; "owned" undoes your mark.',
-            ),
-          date: z
-            .string()
-            .max(40)
-            .optional()
-            .describe(
-              'When, as YYYY-MM-DD (default today). Ignored for "owned".',
-            ),
-          resolves: resolvesParam,
-        },
-        annotations: { readOnlyHint: false, idempotentHint: true },
-      },
-      async ({ domain, ownership, date, resolves }) => {
-        const key = assertInPortfolio(domain);
-        if (ownership === 'owned') restoreOwned([key]);
-        else
-          setDispositions(
-            [{ domainName: key, resolves }],
-            ownership === 'dropped'
-              ? DomainEventType.Dropped
-              : DomainEventType.Archived,
-            date,
-            DomainEventSource.Agent,
-          );
-        return localWrite({ domain: key, ...ownershipOf(key) });
       },
     );
 
@@ -1344,7 +1445,9 @@ export function registerTools(
             .max(10)
             .nullable()
             .optional()
-            .describe('ISO 4217 code, e.g. "USD". Required with an amount.'),
+            .describe(
+              `ISO 4217 code, e.g. "USD". Required with an amount. ${CURRENCY_HELP}`,
+            ),
           kind: z
             .enum(['registered', 'purchased'])
             .optional()
@@ -1380,7 +1483,7 @@ export function registerTools(
       {
         title: 'Record a domain’s sale',
         description:
-          'For a single domain: record that you sold it, or correct the sale on record. Moves the name to Archive (Sold). With no sale on record — or with `resolves` (an open "removed" alert) — it records a new sale, dated today when `date` is left out, and closes that alert; otherwise it edits the latest sale. To undo a sale, use domain_ownership_set with "owned". Your note and the purchase are kept. DomBot-local — no registrar or marketplace call; recorded in the history as done by an agent. Returns the name’s `paid`, `sold`, `ownership` and `archiveLabel`.',
+          'For a single domain: record that you sold it, correct the sale on record, or undo it (`remove: true` deletes the sale). A name an account still holds stays in Owned with `salePending` until the buyer takes it, then moves to Archive as Sold with nothing to review; a name no account holds moves to Archive (Sold) at once. With no sale on record — or with `resolves` (an open "removed" alert) — it records a new sale, dated today when `date` is left out, and closes that alert; otherwise it edits the latest sale. Your note and the purchase are kept. DomBot-local — no registrar or marketplace call; recorded in the history as done by an agent. Returns the name’s `paid`, `sold`, `ownership`, `archiveLabel` and `salePending`.',
         inputSchema: {
           domain,
           date: z
@@ -1396,33 +1499,85 @@ export function registerTools(
             .max(40)
             .nullable()
             .optional()
-            .describe('A decimal in `currency`, e.g. "5000".'),
+            .describe(
+              'A decimal in `currency`, e.g. "5000" (default: unchanged on an edit; null clears it).',
+            ),
           currency: z
             .string()
             .max(10)
             .nullable()
             .optional()
-            .describe('ISO 4217 code, e.g. "USD". Required with an amount.'),
+            .describe(
+              `ISO 4217 code, e.g. "USD". Required with an amount (default: unchanged on an edit). ${CURRENCY_HELP}`,
+            ),
+          fees: z
+            .string()
+            .max(40)
+            .nullable()
+            .optional()
+            .describe(
+              'What the sale cost (commission, escrow, broker), a decimal in `currency`; "0" for none, null for unknown (default: unchanged).',
+            ),
           resolves: resolvesParam,
+          remove: z
+            .boolean()
+            .optional()
+            .describe(
+              'true deletes the sale on record (the app’s Undo in the sale dialog); the other fields are ignored.',
+            ),
         },
         annotations: { readOnlyHint: false, idempotentHint: true },
       },
-      async ({ domain, date, amount, currency, resolves }) => {
+      async ({ domain, date, amount, currency, fees, resolves, remove }) => {
         const key = assertInPortfolio(domain);
         const existing = holdings().get(key)?.sale;
-        // Edit the sale that has the name in Archive as Sold, so a repeated call
-        // doesn't record a second one. A name that sold and came back is owned
-        // again: its old sale is history, and this records a new one.
+        const onRecord = !!ownershipByDomain(eventsFor(key)).get(key)?.sale;
+        if (remove) {
+          if (!existing || !onRecord)
+            throw new Error(`"${domain}" has no sale on record to remove.`);
+          // Blank date and amount delete the sale; the note and purchase stay.
+          setSale(
+            {
+              domainName: key,
+              saleDate: null,
+              amount: null,
+              currency: null,
+              notes: getPurchases()[key]?.notes ?? '',
+            },
+            DomainEventSource.Agent,
+          );
+          return localWrite({
+            domain: key,
+            ...moneyOf(key),
+            ...ownershipOf(key),
+          });
+        }
+        // Edit the sale on record, so a repeated call doesn't record a second
+        // one. A name that sold and came back is owned again: its old sale is
+        // history, and this records a new one.
         const isNew =
           !existing ||
-          ownershipOf(key).archiveLabel !== 'sold' ||
+          !onRecord ||
           (!!resolves && existing.resolves !== resolves);
         setSale(
           {
             domainName: key,
             saleDate: date ?? (isNew ? localDay() : existing.date),
-            amount: amount ?? null,
-            currency: currency ?? null,
+            // Left out on an edit: unchanged, as the date is (so a fees-only
+            // call keeps the price).
+            amount:
+              amount !== undefined
+                ? amount
+                : isNew
+                  ? null
+                  : (existing.amount ?? null),
+            currency:
+              currency !== undefined
+                ? currency
+                : isNew
+                  ? null
+                  : (existing.currency ?? null),
+            ...(fees !== undefined ? { fees } : {}),
             notes: getPurchases()[key]?.notes ?? '',
             ...(isNew ? { mark: true, resolves } : {}),
           },
@@ -1436,13 +1591,39 @@ export function registerTools(
       },
     );
 
+  if (allow('domain_sale_transferred_set'))
+    server.registerTool(
+      'domain_sale_transferred_set',
+      {
+        title: 'Mark a sale handed over',
+        description:
+          'For a single domain: mark its latest sale complete — the buyer has the name — though one of your accounts still shows it (a buyer often takes a name at the same registrar, or sync hasn’t run), so the Sales tab stops showing it as awaiting transfer; `transferred: false` undoes that. DomBot-local — no registrar or marketplace call. Returns { domain, transferred }.',
+        inputSchema: {
+          domain,
+          transferred: z
+            .boolean()
+            .describe('true: handed over (Mark complete); false: undo.'),
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true },
+      },
+      async ({ domain, transferred }) => {
+        const key = assertInPortfolio(domain);
+        const sale = eventsFor(key)
+          .filter((e) => e.type === DomainEventType.Sold)
+          .sort((a, b) => b.id.localeCompare(a.id))[0];
+        if (!sale) throw new Error(`"${domain}" has no sale on record.`);
+        setSaleTransferred(sale.id, transferred);
+        return localWrite({ domain: key, transferred });
+      },
+    );
+
   if (allow('domain_history'))
     server.registerTool(
       'domain_history',
       {
         title: 'Get a domain’s history',
         description:
-          'For a single domain: everything DomBot recorded about it, oldest first — arrivals and departures seen by sync, moves between your accounts, renewals, purchases, sales, and Dropped/Archived marks — plus its note and its current Owned/Archive state. Each event says who recorded it (`source`: sync, user, import, lookup, or agent). Sync alerts ("added" and "removed") carry `alert` (open, dismissed, or resolved) and `resolvedBy`, the id of the event that answered it. Works for names in Archive and names no account reports. Local — no registrar call.',
+          'For a single domain: everything DomBot recorded about it, oldest first — arrivals and departures seen by sync, moves between your accounts, renewals, purchases, sales, and settings changes (`changed`: its `setting` — autoRenew, privacy, lock, nameservers, urlForwarding, emailForwarding, dns, or contacts — with `after`, and `before` when DomBot knew it) — plus its note and its current Owned/Archive state. Each event says who recorded it (`source`: sync, user, import, lookup, agent, or bulk: a bulk job in the app). Sync alerts ("added" and "removed") carry `alert` (open, dismissed, dropped: a departure you marked dropped, or resolved) and `resolvedBy`, the id of the event that answered it. Works for names in Archive and names no account reports. Local — no registrar call.',
         inputSchema: { domain },
         annotations: { readOnlyHint: true },
       },
@@ -1472,9 +1653,11 @@ export function registerTools(
                   ? null
                   : resolvedBy
                     ? 'resolved'
-                    : e.dismissed
-                      ? 'dismissed'
-                      : 'open',
+                    : e.dropped
+                      ? 'dropped'
+                      : e.dismissed
+                        ? 'dismissed'
+                        : 'open',
                 resolvedBy,
               };
             }),
@@ -1649,8 +1832,17 @@ export function registerTools(
       async ({ accountId, registrar, domain, records }) => {
         const r = resolveRegistrar(domain, registrar, accountId);
         const account = resolveDomainAccount(r, domain, accountId);
-        return cachedWrite(() =>
-          getRegistrarClient(r, account.id).setDnsRecords(domain, records),
+        return cachedWrite(
+          () =>
+            getRegistrarClient(r, account.id).setDnsRecords(domain, records),
+          {
+            domain,
+            accountId: account.id,
+            change: {
+              setting: DomainSetting.Dns,
+              after: records.map(dnsRecordLine),
+            },
+          },
         );
       },
     );
@@ -1675,8 +1867,18 @@ export function registerTools(
       async ({ accountId, registrar, domain, contacts }) => {
         const r = resolveRegistrar(domain, registrar, accountId);
         const account = resolveDomainAccount(r, domain, accountId);
-        return cachedWrite(() =>
-          getRegistrarClient(r, account.id).updateContacts(domain, contacts),
+        return cachedWrite(
+          () =>
+            getRegistrarClient(r, account.id).updateContacts(domain, contacts),
+          // The roles only: contact details stay out of the history.
+          {
+            domain,
+            accountId: account.id,
+            change: {
+              setting: DomainSetting.Contacts,
+              after: CONTACT_ROLES.filter((role) => contacts[role]),
+            },
+          },
         );
       },
     );
@@ -1807,7 +2009,7 @@ export function registerTools(
       {
         title: 'Get URL forwarding',
         description:
-          'For a single domain: read its URL forwarding rules (HTTP redirects from a host at the domain to a destination URL). A rule may report a read-only "masked" type; the set tool cannot create one. Not supported by every registrar.',
+          'For a single domain: read its URL forwarding rules (HTTP redirects from a host at the domain to a destination URL). A rule may report a read-only "masked" type; the set tool cannot create one. Where the registrar exposes it (Gandi), a rule also reports `https`, its source-host HTTPS mode. Not supported by every registrar.',
         inputSchema: { accountId, registrar: optionalRegistrar, domain },
         annotations: { readOnlyHint: true },
       },
@@ -1876,6 +2078,51 @@ export function registerTools(
       },
     );
 
+  if (allow('domain_transfer_out_get'))
+    server.registerTool(
+      'domain_transfer_out_get',
+      {
+        title: 'Get transfer out',
+        description:
+          "For a single domain: read its latest outbound transfer — the request another registrar made with the auth code, as when a sale's buyer takes the name. `status` is pending (waiting on you: approve it with domain_transfer_out_approve, or the registrar lets it go on its own around `expiresAt`), approved, rejected, completed, cancelled, or unknown; `rawStatus` is the registrar's own label. `transferOut` is null when there is none. Read live. Not supported by every registrar.",
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return json({
+          domain,
+          transferOut: await getTransferOut({
+            registrar: r,
+            domainName: domain,
+            accountId: account.id,
+          }),
+        });
+      },
+    );
+
+  if (allow('domain_transfer_out_approve'))
+    server.registerTool(
+      'domain_transfer_out_approve',
+      {
+        title: 'Approve transfer out',
+        description:
+          "For a single domain: approve its pending outbound transfer (see domain_transfer_out_get), releasing it to the gaining registrar now instead of after the registrar's waiting period. The domain leaves your account. Not supported by every registrar.",
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+        },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(r, domain, { kind: 'approveTransfer' }, account.id);
+      },
+    );
+
   if (allow('domain_dnssec_get'))
     server.registerTool(
       'domain_dnssec_get',
@@ -1913,4 +2160,7 @@ export function registerTools(
         return json(await getRenewalPriceLive(r, domain, account.id));
       },
     );
+
+  // ── Markets (docs/markets.md) ──────────────────────────────────────────────
+  registerMarketTools(server, scopes);
 }

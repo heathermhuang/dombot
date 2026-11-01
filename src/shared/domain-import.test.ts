@@ -52,7 +52,6 @@ describe('reading a file', () => {
       {
         line: 2,
         domain: 'xn--mnich-kva.de',
-        status: 'owned',
         folder: 'Premium',
         notes: '=hand reg, lucky',
         registration: {
@@ -265,7 +264,6 @@ describe('reading a file', () => {
     expect(r.rows[0]).toEqual({
       line: 2,
       domain: 'example.io',
-      status: 'owned',
       listPrice: { amount: '1000', currency: 'USD' },
       purchase: { date: '2021-06-29' },
     });
@@ -397,6 +395,23 @@ describe('rows', () => {
     ]);
   });
 
+  it('refuses a row in a currency DomBot can’t convert', () => {
+    const r = run(
+      [
+        'Domain,Purchase amount,Currency',
+        'example.com,10,TWD',
+        'example.net,10,USD',
+      ].join('\n'),
+    );
+    expect(r.rows.map((x) => x.domain)).toEqual(['example.net']);
+    expect(r.issues.map((i) => [i.line, i.message])).toEqual([
+      [
+        2,
+        "Purchase amount: DomBot can't convert TWD. Choose one of the 30 currencies it converts, such as USD, EUR or GBP.",
+      ],
+    ]);
+  });
+
   it('refuses an amount whose currency disagrees with its column', () => {
     const r = run(
       ['Domain,Purchase amount,Purchase currency', 'example.com,€5,USD'].join(
@@ -485,8 +500,8 @@ describe('the template', () => {
     const r = run(domainsCsvTemplate());
     expect(r.issues).toEqual([]);
     expect(r.rows.map((x) => [x.domain, x.status])).toEqual([
-      ['example.com', 'owned'],
-      ['example.net', 'owned'],
+      ['example.com', undefined],
+      ['example.net', undefined],
       ['example.org', 'sold'],
     ]);
     expect(r.rows[1].listPrice).toEqual({

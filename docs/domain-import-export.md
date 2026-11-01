@@ -10,8 +10,8 @@ Dynadot, Namecheap, …), marketplace exports (Afternic, Sedo, Efty, …), the
 exports of an earlier portfolio app, and a pasted list of names. A name no
 connected account reports becomes an **imported domain**: it shows in Owned or
 Archive, Renewals, and Activity, takes folders, notes, prices, and history
-like a synced name, survives Clear cache, and travels in the Settings → Sync
-backup. You match columns, then review every change before anything is
+like a synced name, survives Clear cache, and travels in the Settings →
+Import/Export backup. You match columns, then review every change before anything is
 written; a bad row is reported and skipped, never stopping the rest.
 
 What it doesn't do:
@@ -93,12 +93,12 @@ titled "Pricing"), `ListPrice` / `listPrices` in code, and the `Price`,
 - **A name no account reports, and that ends up Owned,** becomes a
   `imported-domains` entry. It shows in Owned with an Imported badge, and in
   Renewals when it has an expiry.
-- **A name that ends up in Archive** (it has a sale, or a `Status` of Dropped,
-  Archived, or Removed) gets no imported entry. Archive rows already come from
-  events.
-- **Status decides Owned or Archive.** There are no import options: a name
-  goes to Archive when its row says so (a sale, or a `Status` other than
-  Owned), and otherwise it's Owned.
+- **A new name with a sale** gets no imported entry: it goes straight to
+  Archive as Sold, whose rows come from events.
+- **DomBot works out Owned or Archive** ([owned-and-archive.md](owned-and-archive.md)).
+  A sale is the only status a row sets. An imported name 90 days past its
+  expiry date is in Archive as Expired, so an imported history of names you
+  let go lands there from its expiry dates, with no status to set.
 - **When an account later reports an imported name**, sync removes the imported
   entry and writes `moved` from no account. Events, notes, folders,
   and prices are keyed by name, so they carry across.
@@ -117,7 +117,9 @@ titled "Pricing"), `ListPrice` / `listPrices` in code, and the `Price`,
   Domains row), reviewing the arrival opens that purchase, and saving it
   closes the review.
 - **Big imports:** on Activity, filter to the import, select every row, and
-  use the bulk Dismiss review. The import result links straight there.
+  use the bulk Dismiss (or Record registration). The import result links
+  straight there. Dismissed names stay in Needs review until what you paid
+  is recorded.
 - **Source:** every added name writes `source: 'import'`, whether it came
   from a file or the Enter names tab, and Activity shows it as "Imported".
   DomBot doesn't tell the two apart.
@@ -135,12 +137,9 @@ normalizes them before anything reaches the server.
 - A blank cell never clears a stored value. A `0` clears it (except in a
   recognized marketplace export, where `0` means "not set").
 - Import never deletes a name, a purchase, a sale, or a note.
-- It replaces your Dropped or Archived label with Sold, the way Mark as Sold
-  does, but it never replaces a Sold.
-- A name you labeled goes back to Owned when its row says `Status: Owned`,
-  or on a buy-back (a purchase dated after the name's sale). It's an `added`
-  event, so the old label and sale stay in the history. With no `Status`,
-  the name stays in Archive, with a warning.
+- It never replaces a sale on record.
+- A sold name comes back on a buy-back (a purchase dated after the name's
+  sale). It's an `added` event, so the old sale stays in the history.
 - Changes it won't make show as warnings in the preview.
 - A non-blank cell always replaces DomBot's value.
 
@@ -164,8 +163,8 @@ connected account reports.
 | --------------------------- | ---------------------- | ------------------------------------------------------------------------------ |
 | `Domain`                    | required               | ASCII (punycode). Import also takes Unicode, any case, and URL forms.          |
 | `IDN`                       | when `Domain` is blank | the Unicode spelling, written only for internationalized names                 |
-| `Status`                    | yes                    | `Owned`, `Sold`, `Dropped`, `Archived`, `Removed` (Archive's Status column)    |
-| `Folder`                    | yes                    | a folder name, or `Hidden`; missing folders are created                        |
+| `Status`                    | yes                    | `Owned`, `Sold`, `Expired`, `Deleted`, `Removed` (Archive's Status column)     |
+| `Folder`                    | yes                    | a folder name; missing folders are created                                     |
 | `Registrar`                 | imported names         | DomBot's name for a known registrar, or free text (`Epik`)                     |
 | `Account`                   | no                     | `Dynadot #2`, `Imported`, or both accounts when two hold the name              |
 | `Created`                   | imported names         | the registration date                                                          |
@@ -203,12 +202,12 @@ connected account reports.
 - **`Currency` isn't written, but it's read.** It supplies the currency for
   any price in its row that has no currency of its own, as many other apps'
   files expect.
-- **`Removed` comes back as a review.** In Archive, Removed means the name
-  left one of your accounts and you haven't labeled it Sold, Dropped, or
-  Archived yet. Import recreates that: the name goes to Archive with a
-  Removed review waiting for a label, as sync left it. These are the
-  higher-priority reviews, so a file with many Removed names keeps the bell
-  amber until they're labeled or dismissed.
+- **Only `Sold` is read back.** Export writes `Sold` for a sale awaiting
+  transfer too, so the sale imports back. `Expired`, `Deleted` and `Removed`
+  are what DomBot worked out; import accepts them and ignores them, as it
+  does the older `Dropped`, `Archived` and `Hidden` words, so older files
+  still import. A row with one of them and no expiry date warns that the name
+  will stay in Owned.
 - **The template** (`dombot-domains-template.csv`) has the importable columns
   and three rows:
   - a hand-registered `example.com` with a renewal price;
@@ -224,7 +223,7 @@ connected account reports.
 | Money         | digits and a period, with the currency's decimal places | a currency symbol or code before or after the number; `,`, `.`, space, or `'` as grouping; either decimal mark (when both appear, the last is the decimal; a single separator followed by exactly three digits is grouping); trailing zeros past the currency's places           |
 | Currency      | ISO code                                                | any case; unambiguous symbols (`€`, `£`, `₹`, …); `$` means your preferred currency when that's a dollar, else USD; English names (`euro`, `pound`, `yen`)                                                                                                                       |
 | Yes/No        | `Yes` or `No`                                           | `y`/`n`, `true`/`false`, `1`/`0`, `on`/`off`, `enabled`/`disabled`, `✓`; Dynadot's `Renewal Status` values                                                                                                                                                                       |
-| Status        | `Owned` to `Removed`                                    | `active`, `portfolio`, `held`, `in account` → Owned; `deleted`, `expired`, `lapsed` → Dropped                                                                                                                                                                                    |
+| Status        | `Owned` or `Sold`                                       | `active`, `portfolio`, `held`, `in account` → Owned (writes nothing); `expired`, `deleted`, `dropped`, `lapsed`, `archived`, `removed` → ignored                                                                                                                                 |
 | Purchase type | `Registered` or `Purchased`                             | `registration`, `hand registered`, `hand-reg` → Registered; `bought`, `aftermarket`, `auction`, `backorder`, `drop catch` → Purchased                                                                                                                                            |
 | Folder        | the name                                                | existing folders match by name, ignoring case; `(no folder)`, `none`, and `-` count as blank                                                                                                                                                                                     |
 | Registrar     | display name                                            | an id (`namecom`), a display name, a website (`name.com`), or a legal name (`GoDaddy.com, LLC`, `Dynadot LLC`). Lowercase it, strip punctuation and company suffixes, then compare. Anything else is kept as free text.                                                          |
@@ -251,10 +250,10 @@ Export, then import into an empty DomBot:
 | Kept                                                                           | Not kept (use the JSON backup)                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | every name                                                                     | account membership (it returns with the first sync)                         |
-| ownership: Owned, Sold, Dropped, Archived, Removed                             | earlier holdings of a name bought more than once                            |
+| ownership: Owned, Sold, Expired, Deleted, Removed                              | earlier holdings of a name bought more than once                            |
 | the latest purchase and sale, with type, dates, amounts, currencies, and years | sync events (`added`, `removed`, `moved`) and which reviews you'd dismissed |
 | the name's note                                                                | notes attached to events                                                    |
-| the folder, by name, Hidden included                                           | folder colors and descriptions                                              |
+| the folder, by name                                                            | folder colors and descriptions                                              |
 | your renewal price and its currency                                            | registrar detail and quotes (sync fetches them again)                       |
 | the BIN price, minimum offer, floor, and their currency                        | settings, accounts, credentials                                             |
 | registrar, created, expires, and auto-renew for imported names                 |                                                                             |
@@ -284,8 +283,9 @@ interface ListPrice {
 - **At least one amount is set.** Clearing all three deletes the record.
 - **A minimum offer or floor** can't be above the BIN price. A zero reads as
   blank.
-- **"Allow offers" and "for sale" aren't stored.** A name with a BIN price is
-  for sale, and a minimum offer (or no BIN price) means offers are welcome.
+- **"Allow offers" and "for sale" aren't stored.** A name with any asking
+  amount is for sale (the Pricing filter's For sale), and a minimum
+  offer (or no BIN price) means offers are welcome.
 - **Bundle checks.** `cleanListPrice` re-checks entries read from a bundle,
   the way `cleanEvent` does for events.
 
@@ -361,9 +361,19 @@ renewal prices import as USD amounts.
   bundle import and the CSV import (`src/shared/list-prices.ts`).
 - **API:** `getListPrices` and `setListPrices`, through the method table.
 - **Domains table (Owned):** a BIN price column; clicking the cell opens the
-  Pricing editor, as the Paid cell opens Purchase details. The row menu and
-  the bulk bar open the same editor for one name or the selection. The
-  Pricing filter narrows by price range.
+  Pricing editor, as the Paid cell opens the purchase dialog. The row menu and
+  the bulk bar open the same editor for one name or the selection.
+- **Pricing filter (Owned):** For sale (any of a BIN price, minimum offer or
+  floor), Has BIN price, Has min offer, Has floor price, and Not for sale
+  (none of them), with counts; picking several matches any of them. Below
+  them, BIN price, Min offer and Floor price ranges narrow further. A range
+  needs that amount,
+  so a name with only a minimum offer is outside every BIN range, and
+  ranges only match prices in your preferred currency (nothing is
+  converted). `portfolio_query` takes the same filter: `askingPrice`,
+  `binMin`/`binMax`, `minOfferMin`/`minOfferMax`, `floorMin`/`floorMax`, and
+  `priceCurrency`.
+  Matching is `matchesAsking` in `src/shared/list-prices.ts`.
 - **Editor:** BIN price, minimum offer, and floor price (marked "never shown
   to buyers"), in one currency, your preferred currency by default. Amounts
   are typed in your number format. All three blank clears the price.
@@ -453,8 +463,8 @@ means "keep".
 interface ImportRow {
   line: number; // first file line, for messages
   domain: string; // toAscii
-  status?: 'owned' | 'sold' | 'dropped' | 'archived' | 'removed';
-  folder?: string; // folder name; 'Hidden' is the built-in
+  status?: 'sold' | 'ignored'; // ignored: a word DomBot works out (Expired, …)
+  folder?: string; // folder name
   notes?: string;
   registration?: {
     registrar?: string; // a registrar id DomBot knows
@@ -503,30 +513,27 @@ errors never reach the planner; the renderer reports them.
 
 **Where each name ends up:**
 
-- **Archive (Sold):** the row has a sale, or `Status` is Sold.
-- **Archive (Dropped or Archived):** `Status` says so.
-- **Archive (Removed, waiting for a label):** `Status` is Removed, and no
+- **Archive (Sold):** the row has a sale, or `Status` is Sold, and no
   account holds the name.
+- **Owned, Sold awaiting transfer:** the same, for a name an account holds.
 - **Unchanged:** the name is held by an account.
-- **Owned, as an imported name:** the name is in no account, and you haven't
-  labeled it Sold, Dropped, or Archived, or the row says `Status: Owned`, or
-  it's a buy-back.
-- **Unchanged, with a warning:** you labeled the name, the row has no
-  `Status`, and it isn't a buy-back.
+- **An imported name:** the name is in no account and has no sale, or it's a
+  buy-back. Where it shows is worked out from its expiry date: Owned, or
+  Archive as Expired 90 days past it.
 
 **What gets written:**
 
-| Data           | Rule                                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Imported entry | Created for a new Owned name. Its registration fields update. A name an account holds ignores those fields, and an info note says which account.                                                                                                                                                                                                                                     |
-| `added`        | Written for each new imported name, with the `importId` and no account. It's an open, low-priority review, like a sync arrival, even when the row has a purchase. If the name has an open `removed` review (it left one of your accounts), the `added` closes it and is written already dismissed, the way sync handles a name that comes back.                                      |
-| Purchase       | **No acquisition in the latest holding:** a new `purchased` or `registered`. It doesn't close any review. **Same values:** nothing. **Different values:** edited in place. A purchase dated after the holding's sale is a buy-back, and it starts a new holding.                                                                                                                     |
-| Sale           | **The latest holding has a sale:** edited in place, by the same rules. **Otherwise:** a new `sold`. It closes an open `removed` review and replaces your Dropped or Archived label (`replaceLabel`), the way Mark as Sold does.                                                                                                                                                      |
-| Status         | **`Dropped` or `Archived`:** writes that label, closing an open `removed` review, unless it's already the label. **`Removed`:** an open `removed` review with no account, unless the name already has a label or a removal. **A name labeled Sold** keeps it, with a warning. **A name an account holds** ignores `Removed`, with a warning. **`Owned`:** writes nothing of its own. |
-| Notes          | The name's note (`eventId: null`). It's replaced.                                                                                                                                                                                                                                                                                                                                    |
-| Folder         | Assigned by name. Missing folders are created, and the preview lists them.                                                                                                                                                                                                                                                                                                           |
-| Renewal price  | Set in `domain-prices`, with its currency.                                                                                                                                                                                                                                                                                                                                           |
-| BIN price      | Set in `domain-list-prices`, for any name, synced or imported.                                                                                                                                                                                                                                                                                                                       |
+| Data           | Rule                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Imported entry | Created for a new Owned name. Its registration fields update. A name an account holds ignores those fields, and an info note says which account.                                                                                                                                                                                                |
+| `added`        | Written for each new imported name, with the `importId` and no account. It's an open, low-priority review, like a sync arrival, even when the row has a purchase. If the name has an open `removed` review (it left one of your accounts), the `added` closes it and is written already dismissed, the way sync handles a name that comes back. |
+| Purchase       | **No acquisition in the latest holding:** a new `purchased` or `registered`. It doesn't close any review. **Same values:** nothing. **Different values:** edited in place. A purchase dated after the holding's sale is a buy-back, and it starts a new holding.                                                                                |
+| Sale           | **The latest holding has a sale:** edited in place, by the same rules. **Otherwise:** a new `sold`. It closes an open `removed` review.                                                                                                                                                                                                         |
+| Status         | **`Sold`:** a sale with no date or amount, as above, unless one is on record. **Anything else** writes nothing; an old word on a name with no expiry date warns that it stays in Owned.                                                                                                                                                         |
+| Notes          | The name's note (`eventId: null`). It's replaced.                                                                                                                                                                                                                                                                                               |
+| Folder         | Assigned by name. Missing folders are created, and the preview lists them.                                                                                                                                                                                                                                                                      |
+| Renewal price  | Set in `domain-prices`, with its currency.                                                                                                                                                                                                                                                                                                      |
+| BIN price      | Set in `domain-list-prices`, for any name, synced or imported.                                                                                                                                                                                                                                                                                  |
 
 **Event order.** A name's events are written in this order: added,
 acquisition, sale, label. Ids are monotonic, and `ownershipByDomain` reads
@@ -580,7 +587,7 @@ importDomains(
   bulk bar exports the selection.
 - **Domains empty state:** Import domains beside Configure registrars, so
   DomBot is useful before any API key is added.
-- **Settings → Sync:** a card with Import domains, Export all domains, and
+- **Settings → Import/Export:** a card with Import domains, Export all domains, and
   Download template (`dombot-domains-template.csv`).
 - **Activity:** an import filter (`/activity?import=<id>`), reached from the
   import's result.

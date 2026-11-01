@@ -14,7 +14,7 @@ import type {
 } from '../shared/publishing-presence';
 import { reconcilePortfolio } from '../core/publication/reconcile';
 import { getImportedDomains } from '../core/services/imported-domains';
-import { publishedSaleSchema, saleDraftSchema } from '../shared/sales';
+import { publishedSaleSchema, saleDraftSchema } from '../shared/hosted-sales';
 import { PublicationStore } from './publication-store';
 import { SalesStore } from './sales-store';
 import type { PublicationInputs } from './publication-inputs';

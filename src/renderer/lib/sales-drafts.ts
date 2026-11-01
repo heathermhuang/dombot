@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { ManualDraft } from './manual-draft';
 import { InquiryDraft } from './inquiry-draft';
 import { hostPath } from './platform';
-import type { SaleDraft, SaleShop } from '../../shared/sales';
+import type { SaleDraft, SaleShop } from '../../shared/hosted-sales';
 
 const listings = new Map<string, ManualDraft<SaleDraft>>();
 const shops = new Map<string, ManualDraft<SaleShop>>();

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { saleModeSchema } from '../shared/sales';
+import { saleModeSchema } from '../shared/hosted-sales';
 import { SalesError } from '../shared/sales-review';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { SalesStore, type SaleObserver } from './sales-store';

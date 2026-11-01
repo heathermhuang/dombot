@@ -14,6 +14,7 @@ import {
   Check,
   ChevronDown,
   CircleX,
+  Clock,
   Copy,
   Ellipsis,
   ExternalLink,
@@ -44,6 +45,7 @@ import { timeAgo } from '../../lib/time';
 import { isStale, useSyncState } from '../../lib/sync-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '../../components/EmptyState';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -181,7 +183,7 @@ export default function RegistrarsSettings() {
       <div className="flex flex-col gap-3">
         {/* Above the cards: Sync all on the left (it acts on the cards
             below), the page's main action on the right. */}
-        {loaded && cards.length > 0 && (
+        {loaded && (
           <div className="flex flex-wrap items-center gap-2">
             {enabledCount > 1 && <SyncAllButton />}
             <div className="ml-auto">
@@ -217,22 +219,31 @@ export default function RegistrarsSettings() {
             firstSync={syncingIds.has(idOf(account))}
           />
         ))}
-        {loaded && cards.length === 0 && !draft && (
-          <EmptyRegistrars catalog={sortedCatalog} onPick={startDraft} />
-        )}
+        {loaded && cards.length === 0 && !draft && <EmptyRegistrars />}
       </div>
     </div>
   );
 }
 
 /**
- * Syncs every enabled account at once, like the status bar's Sync. Each card
- * shows Syncing… while it runs, and a toast sums up the result.
+ * Syncs every enabled registrar account at once (Sync now on the Domains page
+ * adds the market accounts). Each card shows Syncing… while it runs, and a
+ * toast sums up the result.
  */
 function SyncAllButton() {
-  const { sync, syncing, disabled, title } = useSyncState();
+  const {
+    syncRegistrars,
+    registrarsSyncing: syncing,
+    disabled,
+    title,
+  } = useSyncState();
   return (
-    <Button variant="outline" onClick={sync} disabled={disabled} title={title}>
+    <Button
+      variant="outline"
+      onClick={syncRegistrars}
+      disabled={disabled}
+      title={title}
+    >
       <RefreshCw className={cn(syncing && 'animate-spin')} />
       {syncing ? 'Syncing…' : 'Sync all'}
       {/* Room for the full label beside Add from sm up. */}
@@ -284,37 +295,14 @@ function AddAccountMenu({
   );
 }
 
-/** Nothing connected yet: show what's supported, each one click from a form. */
-function EmptyRegistrars({
-  catalog,
-  onPick,
-}: {
-  catalog: RegistrarDefinition[];
-  onPick: (provider: RegistrarDefinition) => void;
-}) {
+/** Nothing connected yet: Add registrar account above is the way in. */
+function EmptyRegistrars() {
   return (
-    <Card className="gap-4 rounded-md px-5 py-5">
-      <div>
-        <h3 className="font-medium">Connect your first registrar</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose where your domains are registered. You can add more accounts,
-          including several at the same registrar, at any time.
-        </p>
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2">
-        {catalog.map((provider) => (
-          <Button
-            key={provider.name}
-            variant="outline"
-            className="h-auto justify-start gap-2.5 px-3 py-2.5"
-            onClick={() => onPick(provider)}
-          >
-            <RegistrarLogo name={provider.name} label={provider.displayName} />
-            {provider.displayName}
-          </Button>
-        ))}
-      </div>
-    </Card>
+    <EmptyState
+      boxed
+      title="No registrar accounts yet"
+      description="Add one to load its domains."
+    />
   );
 }
 
@@ -371,6 +359,8 @@ function AccountCard({
     account.enabled &&
     !syncing &&
     account.sync.lastError != null;
+  const deferred = account.sync.recovery?.state === 'deferred';
+  const retryAt = account.sync.recovery?.retryAt;
 
   useEffect(() => {
     if (!open) return;
@@ -401,6 +391,14 @@ function AccountCard({
   }, [open, id, provider.name, usesProxy, loadAttempt]);
 
   const runSync = async () => {
+    // Inside a rate-limit cooldown the refresh would be skipped; say so
+    // rather than spin and change nothing.
+    if (retryAt && retryAt > Date.now()) {
+      toast.info(`${provider.displayName} asked us to slow down`, {
+        description: `Sync is available again after ${clockTime(retryAt)}.`,
+      });
+      return;
+    }
     setSyncing(true);
     setError(null);
     try {
@@ -691,7 +689,12 @@ function AccountCard({
         {syncFailed && (
           <div
             role="alert"
-            className="mx-5 mt-0.5 mb-[18px] flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+            className={cn(
+              'mx-5 mt-0.5 mb-[18px] flex items-start gap-2 rounded-md border px-3 py-2 text-sm',
+              deferred
+                ? 'border-amber-500/40 bg-amber-500/10'
+                : 'border-destructive/40 bg-destructive/10',
+            )}
           >
             <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />
             <span className="min-w-0 break-words">
@@ -1041,7 +1044,7 @@ function DraftAccountCard({
             disabled={saving && !waiting}
             onClick={cancel}
           >
-            Cancel
+            {waiting ? 'Stop waiting' : 'Cancel'}
           </Button>
         </div>
       </form>
@@ -1256,8 +1259,8 @@ function CredentialFields({
               </Select>
             ) : field.type === 'password' ? (
               <PasswordInput
-                revealLabel={`${accountName} ${field.label}`}
                 id={id}
+                revealLabel={`${accountName} ${field.label}`}
                 value={values[field.name] ?? ''}
                 disabled={disabled}
                 autoComplete="off"
@@ -1329,6 +1332,14 @@ function HelpLink({ link }: { link: HelpLinkData }) {
  *  - configured + never synced → amber "Not synced yet"
  *  - a sync in flight → muted "Syncing…"
  */
+/** A local wall-clock time, e.g. "3:42 PM". */
+function clockTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function SyncStatus({
   meta,
   syncing,
@@ -1360,6 +1371,17 @@ function SyncStatus({
   }
 
   const { lastSyncedAt, lastError } = meta.sync;
+  if (lastError && meta.sync.recovery?.state === 'deferred') {
+    // Rate limited with a retry scheduled: waiting, not broken.
+    return (
+      <span className="flex items-center gap-1.5">
+        <Clock className="size-3.5 shrink-0 text-amber-500 dark:text-amber-400" />
+        <span className="text-[13px] font-medium text-amber-500 dark:text-amber-400">
+          Sync deferred
+        </span>
+      </span>
+    );
+  }
   if (lastError) {
     return (
       <span className="flex items-center gap-1.5">

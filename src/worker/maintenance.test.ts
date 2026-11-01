@@ -50,7 +50,7 @@ async function doc(ns: string, key: string, value: unknown) {
     .run(ns, key, JSON.stringify(sealed), Date.now());
 }
 it('allows an empty migrated account, settings and identity-only records to sleep', async () => {
-  await doc('meta', 'schemaVersion', 4);
+  await doc('meta', 'schemaVersion', 5);
   await doc('settings', 'theme', 'light');
   await doc('mcp', 'grant:one', { secret: 'test-grant' });
   await doc('folders', 'folders', [{ id: 'empty', name: 'Empty folder' }]);
@@ -61,6 +61,9 @@ it('allows an empty migrated account, settings and identity-only records to slee
 });
 it.each([
   'registrar-credentials',
+  'market-accounts',
+  'market-credentials',
+  'market-sales',
   'imported-domains',
   'domain-events',
   'bulk-jobs',

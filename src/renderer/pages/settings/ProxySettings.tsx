@@ -280,7 +280,7 @@ export default function ProxySettings() {
               className={
                 test.matches
                   ? 'mt-3 flex items-start gap-1.5 text-sm text-brand'
-                  : 'mt-3 flex items-start gap-1.5 text-sm text-amber-600 dark:text-amber-400'
+                  : 'mt-3 flex items-start gap-1.5 text-sm text-amber-500 dark:text-amber-400'
               }
             >
               {test.matches ? (
@@ -307,8 +307,7 @@ export default function ProxySettings() {
         <SettingsCard title="Used by">
           {users.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No accounts use the proxy yet. Turn on{' '}
-              <strong>Use fixed IP proxy</strong> in an account under
+              No accounts use the proxy yet. Turn it on for an account under
               Registrars.
             </p>
           ) : (

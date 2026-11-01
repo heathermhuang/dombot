@@ -15,7 +15,7 @@ import {
   anyDraftSchema,
 } from '../shared/owner-site';
 import { emptyDraft, privateListing } from '../shared/publication';
-import { emptySale } from '../shared/sales';
+import { emptySale } from '../shared/hosted-sales';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { publicLinkedSales } from './publication-links';
 import { renderOwnerSite } from '../shared/render-owner-site';
