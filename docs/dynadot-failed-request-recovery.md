@@ -11,7 +11,11 @@ two hours, then six hours, then attention required after three probes.
 The compatibility release uses a **global Dynadot hold**. The transport identifies
 managed routes using host configuration and the selected actual proxy; unknown
 custom egress cannot be proved independent by this service boundary. Neither
-route labels nor purpose create parallel provider lanes. Other registrars retain
+route labels nor purpose create parallel provider lanes. Recovery admission and successful closure must match the observed managed egress
+class. A successful custom/unknown-route inventory cannot clear a managed hold.
+Unverified origins require operator verification before automatic recovery; their
+probe count is not fabricated. The previous verified managed seed migrates in
+place without changing its deadline or retry budget. Other registrars retain
 their relay capacity. The circuit exposes only allowlisted status/deadline data;
 lease tokens, URLs, credentials, response descriptions and holdings remain private.
 
@@ -45,7 +49,7 @@ No other stopped account is bulk reset.
 
 Restore the previous client deployment/settings if needed while retaining the
 compatible scheduler and its durable circuit. Do not roll the scheduler back to a
-version that ignores active circuit state, delete Durable Object storage, clear
+version that ignores active circuit state or recovery-scope fencing, delete Durable Object storage, clear
 negative pricing evidence, change routes or re-enable exhausted probes.
 
 ## Verification boundary

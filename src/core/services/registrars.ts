@@ -346,7 +346,9 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
           lastError:
             'Dynadot failed-request IP restriction. Cached domains are retained; renewal pricing is blocked with pending work retained.' +
             (restriction.state === 'attention_required'
-              ? ' Automatic recovery exhausted; provider/operator action is required.'
+              ? restriction.probes >= 3
+                ? ' Automatic recovery exhausted; provider/operator action is required.'
+                : ' Automatic recovery requires verified affected egress; provider/operator action is required.'
               : ''),
           recovery: {
             state:
@@ -870,7 +872,7 @@ async function performInventorySync(
           restriction,
         };
       entry.lastError = restriction
-        ? `Dynadot failed-request IP restriction. Cached domains are retained; renewal pricing is blocked with pending work retained. ${restriction.state === 'attention_required' ? 'Automatic recovery stopped after three unsuccessful probes; provider/operator action is required.' : 'One inventory recovery probe is eligible after the quiet period; provider clearance is not guaranteed.'}`
+        ? `Dynadot failed-request IP restriction. Cached domains are retained; renewal pricing is blocked with pending work retained. ${restriction.state === 'attention_required' ? (restriction.probes >= 3 ? 'Automatic recovery stopped after three unsuccessful probes; provider/operator action is required.' : 'Automatic recovery requires verified affected egress; provider/operator action is required.') : 'One inventory recovery probe is eligible after the quiet period; provider clearance is not guaranteed.'}`
         : attempts >= 3
           ? 'Dynadot rate limit: automatic inventory retries stopped after three attempts. Cached domains are preserved. Try Sync after the cooldown.'
           : 'Dynadot rate limit: inventory refresh is deferred. Cached domains are preserved; a scheduled retry is pending.';

@@ -59,6 +59,41 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 describe('inventory recovery', () => {
+  it('explains unverified egress without inventing three failed recovery probes', async () => {
+    const restriction = {
+      state: 'attention_required' as const,
+      reason: 'failed_request_ip' as const,
+      scope: 'global' as const,
+      probes: 0,
+      notBefore: Date.now() + 1800000,
+    };
+    list.mockRejectedValueOnce(
+      new RateLimitError(
+        '[dynadot:shared-cooldown]' +
+          encodeDynadotRateLimit({
+            reason: 'failed_request_ip',
+            endpoint: 'inventory',
+            format: 'empty',
+            retryAfterSeconds: 1800,
+            retryAfterSource: 'fallback',
+            circuit: restriction,
+          }),
+        1800,
+      ),
+    );
+    await syncRegistrar('dynadot');
+    const sync = getRegistrarMetadata().find((m) => m.name === 'dynadot')!.sync;
+    expect(sync.lastError).toMatch(/verified affected egress/);
+    expect(sync.lastError).not.toMatch(/three unsuccessful probes/);
+    expect(sync.recovery).toMatchObject({
+      state: 'failed',
+      attempts: 0,
+      restriction: { probes: 0 },
+    });
+    vi.setSystemTime(Date.now() + 7200000);
+    await syncRegistrar('dynadot');
+    expect(list).toHaveBeenCalledTimes(1);
+  });
   it('recovers a previously stopped restricted account natively and preserves local holds without failure events', async () => {
     const lastGood = Date.now() - 86400000;
     const restriction = {

@@ -82,6 +82,7 @@ describe('Worker proxy transport lifecycle', () => {
       const policy = { concurrency: 4, cooldownMs: 0, relayOnly: true };
       const now = Date.now();
       state.dynadotCircuit = {
+        recoveryScope: 'managed',
         state: 'open',
         reason: 'failed_request_ip',
         scope: 'global',

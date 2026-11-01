@@ -49,6 +49,99 @@ const start = () => {
   );
   return { state, step };
 };
+it('cannot use a different egress class to claim or clear a managed recovery probe', () => {
+  const { state, step } = start();
+  const at = state.dynadotCircuit!.notBefore;
+  expect(step({ ...ticket('custom'), scope: 'unknown' }, at).status).toBe(
+    'deferred',
+  );
+  expect(state.active).toHaveLength(0);
+  expect(step(ticket('managed-alias'), at).status).toBe('granted');
+  step(
+    {
+      ...ticket('managed-alias'),
+      action: 'release',
+      token: 'managed-alias',
+      outcome: 'inventory_success',
+    },
+    at + 1,
+  );
+  expect(state.dynadotCircuit).toBeUndefined();
+});
+it('migrates the verified legacy seed without extending its deadline or budget', () => {
+  const { state, step } = start();
+  const at = state.dynadotCircuit!.notBefore;
+  delete state.dynadotCircuit!.recoveryScope;
+  state.dynadotRestrictionSeedAt = 50;
+  expect(step({ ...ticket('unknown'), scope: 'unknown' }, at).status).toBe(
+    'deferred',
+  );
+  expect(state.dynadotCircuit).toMatchObject({
+    recoveryScope: 'managed',
+    notBefore: at,
+    probes: 0,
+  });
+  expect(step(ticket('managed'), at).status).toBe('granted');
+});
+it('does not treat unverified egress as a safe automatic recovery target', () => {
+  const state = emptyProxyQueue();
+  const initial = { ...ticket('custom'), scope: 'unknown' as const };
+  advanceProxyQueue(state, initial, 0, () => 'custom', policy);
+  advanceProxyQueue(
+    state,
+    {
+      ...initial,
+      action: 'release',
+      token: 'custom',
+      outcome: 'failed_request_ip',
+    },
+    100,
+    () => '',
+    policy,
+  );
+  expect(state.dynadotCircuit).toMatchObject({
+    state: 'attention_required',
+    probes: 0,
+  });
+  const at = state.dynadotCircuit!.notBefore;
+  for (const scope of ['managed', 'unknown'] as const)
+    expect(
+      advanceProxyQueue(
+        state,
+        { ...ticket(scope), scope },
+        at + 1,
+        () => scope,
+        policy,
+      ).status,
+    ).toBe('deferred');
+});
+it('cannot close a managed restriction from a legacy wrong-egress half-open lease', () => {
+  const { state, step } = start();
+  const at = state.dynadotCircuit!.notBefore;
+  state.dynadotCircuit!.state = 'half_open';
+  state.dynadotCircuit!.probeToken = 'legacy';
+  state.active.push({
+    id: 'legacy',
+    tenant: 'legacy',
+    token: 'legacy',
+    provider: 'dynadot',
+    purpose: 'inventory',
+    scope: 'unknown',
+    route: 'relay',
+    expiresAt: at + 60000,
+  });
+  step(
+    {
+      ...ticket('legacy'),
+      scope: 'unknown',
+      action: 'release',
+      token: 'legacy',
+      outcome: 'inventory_success',
+    },
+    at + 1,
+  );
+  expect(state.dynadotCircuit).toMatchObject({ state: 'open', probes: 1 });
+});
 it('persists a long hold and admits exactly one inventory probe after expiry', () => {
   const { state, step } = start();
   expect(state.dynadotCircuit).toMatchObject({

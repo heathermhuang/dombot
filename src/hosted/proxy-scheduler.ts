@@ -86,6 +86,7 @@ export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
         ).length,
         dynadotLimitedUntil: state.dynadotLimitedUntil ?? 0,
         dynadotCircuit: circuitStatus(state) ?? null,
+        dynadotRecoveryScope: state.dynadotCircuit?.recoveryScope ?? null,
         dynadotRestrictionSeedAt: state.dynadotRestrictionSeedAt ?? null,
         availableAt: state.availableAt,
         nextExpiryAt: Math.min(
