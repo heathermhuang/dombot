@@ -1,3 +1,4 @@
+import { dynadotCircuitSchema } from '../shared/dynadot-rate-limit';
 import { z } from 'zod';
 import { importedRows } from '../shared/imported-domains';
 import { ownershipByDomain } from '../shared/ownership';
@@ -57,6 +58,7 @@ export const adminSnapshotSchema = z.object({
         recovery: z
           .object({
             state: z.enum(['deferred', 'failed', 'recovered']),
+            restriction: dynadotCircuitSchema.optional(),
             retryAt: count.optional(),
             attempts: count,
           })

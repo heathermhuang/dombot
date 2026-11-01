@@ -152,7 +152,14 @@ describe('Dynadot request pacing', () => {
           new ReadableStream({
             start(controller) {
               finish = () => {
-                controller.enqueue(new TextEncoder().encode('{}'));
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    JSON.stringify({
+                      code: 200,
+                      data: { domain_info_list: [] },
+                    }),
+                  ),
+                );
                 controller.close();
               };
             },

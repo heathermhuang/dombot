@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientOptions } from 'tunnelfetch';
 import { MAX_PROXY_RESPONSE_BYTES } from '../core/services/proxy-transport';
+import { advanceProxyQueue, emptyProxyQueue } from '../shared/proxy-scheduler';
+import { createDynadotFetch } from '../core/services/dynadot-transport';
+import { readDynadotRateLimit } from '../shared/dynadot-rate-limit';
+import { createRegistrar } from '@aoxborrow/registrar-client';
 
 const mock = vi.hoisted(() => ({
   options: [] as ClientOptions[],
@@ -32,6 +36,155 @@ beforeEach(() => {
 });
 
 describe('Worker proxy transport lifecycle', () => {
+  it('preserves another registrar network error while the Dynadot circuit is open', async () => {
+    const error = new Error('Namecheap connection failed');
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const c = JSON.parse(String(init?.body));
+        return Response.json(
+          c.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : {
+                status: 'released',
+                circuit: {
+                  state: 'open',
+                  reason: 'failed_request_ip',
+                  scope: 'global',
+                  probes: 0,
+                  notBefore: Date.now() + 1800000,
+                },
+              },
+        );
+      }),
+    };
+    mock.fetch.mockRejectedValue(error);
+    await expect(
+      createWorkerProxyFetch({
+        ip: proxy.ip,
+        tenant: crypto.randomUUID(),
+        service,
+      })(proxy, 'https://api.namecheap.com/xml.response', {}),
+    ).rejects.toBe(error);
+  });
+  it.each([
+    [{ code: 200, data: { domain_info_list: [] } }, true],
+    [{ code: 400, error: { description: 'bad command' } }, false],
+    [{ code: 200, data: {} }, false],
+    [{ code: 200, data: { domain_info_list: [null] } }, false],
+  ])(
+    'closes recovery only for semantically valid inventory: %j',
+    async (payload, success) => {
+      const state = emptyProxyQueue();
+      const policy = { concurrency: 4, cooldownMs: 0, relayOnly: true };
+      const now = Date.now();
+      state.dynadotCircuit = {
+        state: 'open',
+        reason: 'failed_request_ip',
+        scope: 'global',
+        probes: 0,
+        notBefore: now - 1,
+        observedAt: now - 1800000,
+      };
+      const commands: unknown[] = [];
+      const service = {
+        fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+          const command = JSON.parse(String(init?.body));
+          commands.push(command);
+          return Response.json(
+            advanceProxyQueue(
+              state,
+              { ...command, route: 'relay' },
+              Date.now(),
+              () => crypto.randomUUID(),
+              policy,
+            ),
+          );
+        }),
+      };
+      mock.fetch.mockResolvedValue(Response.json(payload));
+      const worker = createWorkerProxyFetch({
+        tenant: crypto.randomUUID(),
+        service,
+        ip: proxy.ip,
+        managedUrl: proxy.url,
+      });
+      const fetch = createDynadotFetch((url, init) =>
+        worker(proxy, String(url), init ?? {}),
+      );
+      const registrar = createRegistrar(
+        'dynadot',
+        { apiKey: 'fixture', apiSecret: 'fixture' },
+        { fetch, retries: 0 },
+      );
+      if (success) {
+        expect(await registrar.listDomains()).toEqual([]);
+        expect(state.dynadotCircuit).toBeUndefined();
+      } else {
+        const error = await registrar.listDomains().catch((e) => e);
+        expect(readDynadotRateLimit(error)).toMatchObject({
+          outcome: 'uncertain',
+          circuit: { state: 'open', probes: 1 },
+        });
+        expect(state.dynadotCircuit).toMatchObject({
+          state: 'open',
+          probes: 1,
+        });
+        const calls = mock.fetch.mock.calls.length;
+        const held = await fetch('https://api.dynadot.com/restful/v2/domains');
+        expect(held.status).toBe(429);
+        expect(mock.fetch).toHaveBeenCalledTimes(calls);
+      }
+      expect(commands).not.toContain(proxy.url);
+    },
+  );
+  it('records the real failed-request outcome while the fenced lease is held', async () => {
+    const commands: Record<string, unknown>[] = [];
+    const service = {
+      fetch: vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const c = JSON.parse(String(init?.body));
+        commands.push(c);
+        return Response.json(
+          c.action === 'acquire'
+            ? {
+                status: 'granted',
+                token: crypto.randomUUID(),
+                expiresAt: Date.now() + 60000,
+              }
+            : { status: 'released' },
+        );
+      }),
+    };
+    mock.fetch.mockResolvedValue(
+      Response.json(
+        {
+          code: 429,
+          error: {
+            description: 'Too many failed requests from your IP address.',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    await createWorkerProxyFetch({
+      tenant: crypto.randomUUID(),
+      service,
+      managedUrl: proxy.url,
+    })(proxy, 'https://api.dynadot.com/restful/v2/domains', { method: 'GET' });
+    expect(commands[0]).toMatchObject({
+      purpose: 'inventory',
+      scope: 'managed',
+    });
+    expect(commands[1]).toMatchObject({
+      action: 'release',
+      outcome: 'failed_request_ip',
+      retryAfterMs: 60000,
+    });
+    expect(JSON.stringify(commands)).not.toMatch(/secret|https|12323/);
+  });
   it('preserves self-hosted custom Dynadot transport without a managed queue', async () => {
     mock.fetch.mockResolvedValue(new Response('{}'));
     const response = await createWorkerProxyFetch({})(

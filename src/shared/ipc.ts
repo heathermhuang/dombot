@@ -540,6 +540,7 @@ export interface RegistrarConfigField {
 export interface RegistrarSync {
   recovery?: {
     state: 'deferred' | 'failed' | 'recovered';
+    restriction?: import('./proxy-scheduler').DynadotCircuitStatus;
     retryAt?: number;
     attempts: number;
   };

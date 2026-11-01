@@ -1,13 +1,23 @@
 import { z } from 'zod';
+export const dynadotCircuitSchema = z.object({
+  state: z.enum(['open', 'half_open', 'attention_required']),
+  reason: z.literal('failed_request_ip'),
+  scope: z.literal('global'),
+  probes: z.number().int().min(0).max(3),
+  notBefore: z.number().int().nonnegative().safe(),
+});
 
 export const dynadotRateLimitSchema = z.object({
   reason: z.enum([
+    'failed_request_ip',
     'concurrency',
     'request_rate',
     'daily_quota',
     'edge_challenge',
     'unknown',
   ]),
+  circuit: dynadotCircuitSchema.optional(),
+  outcome: z.enum(['failed_request_ip', 'uncertain']).optional(),
   endpoint: z.enum(['inventory', 'account', 'pricing', 'other']),
   format: z.enum(['json', 'xml', 'html', 'text', 'empty']),
   retryAfterSeconds: z.number().int().positive().safe(),
@@ -90,9 +100,13 @@ export function inspectDynadotRateLimit(
       : format === 'html' &&
           /cloudflare|cf-chl-|challenge-platform/i.test(description)
         ? 'edge_challenge'
-        : /rate limit|too many requests/i.test(description)
-          ? 'request_rate'
-          : 'unknown';
+        : /too many failed requests.{0,80}IP address|failed.request.{0,80}(?:IP address|your IP)/i.test(
+              description,
+            )
+          ? 'failed_request_ip'
+          : /rate limit|too many requests/i.test(description)
+            ? 'request_rate'
+            : 'unknown';
   const retry = dynadotRetryAfter(headers.get('Retry-After'));
   const requestId = z.string().uuid().safeParse(headers.get('X-Request-ID'));
   const edgeRequestId = headers.get('CF-Ray');
@@ -105,7 +119,8 @@ export function inspectDynadotRateLimit(
         : url.pathname === '/restful/v2/accounts/info'
           ? 'account'
           : url.pathname === '/api3.json' ||
-              url.pathname.endsWith('/bulk_search')
+              url.pathname.endsWith('/bulk_search') ||
+              /^\/restful\/v2\/domains\/[^/]+\/search$/.test(url.pathname)
             ? 'pricing'
             : 'other',
     retryAfterSeconds: retry.seconds,
@@ -128,7 +143,7 @@ export function readDynadotRateLimit(
   const start = error.message.lastIndexOf(MARKER);
   if (start < 0) return;
   const encoded = error.message.slice(start + MARKER.length);
-  if (!encoded.endsWith(']') || encoded.length > 450) return;
+  if (!encoded.endsWith(']') || encoded.length > 900) return;
   try {
     const parsed = dynadotRateLimitSchema.safeParse(
       JSON.parse(encoded.slice(0, -1)),
@@ -136,5 +151,48 @@ export function readDynadotRateLimit(
     return parsed.success ? parsed.data : undefined;
   } catch {
     return;
+  }
+}
+
+/** Exact read purpose; callers never supply a pricing/inventory label. */
+export function dynadotPurpose(
+  url: URL,
+  method = 'GET',
+): 'inventory' | 'pricing' | 'other' {
+  if (method.toUpperCase() !== 'GET') return 'other';
+  if (url.pathname === '/restful/v2/domains') return 'inventory';
+  if (
+    /^\/restful\/v2\/domains\/(?:[^/]+\/search|bulk_search)$/.test(
+      url.pathname,
+    ) ||
+    (url.pathname === '/api3.json' &&
+      url.searchParams.get('command') === 'renew' &&
+      url.searchParams.get('price_check') === '1')
+  )
+    return 'pricing';
+  return 'other';
+}
+/** A transport 200 is insufficient; empty inventories must still be explicit. */
+export function validDynadotInventory(
+  status: number,
+  bytes: Uint8Array,
+): boolean {
+  if (status !== 200 || bytes.byteLength > 2 * 1024 * 1024) return false;
+  try {
+    const data = JSON.parse(new TextDecoder().decode(bytes));
+    return (
+      data?.code === 200 &&
+      !data.error &&
+      Array.isArray(data?.data?.domain_info_list) &&
+      data.data.domain_info_list.every(
+        (d: { domain_name?: unknown } | null) =>
+          typeof d?.domain_name === 'string' &&
+          d.domain_name.length > 0 &&
+          d.domain_name.length <= 253 &&
+          !/\s|\//.test(d.domain_name),
+      )
+    );
+  } catch {
+    return false;
   }
 }

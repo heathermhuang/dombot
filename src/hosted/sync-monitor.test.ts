@@ -140,6 +140,20 @@ describe('production Dynadot collector and email outbox', () => {
         httpStatus: 429,
         engine: `1.5.2-hosted.${20 + seq}`,
         source: String(seq).repeat(64),
+        rateLimit: {
+          reason: 'failed_request_ip',
+          endpoint: 'inventory',
+          format: 'json',
+          retryAfterSeconds: 60,
+          retryAfterSource: 'fallback',
+          circuit: {
+            state: 'open',
+            reason: 'failed_request_ip',
+            scope: 'global',
+            probes: seq - 2,
+            notBefore: Date.now() + 7200000,
+          },
+        },
       });
     await db
       .prepare('UPDATE sync_monitor_deliveries SET at=?')

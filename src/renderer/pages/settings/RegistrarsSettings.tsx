@@ -696,6 +696,9 @@ function AccountCard({
             <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />
             <span className="min-w-0 break-words">
               {sync.lastError}
+              {sync.recovery?.restriction
+                ? ` ${sync.domainCount} cached domains retained. Last successful inventory: ${sync.lastSyncedAt ? new Date(sync.lastSyncedAt).toLocaleString() : 'never'}.`
+                : ''}
               {sync.recovery?.retryAt && sync.recovery.state === 'deferred'
                 ? ` Retry eligible after ${new Date(sync.recovery.retryAt).toLocaleString()}.`
                 : ''}
@@ -1362,9 +1365,11 @@ function SyncStatus({
       <span className="flex items-center gap-1.5">
         <CircleX className="size-3.5 shrink-0 text-destructive" />
         <span className="text-[13px] font-medium text-destructive">
-          {meta.sync.recovery?.state === 'deferred'
-            ? 'Sync deferred'
-            : 'Sync failed'}
+          {meta.sync.recovery?.restriction
+            ? 'Provider restricted'
+            : meta.sync.recovery?.state === 'deferred'
+              ? 'Sync deferred'
+              : 'Sync failed'}
         </span>
       </span>
     );

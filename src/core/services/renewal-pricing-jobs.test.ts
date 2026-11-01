@@ -15,6 +15,8 @@ import {
 } from '../storage/namespace';
 import { readEntry, writeEntry } from './cache';
 import { setRegistrarEnabled } from './registrar-state';
+import { encodeDynadotRateLimit } from '../../shared/dynadot-rate-limit';
+import { syncAll } from './auto-sync';
 import {
   configureIncrementalRenewalPricing,
   configureRegistrarFactory,
@@ -67,6 +69,58 @@ afterEach(async () => {
 });
 
 describe('hosted renewal pricing', () => {
+  it('turns a pricing restriction into native inventory recovery without losing pending prices', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await getPortfolio(true);
+    const lastGood = getCachedPortfolio()!.fetchedAt;
+    const restriction = {
+      state: 'open' as const,
+      reason: 'failed_request_ip' as const,
+      scope: 'global' as const,
+      probes: 0,
+      notBefore: Date.now() + 1800000,
+    };
+    pricing.mockRejectedValueOnce(
+      new RateLimitError(
+        'HTTP 429 ' +
+          encodeDynadotRateLimit({
+            reason: 'failed_request_ip',
+            endpoint: 'pricing',
+            format: 'json',
+            retryAfterSeconds: 60,
+            retryAfterSource: 'fallback',
+            circuit: restriction,
+          }),
+        60,
+      ),
+    );
+    expect(await stepRenewalPricing()).toMatchObject({
+      remaining: 0,
+      blocked: 3,
+      failed: 0,
+    });
+    await flushWrites();
+    expect(await raw.get('renewal-pricing-jobs', 'dynadot')).toMatchObject({
+      pending: domains.map((d) => d.domainName),
+      failed: 0,
+      notBefore: restriction.notBefore,
+    });
+    expect(
+      readEntry<{ lastSyncedAt: number }>('portfolio', 'dynadot')!.data
+        .lastSyncedAt,
+    ).toBe(lastGood);
+    await stepRenewalPricing();
+    expect(pricing).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(restriction.notBefore + 1);
+    await syncAll(86400000);
+    expect(getRenewalPricingStatus()).toMatchObject({ remaining: 3 });
+    await stepRenewalPricing();
+    expect(pricing).toHaveBeenCalledTimes(2);
+    expect(getRenewalPricingStatus()).toMatchObject({
+      remaining: 2,
+      failed: 0,
+    });
+  });
   it('quotes every Dynadot holding, including uniform TLDs, after each inventory generation', async () => {
     listedDomains = ['ordinary.com', 'ordinary.net', 'premium.ai'].map(
       (domainName) => createDomain({ domainName, registrar: 'dynadot' }),

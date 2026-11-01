@@ -325,6 +325,52 @@ describe('restricted admin with real gateway, coordinator and isolated D1', () =
 });
 
 describe('admin metric meaning', () => {
+  it('reads legacy recovery snapshots and preserves new restriction deadlines for owner/admin status', () => {
+    const legacy = summarizeAdmin(
+      [],
+      {},
+      [],
+      [
+        {
+          name: 'dynadot',
+          accountId: 'a',
+          configured: true,
+          enabled: true,
+          sync: {
+            domainCount: 666,
+            lastSyncedAt: 100,
+            lastError: 'rate limit',
+            recovery: { state: 'failed', attempts: 3 },
+          },
+        } as RegistrarMeta,
+      ],
+      1440,
+      [],
+      1000,
+    );
+    expect(adminSnapshotSchema.parse(legacy).accounts[0].recovery).toEqual({
+      state: 'failed',
+      attempts: 3,
+    });
+    const restriction = {
+      state: 'open' as const,
+      scope: 'global' as const,
+      reason: 'failed_request_ip' as const,
+      probes: 0,
+      notBefore: 1800000,
+    };
+    legacy.accounts[0].recovery = {
+      state: 'deferred',
+      attempts: 3,
+      retryAt: restriction.notBefore,
+      restriction,
+    };
+    expect(adminSnapshotSchema.parse(legacy).accounts[0]).toMatchObject({
+      domains: 666,
+      lastSyncedAt: 100,
+      recovery: { restriction, retryAt: 1800000 },
+    });
+  });
   it('deduplicates names within a user, excludes archive and includes only unmatched imports', () => {
     const domains = [
       { domainName: 'one.test', source: 'registrar' },

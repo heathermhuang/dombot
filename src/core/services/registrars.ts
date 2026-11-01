@@ -1,3 +1,4 @@
+import { readDynadotRateLimit } from '../../shared/dynadot-rate-limit';
 import { protectRegistrar, redactRegistrarMessage } from './registrar-errors';
 import { importedRows } from '../../shared/imported-domains';
 import { getImportedDomains } from './imported-domains';
@@ -120,7 +121,7 @@ type CachedDomain = Omit<Domain, 'source'>;
  * On a failed sync we keep the last-good `domains` and `lastSyncedAt`, and only
  * set the error.
  */
-interface RegistrarPortfolioEntry {
+export interface RegistrarPortfolioEntry {
   domains: CachedDomain[];
   lastSyncedAt: number | null;
   lastError: string | null;
@@ -336,6 +337,28 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
       )
         return;
       if ((generations.get(id) ?? 0) !== generation) return;
+      const restriction = readDynadotRateLimit(failure)?.circuit;
+      if (restriction) {
+        // A restriction first seen during optional pricing also schedules the
+        // single inventory recovery candidate; fresh inventory cannot hide it.
+        writeEntry('portfolio', id, {
+          ...entry,
+          lastError:
+            'Dynadot failed-request IP restriction. Cached domains are retained; renewal pricing is blocked with pending work retained.' +
+            (restriction.state === 'attention_required'
+              ? ' Automatic recovery exhausted; provider/operator action is required.'
+              : ''),
+          recovery: {
+            state:
+              restriction.state === 'attention_required'
+                ? 'failed'
+                : 'deferred',
+            attempts: entry.recovery?.attempts ?? 0,
+            retryAt: restriction.notBefore,
+            restriction,
+          },
+        });
+      }
       const localCooldown =
         failure instanceof Error &&
         /\[dynadot:(shared|local)-cooldown\]/.test(failure.message);
@@ -358,7 +381,10 @@ export async function stepRenewalPricing(): Promise<RenewalPricingProgress> {
             : 30;
         await renewalJobs.set(id, {
           ...job,
-          notBefore: Date.now() + seconds * 1000,
+          notBefore: Math.max(
+            Date.now() + seconds * 1000,
+            restriction?.notBefore ?? 0,
+          ),
           attempts: localCooldown
             ? (job.attempts ?? 0)
             : Math.min(3, (job.attempts ?? 0) + 1),
@@ -763,7 +789,13 @@ async function performInventorySync(
   const prev = readRegistrarEntry(accountId);
   if (name === 'dynadot' && prev?.recovery) {
     if ((prev.recovery.retryAt ?? 0) > Date.now()) return;
-    if (trigger === 'scheduled' && prev.recovery.state === 'failed') return;
+    if (prev.recovery.restriction?.state === 'attention_required') return;
+    if (
+      trigger === 'scheduled' &&
+      prev.recovery.state === 'failed' &&
+      !prev.recovery.restriction
+    )
+      return;
   }
   let entry: RegistrarPortfolioEntry;
   try {
@@ -802,6 +834,7 @@ async function performInventorySync(
   const sharedCooldown =
     syncError instanceof Error &&
     /\[dynadot:(shared|local)-cooldown\]/.test(syncError.message);
+  if (sharedCooldown) entry.lastErrorAt = prev?.lastErrorAt ?? null;
   if (name === 'dynadot') {
     if (syncError instanceof RateLimitError) {
       // A recovered incident's old count is historical, including records
@@ -825,8 +858,20 @@ async function performInventorySync(
           ) *
             1000,
       };
-      entry.lastError =
-        attempts >= 3
+      const restriction =
+        readDynadotRateLimit(syncError)?.circuit ??
+        (sharedCooldown ? prev?.recovery?.restriction : undefined);
+      if (restriction)
+        entry.recovery = {
+          state:
+            restriction.state === 'attention_required' ? 'failed' : 'deferred',
+          attempts: sharedCooldown ? previousAttempts : previousAttempts + 1,
+          retryAt: restriction.notBefore,
+          restriction,
+        };
+      entry.lastError = restriction
+        ? `Dynadot failed-request IP restriction. Cached domains are retained; renewal pricing is blocked with pending work retained. ${restriction.state === 'attention_required' ? 'Automatic recovery stopped after three unsuccessful probes; provider/operator action is required.' : 'One inventory recovery probe is eligible after the quiet period; provider clearance is not guaranteed.'}`
+        : attempts >= 3
           ? 'Dynadot rate limit: automatic inventory retries stopped after three attempts. Cached domains are preserved. Try Sync after the cooldown.'
           : 'Dynadot rate limit: inventory refresh is deferred. Cached domains are preserved; a scheduled retry is pending.';
     } else if (!entry.lastError && prev?.lastError) {
@@ -1664,7 +1709,8 @@ export async function saveRegistrarCredentials(
   delete clean.proxyUrl;
   delete clean.proxyIp;
   await setStoredCredentials(account.id, clean);
-  if (name === 'dynadot') await clearDynadotPricingCapabilities(account.id);
+  if (name === 'dynadot' && previous.apiKey?.trim() !== clean.apiKey?.trim())
+    await clearDynadotPricingCapabilities(account.id);
   if (useProxy !== undefined)
     await setAccountProxy(
       account.id,

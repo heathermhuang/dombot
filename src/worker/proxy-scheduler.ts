@@ -1,9 +1,13 @@
 import { RateLimitError } from '@aoxborrow/registrar-client';
+import { encodeDynadotRateLimit } from '../shared/dynadot-rate-limit';
 import type { ProxyRoute } from '../shared/proxy';
 import {
   PROXY_NETWORK_MS,
   PROXY_QUEUE_WAIT_MS,
   type ProxyQueueCommand,
+  type DynadotPurpose,
+  type DynadotScope,
+  type DynadotOutcome,
   type ProxyQueueReply,
 } from '../shared/proxy-scheduler';
 
@@ -14,6 +18,8 @@ export interface ProxySchedulerSettings {
   relayUrl?: string;
   managedUrl?: string;
   provider?: 'dynadot';
+  purpose?: DynadotPurpose;
+  scope?: DynadotScope;
   alternateHost?: string;
   alternateIp?: string;
   queueRoute?: 'alternate';
@@ -96,7 +102,9 @@ function pause(ms: number, signal?: AbortSignal | null): Promise<void> {
 export async function acquireProxyLease(
   settings: ProxySchedulerSettings,
   signal?: AbortSignal | null,
-): Promise<(retryAfterMs?: number) => Promise<void>> {
+): Promise<
+  (retryAfterMs?: number, outcome?: DynadotOutcome) => Promise<ProxyQueueReply>
+> {
   if (!settings.service || !settings.tenant)
     throw failure('PROXY_QUEUE_UNAVAILABLE');
   const id = crypto.randomUUID(),
@@ -106,6 +114,7 @@ export async function acquireProxyLease(
     action: ProxyQueueCommand['action'],
     token?: string,
     retryAfterMs?: number,
+    outcome?: DynadotOutcome,
   ): Promise<ProxyQueueReply> => {
     const response = await settings.service!.fetch(
       'https://proxy-scheduler.internal/lease',
@@ -121,6 +130,9 @@ export async function acquireProxyLease(
             settings.queueRoute ?? (settings.relayUrl ? 'relay' : 'serial'),
           ...(settings.provider ? { provider: settings.provider } : {}),
           ...(retryAfterMs ? { retryAfterMs } : {}),
+          ...(settings.purpose ? { purpose: settings.purpose } : {}),
+          ...(settings.scope ? { scope: settings.scope } : {}),
+          ...(outcome ? { outcome } : {}),
         } satisfies ProxyQueueCommand),
         signal: AbortSignal.timeout(5000),
       },
@@ -141,15 +153,31 @@ export async function acquireProxyLease(
         )
           throw failure('PROXY_QUEUE_UNAVAILABLE');
         granted = true;
-        return async (retryAfterMs) => {
-          await call('release', reply.token, retryAfterMs);
-        };
+        return async (retryAfterMs, outcome) =>
+          call('release', reply.token, retryAfterMs, outcome);
       }
-      if (reply.status === 'deferred')
+      if (reply.status === 'deferred') {
+        const seconds = Math.max(1, Math.ceil(reply.retryAfterMs / 1000));
         throw new RateLimitError(
-          'Dynadot shared connection is cooling down after an upstream rate limit.',
-          Math.max(1, Math.ceil(reply.retryAfterMs / 1000)),
+          '[dynadot:shared-cooldown]' +
+            (reply.circuit
+              ? encodeDynadotRateLimit({
+                  reason: 'failed_request_ip',
+                  endpoint:
+                    settings.purpose === 'inventory'
+                      ? 'inventory'
+                      : settings.purpose === 'pricing'
+                        ? 'pricing'
+                        : 'other',
+                  format: 'empty',
+                  retryAfterSeconds: seconds,
+                  retryAfterSource: 'fallback',
+                  circuit: reply.circuit,
+                })
+              : ''),
+          seconds,
         );
+      }
       if (reply.status === 'busy') {
         // Capacity is temporary, not a registrar failure. A full sync can
         // have more proxy reads than this tenant's four pending tickets.

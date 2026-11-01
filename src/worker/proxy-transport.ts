@@ -3,6 +3,16 @@ import {
   type RegistrarName,
 } from '@aoxborrow/registrar-client';
 import { dynadotRetrySeconds } from '../core/services/dynadot-transport';
+import {
+  dynadotPurpose,
+  validDynadotInventory,
+  inspectDynadotRateLimit,
+  encodeDynadotRateLimit,
+} from '../shared/dynadot-rate-limit';
+import type {
+  DynadotOutcome,
+  ProxyQueueReply,
+} from '../shared/proxy-scheduler';
 import { connect } from 'cloudflare:sockets';
 import { Client } from 'tunnelfetch';
 import {
@@ -33,7 +43,9 @@ export function createWorkerProxyFetch(
   settings: ProxySchedulerSettings,
 ): ProxyFetch {
   return async (proxy, url, init) => {
-    const dynadot = new URL(url).hostname === 'api.dynadot.com';
+    const target = new URL(url);
+    const dynadot = target.hostname === 'api.dynadot.com';
+    const purpose = dynadotPurpose(target, init.method);
     if (
       !(dynadot && (settings.tenant || settings.service)) &&
       !scheduledProxy(settings, proxy)
@@ -54,7 +66,15 @@ export function createWorkerProxyFetch(
         ...(alternateProxy(settings, proxy)
           ? { queueRoute: 'alternate' as const }
           : {}),
-        ...(dynadot ? { provider: 'dynadot' as const } : {}),
+        ...(dynadot
+          ? {
+              provider: 'dynadot' as const,
+              purpose,
+              scope: managedProxy(settings, proxy)
+                ? ('managed' as const)
+                : ('unknown' as const),
+            }
+          : {}),
       },
       init.signal,
     ).catch((error: unknown) => {
@@ -62,10 +82,19 @@ export function createWorkerProxyFetch(
       throw error;
     });
     if (release instanceof RateLimitError)
-      return new Response('[dynadot:shared-cooldown]', {
-        status: 429,
-        headers: { 'Retry-After': String(release.retryAfter ?? 60) },
-      });
+      return new Response(
+        release.message.includes('[dynadot429:')
+          ? release.message
+          : '[dynadot:shared-cooldown]',
+        {
+          status: 429,
+          headers: { 'Retry-After': String(release.retryAfter ?? 60) },
+        },
+      );
+    let response: Response | undefined;
+    let failure: unknown;
+    let outcome: DynadotOutcome = 'uncertain';
+    let report: ProxyQueueReply | undefined;
     try {
       if (init.signal?.aborted)
         throw Object.assign(
@@ -73,7 +102,7 @@ export function createWorkerProxyFetch(
           { code: 'PROXY_QUEUE_CANCELLED' },
         );
       const selected = relayUrl ? { ...proxy, url: relayUrl } : proxy;
-      const response = await workerProxyFetch(selected, url, {
+      response = await workerProxyFetch(selected, url, {
         ...init,
         signal: AbortSignal.any([
           ...(init.signal ? [init.signal] : []),
@@ -83,12 +112,56 @@ export function createWorkerProxyFetch(
       if (dynadot && response.status === 429)
         retryAfterMs =
           dynadotRetrySeconds(response.headers.get('Retry-After')) * 1000;
-      return response;
+      if (dynadot) {
+        const bytes = new Uint8Array(await response.clone().arrayBuffer());
+        if (
+          response.status === 429 &&
+          inspectDynadotRateLimit(url, response.headers, bytes).reason ===
+            'failed_request_ip'
+        )
+          outcome = 'failed_request_ip';
+        else if (
+          purpose === 'inventory' &&
+          validDynadotInventory(response.status, bytes)
+        )
+          outcome = 'inventory_success';
+      }
+    } catch (error) {
+      failure = error;
     } finally {
       // A failed release never opens another connection: the durable lease
       // remains held until its conservative expiry and cooldown.
-      await release(retryAfterMs).catch(() => {});
+      report = await release(retryAfterMs, dynadot ? outcome : undefined).catch(
+        () => undefined,
+      );
     }
+    if (failure) {
+      if (dynadot && report?.circuit)
+        throw new RateLimitError(
+          'Dynadot recovery probe outcome uncertain. ' +
+            encodeDynadotRateLimit({
+              reason: 'failed_request_ip',
+              endpoint: 'inventory',
+              format: 'empty',
+              outcome: 'uncertain',
+              retryAfterSeconds: Math.max(
+                1,
+                Math.ceil((report.circuit.notBefore - Date.now()) / 1000),
+              ),
+              retryAfterSource: 'fallback',
+              circuit: report.circuit,
+            }),
+        );
+      throw failure;
+    }
+    if (!response) throw new Error('Missing proxy response');
+    response.headers.delete('X-DomBot-Dynadot-Circuit');
+    if (dynadot && report?.circuit)
+      response.headers.set(
+        'X-DomBot-Dynadot-Circuit',
+        JSON.stringify(report.circuit),
+      );
+    return response;
   };
 }
 

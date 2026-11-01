@@ -2,6 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 import {
   advanceProxyQueue,
   emptyProxyQueue,
+  circuitStatus,
+  seedDynadotRestriction,
   type ProxyQueueCommand,
   type ProxyQueueState,
 } from '../shared/proxy-scheduler';
@@ -19,9 +21,18 @@ function commandOf(value: unknown): ProxyQueueCommand | null {
     (command.route !== undefined &&
       !['serial', 'relay', 'alternate'].includes(command.route)) ||
     (command.provider !== undefined && command.provider !== 'dynadot') ||
+    (command.purpose !== undefined &&
+      !['inventory', 'pricing', 'other'].includes(command.purpose)) ||
+    (command.scope !== undefined &&
+      !['managed', 'unknown'].includes(command.scope)) ||
+    (command.outcome !== undefined &&
+      !['failed_request_ip', 'inventory_success', 'uncertain'].includes(
+        command.outcome,
+      )) ||
     (command.retryAfterMs !== undefined &&
       (!Number.isSafeInteger(command.retryAfterMs) ||
-        command.retryAfterMs < 0)) ||
+        command.retryAfterMs < 0 ||
+        command.retryAfterMs > 8_000_000_000_000_000)) ||
     (command.token !== undefined &&
       (typeof command.token !== 'string' || !uuid.test(command.token)))
   )
@@ -33,6 +44,9 @@ function commandOf(value: unknown): ProxyQueueCommand | null {
     ...(command.token ? { token: command.token } : {}),
     ...(command.route ? { route: command.route } : {}),
     ...(command.provider ? { provider: command.provider } : {}),
+    ...(command.purpose ? { purpose: command.purpose } : {}),
+    ...(command.scope ? { scope: command.scope } : {}),
+    ...(command.outcome ? { outcome: command.outcome } : {}),
     ...(command.retryAfterMs !== undefined
       ? { retryAfterMs: command.retryAfterMs }
       : {}),
@@ -71,6 +85,8 @@ export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
           (ticket) => ticket.provider === 'dynadot',
         ).length,
         dynadotLimitedUntil: state.dynadotLimitedUntil ?? 0,
+        dynadotCircuit: circuitStatus(state) ?? null,
+        dynadotRestrictionSeedAt: state.dynadotRestrictionSeedAt ?? null,
         availableAt: state.availableAt,
         nextExpiryAt: Math.min(
           ...state.active.map((grant) => grant.expiresAt),
@@ -86,6 +102,19 @@ export class SharedProxyQueue extends DurableObject<ProxySchedulerEnv> {
     const result = await this.ctx.storage.transaction(async (storage) => {
       const state =
         (await storage.get<ProxyQueueState>('queue')) ?? emptyProxyQueue();
+      const seedAt = Number(
+        Reflect.get(this.env, 'DYNADOT_RESTRICTION_SEED_AT') ?? 0,
+      );
+      if (seedAt && !alternate)
+        seedDynadotRestriction(
+          state,
+          seedAt,
+          Number(
+            Reflect.get(this.env, 'DYNADOT_RESTRICTION_SEED_LIMITED_UNTIL') ??
+              0,
+          ),
+          Date.now(),
+        );
       const reply = advanceProxyQueue(
         state,
         command,
