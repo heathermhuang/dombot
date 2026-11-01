@@ -1,5 +1,6 @@
 import {
   AbortError,
+  Feature,
   NotImplementedError,
   OutcomeUnknownError,
   RateLimitError,
@@ -12,18 +13,32 @@ import type {
   DomainOpResult,
   DomainOpStatus,
   DomainTarget,
+  DomainTransferOut,
 } from '../../shared/ipc';
 import {
   expandTemplate,
   opSummary,
   unsupportedReason,
 } from '../../shared/domain-ops';
+import {
+  opChange,
+  type KnownSettings,
+  type SettingChange,
+} from '../../shared/domain-changes';
+import {
+  DomainEventSource,
+  type DomainEvent,
+  type UserSource,
+} from '../../shared/domain-events';
 import { toCurrencyCode } from '../../shared/currencies';
 import { parseCanonicalAmount } from '../../shared/money';
 import { broadcastPortfolioChanged } from '../events';
+import { changeEvent } from './domain-changes';
+import { putEvents } from './domain-events';
 import { recordRenewals, type ConfirmedRenewal } from './domain-history';
 import {
   resolveDomainAccount,
+  getCachedDomainDetail,
   getCachedPortfolio,
   getDomainDetail,
   getRegistrarClient,
@@ -39,8 +54,8 @@ import {
 // The single dispatcher for per-domain writes. Every caller — the `domain:apply`
 // IPC handler behind a row control, the bulk-job runner, and the MCP `domain_*`
 // tools — comes through here, so capability gating, cache patching, the
-// portfolioChanged broadcast, and error classification happen in one place.
-// See docs/domain-editing.md.
+// portfolioChanged broadcast, error classification, and the history (a
+// `renewed` or `changed` event) happen in one place. See docs/domain-editing.md.
 
 export interface ApplyOptions {
   /** Abort in-flight requests (bulk cancel). */
@@ -56,6 +71,13 @@ export interface ApplyOptions {
    * runner writes a slice's `renewed` events in one batch.
    */
   renewals?: ConfirmedRenewal[];
+  /**
+   * Collect `changed` events here instead of saving each one: the bulk runner
+   * writes a slice's in one batch.
+   */
+  changes?: DomainEvent[];
+  /** Who asked, for the history: you (the default), a bulk job, or an agent. */
+  source?: UserSource | typeof DomainEventSource.Bulk;
 }
 
 /**
@@ -92,8 +114,9 @@ export async function applyDomainOp(
     );
     target = { ...target, accountId: account.id };
     // What the domain looked like going in, to tell afterwards whether a write
-    // of unknown outcome took effect.
+    // of unknown outcome took effect, and what a setting was before.
     const before = cachedDomain(target);
+    const known = knownSettings(before, account.id, target.domainName);
     const seen: Seen = {};
     let result: DomainOpResult;
     try {
@@ -114,6 +137,10 @@ export async function applyDomainOp(
         },
         opts,
       );
+    if (result.status === 'ok') {
+      const change = opChange(op, target.domainName, known);
+      if (change) noteChange(target.domainName, account.id, change, opts);
+    }
     if (result.status === 'ok' && !opts.silent) broadcastPortfolioChanged();
     return result;
   } catch (err) {
@@ -137,9 +164,65 @@ function noteRenewal(renewal: ConfirmedRenewal, opts: ApplyOptions): void {
     return;
   }
   try {
-    recordRenewals([renewal]);
+    recordRenewals([renewal], opts.source ?? DomainEventSource.User);
   } catch (err) {
     console.error('[domain-history] recording the renewal failed', err);
+  }
+}
+
+/**
+ * A setting the registrar confirmed changing becomes a `changed` event. Like
+ * a renewal, recording never fails the op: the change happened either way.
+ */
+function noteChange(
+  domainName: string,
+  accountId: string,
+  change: SettingChange,
+  opts: ApplyOptions,
+): void {
+  try {
+    const event = changeEvent(
+      domainName,
+      change,
+      opts.source ?? DomainEventSource.User,
+      { accountId },
+    );
+    if (opts.changes) opts.changes.push(event);
+    else putEvents([event]);
+  } catch (err) {
+    console.error('[domain-history] recording the change failed', err);
+  }
+}
+
+/**
+ * What DomBot knew of a name's settings before a write, for the `before` of
+ * its `changed` event: the fetched detail first, then the list row. A list
+ * row without nameservers came from a registrar whose list doesn't carry
+ * them, and that list's privacy and lock aren't reliable either (the same
+ * rule the table uses to decide what to look up). Never throws: a cache it
+ * can't read means nothing known, not a write that doesn't happen.
+ */
+function knownSettings(
+  row: Domain | undefined,
+  accountId: string,
+  domainName: string,
+): KnownSettings {
+  try {
+    const detail = getCachedDomainDetail(accountId, domainName);
+    const listed = !!row?.nameservers?.length;
+    const nameservers = detail?.nameservers?.length
+      ? detail.nameservers
+      : listed
+        ? row!.nameservers
+        : undefined;
+    return {
+      autoRenew: detail?.autoRenew ?? row?.autoRenew,
+      privacy: detail?.privacy ?? (listed ? row!.privacy : undefined),
+      lock: detail?.locked ?? (listed ? row!.locked : undefined),
+      nameservers,
+    };
+  } catch {
+    return {};
   }
 }
 
@@ -205,6 +288,12 @@ async function settleUnknown(
     return done(
       'failed',
       'The registrar did not return the auth code. It is safe to try again.',
+    );
+  // Approving one that already went through is refused, nothing more.
+  if (op.kind === 'approveTransfer')
+    return done(
+      'failed',
+      'The registrar did not confirm the approval. It is safe to try again.',
     );
   if (op.kind === 'urlForwarding' || op.kind === 'emailForwarding')
     return done('unknown', UNCONFIRMED);
@@ -420,7 +509,48 @@ async function dispatch(
       ).provider.getAuthCode(domainName, request);
       return done('ok', opSummary(op), { data: { authCode } });
     }
+    case 'approveTransfer':
+      // Extended, like the auth code: reach through to the provider.
+      return fromResult(
+        await getRegistrarClient(
+          registrar,
+          accountId,
+        ).provider.approveTransferOut(domainName, request),
+      );
   }
+}
+
+/**
+ * A domain's latest outbound transfer, read live from the account that holds
+ * it (never cached): the request the buyer's registrar made with the auth
+ * code, behind the Sales page's Approve transfer. Null when the registrar has
+ * none on record. Throws when the registrar can't report one.
+ */
+export async function getTransferOut(
+  target: DomainTarget,
+  request: RequestOptions = {},
+): Promise<DomainTransferOut | null> {
+  if (!getRegistrarFeatures(target.registrar).includes(Feature.GetTransferOut))
+    throw new Error(
+      'This registrar doesn’t report transfers out through its API.',
+    );
+  const account = resolveDomainAccount(
+    target.registrar,
+    target.domainName,
+    target.accountId,
+  );
+  const transfer = await getRegistrarClient(
+    target.registrar,
+    account.id,
+  ).provider.getTransferOut(target.domainName, request);
+  if (!transfer) return null;
+  return {
+    status: transfer.status,
+    rawStatus: transfer.rawStatus,
+    requestedAt: transfer.requestedDate?.toISOString() ?? null,
+    expiresAt: transfer.expirationDate?.toISOString() ?? null,
+    completedAt: transfer.completedDate?.toISOString() ?? null,
+  };
 }
 
 function classify(err: unknown): DomainOpStatus {

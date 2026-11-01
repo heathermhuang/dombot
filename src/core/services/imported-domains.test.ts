@@ -115,13 +115,35 @@ describe('imported domains', () => {
     );
   });
 
+  it('records turning auto-renew on or off as a change of yours', () => {
+    addImportedDomains([{ domainName: 'a.com' }], { source: 'user' });
+    // From not set: no `before`.
+    updateImportedDomain('a.com', { autoRenew: true });
+    // Other fields, or auto-renew left as it is, record nothing.
+    updateImportedDomain('a.com', {
+      autoRenew: true,
+      createdDate: '2020-01-01',
+    });
+    updateImportedDomain('a.com', { autoRenew: false });
+    // Cleared to not set isn't a change of the setting.
+    updateImportedDomain('a.com', { autoRenew: null });
+    expect(
+      listEvents()
+        .filter((e) => e.type === 'changed')
+        .map((e) => [e.source, e.setting, e.before, e.after]),
+    ).toEqual([
+      ['user', 'autoRenew', undefined, true],
+      ['user', 'autoRenew', true, false],
+    ]);
+  });
+
   it('takes a name that left an account back without a new review', () => {
     recordSync(holding(['a.com']));
     recordSync(holding([]));
     expect(open().map((e) => e.type)).toEqual(['removed']);
     addImportedDomains([{ domainName: 'a.com' }], { source: 'import' });
     expect(open()).toEqual([]);
-    expect(ownershipByDomain(listEvents()).get('a.com')?.archived).toBe(false);
+    expect(ownershipByDomain(listEvents()).get('a.com')?.removal).toBeNull();
   });
 
   it('hands a name to the account that reports it, with no new arrival', () => {
@@ -132,7 +154,7 @@ describe('imported domains', () => {
       ['moved', 'a.com', null],
     ]);
     expect(getImportedDomains()).toEqual({});
-    expect(ownershipByDomain(listEvents()).get('a.com')?.archived).toBe(false);
+    expect(ownershipByDomain(listEvents()).get('a.com')?.removal).toBeNull();
   });
 
   it("hands over on an account's first sync too", () => {
@@ -146,7 +168,7 @@ describe('imported domains', () => {
 
   it('is removed by Delete', () => {
     addImportedDomains([{ domainName: 'a.com' }], { source: 'user' });
-    deleteDomains(['a.com']);
+    deleteDomains(['a.com'], new Set());
     expect(getImportedDomains()).toEqual({});
   });
 

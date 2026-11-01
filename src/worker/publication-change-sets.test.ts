@@ -15,7 +15,7 @@ import {
   anyDraftSchema,
 } from '../shared/owner-site';
 import { emptyDraft, privateListing } from '../shared/publication';
-import { emptySale } from '../shared/sales';
+import { emptySale } from '../shared/hosted-sales';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { publicLinkedSales } from './publication-links';
 import { renderOwnerSite } from '../shared/render-owner-site';
@@ -929,9 +929,12 @@ it('qualifies the 100-name composite ceiling and rejects 101 before public mutat
       auth,
     ),
   ).rejects.toThrow();
-  const { writeFileSync } = await import('node:fs');
+  const { writeFileSync, mkdtempSync } = await import('node:fs');
+  const measurementDirectory = mkdtempSync(
+    join(tmpdir(), 'dombot-publishing-budget-'),
+  );
   writeFileSync(
-    join(tmpdir(), 'dombot-publishing-budget-measurement.json'),
+    join(measurementDirectory, 'measurement.json'),
     JSON.stringify({
       names: 100,
       maxDescription: 400,
@@ -941,6 +944,7 @@ it('qualifies the 100-name composite ceiling and rejects 101 before public mutat
       manifestBytes: new TextEncoder().encode(JSON.stringify(m)).byteLength,
       publicRows: 100,
     }),
+    { mode: 0o600, flag: 'wx' },
   );
 }, 30000);
 

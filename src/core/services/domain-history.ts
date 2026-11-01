@@ -1,21 +1,16 @@
 import { assertDomainName, toAscii } from '../../shared/domain-name';
-import { parsePurchaseDate } from '../../shared/money';
 import {
   DomainEventSource,
   DomainEventType,
   localDay,
   type DomainEvent,
-  type UserSource,
 } from '../../shared/domain-events';
 import type { CurrencyCode } from '../../shared/currencies';
-import { ownershipByDomain } from '../../shared/ownership';
 import { diffSync, type AccountHoldings } from '../../shared/sync-diff';
 import { markAccountsTracked, trackedAccountIds } from './accounts';
 import {
-  currentLabel,
   deleteDomainEvents,
   eventsFor,
-  replaceLabel,
   getEvent,
   listEvents,
   newEvent,
@@ -27,9 +22,19 @@ import { deleteListPrices } from './list-prices';
 import { removeImportedDomains, takeOverImported } from './imported-domains';
 import { Namespace } from '../storage/namespace';
 
-// Ownership history on top of the event log: what sync saw, and what you say
-// happened (docs/storage-model.md, "Owned, Archive, and Hidden"). Purchases
-// and sales are in purchases.ts; this is everything else.
+// Ownership history on top of the event log: what sync saw
+// (docs/storage-model.md, "Owned and Archive"). Purchases and sales are in
+// purchases.ts; this is everything else.
+
+/**
+ * Names with a sale under way at a market, whose removal sync writes as
+ * answered. The markets module provides it: it imports this one (through
+ * the registrars), so this one can't import it.
+ */
+let sellingNames: () => ReadonlySet<string> = () => new Set();
+export function provideSellingNames(names: () => ReadonlySet<string>): void {
+  sellingNames = names;
+}
 
 /**
  * What each account's last successful sync saw, keyed by account id. Sync
@@ -99,6 +104,7 @@ export function recordSync(after: AccountHoldings[]): DomainEvent[] {
     trackedAccountIds(),
     now,
     newEvent,
+    sellingNames(),
   );
   const { newlyTracked } = diff;
   // An imported name an account now reports isn't a new arrival: sync takes it
@@ -263,75 +269,6 @@ export interface OwnershipItem {
   resolves?: string;
 }
 
-/** A `YYYY-MM-DD` day from a dialog, or today when it's left blank. */
-function dayOf(date: string | null | undefined, label: string): string {
-  return parsePurchaseDate(date ?? '', label) ?? localDay();
-}
-
-/**
- * Mark names Dropped or Archived, in one write: they move to Archive whatever
- * their registration status. Each `resolves` closes the sync alert it answers.
- * A name already in that state is left as is; one you'd labeled otherwise
- * gets the new label in place of the old (see replaceLabel). `source` is
- * `agent` when an MCP client asked.
- */
-export function setDispositions(
-  items: OwnershipItem[],
-  type: typeof DomainEventType.Dropped | typeof DomainEventType.Archived,
-  date?: string | null,
-  source: UserSource = DomainEventSource.User,
-): DomainEvent[] {
-  const day = dayOf(date, 'Date');
-  const now = Date.now();
-  const events: DomainEvent[] = [];
-  for (const item of items) {
-    const domain = assertDomainName(item.domainName);
-    if (currentLabel(domain) === type) continue;
-    const replaced = replaceLabel(domain);
-    const resolves = item.resolves ?? replaced.resolves;
-    events.push(
-      newEvent(
-        {
-          domain,
-          type,
-          source,
-          date: day,
-          ...(resolves ? { resolves } : {}),
-        },
-        now,
-      ),
-    );
-  }
-  putEvents(events);
-  return events;
-}
-
-/**
- * "Move back to Owned": deletes the Sold, Dropped, or Archived event that put
- * each name in Archive. A name in Archive only because sync saw it leave has
- * nothing of yours to undo (dismiss its alert instead), so it's skipped.
- * Returns how many moved back.
- */
-export function restoreOwned(domainNames: string[]): number {
-  const ids: string[] = [];
-  for (const name of domainNames) {
-    const domain = assertDomainName(name);
-    const o = ownershipByDomain(eventsFor(domain)).get(domain);
-    if (o?.archived && o.event && o.event.source !== DomainEventSource.Sync) {
-      ids.push(o.event.id);
-    }
-  }
-  if (ids.length === 0 && domainNames.length > 0) {
-    throw new Error(
-      domainNames.length === 1
-        ? `${toAscii(domainNames[0])} isn't marked Sold, Dropped, or Archived.`
-        : 'None of these names is marked Sold, Dropped, or Archived.',
-    );
-  }
-  deleteDomainEvents(ids);
-  return ids.length;
-}
-
 /** Acknowledge sync alerts with no action, or bring them back, in one write. */
 export function setAlertsDismissed(ids: string[], dismissed: boolean): void {
   const now = Date.now();
@@ -347,6 +284,29 @@ export function setAlertsDismissed(ids: string[], dismissed: boolean): void {
   putEvents(alerts.map((e) => ({ ...e, dismissed, updatedAt: now })));
 }
 
+/**
+ * Mark departures dropped (it left and no money came back), or not after
+ * all, in one write. Dropped counts as dismissed and gives Archive its
+ * Dropped label; undoing it leaves `dismissed` as it was.
+ */
+export function setDeparturesDropped(ids: string[], dropped: boolean): void {
+  const now = Date.now();
+  const departures = ids
+    .map((id) => getEvent(id))
+    .filter((e): e is DomainEvent => e?.type === DomainEventType.Removed);
+  if (departures.length === 0)
+    throw new Error('That departure no longer exists.');
+  putEvents(departures.map((e) => ({ ...e, dropped, updatedAt: now })));
+}
+
+/** Mark a sale's name handed over to the buyer, or not after all. */
+export function setSaleTransferred(id: string, transferred: boolean): void {
+  const sale = getEvent(id);
+  if (sale?.type !== DomainEventType.Sold)
+    throw new Error('That sale no longer exists.');
+  putEvents([{ ...sale, transferred, updatedAt: Date.now() }]);
+}
+
 /** Undo a user event (a resolution recorded by mistake). Sync events stay. */
 export function deleteUserEvent(id: string): void {
   const event = getEvent(id);
@@ -359,12 +319,25 @@ export function deleteUserEvent(id: string): void {
 
 /**
  * Delete: removes everything DomBot holds about each name (events, notes,
- * folder, price override). If a connected registrar still reports one, the
- * next sync brings it back as a fresh name.
+ * folder, prices, its imported row). Only for names no
+ * connected account holds (`held`, `toAscii` names): imported names and
+ * Archive names. Held names are skipped; returns how many were removed.
  */
-export function deleteDomains(domainNames: string[]): void {
-  for (const name of domainNames) {
-    const domain = assertDomainName(name);
+export function deleteDomains(
+  domainNames: string[],
+  held: ReadonlySet<string>,
+): number {
+  const removable = domainNames
+    .map((name) => assertDomainName(name))
+    .filter((domain) => !held.has(domain));
+  if (removable.length === 0 && domainNames.length > 0) {
+    throw new Error(
+      domainNames.length === 1
+        ? `${toAscii(domainNames[0])} is in one of your accounts; turn off its auto-renew to let it go.`
+        : 'Every one of these is in one of your accounts; turn off auto-renew to let them go.',
+    );
+  }
+  for (const domain of removable) {
     deleteDomainEvents(
       eventsFor(domain).map((e) => e.id),
       domain,
@@ -374,4 +347,5 @@ export function deleteDomains(domainNames: string[]): void {
     deleteListPrices([domain]);
     removeImportedDomains([domain]);
   }
+  return removable.length;
 }

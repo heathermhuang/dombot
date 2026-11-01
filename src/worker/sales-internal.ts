@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { verifyGatewayRequest } from '../shared/gateway-proof';
-import { deliveryStateSchema } from '../shared/sales';
+import { deliveryStateSchema } from '../shared/hosted-sales';
 import { SalesStore } from './sales-store';
 import { SalesInquiryStore } from './sales-inquiry-store';
 import {

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import type { SalesListing } from '../../../shared/sales-api';
-import type { SaleDestination } from '../../../shared/sales';
+import type { SaleDestination } from '../../../shared/hosted-sales';
 import {
   salesRequest,
   useSalesAction,

@@ -1,7 +1,11 @@
 import { dynadotCircuitSchema } from '../shared/dynadot-rate-limit';
 import { z } from 'zod';
 import { importedRows } from '../shared/imported-domains';
-import { ownershipByDomain } from '../shared/ownership';
+import {
+  ownershipByDomain,
+  archiveRows,
+  standingOf,
+} from '../shared/ownership';
 import { toAscii } from '../shared/domain-name';
 import type {
   Domain,
@@ -102,13 +106,17 @@ export function summarizeAdmin(
   const rows = [...domains, ...importedRows(imported, domains)];
   const owned = new Set(
     rows
-      .filter((d) => !ownership.get(toAscii(d.domainName))?.archived)
+      .filter(
+        (d) => !standingOf(d, ownership.get(toAscii(d.domainName))).archived,
+      )
       .map((d) => toAscii(d.domainName)),
   );
   return adminSnapshotSchema.parse({
     at,
     owned: owned.size,
-    archived: [...ownership.values()].filter((o) => o.archived).length,
+    archived: archiveRows(ownership, rows, metadata).filter(
+      (d) => standingOf(d, ownership.get(toAscii(d.domainName))).archived,
+    ).length,
     imported: rows.filter(
       (d) => d.source === 'imported' && owned.has(toAscii(d.domainName)),
     ).length,

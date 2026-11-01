@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isRateCurrency } from '../../../shared/currencies';
 import { toAscii } from '../../../shared/domain-name';
 import type { Domain } from '../../../shared/ipc';
 import {
@@ -16,7 +17,6 @@ import { ActionHeader, todayInput } from '../actions/ActionDialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { CurrencyPicker } from './CurrencyPicker';
 import { MoneyInput } from './MoneyInput';
 import {
   NOTES_MAX,
@@ -26,19 +26,26 @@ import {
 } from './NotesLimit';
 
 /**
- * Sale date, sale amount, and the shared notes for one name.
- * `edit` updates a name that is already Sold. `mark` files it in Sold only
- * when the user saves. Closing without that button leaves the name where it was.
+ * Sale date, sale amount, fees, and the shared notes for one name.
+ * `edit` updates a name that is already Sold, and Undo sale deletes the sale.
+ * `mark` records it only when the user saves. Closing without that button
+ * leaves the name where it was.
  */
 export function SaleDialog({
   domain,
   mode = 'edit',
+  eventId,
   resolves,
   onSaved,
   onClose,
 }: {
-  domain: Domain;
+  /** A name, or just its name when it's no longer in the portfolio. */
+  // The Sales tab edits a sale by name alone; marking needs the rest.
+  domain: Pick<Domain, 'domainName'> &
+    Partial<Pick<Domain, 'departed' | 'source'>>;
   mode?: 'edit' | 'mark';
+  /** The `sold` event to edit (the Sales tab's rows); default the latest. */
+  eventId?: string;
   /** The "removed from registrar" alert this sale answers, if any. */
   resolves?: string;
   /** Runs after the sale is stored. */
@@ -46,6 +53,7 @@ export function SaleDialog({
   onClose: () => void;
 }) {
   const purchases = useAppStore((s) => s.purchases);
+  const events = useAppStore((s) => s.domainEvents);
   const settings = useAppStore((s) => s.settings);
   const saveSale = useAppStore((s) => s.saveSale);
   const formatId: NumberFormatId =
@@ -54,7 +62,16 @@ export function SaleDialog({
   const existing = purchases[toAscii(domain.domainName)];
   // Marking Sold, or answering an alert, records a new sale: start blank
   // rather than from an earlier one. The note belongs to the name.
-  const sale = mode === 'mark' || resolves ? undefined : existing;
+  const event = eventId ? events.find((e) => e.id === eventId) : undefined;
+  const latest = mode === 'mark' || resolves ? undefined : existing;
+  const sale = event
+    ? {
+        saleDate: event.date,
+        saleAmount: event.amount ?? null,
+        saleCurrency: event.currency ?? null,
+        saleFees: event.fees ?? null,
+      }
+    : latest;
 
   // The date starts as stored, or today when there's none yet.
   const [date, setDate] = useState(sale?.saleDate || todayInput);
@@ -67,8 +84,19 @@ export function SaleDialog({
         )
       : '',
   );
+  // A new sale starts in the purchase's currency, when it's one of the 30.
+  const bought = existing?.currency;
+  const [fees, setFees] = useState(
+    sale?.saleFees
+      ? formatAmountInput(
+          sale.saleFees,
+          sale.saleCurrency ?? preferred,
+          formatId,
+        )
+      : '',
+  );
   const [currency, setCurrency] = useState(
-    sale?.saleCurrency ?? existing?.currency ?? preferred,
+    sale?.saleCurrency ?? (isRateCurrency(bought) ? bought : preferred),
   );
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -78,9 +106,11 @@ export function SaleDialog({
     setError(null);
     let saleDate: string | null = null;
     let canonical: string | null = null;
+    let canonicalFees: string | null = null;
     try {
       saleDate = parsePurchaseDate(date, 'Sale date');
       canonical = parseLocalizedAmount(amount, currency, formatId);
+      canonicalFees = parseLocalizedAmount(fees, currency, formatId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Check the amount.');
       return;
@@ -90,10 +120,12 @@ export function SaleDialog({
       await saveSale({
         ...(mode === 'mark' ? { mark: true } : {}),
         ...(resolves ? { resolves } : {}),
+        ...(eventId ? { eventId } : {}),
         domainName: domain.domainName,
         saleDate,
         amount: canonical,
         currency: canonical ? currency : null,
+        fees: canonical ? canonicalFees : null,
         notes,
       });
       await onSaved?.();
@@ -104,18 +136,39 @@ export function SaleDialog({
     }
   }
 
+  // Blank date and amount delete the sale; the note and purchase stay.
+  async function undo() {
+    setError(null);
+    setSaving(true);
+    try {
+      await saveSale({
+        domainName: domain.domainName,
+        saleDate: null,
+        amount: null,
+        currency: null,
+        notes,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not undo.');
+      setSaving(false);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-md">
         <ActionHeader
-          title={mode === 'mark' ? 'Mark as Sold' : 'Edit sale'}
+          title={mode === 'mark' ? 'Record sale' : 'Edit sale'}
           names={[domain.domainName]}
         />
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
             {mode === 'mark'
-              ? 'Moves to Archive as Sold. Nothing changes at the registrar.'
-              : 'What you sold it for and when.'}
+              ? domain.departed || domain.source === 'imported'
+                ? 'Moves to Archive as Sold. Nothing changes at the registrar.'
+                : 'Shows as Sold until the buyer takes it, then moves to Archive. Nothing changes at the registrar.'
+              : 'What you sold it for and when, and what the sale cost you.'}
           </p>
           <div className="flex flex-col gap-2">
             <Label htmlFor="sale-date">Sale date</Label>
@@ -131,14 +184,25 @@ export function SaleDialog({
             <MoneyInput
               id="sale-amount"
               currency={currency}
+              onCurrencyChange={setCurrency}
               value={amount}
               placeholder={formatAmountInput('0', currency, formatId)}
               onChange={(e) => setAmount(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Currency</Label>
-            <CurrencyPicker value={currency} onChange={setCurrency} />
+            <Label htmlFor="sale-fees">Fees</Label>
+            <MoneyInput
+              id="sale-fees"
+              currency={currency}
+              value={fees}
+              placeholder="Unknown"
+              aria-describedby="sale-fees-hint"
+              onChange={(e) => setFees(e.target.value)}
+            />
+            <p id="sale-fees-hint" className="text-xs text-muted-foreground">
+              Commission, escrow or broker fees. Blank is unknown; 0 means none.
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="sale-notes">Notes</Label>
@@ -161,6 +225,20 @@ export function SaleDialog({
           )}
         </div>
         <DialogFooter>
+          {/* Edit opens on a sale on record (one an import wrote may have no
+              date or amount). */}
+          {mode === 'edit' && !resolves && (
+            <Button
+              type="button"
+              variant="outline"
+              // Red outline at rest, filled on hover with the destructive buttons' red.
+              className="border-destructive/60 text-destructive hover:bg-destructive hover:text-white sm:mr-auto dark:border-destructive/60 dark:bg-transparent dark:hover:bg-destructive/60"
+              disabled={saving}
+              onClick={() => void undo()}
+            >
+              Undo sale
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -170,7 +248,7 @@ export function SaleDialog({
             Cancel
           </Button>
           <Button type="button" disabled={saving} onClick={() => void save()}>
-            {mode === 'mark' ? 'Mark as Sold' : 'Save'}
+            {mode === 'mark' ? 'Record sale' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

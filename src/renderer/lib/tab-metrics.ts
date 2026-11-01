@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
 import { useAppStore } from '../store/app';
 import { notifications } from '../../shared/notifications';
-import { summarize, wholeMoney } from './renewals';
+import { compactMoney, leavesOut, summarize, wholeMoney } from './renewals';
+import { DEFAULT_CURRENCY } from '../../shared/money';
 import { importedRows } from '../../shared/imported-domains';
+import { ownedAndRenewing } from '../../shared/ownership';
+import { isPending, useSaleRecords } from './sales';
 
 export interface TabMetric {
   /** Short display value for the tab's pill, e.g. "1,050" or "$4.2k". */
@@ -13,24 +16,17 @@ export interface TabMetric {
   alert?: boolean;
 }
 
-/** Compact whole amount: "$820", "$4.2k", "€12k". */
-function compactMoney(n: number, currency: string): string {
-  if (n < 1000) return wholeMoney(n, currency);
-  const k = n / 1000;
-  const symbol = wholeMoney(0, currency).replace(/[\d\s.,]/g, '');
-  return `${symbol}${k < 10 ? k.toFixed(1).replace(/\.0$/, '') : Math.round(k)}k`;
-}
-
 export interface TabMetrics {
   domains: TabMetric | null;
   renewals: TabMetric | null;
+  sales: TabMetric | null;
   activity: TabMetric | null;
 }
 
 /**
- * The headline number each top-level tab shows in its pill: Domains → portfolio
- * size, Renewals → known annual renewal spend, Activity → alerts that need
- * review (only when there are any). Settings has none: sync failures show in
+ * The headline number each top-level tab shows in its pill: Domains → the
+ * names in Owned, Renewals → known annual renewal spend, Sales → pending sales,
+ * Activity → alerts that need review (those two only when there are any). Settings has none: sync failures show in
  * the bell and the status bar. `null` hides the pill.
  */
 export function useTabMetrics(): TabMetrics {
@@ -38,9 +34,23 @@ export function useTabMetrics(): TabMetrics {
   const importedDomains = useAppStore((s) => s.importedDomains);
   const pricing = useAppStore((s) => s.pricing);
   const events = useAppStore((s) => s.domainEvents);
+  const marketSales = useAppStore((s) => s.marketSales);
+  const registrationLookups = useAppStore((s) => s.registrationLookups);
+  const currency = useAppStore(
+    (s) => s.settings?.preferredCurrency ?? DEFAULT_CURRENCY,
+  );
+  const fx = useAppStore((s) => s.exchangeRates);
+  const saleRecords = useSaleRecords();
 
   return useMemo(() => {
-    const portfolio = [...synced, ...importedRows(importedDomains, synced)];
+    // The pages' own counts (docs/owned-and-archive.md).
+    const { owned: portfolio, renewing } = ownedAndRenewing(
+      [...synced, ...importedRows(importedDomains, synced)],
+      events,
+      registrationLookups,
+      undefined,
+      marketSales,
+    );
     const n = portfolio.length.toLocaleString('en-US');
     const domains =
       portfolio.length > 0
@@ -50,12 +60,13 @@ export function useTabMetrics(): TabMetrics {
           }
         : null;
 
-    const summary = summarize(portfolio, pricing);
+    const summary = summarize(renewing, pricing, currency, fx);
+    const leftOut = leavesOut(summary.leftOut);
     const renewals =
       summary.priced > 0
         ? {
             value: compactMoney(summary.yearly, summary.currency),
-            title: `${wholeMoney(summary.yearly, summary.currency)} per year in renewals (${summary.priced} of ${summary.total} priced)${summary.others.map((o) => `, plus ${wholeMoney(o.yearly, o.currency)}`).join('')}`,
+            title: `${wholeMoney(summary.yearly, summary.currency)} per year in renewals (${summary.priced} of ${summary.total} priced)${leftOut ? `. ${leftOut}.` : ''}`,
           }
         : null;
 
@@ -65,10 +76,31 @@ export function useTabMetrics(): TabMetrics {
       open > 0
         ? {
             value: open.toLocaleString('en-US'),
-            title: `${open.toLocaleString('en-US')} need${open === 1 ? 's' : ''} review`,
+            title: `${open.toLocaleString('en-US')} new`,
           }
         : null;
 
-    return { domains, renewals, activity };
-  }, [synced, importedDomains, pricing, events]);
+    // Not the bell's sale alerts: every sale that hasn't finished, whether
+    // it waits on you, the buyer or the market (the Sales Pending view).
+    const pending = saleRecords.filter(isPending).length;
+    const sales =
+      pending > 0
+        ? {
+            value: pending.toLocaleString('en-US'),
+            title: `${pending.toLocaleString('en-US')} sale${pending === 1 ? '' : 's'} pending`,
+          }
+        : null;
+
+    return { domains, renewals, sales, activity };
+  }, [
+    synced,
+    importedDomains,
+    pricing,
+    events,
+    marketSales,
+    registrationLookups,
+    currency,
+    fx,
+    saleRecords,
+  ]);
 }

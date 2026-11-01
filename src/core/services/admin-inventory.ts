@@ -8,7 +8,11 @@ import { getImportedDomains } from './imported-domains';
 import { listEvents } from './domain-events';
 import { readEntry } from './cache';
 import { importedRows } from '../../shared/imported-domains';
-import { ownershipByDomain, archiveRows } from '../../shared/ownership';
+import {
+  ownershipByDomain,
+  archiveRows,
+  standingOf,
+} from '../../shared/ownership';
 import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
 import { currencyInfo } from '../../shared/money';
@@ -63,7 +67,7 @@ export function projectAdminInventory(
   const multiplicity = new Map<string, number>();
   for (const domain of domains) {
     const name = toAscii(domain.domainName);
-    if (!ownership.get(name)?.archived)
+    if (!standingOf(domain, ownership.get(name)).archived)
       multiplicity.set(name, (multiplicity.get(name) ?? 0) + 1);
   }
   const accounts = new Map(
@@ -105,7 +109,7 @@ export function projectAdminInventory(
         domain.accountLabel ??
         (domain.source === 'imported' ? 'Imported' : 'Default'),
       source: domain.source,
-      archived: Boolean(ownership.get(name)?.archived),
+      archived: standingOf(domain, ownership.get(name)).archived,
       departed: Boolean(domain.departed),
       ambiguous: (multiplicity.get(name) ?? 0) > 1,
       expiresAt: time(detail?.expirationDate ?? domain.expirationDate),
@@ -169,7 +173,7 @@ export function projectAdminInventory(
     at,
     available: input.available || domains.length > 0,
     owned: names.size,
-    archived: [...ownership.values()].filter((value) => value.archived).length,
+    archived: rows.filter((row) => row.archived).length,
     unobservedAccounts: active.filter(
       (account) => account.sync.lastSyncedAt === null,
     ).length,

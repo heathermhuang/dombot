@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { MemoryDocStore } from '../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../core/storage/namespace';
 import { createSaleObserver } from './sales-observation';
-import { emptySale } from '../shared/sales';
+import { emptySale } from '../shared/hosted-sales';
 import {
   managedControl,
   managedControls,

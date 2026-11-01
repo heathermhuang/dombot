@@ -29,7 +29,7 @@ export const SORT_COLUMNS: { key: string; label: string }[] = [
   { key: 'folder', label: 'Folder' },
   { key: 'registrar', label: 'Registrar' },
   { key: 'createdDate', label: 'Created' },
-  { key: 'expirationDate', label: 'Expires' },
+  { key: 'expirationDate', label: 'Expiration' },
   { key: 'renewal', label: 'Renewal' },
   { key: 'autoRenew', label: 'Auto-renew' },
   { key: 'privacy', label: 'Privacy' },
@@ -85,6 +85,9 @@ function parseColumnLayouts(raw: unknown): Record<string, ColumnLayout> {
     if (l && strings(l.order) && strings(l.hidden))
       out[id] = { order: l.order, hidden: l.hidden };
   }
+  if (out['domains.active'] && !out['domains.owned'])
+    out['domains.owned'] = out['domains.active'];
+  delete out['domains.active'];
   return out;
 }
 

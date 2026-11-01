@@ -5,7 +5,7 @@ import {
   type PublishedSale,
   type SaleDraft,
   type SaleDestination,
-} from '../../shared/sales';
+} from '../../shared/hosted-sales';
 import { SalesError } from '../../shared/sales-review';
 import { validateSalesDestination } from '../../shared/sales-provider';
 

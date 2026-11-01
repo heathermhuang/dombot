@@ -5,6 +5,7 @@ import {
   localDay,
   type DomainEvent,
 } from './domain-events';
+import { removalExpiry } from './ownership';
 
 // What a sync changed, as domain events (docs/storage-model.md). Pure: the
 // caller passes the portfolio before and after the sync, the events so far,
@@ -78,12 +79,6 @@ export function renewalYears(days: number): number {
 
 type NewEvent = Omit<DomainEvent, 'id' | 'createdAt' | 'updatedAt'>;
 
-const OWNERSHIP_ENDED: ReadonlySet<string> = new Set([
-  DomainEventType.Sold,
-  DomainEventType.Dropped,
-  DomainEventType.Archived,
-]);
-
 /** Ids of events a later event resolves. */
 export function resolvedIds(events: DomainEvent[]): Set<string> {
   const out = new Set<string>();
@@ -91,11 +86,15 @@ export function resolvedIds(events: DomainEvent[]): Set<string> {
   return out;
 }
 
-/** An alert still waiting on you: not dismissed, not resolved. */
+/**
+ * An alert still waiting on you: not dismissed (or marked dropped), not
+ * resolved. Activity calls these new.
+ */
 export function isOpenAlert(e: DomainEvent, resolved: Set<string>): boolean {
   return (
     (e.type === DomainEventType.Removed || e.type === DomainEventType.Added) &&
     !e.dismissed &&
+    !e.dropped &&
     !resolved.has(e.id)
   );
 }
@@ -116,6 +115,8 @@ export function diffSync(
   tracked: ReadonlySet<string>,
   now: number,
   newEvent: (fields: NewEvent, now: number) => DomainEvent,
+  /** Names with a market sale under way (ownership's `namesSelling`). */
+  selling: ReadonlySet<string> = new Set(),
 ): SyncDiff {
   const date = localDay(now);
   const prev = new Map(before.map((h) => [h.accountId, h]));
@@ -138,8 +139,8 @@ export function diffSync(
           if (open.id === e.resolves) map.delete(name);
     }
     // The same ownership rule as shared/ownership.ts: only coming back to one
-    // of your accounts clears a label; purchases and moves don't.
-    if (OWNERSHIP_ENDED.has(e.type)) disposed.add(e.domain);
+    // of your accounts clears a sale; purchases and moves don't.
+    if (e.type === DomainEventType.Sold) disposed.add(e.domain);
     else if (e.type === DomainEventType.Added) disposed.delete(e.domain);
     if (!isOpenAlert(e, resolved)) return;
     (e.type === DomainEventType.Removed ? openRemoved : openAdded).set(
@@ -309,12 +310,18 @@ export function diffSync(
       continue;
     }
     if (openRemoved.has(left.name)) continue;
+    // Gone after its expiry: it lapsed (Archive's Expired).
+    const lapsed = removalExpiry(expiryOf(left.accountId, left.name), now);
     push({
       domain: left.name,
       type: DomainEventType.Removed,
       accountId: left.accountId,
-      // Already marked Sold, Dropped, or Archived: nothing left to review.
-      ...(disposed.has(left.name) ? { dismissed: true } : {}),
+      ...lapsed,
+      // Sold (or selling at a market: the buyer took it), or lapsed:
+      // nothing left to review.
+      ...(disposed.has(left.name) || selling.has(left.name) || lapsed.expires
+        ? { dismissed: true }
+        : {}),
     });
   }
 

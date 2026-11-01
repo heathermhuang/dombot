@@ -63,8 +63,9 @@ Use your own Cloudflare resources, credentials and legal operator details. Each
 tenant needs its own immutable identity, database and encryption/admission keys;
 do not route different customers through a caller-selected database. Public
 registration draws only from prequalified unused capacity and requires configured
-email delivery and legal policies. Paid registrar operations through hosted MCP
-remain blocked in this edition.
+email delivery and legal policies. Shared MCP permissions default to read-only; newly approved management and paid
+registrar permissions require fresh owner consent. Existing legacy connections
+remain unable to spend. Registrar fees are charged by the owner’s provider.
 
 To operate only a private, single-owner DomBot instance, use the upstream
 [self-hosting instructions](self-hosting.md) instead of the multi-tenant gateway.

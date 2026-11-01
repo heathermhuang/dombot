@@ -13,7 +13,7 @@ import {
   emptySale,
   publishedSaleSchema,
   type SaleInquiry,
-} from '../shared/sales';
+} from '../shared/hosted-sales';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { exportSales, restoreSales, salesBackupSchema } from './sales-backup';
 import { SalesJobs } from './sales-jobs';

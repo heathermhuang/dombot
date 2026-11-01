@@ -1,39 +1,49 @@
-import { accountTitle } from '../../shared/account-label';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { domainKey } from '../../shared/account-key';
 import { useMemo, useState } from 'react';
+import { cn } from '@/lib/utils';
 import {
+  AlarmClock,
+  Building2,
   CalendarClock,
-  CircleDollarSign,
+  CalendarDays,
+  CalendarSync,
   Globe,
+  RotateCw,
+  Stamp,
   type LucideIcon,
 } from 'lucide-react';
 import type { Domain } from '../../shared/ipc';
 import { importedRows } from '../../shared/imported-domains';
+import { ownedAndRenewing } from '../../shared/ownership';
 import { useAppStore } from '../store/app';
+import { StatCard, StatCardRow } from '../components/StatCard';
+import { ToolbarSwitch } from '../components/data-table/FilterToolbar';
+import { FilterDropdown } from '../components/data-table/FilterBar';
+import {
+  importedRegistrarName,
+  importedRegistrarValue,
+  registrarFilterOptions,
+  registrarFilterValue,
+} from '../lib/registrar-filter';
 import {
   dueWithin,
   groupBy,
-  mainCurrency,
+  leavesOut,
   priceOf,
   summarize,
   tldOf,
   upcomingByMonth,
   wholeMoney,
-  type CurrencyTotal,
   type Group,
   type MonthBucket,
 } from '../lib/renewals';
-import { cn } from '@/lib/utils';
+import { periodLabel } from '../../shared/exchange-rates';
+import { DEFAULT_CURRENCY } from '../../shared/money';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '@/components/ui/empty';
+import { EmptyState } from '../components/EmptyState';
 import {
   Table,
   TableBody,
@@ -107,6 +117,12 @@ function toSlices(
   return slices;
 }
 
+// The stamp draws small in its box: a pixel bigger (13px of 12, 15 of 14
+// on phones) to sit level with the switch's other icons.
+const ManualIcon = function ManualIcon({ className }: { className?: string }) {
+  return <Stamp className={cn(className, 'scale-[1.083]')} />;
+} as LucideIcon;
+
 // The "Set prices manually" editor is hidden for now; the state and handlers
 // stay wired up so it can be switched back on later.
 const MANUAL_PRICING_ENABLED = false;
@@ -120,85 +136,189 @@ export default function Renewals() {
     portfolioLoadedAt,
     portfolioRegistrarLabels,
     pricing,
-    renewalPricing,
     setManualPrice,
+    domainEvents,
+    marketSales,
+    registrationLookups,
   } = useAppStore();
 
-  // Synced names plus the ones you added by hand.
+  // The names in Owned (synced, and the ones you added by hand), less those
+  // you've sold that the buyer hasn't taken yet. Archive is never counted
+  // (docs/owned-and-archive.md).
   const allDomains = useMemo(
-    () => [...syncedDomains, ...importedRows(importedDomains, syncedDomains)],
-    [syncedDomains, importedDomains],
+    () =>
+      ownedAndRenewing(
+        [...syncedDomains, ...importedRows(importedDomains, syncedDomains)],
+        domainEvents,
+        registrationLookups,
+        undefined,
+        marketSales,
+      ).renewing,
+    [
+      syncedDomains,
+      importedDomains,
+      domainEvents,
+      marketSales,
+      registrationLookups,
+    ],
   );
-  const [account, setAccount] = useState('all');
   const accounts = useAppStore((s) => s.registrars);
   const multipleAccounts = useMemo(
     () => multiAccountRegistrars(accounts, allDomains),
     [accounts, allDomains],
   );
-  const showAccountDetails = multipleAccounts.size > 0;
-  const portfolio = useMemo(
+  // The Registrar filter, as on Domains: accounts, then the registrars of
+  // the names you added; several at once. Counts are over every name.
+  const [registrar, setRegistrar] = useState<string[]>([]);
+  const inRegistrar = useMemo(
     () =>
-      !showAccountDetails || account === 'all'
+      registrar.length === 0
         ? allDomains
-        : allDomains.filter((d) => (d.accountId ?? d.registrar) === account),
-    [allDomains, account, showAccountDetails],
+        : allDomains.filter((d) =>
+            registrar.includes(
+              registrarFilterValue(d, portfolioRegistrarLabels),
+            ),
+          ),
+    [allDomains, registrar, portfolioRegistrarLabels],
   );
-  const accountFilter = showAccountDetails && (
-    <label className="flex items-center gap-3 text-sm">
-      Account
-      <select
-        aria-label="Account"
-        className="rounded-md border bg-background px-3 py-2"
-        value={account}
-        onChange={(e) => setAccount(e.target.value)}
-      >
-        <option value="all">All accounts</option>
-        {accounts
-          ?.filter((r) => r.configured && r.enabled)
-          .map((r) => (
-            <option key={r.accountId ?? r.name} value={r.accountId ?? r.name}>
-              {accountTitle(
-                r.displayName,
-                r.accountLabel,
-                multipleAccounts.has(r.name),
-              )}
-            </option>
-          ))}
-      </select>
-    </label>
+  const registrarFilter = (
+    <FilterDropdown
+      // Full width on phones, like the search on the other pages.
+      className="w-56 max-sm:w-full"
+      field={{
+        key: 'registrar',
+        label: 'Registrar',
+        icon: Building2,
+        options: registrarFilterOptions(
+          allDomains,
+          portfolioRegistrarLabels,
+          multipleAccounts,
+        ),
+        selected: registrar,
+        onChange: setRegistrar,
+        plural: 'registrars',
+      }}
+    />
   );
+  // Every name, only the ones that renew on their own, or only the ones you
+  // renew by hand (auto-renew off, or unknown for a name you added).
+  const [renewing, setRenewing] = useState<'all' | 'auto' | 'manual'>('all');
+  const autoRenews = (d: Domain) => d.autoRenew && !d.autoRenewUnknown;
+  const autoRenewing = useMemo(
+    () => inRegistrar.filter(autoRenews),
+    [inRegistrar],
+  );
+  const manual = useMemo(
+    () => inRegistrar.filter((d) => !autoRenews(d)),
+    [inRegistrar],
+  );
+  const portfolio =
+    renewing === 'auto'
+      ? autoRenewing
+      : renewing === 'manual'
+        ? manual
+        : inRegistrar;
+  const renewSwitch = (
+    <ToolbarSwitch
+      fillOnPhone
+      label="Which renewals to count"
+      // Three don't fit a phone with their counts, and Auto-renew needs
+      // more than a third.
+      className="max-sm:[&_.tabular-nums]:hidden max-sm:[&_[role=radio]]:flex-auto max-sm:[&_[role=radio]]:whitespace-nowrap"
+      options={[
+        {
+          id: 'all',
+          label: 'All',
+          icon: CalendarClock,
+          count: inRegistrar.length,
+          active: renewing === 'all',
+          onClick: () => setRenewing('all'),
+        },
+        {
+          id: 'auto',
+          label: 'Auto-renew',
+          icon: RotateCw,
+          count: autoRenewing.length,
+          active: renewing === 'auto',
+          onClick: () => setRenewing('auto'),
+        },
+        {
+          id: 'manual',
+          // Just Manual on a phone, where three share the width.
+          label: (
+            <>
+              Manual<span className="max-sm:hidden"> renew</span>
+            </>
+          ),
+          icon: ManualIcon,
+          count: manual.length,
+          active: renewing === 'manual',
+          onClick: () => setRenewing('manual'),
+        },
+      ]}
+    />
+  );
+  // The switch and the filter narrow what's counted, not whether there's a
+  // portfolio.
   const hasPortfolio =
-    portfolio.length > 0 &&
+    allDomains.length > 0 &&
     (portfolioLoadedAt !== null ||
-      portfolio.some((d) => d.source === 'imported'));
-  const hasPricing = Object.keys(pricing).length > 0;
-  // Pricing is computed locally in main and arrives with the portfolio (and is
-  // re-read after each Sync), so "loading" is just the brief gap before it lands.
-  const pricingLoading = hasPortfolio && !hasPricing;
+      allDomains.some((d) => d.source === 'imported'));
 
-  // Prices keep their own currency and are never converted: the totals are in
-  // the currency most names renew in, and any others are listed beside them.
-  const currency = useMemo(
-    () => mainCurrency(portfolio, pricing),
-    [portfolio, pricing],
+  // Totals are in your preferred currency. A price in another one is
+  // converted at the newest exchange rate held (a renewal is ahead of you);
+  // one DomBot can't convert is left out and said so.
+  const currency = useAppStore(
+    (s) => s.settings?.preferredCurrency ?? DEFAULT_CURRENCY,
   );
+  const fx = useAppStore((s) => s.exchangeRates);
   const usd = (n: number) => wholeMoney(n, currency);
   const summary = useMemo(
-    () => summarize(portfolio, pricing, currency),
-    [portfolio, pricing, currency],
+    () => summarize(portfolio, pricing, currency, fx),
+    [portfolio, pricing, currency, fx],
   );
-  const othersNote = plusOthers(summary.others);
-  const byRegistrar = useMemo(
-    () =>
-      groupBy(
-        portfolio,
-        pricing,
-        (d) => d.registrar,
-        (id) => registrarLabel(id, portfolioRegistrarLabels),
-        currency,
-      ),
-    [portfolio, pricing, portfolioRegistrarLabels, currency],
-  );
+  const leftOutNote = leavesOut(summary.leftOut);
+  // Under the cards when a price was converted or left out.
+  const conversionNote = useMemo(() => {
+    const notes: string[] = [];
+    if (summary.converted > 0) {
+      const period = fx.ratesFor(null)?.period;
+      notes.push(
+        `In ${currency}: ${summary.converted} converted from ${summary.convertedFrom.join(', ')}${
+          period ? ` at ${periodLabel(period)} (ECB)` : ''
+        }.`,
+      );
+    }
+    if (leftOutNote) notes.push(`${leftOutNote}.`);
+    return notes.length ? notes.join(' ') : null;
+  }, [summary, fx, currency, leftOutNote]);
+  // By registrar, as the Registrar filter groups them: a name you added
+  // with no registrar DomBot knows goes under the one you typed, or
+  // Unknown, never a blank slice.
+  const byRegistrar = useMemo(() => {
+    const importedLabels = new Map<string, string>();
+    const keyOf = (d: Domain) => {
+      if (d.registrar) return d.registrar;
+      const label = importedRegistrarName(d, portfolioRegistrarLabels);
+      const key = importedRegistrarValue(label);
+      importedLabels.set(key, label || 'Unknown');
+      return key;
+    };
+    return groupBy(
+      portfolio,
+      pricing,
+      keyOf,
+      (key) =>
+        importedLabels.get(key) ??
+        registrarLabel(key, portfolioRegistrarLabels),
+      currency,
+      fx,
+    );
+  }, [portfolio, pricing, portfolioRegistrarLabels, currency, fx]);
+  // Unknown isn't a registrar.
+  const registrarCount = byRegistrar.filter(
+    (g) => g.key !== importedRegistrarValue(''),
+  ).length;
   const byTld = useMemo(
     () =>
       groupBy(
@@ -207,16 +327,21 @@ export default function Renewals() {
         (d) => tldOf(d.domainName),
         (t) => (t ? `.${t}` : '—'),
         currency,
+        fx,
       ),
-    [portfolio, pricing, currency],
+    [portfolio, pricing, currency, fx],
   );
   const months = useMemo(
-    () => upcomingByMonth(portfolio, pricing, 12, currency),
-    [portfolio, pricing, currency],
+    () => upcomingByMonth(portfolio, pricing, 12, currency, fx),
+    [portfolio, pricing, currency, fx],
+  );
+  const due30 = useMemo(
+    () => dueWithin(portfolio, pricing, 30, currency, fx),
+    [portfolio, pricing, currency, fx],
   );
   const due90 = useMemo(
-    () => dueWithin(portfolio, pricing, 90, currency),
-    [portfolio, pricing, currency],
+    () => dueWithin(portfolio, pricing, 90, currency, fx),
+    [portfolio, pricing, currency, fx],
   );
 
   // Donut slices: registrar and TLD, each by domain count and by yearly spend.
@@ -246,18 +371,14 @@ export default function Renewals() {
 
   if (!hasPortfolio) {
     return (
-      <div className="mx-auto max-w-[1400px]">
-        <PageHeader loading={pricingLoading} summary={summary} />
-        {accountFilter}
-        <Empty className="mt-6 rounded-lg border border-dashed">
-          <EmptyHeader>
-            <EmptyTitle>No portfolio loaded</EmptyTitle>
-            <EmptyDescription>
-              Load your domains on the Domains tab first — the renewals
-              dashboard is built from that portfolio.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+      <div className="mx-auto w-full max-w-[1400px]">
+        <PageHeader />
+        <EmptyState
+          boxed
+          className="mt-6"
+          title="No domains yet"
+          description="Renewal costs show up here once your domains load."
+        />
       </div>
     );
   }
@@ -265,59 +386,88 @@ export default function Renewals() {
   const monthly = summary.yearly / 12;
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
-      <PageHeader loading={pricingLoading} summary={summary} />
-      {accountFilter}
-      <p className="text-sm text-muted-foreground">
-        Annual estimates spread multi-year quotes across their required term.
-        Saved prices may include older quotes and TLD rates that miss premium
-        renewals.
-        {summary.base + summary.tld > 0 &&
-          ` ${summary.base + summary.tld} use a base or TLD rate.`}{' '}
-        {!!summary.portal &&
-          ` ${summary.portal} use saved registrar portal snapshots.`}
-        Confirm current prices with your registrar before spending.
-        {!!renewalPricing?.failed &&
-          ` Across your portfolio, ${renewalPricing.failed} price updates failed; last saved estimates remain visible.`}
-      </p>
+    // 13px between rows and cards, as on Domains, Sales and Activity.
+    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-[13px]">
+      <PageHeader
+        view={
+          renewing === 'auto'
+            ? 'Auto-renew'
+            : renewing === 'manual'
+              ? 'Manual renew'
+              : 'All'
+        }
+      />
 
-      {/* Totals */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Totals: the small two-row cards Domains and Sales have, in your
+          currency. The line under them says what was converted or left out. */}
+      <StatCardRow {...(conversionNote ? { note: conversionNote } : {})}>
         <StatCard
+          size="sm"
           icon={Globe}
-          accentClass="text-blue-500"
-          label="Total domains"
-          value={count(summary.total)}
-          hint={`${byRegistrar.length} registrar${
-            byRegistrar.length === 1 ? '' : 's'
-          } · ${byTld.length} TLD${byTld.length === 1 ? '' : 's'}`}
+          accentClass="text-brand-400"
+          label="Domains"
+          value={[
+            {
+              value: count(summary.total),
+              unit: `${registrarCount} registrar${
+                registrarCount === 1 ? '' : 's'
+              }`,
+            },
+          ]}
         />
         <StatCard
-          icon={CircleDollarSign}
-          accentClass="text-brand-500"
-          label="Yearly renewals"
-          value={usd(summary.yearly)}
-          hint={`${usd(monthly)}/mo · ${usd(summary.yearlyAutoRenew)} auto-renews, ${usd(
-            summary.yearly - summary.yearlyAutoRenew,
-          )} manual${othersNote ? ` · ${othersNote}` : ''}`}
+          size="sm"
+          icon={CalendarDays}
+          accentClass="text-sky-400"
+          label="Monthly avg"
+          value={usd(monthly)}
         />
         <StatCard
+          size="sm"
+          icon={CalendarSync}
+          accentClass="text-violet-400"
+          label="Yearly"
+          value={[{ value: usd(summary.yearly) }]}
+        />
+        <StatCard
+          size="sm"
+          icon={AlarmClock}
+          accentClass="text-rose-400"
+          label="Due, 30 days"
+          value={[
+            {
+              value: usd(due30.yearly),
+              unit: `${due30.count} name${due30.count === 1 ? '' : 's'}`,
+            },
+          ]}
+        />
+        <StatCard
+          size="sm"
           icon={CalendarClock}
-          accentClass="text-amber-500"
-          label="Due next 90 days"
-          value={usd(due90.yearly)}
-          hint={`${due90.count} domain${due90.count === 1 ? '' : 's'} renewing${
-            due90.others.length ? ` · ${plusOthers(due90.others)}` : ''
-          }`}
+          accentClass="text-amber-400"
+          label="Due, 90 days"
+          value={[
+            {
+              value: usd(due90.yearly),
+              unit: `${due90.count} name${due90.count === 1 ? '' : 's'}`,
+            },
+          ]}
         />
+      </StatCardRow>
+
+      {/* A toolbar over the chart and donuts, as over the other pages'
+          tables: the view first, then the registrars, which wrap under it
+          only when they don't fit (and always on a phone). */}
+      <div className="flex flex-wrap items-center gap-3.5">
+        <div className="max-sm:basis-full">{renewSwitch}</div>
+        {registrarFilter}
       </div>
 
-      {/* Spend over time — sits between the totals and the composition donuts so
-          the two rows of three never read as paired. */}
+      {/* Spend over time, between the totals and the composition donuts. */}
       <MonthlyBarChart months={months} fmt={usd} />
 
       {/* Composition: two pairs (count + spend), one row per dimension. */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-[13px] md:grid-cols-2">
         <DonutCard
           title="Domains by registrar"
           slices={regCount}
@@ -363,73 +513,28 @@ export default function Renewals() {
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
-function PageHeader({
-  loading,
-  summary,
-}: {
-  loading: boolean;
-  summary: ReturnType<typeof summarize>;
-}) {
+/** The title, and the view beside it: the same height and type as the other pages' title rows. */
+function PageHeader({ view }: { view?: string }) {
   return (
-    <div className="flex items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold sm:text-[32px]">Renewals</h1>
-        <p className="-mt-0.5 text-sm text-muted-foreground">
-          {loading
-            ? `Pricing… ${summary.priced}/${summary.total}`
-            : summary.priced > 0
-              ? `Forward-looking renewal costs · ${summary.priced}/${summary.total} priced`
-              : 'Annual renewal costs across your whole portfolio.'}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ── Stat card ────────────────────────────────────────────────────────────────
-
-function StatCard({
-  icon: Icon,
-  accentClass,
-  label,
-  value,
-  hint,
-}: {
-  icon: LucideIcon;
-  /** Tailwind text-color for the background watermark (rendered at a low group
-   * opacity), e.g. "text-brand-500". */
-  accentClass: string;
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-lg border bg-card px-4 pt-[9px] pb-[11px]">
-      <Icon
-        className={cn(
-          // Fade the whole shape as a group (opacity-[0.15]) rather than using a
-          // translucent stroke color — a semi-transparent stroke composites to
-          // bright spots wherever the icon's paths overlap.
-          'pointer-events-none absolute -right-4 -bottom-6 size-[123px] opacity-[0.15]',
-          accentClass,
+    <div className="mb-1 min-h-9">
+      <h1 className="mt-1.5 flex min-w-0 items-baseline gap-2.5 text-2xl font-bold leading-none sm:mt-0.5 sm:text-[32px]">
+        Renewals
+        {/* The view, as on Domains. */}
+        {view && (
+          <span className="text-sm font-semibold uppercase tracking-wider text-brand sm:text-base">
+            {view}
+          </span>
         )}
-        strokeWidth={1.5}
-        aria-hidden
-      />
-      <div className="relative">
-        <div className="text-[15px] text-foreground/75">{label}</div>
-        <div className="mt-2 text-2xl font-bold tabular-nums">{value}</div>
-        <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
-      </div>
+      </h1>
     </div>
   );
 }
 
 // ── Monthly bar chart ────────────────────────────────────────────────────────
 
-/** Totals in other currencies, e.g. "+ €45 · + £12". */
-function plusOthers(others: CurrencyTotal[]): string {
-  return others.map((o) => `+ ${wholeMoney(o.yearly, o.currency)}`).join(' · ');
+/** "leaves out 2 renewals in TWD", for a hint after a dot; null stays null. */
+function lower(note: string | null): string | null {
+  return note && note[0].toLowerCase() + note.slice(1);
 }
 
 // The bars are all a single flat blue — the month labels already tell them
@@ -480,7 +585,7 @@ function MonthlyBarChart({
                     backgroundColor: BAR_COLOR,
                   }}
                   title={`${m.label}: ${usd(m.yearly)}${
-                    m.others.length ? ` ${plusOthers(m.others)}` : ''
+                    m.leftOut.length ? ` (${lower(leavesOut(m.leftOut))})` : ''
                   } · ${m.count} domain${m.count === 1 ? '' : 's'}`}
                 />
                 {m.yearly > 0 && (
@@ -770,7 +875,6 @@ function PriceEditorRow({
               if (e.key === 'Enter') void save();
             }}
             placeholder="—"
-            aria-label={`Annual renewal price for ${domain.domainName} in ${currency}`}
             aria-invalid={invalid}
             className="h-8 w-28 text-right tabular-nums"
           />

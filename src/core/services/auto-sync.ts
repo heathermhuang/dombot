@@ -7,8 +7,11 @@ import {
 import { getSettings } from './settings';
 import { broadcastPortfolioChanged } from '../events';
 import { isBulkRunning } from './bulk-jobs';
+import { syncMarkets } from './markets/sync';
+import { refreshExchangeRates } from './exchange-rates';
 
-// Periodic background portfolio sync. The UI never auto-refreshes on staleness
+// Periodic background sync of every registrar, then every market account.
+// The UI never auto-refreshes on staleness
 // (the user hits Sync), but an MCP-only user may never open the window, so the
 // cache the MCP tools serve would otherwise only refresh when an agent
 // explicitly calls portfolio_sync / registrar_sync. This timer keeps that cache
@@ -18,7 +21,7 @@ import { isBulkRunning } from './bulk-jobs';
 // The interval is the `autoSyncIntervalMinutes` setting (default 24h; 0
 // disables), adjustable live in Settings → Sync. DOMBOT_SYNC_INTERVAL_MINUTES,
 // when set, overrides the setting (a dev/testing escape hatch). Conservative by
-// design — one pass across every configured registrar is real API traffic.
+// design — one pass across every configured account is real API traffic.
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let inFlight = false;
@@ -42,36 +45,55 @@ function intervalMs(): number {
 }
 
 /**
- * One best-effort refresh of every configured registrar, then notify windows.
+ * One best-effort refresh of every configured registrar, then every enabled
+ * market account, then notify windows.
  * Skips when nothing is configured, while a bulk job is patching caches, or
- * (with `ifOlderThanMs`) when the cache is already fresher than that — which
- * is how a fixed-cadence scheduler (the web host's hourly cron) honors a
+ * (with `ifOlderThanMs`) when the cache is already fresher than that, except
+ * for due per-account rate-limit recovery. The freshness threshold is
+ * how a fixed-cadence scheduler (the web host's hourly cron) honors a
  * longer configured interval. Won't stack onto a still-running pass.
  * Returns true when a sync actually ran.
  */
 export async function syncAll(ifOlderThanMs?: number): Promise<boolean> {
   if (inFlight) return false;
-  if (getActiveRegistrars().length === 0) return false;
   // Don't race a bulk job's per-item cache patches; the next tick retries.
   if (isBulkRunning()) return false;
   inFlight = true;
   try {
-    const recovered = await retryDeferredSyncs();
-    if (ifOlderThanMs !== undefined) {
-      const fetchedAt = getCachedPortfolio()?.fetchedAt ?? 0;
-      if (Date.now() - fetchedAt < ifOlderThanMs) {
-        if (recovered) broadcastPortfolioChanged();
-        return recovered;
+    let ran = false;
+    if (getActiveRegistrars().length > 0) {
+      try {
+        const fetchedAt = getCachedPortfolio()?.fetchedAt ?? 0;
+        if (
+          ifOlderThanMs !== undefined &&
+          Date.now() - fetchedAt < ifOlderThanMs
+        ) {
+          // Fresh enough, but an account whose sync was deferred (a rate
+          // limit) may be due again.
+          if (await retryDeferredSyncs()) {
+            broadcastPortfolioChanged();
+            ran = true;
+          }
+        } else {
+          await getPortfolio(true, 'scheduled');
+          broadcastPortfolioChanged();
+          console.log('[auto-sync] portfolio refreshed');
+          ran = true;
+        }
+      } catch (err) {
+        // Best-effort — the next tick retries.
+        console.error('[auto-sync] failed', err);
       }
     }
-    await getPortfolio(true, 'scheduled');
-    broadcastPortfolioChanged();
-    console.log('[auto-sync] portfolio refreshed');
-    return true;
-  } catch (err) {
-    // Best-effort — the next tick retries.
-    console.error('[auto-sync] failed', err);
-    return false;
+    // Markets after registrars, so a sale's "still held?" check sees the
+    // fresh portfolio. Each account records its own failure.
+    if ((await syncMarkets(ifOlderThanMs)) > 0) {
+      console.log('[auto-sync] markets refreshed');
+      ran = true;
+    }
+    // Fetches only what's missing, so every pass may ask.
+    await refreshExchangeRates();
+    return ran;
   } finally {
     inFlight = false;
   }

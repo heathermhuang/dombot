@@ -4,6 +4,7 @@ import {
   onboardingScriptPath,
   onboardingScript,
   validFirstConnection,
+  validFirstMarketConnection,
 } from './on-demand-views';
 import { landingMcpScript, landingMcpScriptPath } from './landing-mcp';
 import { landingScript, landingScriptPath } from './landing-interactions';
@@ -1225,7 +1226,9 @@ app.all('/w/:workspace/*', async (c) => {
         portfolioStart(id, '', c.env.DOMBOT_MANAGED_PROXY_IP ?? ''),
       );
     }
-    const connecting = path === '/api/connectRegistrarAccount';
+    const marketConnection = path === '/api/connectMarketAccount';
+    const connecting =
+      marketConnection || path === '/api/connectRegistrarAccount';
     if ((!connecting && path !== '/start') || c.req.method !== 'POST')
       return c.notFound();
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
@@ -1236,7 +1239,7 @@ app.all('/w/:workspace/*', async (c) => {
       );
     if (connecting) {
       if (
-        !validFirstConnection(
+        !(marketConnection ? validFirstMarketConnection : validFirstConnection)(
           await c.req.raw
             .clone()
             .json()
@@ -1245,8 +1248,7 @@ app.all('/w/:workspace/*', async (c) => {
       )
         return c.json(
           {
-            error:
-              'Enter the required registrar credentials before connecting.',
+            error: 'Enter the required account credentials before connecting.',
           },
           400,
         );
@@ -1256,7 +1258,11 @@ app.all('/w/:workspace/*', async (c) => {
         return c.text('Choose how to add your domains.', 400);
     }
     try {
-      await activateWorkspace(c.env, user, connecting ? 'registrar' : 'import');
+      await activateWorkspace(
+        c.env,
+        user,
+        marketConnection ? 'market' : connecting ? 'registrar' : 'import',
+      );
       configured = await workspaceFor(c.env, id);
       if (!configured) throw Error('Portfolio not admitted');
       if (!connecting) return c.redirect(`/w/${id}/`, 303);
@@ -1411,6 +1417,18 @@ app.all('/w/:workspace/*', async (c) => {
       : salesHostRequest(c.env, id, user.id, path, c.req.raw);
   }
   const sensitive = new Set([
+    'writeMarketListings',
+    'pushMarketPrices',
+    'deleteMarketListings',
+    'startMarketBulk',
+    'advanceMarketBulk',
+    'relistMarketListings',
+    'setMarketSaleAuthCode',
+    'sendMarketSaleMessage',
+    'setMarketListingDefaults',
+    'getMarketCredentials',
+    'saveMarketCredentials',
+    'removeMarketAccount',
     'getRegistrarCredentials',
     'saveRegistrarCredentials',
     'createRegistrarAccount',
@@ -1440,7 +1458,10 @@ app.all('/w/:workspace/*', async (c) => {
   } catch {
     return c.json({ error: 'Invalid API path' }, 400);
   }
-  const connecting = apiMethod === 'connectRegistrarAccount';
+  const connecting = [
+    'connectRegistrarAccount',
+    'connectMarketAccount',
+  ].includes(apiMethod);
   let publicProxyOptions = false;
   if (apiMethod === 'getProxySettings' && c.req.method === 'POST') {
     const body = (await c.req.raw
@@ -1473,6 +1494,9 @@ app.all('/w/:workspace/*', async (c) => {
   }
   if (
     [
+      'listPortfolio',
+      'syncMarketAccount',
+      'getMarketListingDefaults',
       'getPortfolio',
       'syncRegistrar',
       'stepRenewalPricing',

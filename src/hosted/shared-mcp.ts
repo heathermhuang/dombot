@@ -16,6 +16,23 @@ import {
 } from '../shared/gateway-proof';
 
 const scope = 'portfolio:read';
+const supportedScopes = [
+  'portfolio:read',
+  'domains:write',
+  'domains:spend',
+] as const;
+function requestedScopes(value?: string): string[] | null {
+  const requested = (value ?? scope).trim().split(/\s+/);
+  if (
+    !requested.length ||
+    requested.some(
+      (s) => !supportedScopes.includes(s as (typeof supportedScopes)[number]),
+    ) ||
+    new Set(requested).size !== requested.length
+  )
+    return null;
+  return supportedScopes.filter((s) => requested.includes(s));
+}
 const accessLifetime = 30 * 86400_000;
 const registration = z.object({
   client_name: z.string().trim().min(1).max(160).default('MCP client'),
@@ -54,6 +71,7 @@ const registration = z.object({
 type Metadata = z.infer<typeof registration>;
 type Client = { id: string; metadata: string; secret_hash: string | null };
 type Authorization = {
+  scope: string;
   id: string;
   client_id: string;
   redirect_uri: string;
@@ -69,6 +87,7 @@ type Authorization = {
   consumed_at: number | null;
 };
 type Grant = {
+  scope: string;
   id: string;
   client_id: string;
   workspace_id: string;
@@ -192,14 +211,15 @@ async function mcpEnabled(env: HostedEnv, user: SessionUser, base: string) {
 }
 export async function sharedMcpClients(env: HostedEnv, user: SessionUser) {
   const rows = await env.CONTROL_DB.prepare(
-    'SELECT g.id,g.created_at,c.metadata FROM mcp_grants g JOIN mcp_clients c ON c.id=g.client_id WHERE g.user_id=? AND g.workspace_id=? AND g.revoked_at IS NULL AND g.expires_at>? ORDER BY g.created_at',
+    'SELECT g.id,g.created_at,g.scope,c.metadata FROM mcp_grants g JOIN mcp_clients c ON c.id=g.client_id WHERE g.user_id=? AND g.workspace_id=? AND g.revoked_at IS NULL AND g.expires_at>? ORDER BY g.created_at',
   )
     .bind(user.id, user.workspace_id, Date.now())
-    .all<{ id: string; created_at: number; metadata: string }>();
+    .all<{ id: string; created_at: number; metadata: string; scope: string }>();
   return rows.results.map((row) => ({
     clientId: 'shared:' + row.id,
     clientName: (JSON.parse(row.metadata) as Metadata).client_name,
     pairedAt: row.created_at,
+    scopes: requestedScopes(row.scope) ?? [],
   }));
 }
 export async function revokeSharedMcpClient(
@@ -235,7 +255,11 @@ export function sharedMcpRoutes() {
         allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       }),
     );
-  app.use('*', bodyLimit({ maxSize: 16384 }));
+  const oauthBodyLimit = bodyLimit({ maxSize: 16384 });
+  const rpcBodyLimit = bodyLimit({ maxSize: 8 * 1024 * 1024 });
+  app.use('*', (c, next) =>
+    (c.req.path === '/mcp' ? rpcBodyLimit : oauthBodyLimit)(c, next),
+  );
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     if (
@@ -266,7 +290,10 @@ export function sharedMcpRoutes() {
           'client_secret_post',
         ],
         code_challenge_methods_supported: ['S256'],
-        scopes_supported: [scope],
+        scopes_supported:
+          c.env.SHARED_MCP_MANAGEMENT_ENABLED === 'true'
+            ? [...supportedScopes]
+            : [scope],
         authorization_response_iss_parameter_supported: true,
       }),
     );
@@ -278,7 +305,10 @@ export function sharedMcpRoutes() {
       c.json({
         resource: resource(c),
         authorization_servers: [origin(c)],
-        scopes_supported: [scope],
+        scopes_supported:
+          c.env.SHARED_MCP_MANAGEMENT_ENABLED === 'true'
+            ? [...supportedScopes]
+            : [scope],
         resource_name: 'domains.domains',
       }),
     );
@@ -358,12 +388,21 @@ export function sharedMcpRoutes() {
       );
     if (q.resource !== resource(c))
       return fail(c, 'invalid_target', 'Use the shared MCP resource.');
-    if (q.scope !== undefined && q.scope !== scope)
-      return fail(c, 'invalid_scope', 'Only portfolio:read is available.');
+    const permissions = requestedScopes(q.scope);
+    if (
+      !permissions ||
+      (permissions.some((s) => s !== 'portfolio:read') &&
+        c.env.SHARED_MCP_MANAGEMENT_ENABLED !== 'true')
+    )
+      return fail(
+        c,
+        'invalid_scope',
+        'Use portfolio:read, domains:write and domains:spend; write and paid permissions require explicit approval.',
+      );
     const id = opaqueToken(),
       now = Date.now();
     const inserted = await c.env.CONTROL_DB.prepare(
-      'INSERT INTO mcp_authorizations(id,client_id,redirect_uri,resource,state,challenge,expires_at) SELECT ?,?,?,?,?,?,? WHERE (SELECT count(*) FROM mcp_authorizations WHERE expires_at>?)<5000 RETURNING id',
+      'INSERT INTO mcp_authorizations(id,client_id,redirect_uri,resource,state,challenge,expires_at,scope) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM mcp_authorizations WHERE expires_at>?)<5000 RETURNING id',
     )
       .bind(
         id,
@@ -373,6 +412,7 @@ export function sharedMcpRoutes() {
         q.state ?? null,
         q.code_challenge,
         now + 600_000,
+        permissions.join(' '),
         now,
       )
       .first();
@@ -431,7 +471,7 @@ export function sharedMcpRoutes() {
     return c.html(
       page(
         'Connect your AI assistant',
-        `<form action="/oauth/consent" method="post"><span class="eyebrow">AI assistant access</span><h1>Connect ${e(metadata.client_name)}?</h1><p>Signed in as <strong>${e(user.email)}</strong><br>Portfolio: <strong>${e(user.label)}</strong></p><p>This connection can read your portfolio and refresh registrar information. It cannot change domain settings, transfer domains, renew domains, or make purchases.</p><p class="note">Client name supplied by the application. Access returns to <strong>${e(new URL(row.redirect_uri).origin)}</strong>.</p><input type="hidden" name="id" value="${id}"><input type="hidden" name="csrf" value="${csrf}"><button name="decision" value="approve" type="submit">Allow portfolio access</button> <button name="decision" value="deny" type="submit">Cancel</button><p class="note">Expires after 30 days. Revoke access any time in MCP settings.</p></form>`,
+        `<form action="/oauth/consent" method="post"><span class="eyebrow">AI assistant access</span><h1>Connect ${e(metadata.client_name)}?</h1><p>Signed in as <strong>${e(user.email)}</strong><br>Portfolio: <strong>${e(user.label)}</strong></p><p>${row.scope.split(' ').includes('domains:write') ? 'You are granting management access: this connection can change domain settings and DNS, create or change marketplace listings and prices, send marketplace sale messages and auth codes, and approve outgoing transfers using your connected accounts.' : row.scope.split(' ').includes('domains:spend') ? 'You are granting paid registrar access as described below. Other domain-setting and marketplace changes are not included unless separately requested.' : 'This connection can read your portfolio and refresh registrar information. It cannot change domain settings, transfer domains, renew domains, or make purchases.'}</p>${row.scope.split(' ').includes('domains:spend') ? '<p class="notice"><strong>Paid registrar permission:</strong> this client can register, renew and transfer domains using your connected registrar accounts. These operations can charge your registrar account. This permission lasts for the connection and does not ask for approval again on each operation. Approve only an application you trust.</p>' : '<p>Paid registrations, renewals and transfers are not permitted by this connection.</p>'}<p class="note">Client name supplied by the application. Access returns to <strong>${e(new URL(row.redirect_uri).origin)}</strong>.</p><input type="hidden" name="id" value="${id}"><input type="hidden" name="csrf" value="${csrf}"><button name="decision" value="approve" type="submit">Allow ${row.scope.split(' ').includes('domains:spend') ? 'paid registrar' : row.scope.split(' ').includes('domains:write') ? 'management' : 'portfolio'} access</button> <button name="decision" value="deny" type="submit">Cancel</button><p class="note">Expires after 30 days. Revoke access any time in MCP settings.</p></form>`,
       ),
     );
   });
@@ -513,6 +553,15 @@ export function sharedMcpRoutes() {
         'invalid_grant',
         'Invalid or expired code, redirect, resource, or PKCE verifier.',
       );
+    if (
+      row.scope.split(' ').some((s) => s !== 'portfolio:read') &&
+      c.env.SHARED_MCP_MANAGEMENT_ENABLED !== 'true'
+    )
+      return fail(
+        c,
+        'invalid_scope',
+        'Management access is temporarily unavailable.',
+      );
     const token = opaqueToken(),
       id = crypto.randomUUID(),
       claim = crypto.randomUUID();
@@ -521,7 +570,7 @@ export function sharedMcpRoutes() {
         'UPDATE mcp_authorizations SET consumed_at=?,consumption_id=? WHERE code_hash=? AND consumed_at IS NULL AND code_expires_at>? AND expires_at>? AND EXISTS(SELECT 1 FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.id=mcp_authorizations.user_id AND w.enabled=1) RETURNING id',
       ).bind(now, claim, hash, now, now),
       c.env.CONTROL_DB.prepare(
-        'INSERT INTO mcp_grants(id,token_hash,client_id,user_id,workspace_id,resource,created_at,expires_at) SELECT ?,?,a.client_id,u.id,u.workspace_id,a.resource,?,? FROM mcp_authorizations a JOIN users u ON u.id=a.user_id JOIN workspaces w ON w.id=u.workspace_id WHERE a.code_hash=? AND a.consumption_id=? AND w.enabled=1 RETURNING id',
+        'INSERT INTO mcp_grants(id,token_hash,client_id,user_id,workspace_id,resource,created_at,expires_at,scope) SELECT ?,?,a.client_id,u.id,u.workspace_id,a.resource,?,?,a.scope FROM mcp_authorizations a JOIN users u ON u.id=a.user_id JOIN workspaces w ON w.id=u.workspace_id WHERE a.code_hash=? AND a.consumption_id=? AND w.enabled=1 RETURNING id',
       ).bind(
         id,
         await tokenHash(token),
@@ -541,7 +590,7 @@ export function sharedMcpRoutes() {
       access_token: token,
       token_type: 'Bearer',
       expires_in: accessLifetime / 1000,
-      scope,
+      scope: row.scope,
     });
   });
   app.post('/revoke', async (c) => {
@@ -574,11 +623,23 @@ export function sharedMcpRoutes() {
     );
     if (!match) return unauthorized();
     const grant = await c.env.CONTROL_DB.prepare(
-      'SELECT g.id,g.client_id,g.workspace_id,g.expires_at FROM mcp_grants g JOIN users u ON u.id=g.user_id AND u.workspace_id=g.workspace_id JOIN workspaces w ON w.id=g.workspace_id WHERE g.token_hash=? AND g.resource=? AND g.revoked_at IS NULL AND g.expires_at>? AND w.enabled=1',
+      'SELECT g.id,g.client_id,g.workspace_id,g.expires_at,g.scope FROM mcp_grants g JOIN users u ON u.id=g.user_id AND u.workspace_id=g.workspace_id JOIN workspaces w ON w.id=g.workspace_id WHERE g.token_hash=? AND g.resource=? AND g.revoked_at IS NULL AND g.expires_at>? AND w.enabled=1',
     )
       .bind(await tokenHash(match[1]), resource(c), Date.now())
       .first<Grant>();
     if (!grant) return unauthorized();
+    const grantedScopes = requestedScopes(grant.scope);
+    if (!grantedScopes) return unauthorized();
+    if (
+      grantedScopes.some((s) => s !== 'portfolio:read') &&
+      c.env.SHARED_MCP_MANAGEMENT_ENABLED !== 'true'
+    )
+      return fail(
+        c,
+        'access_denied',
+        'Management access is temporarily unavailable.',
+        403,
+      );
     const configured = await workspaceFor(c.env, grant.workspace_id);
     if (!configured) return unauthorized();
     if (
@@ -599,6 +660,7 @@ export function sharedMcpRoutes() {
         rpc,
         grant.workspace_id,
         c.env.MCP_POLICIES,
+        grantedScopes,
       );
       if (denied) return fail(c, 'access_denied', denied, 403);
     }
@@ -626,7 +688,7 @@ export function sharedMcpRoutes() {
         undefined,
         {
           clientId: grant.client_id,
-          scopes: [scope],
+          scopes: grantedScopes as (typeof supportedScopes)[number][],
           expiresAt: Math.floor(grant.expires_at / 1000),
         },
       ),

@@ -1,7 +1,7 @@
 import { publicPageStyles } from './public-page-style';
 import { escapeHtml as e } from './render-portfolio';
 import type { PublishedOwnerSite } from './owner-site';
-import { salePriceLabel, type SaleMoney } from './sales';
+import { salePriceLabel, type SaleMoney } from './hosted-sales';
 export interface ResolvedSiteLink {
   url: string;
   mode: string;

@@ -2,7 +2,7 @@ import {
   publishedSaleSchema,
   salePriceLabel,
   type PublishedSale,
-} from './sales';
+} from './hosted-sales';
 import { salesFormScriptPath } from './sales-form-script';
 import { publicPageStyles } from './public-page-style';
 import { validateSalesDestination } from './sales-provider';

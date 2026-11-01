@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { publishedSaleSchema } from './sales';
+import { publishedSaleSchema } from './hosted-sales';
 
 export const salesReviewSchema = z
   .object({

@@ -1,6 +1,7 @@
 import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
 import { create } from 'zustand';
+import { ExchangeRates } from '../../shared/exchange-rates';
 import type {
   ImportedDomain,
   ImportedDomainFields,
@@ -15,6 +16,7 @@ import type {
   DomainOpResult,
   DomainPurchase,
   DomainTarget,
+  DomainTransferOut,
   DomainEvent,
   OwnershipItem,
   PurchaseInput,
@@ -31,6 +33,20 @@ import type {
   RenewalPriceInput,
   RenewalPricing,
 } from '../../shared/ipc';
+import type {
+  MarketAccountView,
+  MarketInfo,
+  MarketListing,
+  MarketSale,
+  MarketTraffic,
+} from '../../shared/markets';
+
+/** Listings grouped by name: one name can be listed on several markets. */
+function byDomain(listings: MarketListing[]): Record<string, MarketListing[]> {
+  const out: Record<string, MarketListing[]> = {};
+  for (const l of listings) (out[toAscii(l.name)] ??= []).push(l);
+  return out;
+}
 
 /** Hard ceiling on any sync — if the main-process fetch hangs (a registrar API
  * that never responds), reject so the "Syncing…" state can't stick forever. */
@@ -160,6 +176,14 @@ interface AppState {
     optimistic?: Partial<Domain>,
   ) => Promise<DomainOpResult>;
 
+  // Outbound transfers read for pending sales' names, keyed like `enriched`:
+  // whether the buyer's registrar has asked for the name (Sales' Approve
+  // transfer). Read live, never persisted; null when there is none.
+  transfersOut: Record<string, DomainTransferOut | null>;
+  /** Read one name's transfer-out into `transfersOut`. A failed read stores
+   *  nothing, so the row shows no Approve transfer. */
+  loadTransferOut: (target: DomainTarget) => Promise<void>;
+
   // Annual renewal pricing, keyed by `${registrar}:${domainName}`. Backs the
   // Renewals dashboard and the Domains renewal column. Computed in main from
   // local data (base rates + TLD rates + Sync-captured quotes + manual
@@ -168,6 +192,10 @@ interface AppState {
   pricing: Record<string, RenewalPricing>;
   /** Re-read the whole-portfolio pricing map from main (local, no network). */
   loadPricing: () => Promise<void>;
+  /** The shipped archive plus the rates the host fetched since, for
+   *  converting totals into the preferred currency (docs/exchange-rates.md). */
+  exchangeRates: ExchangeRates;
+  loadExchangeRates: () => Promise<void>;
   setManualPrice: (
     domain: string,
     price: RenewalPriceInput | null,
@@ -224,6 +252,27 @@ interface AppState {
     fields: ImportedDomainFields,
   ) => Promise<void>;
 
+  /** Connected market accounts (Settings → Markets); null until loaded. */
+  marketAccounts: MarketAccountView[] | null;
+  /** Synced listings of enabled market accounts, by normalized domain name. */
+  marketListings: Record<string, MarketListing[]>;
+  /** The markets DomBot supports. */
+  marketCatalog: MarketInfo[];
+  /** Recorded market sales, newest first. */
+  marketSales: MarketSale[];
+  /** Traffic for the Markets page and the views/leads columns. */
+  marketTraffic: MarketTraffic;
+  loadMarkets: () => Promise<void>;
+  /** Swap in the accounts a market API call returned, and reload listings. */
+  setMarketAccounts: (accounts: MarketAccountView[]) => Promise<void>;
+  /** Every enabled market account is syncing (Sync now, or Settings →
+   * Markets' Sync all); one account's own sync shows on its card alone. */
+  marketsSyncing: boolean;
+  /** Sync every enabled market account, then reload what they hold. A failed
+   * account records its error on its card; this throws only when an account
+   * ran out of time (it carries on in the background) or the call failed. */
+  syncMarkets: () => Promise<void>;
+
   /** Asking prices keyed by normalized domain name. */
   listPrices: Record<string, ListPrice>;
   loadListPrices: () => Promise<void>;
@@ -244,23 +293,14 @@ interface AppState {
    */
   domainEvents: DomainEvent[];
   loadDomainEvents: () => Promise<void>;
-  /**
-   * Mark names Dropped or Archived on `date` (blank: today). Each `resolves`
-   * closes the alert it answers.
-   */
-  setDispositions: (
-    items: OwnershipItem[],
-    type: 'dropped' | 'archived',
-    date?: string | null,
-  ) => Promise<void>;
   /** Mark names Sold with no price, dated `date` (blank: today). */
   markSold: (items: OwnershipItem[], date?: string | null) => Promise<void>;
-  /** "Move back to Owned": undo Sold, Dropped, or Archived. */
-  restoreOwned: (domainNames: string[]) => Promise<void>;
   setAlertsDismissed: (ids: string[], dismissed: boolean) => Promise<void>;
+  setDeparturesDropped: (ids: string[], dropped: boolean) => Promise<void>;
+  setSaleTransferred: (id: string, transferred: boolean) => Promise<void>;
   /** Undo one of your own events. */
   deleteUserEvent: (id: string) => Promise<void>;
-  /** Delete everything DomBot holds about each name. */
+  /** Delete: everything it holds about names no account holds. */
   deleteDomains: (domainNames: string[]) => Promise<void>;
 
   // Row selection for bulk actions, keyed `${registrar}:${domainName}`. Lives
@@ -429,6 +469,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().loadListPrices(),
       get().loadPricing(),
       get().loadRegistrars(),
+      get().loadMarkets(),
+      get().loadExchangeRates(),
     ]).then(() => undefined);
     // Before the first load there's nothing in view to overlay; the launch
     // hydrate path covers a fresh start.
@@ -493,8 +535,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       detailAllLoading: false,
       selected: new Set(),
     });
-    // Imported names aren't cache: re-read their prices.
-    await get().loadPricing();
+    // Imported names aren't cache: re-read their prices. Market listings
+    // were cache: re-read what's left.
+    await Promise.all([get().loadPricing(), get().loadMarkets()]);
   },
 
   loadPortfolio: async () => {
@@ -529,6 +572,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       void get().loadPricing();
       void get().loadDomainEvents();
       void get().loadFolders();
+      void get().loadExchangeRates();
     } catch (err) {
       set({
         portfolioLoading: false,
@@ -581,6 +625,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         delete mutating[key];
         return { mutating };
       });
+    }
+  },
+  transfersOut: {},
+  loadTransferOut: async (target) => {
+    try {
+      const transfer = await window.api.getTransferOut(target);
+      set((s) => ({
+        transfersOut: { ...s.transfersOut, [domainKey(target)]: transfer },
+      }));
+    } catch {
+      // Shown as nothing to approve.
     }
   },
   enrichVisible: async (domains, force = false) => {
@@ -678,6 +733,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadPricing: async () => {
     const pricing = await window.api.getPortfolioPricing();
     set({ pricing });
+  },
+  exchangeRates: new ExchangeRates(),
+  loadExchangeRates: async () => {
+    set({
+      exchangeRates: new ExchangeRates(await window.api.getExchangeRates()),
+    });
   },
   setManualPrice: async (domain, price) => {
     await window.api.setManualPrice(domain, price);
@@ -791,6 +852,67 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     void get().loadPricing();
   },
+  marketAccounts: null,
+  marketListings: {},
+  marketCatalog: [],
+  marketSales: [],
+  marketTraffic: { accountDays: [], domains: {}, byMarket: {} },
+  loadMarkets: async () => {
+    const [accounts, listings, catalog, sales, traffic] = await Promise.all([
+      window.api.listMarketAccounts(),
+      window.api.getMarketListings(),
+      get().marketCatalog.length
+        ? Promise.resolve(get().marketCatalog)
+        : window.api.getMarketCatalog(),
+      window.api.getMarketSales(),
+      window.api.getMarketTraffic(),
+    ]);
+    set({
+      marketAccounts: accounts,
+      marketListings: byDomain(listings),
+      marketCatalog: catalog,
+      marketSales: sales,
+      marketTraffic: traffic,
+    });
+  },
+  setMarketAccounts: async (accounts) => {
+    set({ marketAccounts: accounts });
+    const [listings, sales] = await Promise.all([
+      window.api.getMarketListings(),
+      window.api.getMarketSales(),
+    ]);
+    set({ marketListings: byDomain(listings), marketSales: sales });
+  },
+  marketsSyncing: false,
+  syncMarkets: async () => {
+    set({ marketsSyncing: true });
+    // One account at a time, as auto-sync does, each with its own time
+    // budget: one account's traffic slice alone can take minutes. An account
+    // that runs over keeps syncing in core (a later Sync joins it) while the
+    // rest go ahead.
+    let failure: unknown = null;
+    try {
+      const ids = (get().marketAccounts ?? [])
+        .filter((a) => a.enabled && a.configured)
+        .map((a) => a.id);
+      for (const id of ids) {
+        try {
+          await get().setMarketAccounts(
+            await withSyncTimeout(window.api.syncMarketAccount(id)),
+          );
+        } catch (err) {
+          failure ??= err;
+        }
+      }
+    } finally {
+      // Whatever finished: traffic too, and the sold events a sync records.
+      await Promise.all([get().loadMarkets(), get().loadDomainEvents()]).catch(
+        () => {},
+      );
+      set({ marketsSyncing: false });
+    }
+    if (failure) throw failure;
+  },
   listPrices: {},
   loadListPrices: async () => {
     set({ listPrices: await window.api.getListPrices() });
@@ -824,18 +946,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     ]);
     set({ domainEvents, importedDomains });
   },
-  setDispositions: async (items, type, date) => {
-    set({
-      domainEvents: await window.api.setDispositions(items, type, date),
-    });
-  },
   markSold: async (items, date) => {
     set({ domainEvents: await window.api.markSold(items, date) });
     await get().loadPurchases();
   },
-  restoreOwned: async (domainNames) => {
-    set({ domainEvents: await window.api.restoreOwned(domainNames) });
-    await get().loadPurchases();
+  setSaleTransferred: async (id, transferred) => {
+    set({
+      domainEvents: await window.api.setSaleTransferred(id, transferred),
+    });
+  },
+  setDeparturesDropped: async (ids, dropped) => {
+    set({ domainEvents: await window.api.setDeparturesDropped(ids, dropped) });
   },
   setAlertsDismissed: async (ids, dismissed) => {
     set({ domainEvents: await window.api.setAlertsDismissed(ids, dismissed) });

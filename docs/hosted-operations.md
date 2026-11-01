@@ -157,11 +157,15 @@ auto-sync intervals must be disabled (`0`) or at least 60 minutes; existing sett
 preserved by deployment. These limits do not promise unlimited holdings, storage or provider
 quota, and are not a guarantee against every denial-of-service attack.
 
-All three paid MCP tools (register, transfer and renew) are denied at the gateway, even
-when an existing OAuth grant includes `domains:spend`. The early-access agent budget is
-zero. Browser actions retain their existing explicit controls and registrar charges.
-No nonzero agent-spend approvals or budgets are advertised. Existing OAuth scopes still
-apply; gateway policy can only reduce access.
+Legacy workspace MCP connections remain unable to spend, including older grants
+that named `domains:spend`. Shared MCP defaults to read-only. After migration 0021
+and the compatible-reader rollout, owners may approve a new shared connection
+with `domains:write` and/or `domains:spend` through fresh authentication and explicit
+consent. The paid consent identifies registration, renewal and transfer charges
+at the owner's registrar, and lasts for the connection rather than requiring a
+second approval per operation. Existing grants remain read-only; request parameters
+and operator policy cannot add scopes. Browser actions retain explicit controls.
+Qualification must never perform paid provider operations as a side effect.
 
 Optional protected `MCP_POLICIES` JSON maps immutable workspace IDs to `allowedTools` and
 `accountIds`. A selected account restriction requires explicit `accountId` for a tool that

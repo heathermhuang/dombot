@@ -13,12 +13,13 @@ const spending = new Set([
   'registrar_register_domain',
   'registrar_transfer_domain',
 ]);
-/** Paid agent operations have a hard zero budget during free early access.
- * A broad OAuth grant or operator policy cannot override this boundary. */
+/** Legacy connections remain unable to spend. Only persisted, freshly approved
+ * shared-OAuth paid permission may enable upstream registrar purchase tools. */
 export function mcpPolicyDenial(
   body: unknown,
   workspace: string,
   raw?: string,
+  grantedScopes?: readonly string[],
 ): string | null {
   if (Array.isArray(body)) return 'Batch MCP requests are not supported';
   if (!body || typeof body !== 'object') return null;
@@ -29,8 +30,8 @@ export function mcpPolicyDenial(
   if (rpc.method !== 'tools/call') return null;
   const name = rpc.params?.name;
   if (typeof name !== 'string') return 'Invalid tool request';
-  if (spending.has(name))
-    return 'Paid agent operations are unavailable during free early access. The agent spending budget is zero.';
+  if (spending.has(name) && !grantedScopes?.includes('domains:spend'))
+    return 'Paid registrar operations require explicit paid permission on a newly approved shared connection. This connection’s spending budget is zero.';
   if (!raw) return null;
   let input: unknown;
   try {

@@ -10,6 +10,7 @@ import {
   CalendarClock,
   Globe,
   History,
+  Receipt,
   Menu,
   RefreshCw,
   Settings as SettingsIcon,
@@ -27,17 +28,13 @@ import { useAppStore } from './store/app';
 import Domains from './pages/Domains';
 import Renewals from './pages/Renewals';
 import Activity from './pages/Activity';
+import Sales from './pages/Sales';
 import Settings from './pages/Settings';
 import ApprovalModal from './components/ApprovalModal';
 import DemoBanner from './components/DemoBanner';
 import { useWeeklyUpdateCheck } from './lib/updates';
 import StatusBar from './components/StatusBar';
-import {
-  isDemo,
-  supportsPublishing,
-  supportsSales,
-  webAuthMode,
-} from './lib/platform';
+import { isDemo, supportsPublishing, webAuthMode } from './lib/platform';
 import SalesListings from './pages/sales/Listings';
 import SalesListingEditor from './pages/sales/ListingEditor';
 import SalesReview from './pages/sales/PublicationReview';
@@ -72,6 +69,7 @@ const TAB_OPTIONS: Record<
   '/public-page': { iconOnlyBelow: 'xl' },
   '/renewals': { metric: 'renewals', pillFrom: 'lg' },
   '/activity': { metric: 'activity', pillFrom: 'lg' },
+  '/sales': { metric: 'sales', pillFrom: 'lg' },
   '/settings': {
     pillFrom: 'lg',
     // The gear is drawn smaller than the other icons, so it's bumped up.
@@ -118,6 +116,8 @@ export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
   const loadPurchases = useAppStore((s) => s.loadPurchases);
   const loadListPrices = useAppStore((s) => s.loadListPrices);
+  const loadExchangeRates = useAppStore((s) => s.loadExchangeRates);
+  const loadMarkets = useAppStore((s) => s.loadMarkets);
   const loadDomainEvents = useAppStore((s) => s.loadDomainEvents);
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const attachBulk = useAppStore((s) => s.attachBulk);
@@ -140,6 +140,8 @@ export default function App() {
     void loadSettings();
     void loadPurchases();
     void loadListPrices();
+    void loadExchangeRates();
+    void loadMarkets();
     void loadDomainEvents();
     // The bell lists sync errors from any page.
     void loadRegistrars();
@@ -148,6 +150,8 @@ export default function App() {
     loadSettings,
     loadPurchases,
     loadListPrices,
+    loadExchangeRates,
+    loadMarkets,
     loadDomainEvents,
     loadRegistrars,
   ]);
@@ -246,9 +250,7 @@ export default function App() {
           )}
         >
           {NAV_ITEMS.filter(
-            (item) =>
-              (item.to !== '/public-page' || supportsPublishing()) &&
-              (item.to !== '/sales' || supportsSales()),
+            (item) => item.to !== '/public-page' || supportsPublishing(),
           ).map(({ to, label, icon }) => {
             const { metric, ...options } = TAB_OPTIONS[to] ?? {};
             return (
@@ -342,18 +344,20 @@ export default function App() {
         className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [mask-image:linear-gradient(to_bottom,transparent,black_8px)] px-4 pt-[22px] pb-4 sm:px-6 sm:pt-[31px]"
       >
         <Routes>
-          <Route
-            path="/"
-            element={
-              supportsPublishing() ? <YourSite inventory /> : <Domains />
-            }
-          />
+          <Route path="/" element={<Domains />} />
           <Route path="/renewals" element={<Renewals />} />
           <Route path="/activity" element={<Activity />} />
+          <Route path="/sales" element={<Sales />} />
+          {/* The Markets tab became Sales (docs/sales-tab.md). */}
+          <Route path="/markets" element={<Navigate to="/sales" replace />} />
           <Route path="/settings" element={<Settings />} />
           {supportsPublishing() && (
             <>
-              <Route path="/sales" element={<SalesListings />} />
+              <Route path="/public-listings" element={<SalesListings />} />
+              <Route
+                path="/sales/listings"
+                element={<Navigate to="/public-listings" replace />}
+              />
               <Route
                 path="/sales/listings/:id"
                 element={<SalesListingEditor />}
@@ -418,9 +422,9 @@ function HostedSyncControl() {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Domains', icon: Globe },
-  { to: '/sales', label: 'Sales', icon: Globe },
   { to: '/public-page', label: 'Public profile', icon: Globe },
   { to: '/renewals', label: 'Renewals', icon: CalendarClock },
+  { to: '/sales', label: 'Sales', icon: Receipt },
   { to: '/activity', label: 'Activity', icon: History },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
@@ -457,9 +461,7 @@ function MobileNav() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         {NAV_ITEMS.filter(
-          (item) =>
-            (item.to !== '/public-page' || supportsPublishing()) &&
-            (item.to !== '/sales' || supportsSales()),
+          (item) => item.to !== '/public-page' || supportsPublishing(),
         ).map(({ to, label, icon: Icon }) => {
           const active = isActive(to);
           const metric = TAB_OPTIONS[to]?.metric;

@@ -1,25 +1,22 @@
 import { useRef } from 'react';
 import { domainKey } from '../../../shared/account-key';
 import {
-  Archive,
   Calculator,
   CalendarPlus,
   Ellipsis,
-  ExternalLink,
   KeyRound,
   Link2,
   Mail,
-  OctagonMinus,
   Receipt,
   PencilLine,
   RefreshCw,
   Trash2,
-  Undo2,
+  CircleX,
 } from 'lucide-react';
 import type { Domain, Folder } from '../../../shared/ipc';
-import { toAscii } from '../../../shared/domain-name';
 import type { ArchiveLabel } from '../../../shared/ownership';
 import { useAppStore } from '../../store/app';
+import { MarketLogo } from '../RegistrarLogo';
 import { useOpUnsupportedReason } from '../../lib/domain-ops';
 import { FolderIcon } from '../icons/FolderIcon';
 import { FolderMenuItems } from './FolderMenuItems';
@@ -36,15 +33,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StickyNoteIcon } from '../icons/StickyNoteIcon';
 import { CashIcon } from '../icons/CashIcon';
+import type { MarketAction } from './MarketActionDialog';
 
 /**
  * The trailing "⋯" menu on each row (pinned to the right of the Domain cell):
- * for a name you own, a refresh, a Folder submenu (a folder, Hidden, or None),
- * and the actions that aren't a column (forwarding, renew, auth code); then,
- * for every name, Notes, Purchase details, and the ownership states: Sold, Dropped, or Archived (the one it's in is disabled; a new one
- * replaces yours; Archive only for a name you own), "Move back
- * to Owned" for a labeled name an account still holds, and Delete. A name in
- * Archive gets no registrar actions: move it back to Owned first. Registrar-backed items the
+ * for a name you own, a refresh, a Folder submenu, and the actions that
+ * aren't a column (forwarding, renew, auth code); then, for every name,
+ * Notes, Record purchase (Edit purchase or registration once one is
+ * recorded), and Record sale (Edit sale once one is recorded; undoing it is in
+ * that dialog). Delete ends the menu only for a
+ * name no connected account holds (imported and Archive names): a name you
+ * hold goes away by turning its auto-renew off (docs/owned-and-archive.md).
+ * A name in Archive gets no registrar actions. Registrar-backed items the
  * registrar can't do are disabled with the reason as their tooltip. Disabled
  * outright while a write for this row is in flight.
  */
@@ -64,11 +64,15 @@ export function RowActionsMenu({
   onEditDetails,
   onAssignFolder,
   archive,
+  sold,
+  paid,
+  removable,
   onMarkSold,
-  onMarkDropped,
-  onMarkArchived,
-  onRestoreOwned,
   onDelete,
+  onMarket,
+  marketLabel = 'markets',
+  marketId = null,
+  marketReasons,
 }: {
   domain: Domain;
   folders: Folder[];
@@ -87,16 +91,22 @@ export function RowActionsMenu({
   onAssignFolder: (folderId: string | null) => void;
   /** Why the name is in Archive, or null while you own it. */
   archive: ArchiveLabel | null;
+  /** A sale is on record: Record sale edits it. */
+  sold: boolean;
+  /** What's recorded as paid, if anything: Record purchase edits it. */
+  paid?: 'registered' | 'purchased' | null;
+  /** No connected account holds it: Delete applies. */
+  removable: boolean;
   onMarkSold: () => void;
-  onMarkDropped: () => void;
-  onMarkArchived: () => void;
-  onRestoreOwned: () => void;
   onDelete: () => void;
+  /** List or delist on a market; absent with no market account. */
+  onMarket?: (action: MarketAction) => void;
+  marketLabel?: string;
+  /** The one market behind the menu, for its logo; null for several. */
+  marketId?: string | null;
+  /** Why each market action can't apply here; null when it can. */
+  marketReasons?: Record<MarketAction, string | null>;
 }) {
-  // A name you labeled that an account still holds can go back to Owned. One
-  // gone from every account stays Sold, Dropped, or Archived.
-  const labeled =
-    archive === 'sold' || archive === 'dropped' || archive === 'archived';
   const key = domainKey(domain);
   // An imported name isn't at a connected account: registrar actions can't run.
   const importedReason =
@@ -132,8 +142,10 @@ export function RowActionsMenu({
           size="icon-sm"
           disabled={pending}
           aria-label={`Actions for ${domain.domainName}`}
-          title="Actions"
-          className="-my-2 w-7 text-muted-foreground hover:text-foreground compact:h-7 compact:w-6"
+          // Covers the Domain cell outside the name: the cell lights, not
+          // the button (index.css).
+          data-cell-action
+          className="-my-2 w-7 text-muted-foreground hover:bg-transparent hover:text-foreground compact:h-7 compact:w-6 dark:hover:bg-transparent"
         >
           <Ellipsis />
         </Button>
@@ -212,9 +224,9 @@ export function RowActionsMenu({
             <DropdownMenuSeparator />
           </>
         )}
-        {/* Ownership, in the same order as on Activity. Purchase details and
-            Mark as Sold open with what's saved (and the name's notes), so
-            a sold name's Mark as Sold edits its sale. */}
+        {/* Ownership, in the same order as on Activity. Record purchase and
+            Record sale open with what's saved (and the name's notes), so
+            they edit what's recorded. */}
         <DropdownMenuItem
           onSelect={() => {
             keepFocus.current = true;
@@ -226,58 +238,63 @@ export function RowActionsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onEditPurchase}>
           <Calculator className="text-muted-foreground" />
-          Purchase details<span className="-ml-[6px] opacity-50">…</span>
+          {paid === 'registered'
+            ? 'Edit registration'
+            : paid
+              ? 'Edit purchase'
+              : 'Record purchase'}
+          <span className="-ml-[6px] opacity-50">…</span>
         </DropdownMenuItem>
+        {/* Pricing and the markets, in a section of their own. */}
         {archive === null && (
-          <DropdownMenuItem onSelect={onEditListPrice}>
-            <CashIcon className="text-muted-foreground" />
-            Pricing<span className="-ml-[6px] opacity-50">…</span>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onEditListPrice}>
+              <CashIcon className="text-muted-foreground" />
+              Pricing<span className="-ml-[6px] opacity-50">…</span>
+            </DropdownMenuItem>
+            {onMarket && (
+              <>
+                <DropdownMenuItem
+                  disabled={Boolean(marketReasons?.list)}
+                  title={marketReasons?.list ?? undefined}
+                  onSelect={() => onMarket('list')}
+                >
+                  <MarketLogo
+                    market={marketId}
+                    label={marketLabel}
+                    className="size-4 p-[1.5px] text-muted-foreground"
+                  />
+                  List at your price
+                  <span className="-ml-[6px] opacity-50">…</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={Boolean(marketReasons?.delist)}
+                  title={marketReasons?.delist ?? undefined}
+                  onSelect={() => onMarket('delist')}
+                >
+                  <CircleX className="text-muted-foreground" />
+                  Delist<span className="-ml-[6px] opacity-50">…</span>
+                </DropdownMenuItem>
+              </>
+            )}
+          </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={archive === 'sold' ? onEditSale : onMarkSold}
-        >
+        <DropdownMenuItem onSelect={sold ? onEditSale : onMarkSold}>
           <Receipt className="text-muted-foreground" />
-          Mark as Sold<span className="-ml-[6px] opacity-50">…</span>
+          {sold ? 'Edit sale' : 'Record sale'}
+          <span className="-ml-[6px] opacity-50">…</span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={archive === 'dropped'}
-          onSelect={onMarkDropped}
-        >
-          <OctagonMinus className="text-muted-foreground" />
-          Mark as Dropped<span className="-ml-[6px] opacity-50">…</span>
-        </DropdownMenuItem>
-        {/* Puts a name you own away without a reason. In Archive, Removed
-            already means "gone, no reason given". */}
-        {archive === null && (
-          <DropdownMenuItem onSelect={onMarkArchived}>
-            <Archive className="text-muted-foreground" />
-            Archive<span className="-ml-[6px] opacity-50">…</span>
-          </DropdownMenuItem>
+        {removable && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+              <Trash2 />
+              Delete<span className="-ml-[6px] opacity-50">…</span>
+            </DropdownMenuItem>
+          </>
         )}
-        {!domain.departed && labeled && (
-          <DropdownMenuItem onSelect={onRestoreOwned}>
-            <Undo2 className="text-muted-foreground" />
-            Move back to Owned
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() =>
-            void window.api.openExternal(
-              `https://${toAscii(domain.domainName)}`,
-            )
-          }
-        >
-          <ExternalLink className="text-muted-foreground" />
-          Open in browser
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-          <Trash2 />
-          Delete<span className="-ml-[6px] opacity-50">…</span>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

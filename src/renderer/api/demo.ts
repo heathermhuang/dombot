@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { DombotApi } from '../../shared/ipc';
+import type { DombotApi, DomainTarget, RegistrarName } from '../../shared/ipc';
 import {
   coreMethods,
   invoke,
@@ -17,15 +17,30 @@ import {
 } from '../../core/demo';
 import { onCoreEvent } from '../../core/events';
 import { setBulkAutoDrive } from '../../core/services/bulk-jobs';
+import { applyDomainOp } from '../../core/services/domain-ops';
 import {
   getMergedPortfolio,
   getPortfolio,
 } from '../../core/services/registrars';
-import { listEvents } from '../../core/services/domain-events';
+import {
+  listEvents,
+  newEvent,
+  putEvents,
+} from '../../core/services/domain-events';
+import { marketListings, syncMarkets } from '../../core/services/markets/sync';
+import { marketAdapter } from '../../core/services/markets/accounts';
+import { syncDomainTraffic } from '../../core/services/markets/traffic';
 import { localDay } from '../../shared/domain-events';
-import { setDispositions } from '../../core/services/domain-history';
-import { setPurchase, setSale } from '../../core/services/purchases';
-import { setListPrices } from '../../core/services/list-prices';
+import {
+  cachedRegistered,
+  rememberRegistrationLookups,
+} from '../../core/services/registration-lookup';
+import { toAscii } from '../../shared/domain-name';
+import { setNotes, setPurchase, setSale } from '../../core/services/purchases';
+import {
+  setAlertsDismissed,
+  setDeparturesDropped,
+} from '../../core/services/domain-history';
 import { setManualPrice } from '../../core/services/pricing';
 import { addImportedDomains } from '../../core/services/imported-domains';
 import { MemoryDocStore } from '../../core/storage/doc-store';
@@ -103,7 +118,9 @@ export interface DemoApi {
 
 /**
  * Changes after the baseline sync, so every kind of alert shows: departures
- * from several accounts, arrivals, and a move.
+ * from several accounts, arrivals, and a move. One departure is a name whose
+ * expiry had already passed, so Archive shows one as Expired with nothing to
+ * review (docs/owned-and-archive.md).
  */
 function stageSampleChanges(world: DemoWorld): void {
   const records = world.all();
@@ -118,6 +135,14 @@ function stageSampleChanges(world: DemoWorld): void {
     const list = of(registrar);
     if (list.length > 0) world.remove(list[list.length - 1].domainName);
   }
+  // A lapse: a name sync last saw past its expiry leaves too.
+  const lapsed = records.find(
+    (record) =>
+      record.registrar !== 'godaddy' &&
+      record.registrar !== 'porkbun' &&
+      record.expirationDate.getTime() < Date.now(),
+  );
+  if (lapsed) world.remove(lapsed.domainName);
 
   const moving = godaddy[0];
   world.remove(moving.domainName);
@@ -149,11 +174,19 @@ function stageSampleChanges(world: DemoWorld): void {
 
 /**
  * Some answered alerts and recorded purchases, so Activity shows history
- * beside what still needs review.
+ * beside what still needs review, and every Archive label shows: Sold (a
+ * departure you sold), Deleted (one the lookup says nobody holds), Expired
+ * (the lapse; see stageSampleChanges), Dropped (one you marked dropped), and
+ * Removed (one you dismissed without saying why, so Needs review still lists
+ * it, just not as new). One name you still hold is Sold too, awaiting
+ * transfer.
  */
 function recordSampleHistory(): void {
-  const departures = listEvents().filter((e) => e.type === 'removed');
-  const [sold, dropped] = departures;
+  // A lapse records its expiry and needs no answer.
+  const departures = listEvents().filter(
+    (e) => e.type === 'removed' && !e.expires,
+  );
+  const [sold, deleted, dismissed, dropped] = departures;
   if (sold) {
     setSale({
       domainName: sold.domain,
@@ -165,13 +198,31 @@ function recordSampleHistory(): void {
       resolves: sold.id,
     });
   }
-  if (dropped) {
-    setDispositions(
-      [{ domainName: dropped.domain, resolves: dropped.id }],
-      'dropped',
-    );
+  if (deleted) {
+    rememberRegistrationLookups({
+      [deleted.domain]: {
+        registered: false,
+        registrar: null,
+        created: null,
+        expires: null,
+        checkedAt: new Date().toISOString(),
+      },
+    });
   }
+  if (dismissed) setAlertsDismissed([dismissed.id], true);
+  if (dropped) setDeparturesDropped([dropped.id], true);
   const owned = getMergedPortfolio().domains.map((d) => d.domainName);
+  // Sold, and the buyer hasn't taken it yet: Owned with the Sold pill.
+  if (owned[6]) {
+    setSale({
+      domainName: owned[6],
+      saleDate: localDay(),
+      amount: '3800',
+      currency: 'USD',
+      notes: '',
+      mark: true,
+    });
+  }
   const day = (daysAgo: number) => localDay(Date.now() - daysAgo * 86_400_000);
   owned.slice(3, 5).forEach((domainName, i) =>
     setPurchase({
@@ -184,31 +235,197 @@ function recordSampleHistory(): void {
   );
 }
 
+/** What the sold names cost, a stand-in rotation. */
+const SOLD_NAME_COSTS = [
+  '150.00',
+  '480.00',
+  '900.00',
+  '1200.00',
+  '2500.00',
+  '60.00',
+] as const;
+
 /**
- * Asking prices on a few names, so the Asking column has something in it,
- * and one renewal price in another currency.
+ * Sales beyond the markets' and what the sold names cost, so the Sales tab
+ * has every kind: purchases or hand registrations on most sold names
+ * (holding period and profit), and private and imported sales, some with
+ * fees and one in euros. The names are made up and no account holds them.
  */
-function recordSampleListPrices(): void {
-  const owned = getMergedPortfolio().domains.map((d) => d.domainName);
-  const samples = [
-    { amount: '4800', minOffer: '1500', floor: '2500', currency: 'USD' },
-    { amount: '12500', minOffer: '5000', floor: null, currency: 'USD' },
-    { amount: '950', minOffer: null, floor: null, currency: 'EUR' },
-    { amount: null, minOffer: '250', floor: null, currency: 'USD' },
+function recordSampleSales(): void {
+  const DAY = 86_400_000;
+  const day = (ms: number) => localDay(ms);
+  const sold = listEvents().filter((e) => e.type === 'sold' && e.date);
+  const acquisitions = sold
+    // A few with nothing on record, so coverage shows.
+    .filter((_, i) => i % 5 !== 4)
+    .map((e, i) => {
+      const registered = i % 4 === 0;
+      return newEvent({
+        domain: e.domain,
+        type: registered ? 'registered' : 'purchased',
+        source: 'user',
+        date: day(Date.parse(e.date!) - (300 + ((i * 173) % 1100)) * DAY),
+        amount: registered
+          ? '10.99'
+          : SOLD_NAME_COSTS[i % SOLD_NAME_COSTS.length],
+        currency: 'USD',
+        ...(registered ? { years: 1 } : {}),
+      });
+    });
+
+  const now = Date.now();
+  const sales: {
+    domain: string;
+    soldDaysAgo: number;
+    amount: string;
+    fees: string | null;
+    paid: string | null;
+    currency?: 'USD' | 'EUR';
+    source: 'user' | 'import';
+  }[] = [
+    // Escrow fees on a private deal.
+    {
+      domain: 'tallgrass.com',
+      soldDaysAgo: 38,
+      amount: '7500.00',
+      fees: '243.75',
+      paid: '650.00',
+      source: 'user',
+    },
+    // A direct sale with no fees.
+    {
+      domain: 'brightwake.io',
+      soldDaysAgo: 160,
+      amount: '3200.00',
+      fees: '0.00',
+      paid: '39.00',
+      source: 'user',
+    },
+    // Through a broker, in euros.
+    {
+      domain: 'kastanie.de',
+      soldDaysAgo: 290,
+      amount: '4800.00',
+      fees: '480.00',
+      paid: '900.00',
+      currency: 'EUR',
+      source: 'user',
+    },
+    // From a spreadsheet of old sales: fees not recorded.
+    {
+      domain: 'oldmill.net',
+      soldDaysAgo: 520,
+      amount: '1800.00',
+      fees: null,
+      paid: '120.00',
+      source: 'import',
+    },
+    {
+      domain: 'copperline.co',
+      soldDaysAgo: 700,
+      amount: '5400.00',
+      fees: '540.00',
+      paid: null,
+      source: 'import',
+    },
   ];
-  setListPrices(
-    samples
-      .map((s, i) => ({ domainName: owned[i * 2], ...s }))
-      .filter((s) => s.domainName),
-  );
-  // A renewal price in euros: Renewals lists it beside the dollar totals.
-  if (owned[1]) setManualPrice(owned[1], { amount: '45', currency: 'EUR' });
+  const recorded = sales.flatMap((x) => {
+    const soldOn = now - x.soldDaysAgo * DAY;
+    const currency = x.currency ?? 'USD';
+    return [
+      ...(x.paid
+        ? [
+            newEvent({
+              domain: x.domain,
+              type: 'purchased',
+              source: x.source,
+              date: day(soldOn - 640 * DAY),
+              amount: x.paid,
+              currency,
+            }),
+          ]
+        : []),
+      newEvent({
+        domain: x.domain,
+        type: 'sold',
+        source: x.source,
+        date: day(soldOn),
+        amount: x.amount,
+        currency,
+        fees: x.fees,
+      }),
+    ];
+  });
+  putEvents([...acquisitions, ...recorded]);
 }
 
 /**
- * Two names you added by hand: one at Gandi (a registrar DomBot supports,
- * and the demo also syncs a Gandi account, so both show), one at a
- * registrar it doesn't know.
+ * The registrar account behind each sale, which the Sales tab shows: the
+ * one holding the name, else one of the demo's accounts in turn (the sold
+ * names are made up and no account holds them).
+ */
+function recordSaleAccounts(): void {
+  const domains = getMergedPortfolio().domains;
+  const holder = new Map(
+    domains
+      .filter((d) => d.accountId)
+      .map((d) => [d.domainName.toLowerCase(), d.accountId!]),
+  );
+  const accounts = [...new Set(holder.values())].sort();
+  if (!accounts.length) return;
+  putEvents(
+    listEvents()
+      .filter((e) => e.type === 'sold' && !e.accountId)
+      .map((e, i) => ({
+        ...e,
+        accountId: holder.get(e.domain) ?? accounts[i % accounts.length],
+      })),
+  );
+}
+
+/**
+ * One renewal price in another currency: Renewals lists it beside the dollar
+ * totals. (Asking prices come with the seed: core/demo.)
+ */
+function recordSampleRenewalPrice(): void {
+  const owned = getMergedPortfolio().domains.map((d) => d.domainName);
+  if (owned[1]) setManualPrice(owned[1], { amount: '45', currency: 'EUR' });
+}
+
+/** Notes a portfolio owner keeps, put on a spread of names. */
+const SAMPLE_NOTES = [
+  'Buyer emailed 2026-08 asking for a price; offered $4k, no reply yet.',
+  'Bought at NameJet. Strong .com, hold for end user.',
+  'Renew even if unsold: it forwards to the old shop.',
+  'Brandable shortlist. Try Atom Premium next round?',
+  'Inbound offer via Afternic at $1,200 declined. Floor $2,500.',
+  'Old side project. Keep until the redirect traffic dies down.',
+  'Trademark check done (clear in US/EU).',
+  'Was parked at Sedo; moved listing to Afternic for Fast Transfer.',
+  'Price high on purpose; comps at $8–12k.',
+  'Expiring soon: decide on renewal by next month.',
+] as const;
+
+/**
+ * Notes on ten names, a few of them on the first page of Domains (sorted by
+ * name), so the notes icon shows without scrolling.
+ */
+function recordSampleNotes(): void {
+  const owned = getMergedPortfolio()
+    .domains.map((d) => d.domainName)
+    .sort((a, b) => a.localeCompare(b));
+  [1, 6, 13, 27, 44, 70, 103, 140, 182, 220].forEach((at, i) => {
+    const domainName = owned[at];
+    if (domainName) setNotes(domainName, SAMPLE_NOTES[i]);
+  });
+}
+
+/**
+ * Names you added by hand: one at Gandi (a registrar DomBot supports, and
+ * the demo also syncs a Gandi account, so both show), and three at a
+ * registrar it doesn't know: one renewing by hand, one Expiring (auto-renew
+ * off, due within 30 days), and one long past expiry, which Archive shows as
+ * Expired.
  */
 function recordSampleImportedDomains(): void {
   const day = (daysAhead: number) =>
@@ -232,9 +449,64 @@ function recordSampleImportedDomains(): void {
           autoRenew: false,
         },
       },
+      {
+        domainName: 'lanternway.org',
+        fields: {
+          registrarLabel: 'Epik',
+          createdDate: '2021-06-14',
+          expirationDate: day(12),
+          autoRenew: false,
+        },
+      },
+      {
+        domainName: 'oldorchard.net',
+        fields: {
+          registrarLabel: 'Epik',
+          createdDate: '2016-03-09',
+          expirationDate: day(-130),
+          autoRenew: false,
+        },
+      },
     ],
     { source: 'user' },
   );
+}
+
+/**
+ * A few settings changed through the real write path, so Activity shows
+ * Changed rows from you and from an agent: auto-renew off on two names
+ * (letting them go), privacy on, and nameservers moved.
+ */
+async function recordSampleSettingsChanges(): Promise<void> {
+  // Names from the middle of accounts whose API changes all four, clear of
+  // the ones the sample departures and moves take.
+  const names = getMergedPortfolio().domains.filter(
+    (d) => d.registrar === 'namecheap' || d.registrar === 'dynadot',
+  );
+  const pick = (at: number) => names[Math.floor((names.length * at) / 10)];
+  const targetOf = (d: (typeof names)[number]): DomainTarget => ({
+    registrar: d.registrar as RegistrarName,
+    accountId: d.accountId,
+    domainName: d.domainName,
+  });
+  const letGo = [pick(2), pick(5)].filter((d) => d?.autoRenew);
+  for (const d of letGo)
+    await applyDomainOp(targetOf(d), { kind: 'autoRenew', enabled: false });
+  const privacy = names
+    .slice(Math.floor(names.length * 0.3))
+    .find((d) => !d.privacy && !letGo.includes(d));
+  if (privacy)
+    await applyDomainOp(targetOf(privacy), { kind: 'privacy', enabled: true });
+  const moved = pick(7);
+  if (moved)
+    await applyDomainOp(
+      targetOf(moved),
+      {
+        kind: 'nameservers',
+        nameservers: ['ada.ns.cloudflare.com', 'bob.ns.cloudflare.com'],
+      },
+      { source: 'agent' },
+    );
 }
 
 /**
@@ -253,16 +525,54 @@ export async function createDemoApi(
   // looks like the real thing.
   const demo = await installDemo({ latencyMs: 0, size: options.size });
   await getPortfolio(true);
-  recordSampleListPrices();
+  // After the portfolio, so market sales know which names you still hold.
+  await syncMarkets();
+  // A real sync fetches per-name traffic a slice at a time; the demo has it
+  // all from the start.
+  for (const accountId of new Set(marketListings().map((l) => l.accountId))) {
+    await syncDomainTraffic(
+      marketAdapter(accountId),
+      marketListings().filter((l) => l.accountId === accountId),
+      Infinity,
+    );
+  }
+  recordSampleSales();
+  recordSampleRenewalPrice();
+  recordSampleNotes();
   recordSampleImportedDomains();
   if (options.sampleChanges) {
+    await recordSampleSettingsChanges();
     stageSampleChanges(demo.world);
     await getPortfolio(true);
     recordSampleHistory();
   }
+  recordSaleAccounts();
   demo.setLatency(options.latencyMs ?? 150);
 
-  const table: ApiTable = { ...coreMethods, ...demoMethods };
+  const table: ApiTable = {
+    ...coreMethods,
+    ...demoMethods,
+    // Archive must not send the demo's sample names to public RDAP servers.
+    // Keep the seeded Deleted example; all other sample names are registered.
+    lookupRegistrations: {
+      ...coreMethods.lookupRegistrations,
+      handler: async (names) => {
+        const registered = cachedRegistered();
+        return Object.fromEntries(
+          names.map((name) => [
+            toAscii(name),
+            {
+              registered: registered.get(toAscii(name)) ?? true,
+              registrar: null,
+              created: null,
+              expires: null,
+              checkedAt: new Date().toISOString(),
+            },
+          ]),
+        );
+      },
+    },
+  };
   const api: Record<string, unknown> = {};
   for (const name of Object.keys(table) as ApiMethodName[]) {
     api[name] = (...args: unknown[]) =>

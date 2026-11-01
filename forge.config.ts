@@ -30,7 +30,10 @@ const config: ForgeConfig = {
     // Developer ID signing (macOS). Hardened runtime is required for notarization;
     // @electron/osx-sign applies Electron-appropriate default entitlements.
     osxSign: notarizeMac
-      ? { identity: APPLE_SIGNING_IDENTITY, optionsForFile: () => ({ hardenedRuntime: true }) }
+      ? {
+          identity: APPLE_SIGNING_IDENTITY,
+          optionsForFile: () => ({ hardenedRuntime: true }),
+        }
       : undefined,
     // Notarization via App Store Connect API key (set from secrets).
     osxNotarize: notarizeMac
@@ -55,7 +58,9 @@ const config: ForgeConfig = {
       for (const outputPath of outputPaths) {
         const app = `${outputPath}/DomBot.app`;
         if (notarizeMac) {
-          execFileSync('xcrun', ['stapler', 'staple', app], { stdio: 'inherit' });
+          execFileSync('xcrun', ['stapler', 'staple', app], {
+            stdio: 'inherit',
+          });
         } else {
           execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], {
             stdio: 'inherit',

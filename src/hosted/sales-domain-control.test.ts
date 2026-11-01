@@ -21,7 +21,7 @@ import { SalesStore, readPublicSale } from '../worker/sales-store';
 import { createVerifiedSaleObserver } from '../worker/sales-observation';
 import { MemoryDocStore } from '../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../core/storage/namespace';
-import { emptySale } from '../shared/sales';
+import { emptySale } from '../shared/hosted-sales';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { Hono } from 'hono';
 import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';

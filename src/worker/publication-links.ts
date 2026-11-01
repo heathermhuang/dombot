@@ -1,4 +1,4 @@
-import { publishedSaleSchema, type PublishedSale } from '../shared/sales';
+import { publishedSaleSchema, type PublishedSale } from '../shared/hosted-sales';
 import {
   publishedOwnerSiteV3Schema,
   selectedSite,

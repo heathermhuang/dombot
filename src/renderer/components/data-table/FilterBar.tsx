@@ -9,13 +9,13 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { Search, X } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toolbarLayout } from './toolbar-layout';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -23,7 +23,7 @@ import type { FilterOption } from './Toolbar';
 import { DomainTableScroll } from '../../lib/domain-table-scroll';
 import { FilterPlusIcon } from '../icons/FilterPlusIcon';
 
-// A table's filter bar: "+ Add filter" opens a menu of fields, and each field
+// A table's filter bar: "Filters" opens a menu of fields, and each field
 // in use becomes a chip (name | value | ×) whose dropdown edits it. Only the
 // filters you set take up room; there's no Reset, each chip clears itself.
 
@@ -73,7 +73,7 @@ function clearField(field: FilterField) {
   else field.onChange([]);
 }
 
-/** Lists (and the Add filter menu) longer than this get a search box. */
+/** Lists longer than this get a search box. */
 const SEARCHABLE = 8;
 
 // The filter green, from the design: the set chip's tint (with its dark
@@ -209,6 +209,57 @@ function ListMenu({ field }: { field: ListField }) {
  * from the value on the field background. `flat`: the whole chip on the
  * tint, name and value side by side.
  */
+/**
+ * A list filter as a plain dropdown, for a page with one filter (Renewals'
+ * Registrar): it looks like a select, reads "All registrars" when nothing is
+ * picked, and has no ×. Its menu is the chip's, so picking works the same.
+ */
+export function FilterDropdown({
+  field,
+  align = 'end',
+  className,
+}: {
+  field: Omit<ListField, 'kind'>;
+  /** The menu's edge against the trigger's. */
+  align?: 'start' | 'end';
+  className?: string;
+}) {
+  const list: ListField = { ...field, kind: 'list' };
+  const summary = summaryOf(list);
+  const Icon = field.icon;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`${field.label}: ${summary ?? 'all'}`}
+          // The look of a select trigger (components/ui/select.tsx).
+          className={cn(
+            'flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50',
+            className,
+          )}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">{summary ?? `All ${field.plural}`}</span>
+          </span>
+          <ChevronDown className="size-4 shrink-0 opacity-50" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={align}
+        sideOffset={6}
+        className="w-60"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        // Hand the panel's focus on to its search box, as the chip does.
+        onFocus={focusLeadingInput}
+      >
+        <ListMenu field={list} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export type FilterChipVariant = 'segmented' | 'flat';
 
 /**
@@ -235,6 +286,7 @@ function FilterChip({
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <span
+        data-filter-chip={field.key}
         className={cn(
           'relative inline-flex h-9 items-stretch overflow-hidden rounded-md border text-sm',
           // An empty chip's dashes darken (brighten in dark mode) while its
@@ -337,11 +389,8 @@ function FilterChip({
         // Stay on the chip, not its trigger half, when the menu closes.
         onCloseAutoFocus={(e) => e.preventDefault()}
         // The menu focuses its own panel as it opens; hand that on to the
-        // panel's first field (a search box, Min), so typing lands there.
-        onFocus={(e) => {
-          if (e.target === e.currentTarget)
-            e.currentTarget.querySelector('input')?.focus();
-        }}
+        // panel's search box, so typing lands there.
+        onFocus={focusLeadingInput}
       >
         {field.kind === 'list' ? <ListMenu field={field} /> : field.content}
       </DropdownMenuContent>
@@ -349,13 +398,13 @@ function FilterChip({
   );
 }
 
-// The Add filter button's box, and its labelled form's spacing.
+// The Filters button's box, and its labelled form's spacing.
 const ADD_FILTER_BOX =
   'inline-flex h-9 items-center rounded-md border border-dashed text-sm whitespace-nowrap';
 const ADD_FILTER_LABELLED = 'gap-1.5 pr-3 pl-[9px]';
 
 /**
- * The menu of fields, opened from "+ Add filter", or from the square "+"
+ * The menu of fields, opened from "Filters", or from the square "+"
  * when only that fits after the last chip. Both stay grey in every state. A checkbox
  * marks each field already showing as a chip: ticking one adds its chip and
  * opens it, unticking one removes its chip (as its × would) and leaves the
@@ -375,17 +424,12 @@ function AddFilter({
   onRemove: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const picked = useRef(false);
   const choose = (key: string) => {
     picked.current = true;
     onPick(key);
   };
-  const q = query.trim().toLowerCase();
-  const shown = q
-    ? fields.filter((f) => f.label.toLowerCase().includes(q))
-    : fields;
-  // Labelled when "Add filter" fits on the line after the last chip, or when
+  // Labelled when "Filters" fits on the line after the last chip, or when
   // the button wraps to a line of its own anyway; the square only where it
   // keeps the button on the chips' line and the label wouldn't.
   const ref = useRef<HTMLButtonElement>(null);
@@ -417,19 +461,14 @@ function AddFilter({
   });
   return (
     <>
-      <DropdownMenu
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) setQuery('');
-        }}
-      >
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
             ref={ref}
             type="button"
-            aria-label="Add filter"
-            title={compact ? 'Add filter' : undefined}
+            data-filter-add
+            aria-label="Filters"
+            title={compact ? 'Filters' : undefined}
             className={cn(
               // Grey: hover darkens the dashes and text like an empty chip's
               // (brightens them in dark mode); keyboard focus gets the app's
@@ -445,7 +484,7 @@ function AddFilter({
             )}
           >
             <FilterPlusIcon className="h-4 w-[17px]" />
-            {!compact && 'Add filter'}
+            {!compact && 'Filters'}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -462,31 +501,7 @@ function AddFilter({
             picked.current = false;
           }}
         >
-          <DropdownMenuLabel className="px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-            Add filter
-          </DropdownMenuLabel>
-          {/* Only once there are enough fields to need it. */}
-          {fields.length > SEARCHABLE && (
-            <MenuSearch
-              value={query}
-              onChange={setQuery}
-              placeholder="Find a filter…"
-              onEnter={() => {
-                if (shown.length === 0) return;
-                const key = shown[0].key;
-                if (showing.has(key)) return onRemove(key);
-                choose(key);
-                setOpen(false);
-                setQuery('');
-              }}
-            />
-          )}
-          {shown.length === 0 && (
-            <div className="px-2 py-1.5 text-sm text-muted-foreground">
-              No matches
-            </div>
-          )}
-          {shown.map((f) => {
+          {fields.map((f) => {
             const Icon = f.icon;
             return (
               <DropdownMenuCheckboxItem
@@ -517,7 +532,7 @@ function AddFilter({
         )}
       >
         <FilterPlusIcon className="h-4 w-[17px]" />
-        Add filter
+        Filters
       </span>
     </>
   );
@@ -528,11 +543,44 @@ function AddFilter({
 // on the next one.
 const removedPresets = new Map<string, Set<string>>();
 
+/** The box a bar's chips wrap in: the nearest ancestor that lays out (a
+ *  toolbar can be `display: contents`). */
+/**
+ * A filter panel focuses itself as it opens, and again when a click lands
+ * on its background. Hand that on to an input only when it's the panel's
+ * first control (a list's search box), and without scrolling: an input
+ * further down (Markets' and Pricing's price range) would pull the panel
+ * back to it on every click, so you couldn't scroll up past it.
+ */
+function focusLeadingInput(e: React.FocusEvent<HTMLElement>) {
+  if (e.target !== e.currentTarget) return;
+  const first = e.currentTarget.querySelector<HTMLElement>(
+    'input, button, select, textarea, [role^="menuitem"], [tabindex]:not([tabindex="-1"])',
+  );
+  if (first instanceof HTMLInputElement) first.focus({ preventScroll: true });
+}
+
+/** The search box's width as its row wraps it: its flex basis, or null when
+ *  it fills a line of its own (a phone's). */
+function searchWidth(search: Element | null | undefined, row: number) {
+  if (!(search instanceof HTMLElement)) return 0;
+  if (search.offsetWidth >= row - 1) return null;
+  const basis = getComputedStyle(search).flexBasis;
+  return basis.endsWith('px') ? parseFloat(basis) : search.offsetWidth;
+}
+
+function rowOf(el: Element | null): HTMLElement | null {
+  let row = el?.parentElement ?? null;
+  while (row && getComputedStyle(row).display === 'contents')
+    row = row.parentElement;
+  return row;
+}
+
 /**
  * The filter chips, then the add button. The presets start the row; every
  * filter added from the menu (a removed preset too) goes on the end.
  * Rendered inline (a fragment), so everything wraps with the toolbar around
- * it. The add button reads "Add filter" unless only a square "+" would fit
+ * it. The add button reads "Filters" unless only a square "+" would fit
  * after the last chip.
  *
  * Picking a field adds its chip with the value list open; unticking one in
@@ -544,15 +592,22 @@ export function FilterBar({
   id,
   fields,
   presets = [],
+  presetsIfRoom = [],
   variant = 'segmented',
+  onSwitchAbove,
 }: {
   /** Names this bar for the session's memory of removed presets. */
   id: string;
   fields: FilterField[];
   /** Keys of the fields always shown, in order, even when unset. */
   presets?: string[];
+  /** Of `presets`, the ones shown while unset only when there's room
+   *  (toolbarLayout). Checked again as the row's width changes. */
+  presetsIfRoom?: string[];
   /** The chips' look; see FilterChipVariant. */
   variant?: FilterChipVariant;
+  /** Told whether the toolbar's switch should go on a line of its own. */
+  onSwitchAbove?: (above: boolean) => void;
 }) {
   // Presets whose × was clicked this session.
   const [removed, setRemoved] = useState<Set<string>>(
@@ -566,11 +621,100 @@ export function FilterBar({
   );
   // The chip whose dropdown is open.
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // presetsIfRoom left out for room, and each preset's width with no value
+  // (or, until it's had none, when it first showed). Picking one from the
+  // menu shows it regardless.
+  const [cramped, setCramped] = useState<Set<string>>(() => new Set());
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const widths = useRef(new Map<string, number>());
+  const anchor = useRef<HTMLSpanElement>(null);
   const byKey = new Map(fields.map((f) => [f.key, f]));
-  const chips = [
+  const placed = [
     ...order.map((k) => byKey.get(k)),
     ...fields.filter((f) => !order.includes(f.key) && summaryOf(f) !== null),
   ].filter((f): f is FilterField => !!f);
+  const optional = (f: FilterField) =>
+    presetsIfRoom.includes(f.key) &&
+    !picked.has(f.key) &&
+    summaryOf(f) === null &&
+    openKey !== f.key;
+  const chips = placed.filter((f) => !(optional(f) && cramped.has(f.key)));
+
+  // The toolbar's layout (toolbarLayout): which if-room presets show, and
+  // whether the switch goes on a line of its own. Worked out from the
+  // row's starting state, each preset as wide as it is with no value, and
+  // again only when the row's width or the set of presets changes, or the
+  // switch gets wider than it has been at this width (its counts and
+  // options loading). So setting filters never moves the switch: chips
+  // that grow just wrap, and a switch whose counts follow the filters only
+  // narrows. A new width measures it afresh (a phone's fills the row).
+  const decided = useRef('');
+  const switchWidth = useRef({ at: 0, width: 0 });
+  useLayoutEffect(() => {
+    const row = rowOf(anchor.current);
+    if (!row) return;
+    const update = () => {
+      // Hidden (a collapsed toolbar): nothing to measure.
+      if (row.offsetWidth === 0) return;
+      for (const f of placed) {
+        const el = row.querySelector<HTMLElement>(
+          `[data-filter-chip="${f.key}"]`,
+        );
+        if (
+          el?.offsetWidth &&
+          (summaryOf(f) === null || !widths.current.has(f.key))
+        )
+          widths.current.set(f.key, el.offsetWidth);
+      }
+      const style = getComputedStyle(row);
+      const width =
+        row.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight);
+      const switchEl = row.querySelector('[data-toolbar-switch]')
+        ?.firstElementChild as HTMLElement | null | undefined;
+      const measured = switchEl?.offsetWidth ?? 0;
+      switchWidth.current =
+        switchWidth.current.at === width
+          ? { at: width, width: Math.max(switchWidth.current.width, measured) }
+          : { at: width, width: measured };
+      // The presets showing as chips: one whose field the page doesn't
+      // offer right now (Archive's Status, with nothing archived) has none.
+      const keys = order.filter((k) => presets.includes(k) && byKey.has(k));
+      const at = `${width}|${switchWidth.current.width}|${keys.join()}`;
+      if (at === decided.current) return;
+      const chips = keys.map((key) => ({
+        key,
+        width: widths.current.get(key) ?? 0,
+        ifRoom: presetsIfRoom.includes(key),
+      }));
+      // Not all measured yet (a preset that started with a value hidden).
+      if (chips.some((c) => !c.width)) return;
+      const search = row.querySelector('input[type="search"]')?.parentElement;
+      const add = row.querySelector<HTMLElement>('[data-filter-add]');
+      decided.current = at;
+      const layout = toolbarLayout({
+        width,
+        gap: parseFloat(style.columnGap) || 0,
+        switch: switchWidth.current.width,
+        search: searchWidth(search, width),
+        chips,
+        // Square: as wide as it is tall.
+        add: add?.offsetHeight ?? 0,
+      });
+      setCramped((was) =>
+        was.size === layout.hidden.size &&
+        [...layout.hidden].every((k) => was.has(k))
+          ? was
+          : layout.hidden,
+      );
+      onSwitchAbove?.(layout.switchAbove);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
 
   function setRemovedPresets(next: Set<string>) {
     removedPresets.set(id, next);
@@ -580,12 +724,13 @@ export function FilterBar({
   function pick(key: string) {
     // A new chip goes at the end; one already showing stays put.
     if (!order.includes(key)) setOrder((o) => [...o, key]);
+    if (presetsIfRoom.includes(key)) setPicked((p) => new Set(p).add(key));
     if (removed.has(key)) {
       const next = new Set(removed);
       next.delete(key);
       setRemovedPresets(next);
     }
-    // After the Add filter menu has closed, so the two don't fight over focus.
+    // After the Filters menu has closed, so the two don't fight over focus.
     requestAnimationFrame(() => setOpenKey(key));
   }
 
@@ -593,6 +738,11 @@ export function FilterBar({
     clearField(field);
     setOpenKey(null);
     setOrder((o) => o.filter((k) => k !== field.key));
+    setPicked((p) => {
+      const next = new Set(p);
+      next.delete(field.key);
+      return next;
+    });
     if (presets.includes(field.key))
       setRemovedPresets(new Set(removed).add(field.key));
   }
@@ -620,6 +770,9 @@ export function FilterBar({
           if (field) remove(field);
         }}
       />
+      {/* Finds the row the chips wrap in, for the toolbar's layout. After
+          the add button, which measures from the element before it. */}
+      <span ref={anchor} hidden />
     </>
   );
 }

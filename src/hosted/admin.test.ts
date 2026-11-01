@@ -371,7 +371,7 @@ describe('admin metric meaning', () => {
       recovery: { restriction, retryAt: 1800000 },
     });
   });
-  it('deduplicates names within a user, excludes archive and includes only unmatched imports', () => {
+  it('deduplicates names within a user and keeps sold names held at the registrar owned until transfer', () => {
     const domains = [
       { domainName: 'one.test', source: 'registrar' },
       { domainName: 'ONE.test', source: 'registrar' },
@@ -385,7 +385,7 @@ describe('admin metric meaning', () => {
       { id: '1', domain: 'sold.test', type: 'sold' },
     ] as DomainEvent[];
     const s = summarizeAdmin(domains, imported, events, [], 1440, []);
-    expect(s).toMatchObject({ owned: 2, imported: 1, archived: 1 });
+    expect(s).toMatchObject({ owned: 3, imported: 1, archived: 0 });
   });
   it('classifies failures without persisting secret messages and preserves failed, never and disabled states', () => {
     const meta = ['failed', 'never', 'disabled', 'stale'].map((state, n) => ({

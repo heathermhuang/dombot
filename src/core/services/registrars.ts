@@ -109,6 +109,18 @@ function withoutQuote(record: DetailRecord): Partial<Domain> {
   return rest;
 }
 
+/** True when a listed date needs no write: the list omits it, or the cached
+ *  value (a Date, or its JSON string once reloaded) is the same instant. */
+function sameDate(
+  listed: Date | null | undefined,
+  cached: Date | string | null | undefined,
+): boolean {
+  if (listed == null) return true;
+  return (
+    cached != null && new Date(cached).getTime() === new Date(listed).getTime()
+  );
+}
+
 /** A cached row: what the account's list returned. `assemblePortfolio`
  *  stamps the account and `source` on it. */
 type CachedDomain = Omit<Domain, 'source'>;
@@ -581,8 +593,10 @@ export async function getRegistrationQuote(
       return { amount: null, currency: 'USD' };
     throw err;
   }
-  const code = currencyInfo(pricing.currency ?? 'USD')?.code ?? 'USD';
-  const decimals = currencyInfo(code)?.decimals ?? 2;
+  // A code DomBot doesn't know is no price, not a price in dollars.
+  const info = currencyInfo(pricing.currency ?? 'USD');
+  if (!info) return { amount: null, currency: 'USD' };
+  const { code, decimals } = info;
   const registration = pricing.registration;
   if (
     typeof registration !== 'number' ||
@@ -855,7 +869,11 @@ async function performInventorySync(
         retryAt:
           Date.now() +
           Math.max(
-            syncError.retryAfter ?? 60,
+            syncError.retryAfter != null &&
+              Number.isFinite(syncError.retryAfter) &&
+              syncError.retryAfter >= 0
+              ? syncError.retryAfter
+              : 60,
             60 * 2 ** Math.max(0, attempts - 1),
           ) *
             1000,
@@ -912,6 +930,16 @@ async function performInventorySync(
     // list that omits a date must not erase a previously known value.
     for (const domain of entry.domains) {
       if (domain.expirationDate == null && domain.renewalDate == null) continue;
+      const cached = readEntry<DetailRecord>(
+        'detail',
+        detailKey(accountId, domain.domainName),
+      )?.data;
+      if (
+        !cached ||
+        (sameDate(domain.expirationDate, cached.expirationDate) &&
+          sameDate(domain.renewalDate, cached.renewalDate))
+      )
+        continue;
       patchEntryData<DetailRecord>(
         'detail',
         detailKey(accountId, domain.domainName),
@@ -1435,6 +1463,18 @@ export function getCachedDetail(): Record<string, Partial<Domain>> {
     out[key] = reviveDomainDates(withoutQuote(entry.data));
   }
   return out;
+}
+
+/** One domain's cached detail (revived), or null when it was never fetched. */
+export function getCachedDomainDetail(
+  accountId: string,
+  domainName: string,
+): Partial<Domain> | null {
+  const entry = readEntry<DetailRecord>(
+    'detail',
+    detailKey(accountId, domainName),
+  );
+  return entry ? reviveDomainDates(withoutQuote(entry.data)) : null;
 }
 
 /**

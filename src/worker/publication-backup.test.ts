@@ -10,7 +10,7 @@ import {
   hydrateStores,
 } from '../core/storage/namespace';
 import { emptyDraft } from '../shared/publication';
-import { emptySale } from '../shared/sales';
+import { emptySale } from '../shared/hosted-sales';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { PublicationStore } from './publication-store';
 import { SalesStore } from './sales-store';

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from './domain-events';
 import type { Domain, RegistrarMeta } from './ipc';
-import { archiveRows, ownershipByDomain } from './ownership';
+import type { MarketSale } from './markets';
+import {
+  IMPORTED_ARCHIVE_DAYS,
+  archiveRows,
+  ownedAndRenewing,
+  ownershipByDomain,
+  removalExpiry,
+  standingOf,
+} from './ownership';
 
 let n = 0;
 const event = (patch: Partial<DomainEvent>): DomainEvent => ({
@@ -17,8 +25,28 @@ const event = (patch: Partial<DomainEvent>): DomainEvent => ({
 });
 const owner = (events: DomainEvent[]) => ownershipByDomain(events).get('a.com');
 
+const DAY = 86_400_000;
+const NOW = Date.parse('2026-10-29T12:00:00Z');
+const inDays = (days: number) => new Date(NOW + days * DAY);
+const row = (patch: Partial<Domain> = {}): Domain => ({
+  registrar: 'dynadot',
+  domainName: 'a.com',
+  status: 'active',
+  createdDate: null,
+  expirationDate: inDays(200),
+  renewalDate: null,
+  autoRenew: true,
+  locked: false,
+  privacy: false,
+  nameservers: [],
+  syncedAt: new Date(NOW),
+  deleted: false,
+  source: 'registrar',
+  ...patch,
+});
+
 describe('ownershipByDomain', () => {
-  it('keeps a Sold name in Archive through a move and a purchase', () => {
+  it('keeps a sale through a move and a purchase', () => {
     const sold = event({ type: 'sold', source: 'user' });
     const events = [
       sold,
@@ -29,20 +57,259 @@ describe('ownershipByDomain', () => {
       }),
       event({ type: 'purchased', source: 'import', accountId: null }),
     ];
-    expect(owner(events)).toMatchObject({
-      archived: true,
-      label: 'sold',
-      event: sold,
+    expect(owner(events)).toEqual({
+      sale: sold,
+      removal: null,
       lastAccountId: 'porkbun',
+      marketSale: null,
     });
   });
 
-  it('brings a name back when it arrives in one of your accounts', () => {
+  it('forgets the sale and the removal when the name arrives again', () => {
     const events = [
-      event({ type: 'dropped', source: 'user' }),
+      event({ type: 'sold', source: 'user' }),
+      event({ type: 'removed' }),
       event({ type: 'added' }),
     ];
-    expect(owner(events)).toMatchObject({ archived: false, label: null });
+    expect(owner(events)).toMatchObject({ sale: null, removal: null });
+  });
+
+  it('holds a removal until a move finds the name in another account', () => {
+    const removed = event({ type: 'removed' });
+    expect(owner([removed])?.removal).toBe(removed);
+    expect(
+      owner([
+        removed,
+        event({
+          type: 'moved',
+          fromAccountId: 'dynadot',
+          toAccountId: 'porkbun',
+        }),
+      ])?.removal,
+    ).toBeNull();
+  });
+});
+
+describe('a market sale under way', () => {
+  const sale = (patch: Partial<MarketSale> = {}): MarketSale => ({
+    market: 'afternic',
+    accountId: 'afternic-1',
+    id: 'tx-1',
+    name: 'a.com',
+    soldOn: '2026-10-28',
+    status: 'in_progress',
+    statusRaw: 'PENDING_TRANSFER',
+    kind: 'buy_now',
+    price: '2499',
+    commission: null,
+    commissionEstimated: false,
+    net: null,
+    currency: 'USD',
+    installments: null,
+    paidOutOn: null,
+    action: 'transfer',
+    ...patch,
+  });
+  const under = (events: DomainEvent[], sales: MarketSale[]) =>
+    ownershipByDomain(events, sales).get('a.com');
+
+  it('makes a name you hold Sold, out of renewals', () => {
+    const o = under([], [sale()]);
+    expect(o?.marketSale?.id).toBe('tx-1');
+    expect(standingOf(row(), o, null, NOW)).toMatchObject({
+      archived: false,
+      salePending: true,
+    });
+    const { renewing } = ownedAndRenewing([row()], [], {}, NOW, [sale()]);
+    expect(renewing).toEqual([]);
+  });
+
+  it('is Sold, not Removed, once the name has left', () => {
+    const o = under([event({ type: 'removed', date: '2026-10-30' })], [sale()]);
+    expect(standingOf(row({ departed: true }), o, null, NOW).label).toBe(
+      'sold',
+    );
+  });
+
+  it('moves a name you added to Archive as Sold, as a recorded sale does', () => {
+    const o = under([], [sale()]);
+    expect(standingOf(row({ source: 'imported' }), o, null, NOW)).toMatchObject(
+      { archived: true, label: 'sold' },
+    );
+  });
+
+  it('leaves out leases, finished sales, and names that arrived since', () => {
+    expect(under([], [sale({ kind: 'lease' })])).toBeUndefined();
+    expect(under([], [sale({ status: 'completed' })])).toBeUndefined();
+    expect(under([], [sale({ status: 'cancelled' })])).toBeUndefined();
+    // The market's sales include your purchases: the name came to you.
+    expect(
+      under([event({ type: 'added', date: '2026-10-28' })], [sale()])
+        ?.marketSale,
+    ).toBeNull();
+    // Arrived long before it sold: a sale.
+    expect(
+      under([event({ type: 'added', date: '2020-01-01' })], [sale()])
+        ?.marketSale?.id,
+    ).toBe('tx-1');
+  });
+
+  it('gives way to the sold event once the market completes it', () => {
+    const sold = event({ type: 'sold', source: 'sync' });
+    expect(under([sold], [sale()])).toMatchObject({
+      sale: sold,
+      marketSale: null,
+    });
+  });
+});
+
+describe('standingOf', () => {
+  it('keeps every name an account holds in Owned', () => {
+    const o = owner([event({ type: 'sold', source: 'user' })]);
+    expect(standingOf(row(), o, false, NOW)).toEqual({
+      archived: false,
+      label: null,
+      salePending: true,
+      expiring: false,
+    });
+  });
+
+  it('shows Expiring for auto-renew off within 30 days only', () => {
+    const at = (days: number, autoRenew = false) =>
+      standingOf(row({ expirationDate: inDays(days), autoRenew }), undefined)
+        .expiring;
+    expect(at(10)).toBe(true);
+    expect(at(29)).toBe(true);
+    expect(at(90)).toBe(false);
+    expect(at(10, true)).toBe(false);
+    // The day it expires still counts, whatever the time of day.
+    expect(
+      standingOf(
+        row({
+          expirationDate: new Date('2026-10-29T00:00:00Z'),
+          autoRenew: false,
+        }),
+        undefined,
+        undefined,
+        NOW,
+      ).expiring,
+    ).toBe(true);
+    // Past expiry is the registrar's Expired / Grace / Redemption instead.
+    expect(at(-3)).toBe(false);
+    expect(
+      standingOf(
+        row({
+          source: 'imported',
+          expirationDate: inDays(10),
+          autoRenew: false,
+          autoRenewUnknown: true,
+        }),
+        undefined,
+        undefined,
+        NOW,
+      ).expiring,
+    ).toBe(false);
+  });
+
+  describe('a name that left your accounts', () => {
+    const departed = row({ departed: true, expirationDate: null });
+    const label = (events: DomainEvent[], registered?: boolean) =>
+      standingOf(departed, owner(events), registered, NOW).label;
+
+    it('is Sold when a sale is recorded, before or after it left', () => {
+      expect(
+        label([
+          event({ type: 'sold', source: 'user' }),
+          event({ type: 'removed' }),
+        ]),
+      ).toBe('sold');
+      expect(
+        label([
+          event({ type: 'removed' }),
+          event({ type: 'sold', source: 'user' }),
+        ]),
+      ).toBe('sold');
+    });
+
+    it('is Deleted when the lookup says nobody holds it', () => {
+      expect(label([event({ type: 'removed' })], false)).toBe('deleted');
+      expect(label([event({ type: 'removed' })], true)).toBe('removed');
+    });
+
+    it('is Expired when it left after its expiry, Removed before', () => {
+      expect(
+        label([
+          event({ type: 'removed', date: '2026-10-20', expires: '2026-10-01' }),
+        ]),
+      ).toBe('expired');
+      expect(label([event({ type: 'removed', date: '2026-10-20' })])).toBe(
+        'removed',
+      );
+    });
+
+    it('is Dropped when it left early and you marked it dropped', () => {
+      expect(label([event({ type: 'removed', dropped: true })])).toBe(
+        'dropped',
+      );
+      // A lapse is still Expired.
+      expect(
+        label([
+          event({ type: 'removed', expires: '2026-10-01', dropped: true }),
+        ]),
+      ).toBe('expired');
+    });
+  });
+
+  describe('an imported name', () => {
+    const imported = (days: number) =>
+      row({ source: 'imported', expirationDate: inDays(days) });
+
+    it('moves to Archive as Sold with a sale', () => {
+      expect(
+        standingOf(
+          imported(200),
+          owner([event({ type: 'sold', source: 'user' })]),
+          undefined,
+          NOW,
+        ),
+      ).toMatchObject({ archived: true, label: 'sold' });
+    });
+
+    it(`stays in Owned until ${IMPORTED_ARCHIVE_DAYS} days past expiry`, () => {
+      expect(
+        standingOf(imported(-30), undefined, undefined, NOW).archived,
+      ).toBe(false);
+      expect(
+        standingOf(imported(-IMPORTED_ARCHIVE_DAYS), undefined, undefined, NOW)
+          .archived,
+      ).toBe(false);
+      expect(
+        standingOf(
+          imported(-IMPORTED_ARCHIVE_DAYS - 2),
+          undefined,
+          undefined,
+          NOW,
+        ),
+      ).toMatchObject({ archived: true, label: 'expired' });
+    });
+
+    it('is Deleted sooner when the lookup says nobody holds it', () => {
+      expect(standingOf(imported(-30), undefined, false, NOW)).toMatchObject({
+        archived: true,
+        label: 'deleted',
+      });
+    });
+  });
+});
+
+describe('removalExpiry', () => {
+  it('records the last expiry only once it has passed', () => {
+    expect(removalExpiry('2026-01-01', NOW)).toEqual({ expires: '2026-01-01' });
+    expect(removalExpiry('2027-01-01', NOW)).toEqual({});
+    expect(removalExpiry(undefined, NOW)).toEqual({});
+    // Today's UTC day hasn't passed yet.
+    expect(removalExpiry('2026-10-29', NOW)).toEqual({});
+    expect(removalExpiry('2026-10-28', NOW)).toEqual({ expires: '2026-10-28' });
   });
 });
 
@@ -52,11 +319,16 @@ describe('archiveRows', () => {
     { name: 'porkbun', accountId: 'pb-1', accountLabel: 'Selling' },
   ] as RegistrarMeta[];
 
-  it('adds names in Archive that no account reports, at their last account', () => {
+  it('adds names that left your accounts, at their last account', () => {
     const events = [
       event({ domain: 'held.com', type: 'sold', source: 'user' }),
       event({ domain: 'gone.com', accountId: 'pb-1' }),
-      event({ domain: 'gone.com', type: 'removed', accountId: 'pb-1' }),
+      event({
+        domain: 'gone.com',
+        type: 'removed',
+        accountId: 'pb-1',
+        expires: '2026-09-01',
+      }),
       event({ domain: 'kept.com' }),
     ];
     const rows = archiveRows(ownershipByDomain(events), [held], registrars);
@@ -66,8 +338,53 @@ describe('archiveRows', () => {
         registrar: 'porkbun',
         accountId: 'pb-1',
         accountLabel: 'Selling',
+        expirationDate: new Date('2026-09-01T00:00:00Z'),
         departed: true,
       }),
     ]);
+  });
+});
+
+describe('ownedAndRenewing', () => {
+  const names = (ds: Domain[]) => ds.map((d) => d.domainName);
+  const kept = row({ domainName: 'kept.com' });
+  // Sold, and the buyer hasn't taken it: still yours, but it won't renew.
+  const sold = row({ domainName: 'a.com' });
+  const events = [event({ type: 'sold', source: 'user' })];
+  // A name you added, long past its expiry: in Archive as Expired.
+  const lapsed = row({
+    domainName: 'lapsed.net',
+    source: 'imported',
+    autoRenewUnknown: true,
+    expirationDate: inDays(-(IMPORTED_ARCHIVE_DAYS + 1)),
+  });
+  // A name you added that RDAP says no one holds: in Archive as Deleted.
+  const gone = row({ domainName: 'gone.org', source: 'imported' });
+  const lookups = {
+    'gone.org': {
+      registered: false,
+      registrar: null,
+      created: null,
+      expires: null,
+      checkedAt: new Date(NOW).toISOString(),
+    },
+  };
+
+  it('counts Owned without Archive, and renewing without pending sales', () => {
+    const { owned, renewing } = ownedAndRenewing(
+      [kept, sold, lapsed, gone],
+      events,
+      lookups,
+      NOW,
+    );
+    expect(names(owned)).toEqual(['kept.com', 'a.com']);
+    expect(names(renewing)).toEqual(['kept.com']);
+  });
+
+  it('keeps a name you added until it has been expired a while', () => {
+    const recent = { ...lapsed, expirationDate: inDays(-1) };
+    const { owned, renewing } = ownedAndRenewing([recent], [], {}, NOW);
+    expect(names(owned)).toEqual(['lapsed.net']);
+    expect(names(renewing)).toEqual(['lapsed.net']);
   });
 });

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { SalesReview } from '../../../shared/sales-review';
-import type { PublishedSale } from '../../../shared/sales';
+import type { PublishedSale } from '../../../shared/hosted-sales';
 import {
   salesRequest,
   useSalesAction,
@@ -50,7 +50,7 @@ function PublicationReviewView() {
   }, [reviewId, jobId, setReceipt]);
   return (
     <SalesShell>
-      <Link className="link" to="/sales">
+      <Link className="link" to="/public-listings">
         ← Sales pages
       </Link>
       <div className="sales-heading">

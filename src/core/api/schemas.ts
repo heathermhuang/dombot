@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { registrars } from '@aoxborrow/registrar-client';
 import { FOLDER_COLORS } from '../../shared/ipc';
+import { isRateCurrency } from '../../shared/currencies';
 
 // Input schemas for the API method table (api/index.ts). Every method's
 // arguments are validated against one of these before a handler runs — the
@@ -31,6 +32,7 @@ export const urlForwardInput = z.object({
   host: z.string().trim().min(1).max(253),
   url: z.string().trim().min(1).max(2048),
   type: z.enum(['temporary', 'permanent']),
+  https: z.enum(['off', 'on', 'only']).optional(),
 });
 
 export const emailForward = z.object({
@@ -61,6 +63,7 @@ export const domainOp = z.discriminatedUnion('kind', [
     kind: z.literal('renew'),
     years: z.number().int().min(1).max(10),
   }),
+  z.object({ kind: z.literal('approveTransfer') }),
 ]);
 
 export const folderColor = z.enum(FOLDER_COLORS as [string, ...string[]]);
@@ -120,15 +123,16 @@ export const purchaseInput = z
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const decimal = z.string().regex(/^\d{1,15}(\.\d{1,3})?$/);
-const currencyCode = z.string().regex(/^[A-Z]{3}$/);
+// One of the 30 DomBot converts: an import enters new amounts.
+const currencyCode = z.string().refine(isRateCurrency, {
+  message: 'Not one of the 30 currencies DomBot converts.',
+});
 
 export const importRow = z
   .object({
     line: z.number().int().min(0),
     domain: z.string().trim().min(1).max(253),
-    status: z
-      .enum(['owned', 'sold', 'dropped', 'archived', 'removed'])
-      .optional(),
+    status: z.enum(['sold', 'ignored']).optional(),
     folder: z.string().trim().min(1).max(100).optional(),
     notes: z.string().max(4000).optional(),
     registration: z
@@ -194,7 +198,7 @@ export const importedDomainFields = z
   })
   .strict();
 
-/** A manual yearly renewal price, in any currency. */
+/** A manual yearly renewal price; the service checks the currency. */
 export const renewalPriceInput = z
   .object({ amount: z.string().max(40), currency: z.string().max(10) })
   .strict();
@@ -218,9 +222,11 @@ export const noteText = z.string().max(4000);
 export const saleInput = z
   .object({
     domainName: z.string().trim().min(1).max(253),
+    eventId: z.string().min(1).max(80).optional(),
     saleDate: z.string().nullable(),
     amount: z.string().nullable(),
     currency: z.string().nullable(),
+    fees: z.string().max(40).nullable().optional(),
     notes: z.string().max(4000),
     resolves: z.string().min(1).max(80).optional(),
     mark: z.boolean().optional(),
@@ -228,8 +234,6 @@ export const saleInput = z
   .strict();
 
 export const eventId = z.string().min(1).max(80);
-
-export const disposition = z.enum(['dropped', 'archived']);
 
 /** Names to act on, each with the sync alert the action answers. */
 export const ownershipItems = z
@@ -239,3 +243,90 @@ export const ownershipItems = z
 
 /** A `YYYY-MM-DD` day from a dialog; blank or null means today. */
 export const optionalDay = z.string().max(40).nullable().optional();
+
+// Markets
+export const marketId = z.enum(['afternic', 'atom', 'sedo']);
+export const marketCredentials = z.record(
+  z.string().max(100),
+  z.string().max(1000),
+);
+export const marketAccountId = z.string().min(1).max(64);
+export const marketLabel = z.string().max(100);
+const amount = z
+  .string()
+  .regex(/^\d+(\.\d+)?$/)
+  .max(20);
+export const marketListingChange = z.object({
+  name: domainName,
+  displayName: z.string().max(253).optional(),
+  price: amount.nullable().optional(),
+  minOffer: amount.nullable().optional(),
+  floor: amount.nullable().optional(),
+  currency: z.string().length(3).optional(),
+  forSale: z.boolean().optional(),
+  leaseToOwn: z
+    .object({
+      enabled: z.boolean(),
+      maxPayments: z.number().int().min(2).max(60).optional(),
+    })
+    .optional(),
+  extra: z
+    .discriminatedUnion('market', [
+      z.object({
+        market: z.literal('afternic'),
+        landingPage: z.enum(['PARKING_TYPE', 'SALES_TYPE']).optional(),
+        intakeStyle: z
+          .enum(['BUYNOW', 'PRICE_FORM', 'CUSTOM_LANDER'])
+          .optional(),
+        showLanderBuynowOption: z.boolean().optional(),
+        showLanderMakeOfferOption: z.boolean().optional(),
+        showLanderLeaseToOwnOption: z.boolean().optional(),
+        featured: z.boolean().optional(),
+      }),
+      z.object({
+        market: z.literal('atom'),
+        tier: z.enum(['standard', 'plus']).optional(),
+        category: z.string().min(1).max(200).optional(),
+        description: z.string().max(2000).optional(),
+      }),
+      z.object({
+        market: z.literal('sedo'),
+        categories: z.array(z.number().int().positive()).max(3).optional(),
+        language: z.string().length(2).optional(),
+      }),
+    ])
+    .optional(),
+});
+export const marketListingChanges = z
+  .array(marketListingChange)
+  .min(1)
+  .max(20000);
+export const marketNames = z.array(domainName).min(1).max(20000);
+export const marketBulkTargets = z
+  .array(
+    z.object({
+      accountId: marketAccountId,
+      name: domainName,
+      change: marketListingChange.optional(),
+    }),
+  )
+  .min(1)
+  .max(20000);
+export const marketBulkOp = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('write') }),
+  z.object({ kind: z.literal('pushAskingPrices') }),
+  z.object({ kind: z.literal('delete') }),
+]);
+export const relistMode = z.enum(['RESYNC', 'REACTIVATE']);
+export const marketListingDefaults = z
+  .object({
+    landingPage: z.enum(['PARKING_TYPE', 'SALES_TYPE']).optional(),
+    intakeStyle: z.enum(['BUYNOW', 'PRICE_FORM', 'CUSTOM_LANDER']).optional(),
+    leasingEnabled: z.boolean().optional(),
+    maxLeasePeriod: z.number().int().min(2).max(60).optional(),
+    showLanderBuynowOption: z.boolean().optional(),
+    showLanderMakeOfferOption: z.boolean().optional(),
+    showLanderLeaseToOwnOption: z.boolean().optional(),
+    selfBrokerEnabled: z.boolean().optional(),
+  })
+  .strict();

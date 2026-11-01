@@ -49,6 +49,8 @@ const api: DombotApi = {
     ipcRenderer.invoke(IpcChannels.getUrlForwarding, target),
   getEmailForwarding: (target) =>
     ipcRenderer.invoke(IpcChannels.getEmailForwarding, target),
+  getTransferOut: (target) =>
+    ipcRenderer.invoke(IpcChannels.getTransferOut, target),
   startBulk: (targets, op) =>
     ipcRenderer.invoke(IpcChannels.startBulk, targets, op),
   cancelBulk: (jobId) => ipcRenderer.invoke(IpcChannels.cancelBulk, jobId),
@@ -144,6 +146,7 @@ const api: DombotApi = {
     ipcRenderer.invoke(IpcChannels.assignFolder, domainName, folderId),
 
   // Settings
+  getExchangeRates: () => ipcRenderer.invoke(IpcChannels.getExchangeRates),
   getSettings: () => ipcRenderer.invoke(IpcChannels.getSettings),
   updateSettings: (patch) =>
     ipcRenderer.invoke(IpcChannels.updateSettings, patch),
@@ -162,15 +165,55 @@ const api: DombotApi = {
   getListPrices: () => ipcRenderer.invoke(IpcChannels.getListPrices),
   setListPrices: (inputs) =>
     ipcRenderer.invoke(IpcChannels.setListPrices, inputs),
+  getMarketCatalog: () => ipcRenderer.invoke(IpcChannels.getMarketCatalog),
+  listMarketAccounts: () => ipcRenderer.invoke(IpcChannels.listMarketAccounts),
+  connectMarketAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.connectMarketAccount, ...args),
+  renameMarketAccount: (...args) =>
+    ipcRenderer.invoke(IpcChannels.renameMarketAccount, ...args),
+  setMarketAccountEnabled: (...args) =>
+    ipcRenderer.invoke(IpcChannels.setMarketAccountEnabled, ...args),
+  getMarketCredentials: (accountId) =>
+    ipcRenderer.invoke(IpcChannels.getMarketCredentials, accountId),
+  saveMarketCredentials: (...args) =>
+    ipcRenderer.invoke(IpcChannels.saveMarketCredentials, ...args),
+  removeMarketAccount: (accountId) =>
+    ipcRenderer.invoke(IpcChannels.removeMarketAccount, accountId),
+  syncMarketAccount: (accountId) =>
+    ipcRenderer.invoke(IpcChannels.syncMarketAccount, accountId),
+  getMarketListings: () => ipcRenderer.invoke(IpcChannels.getMarketListings),
+  getMarketSales: () => ipcRenderer.invoke(IpcChannels.getMarketSales),
+  getMarketTraffic: () => ipcRenderer.invoke(IpcChannels.getMarketTraffic),
+  writeMarketListings: (...args) =>
+    ipcRenderer.invoke(IpcChannels.writeMarketListings, ...args),
+  pushMarketPrices: (...args) =>
+    ipcRenderer.invoke(IpcChannels.pushMarketPrices, ...args),
+  startMarketBulk: (...args) =>
+    ipcRenderer.invoke(IpcChannels.startMarketBulk, ...args),
+  advanceMarketBulk: () => ipcRenderer.invoke(IpcChannels.advanceMarketBulk),
+  cancelMarketBulk: (jobId) =>
+    ipcRenderer.invoke(IpcChannels.cancelMarketBulk, jobId),
+  deleteMarketListings: (...args) =>
+    ipcRenderer.invoke(IpcChannels.deleteMarketListings, ...args),
+  relistMarketListings: (...args) =>
+    ipcRenderer.invoke(IpcChannels.relistMarketListings, ...args),
+  setMarketSaleAuthCode: (...args) =>
+    ipcRenderer.invoke(IpcChannels.setMarketSaleAuthCode, ...args),
+  sendMarketSaleMessage: (...args) =>
+    ipcRenderer.invoke(IpcChannels.sendMarketSaleMessage, ...args),
+  getMarketListingDefaults: (...args) =>
+    ipcRenderer.invoke(IpcChannels.getMarketListingDefaults, ...args),
+  setMarketListingDefaults: (...args) =>
+    ipcRenderer.invoke(IpcChannels.setMarketListingDefaults, ...args),
   getDomainEvents: () => ipcRenderer.invoke(IpcChannels.getDomainEvents),
-  setDispositions: (items, type, date) =>
-    ipcRenderer.invoke(IpcChannels.setDispositions, items, type, date),
   markSold: (items, date) =>
     ipcRenderer.invoke(IpcChannels.markSold, items, date),
-  restoreOwned: (domainNames) =>
-    ipcRenderer.invoke(IpcChannels.restoreOwned, domainNames),
   setAlertsDismissed: (ids, dismissed) =>
     ipcRenderer.invoke(IpcChannels.setAlertsDismissed, ids, dismissed),
+  setDeparturesDropped: (ids, dropped) =>
+    ipcRenderer.invoke(IpcChannels.setDeparturesDropped, ids, dropped),
+  setSaleTransferred: (id, transferred) =>
+    ipcRenderer.invoke(IpcChannels.setSaleTransferred, id, transferred),
   deleteUserEvent: (id) => ipcRenderer.invoke(IpcChannels.deleteUserEvent, id),
   deleteDomains: (domainNames) =>
     ipcRenderer.invoke(IpcChannels.deleteDomains, domainNames),

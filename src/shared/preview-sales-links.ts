@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { saleDomainSchema, saleModeSchema, saleMoneySchema } from './sales';
+import { saleDomainSchema, saleModeSchema, saleMoneySchema } from './hosted-sales';
 export const previewSalesReferences = z
   .array(
     z
@@ -34,7 +34,7 @@ export const previewSalesTermsSchema = z
 export type PreviewSalesTerm = z.infer<typeof previewSalesTermSchema>;
 
 import type { PublishedOwnerSite } from './owner-site';
-import type { PublishedSale } from './sales';
+import type { PublishedSale } from './hosted-sales';
 import type { ResolvedSiteLink } from './render-owner-site';
 /** Reconcile asynchronous reads with the current reference, never a prior preview. */
 export function resolvedPreviewLinks(

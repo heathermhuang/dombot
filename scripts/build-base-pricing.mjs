@@ -57,7 +57,9 @@ const dump = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
 // The dump keys registrars by website domain (e.g. "gandi.net"), which is the
 // same domain registrar-client reports as each provider's `website` — so we join
 // on that directly.
-const byWebsite = new Map(dump.registrars.map((r) => [r.name.toLowerCase(), r]));
+const byWebsite = new Map(
+  dump.registrars.map((r) => [r.name.toLowerCase(), r]),
+);
 
 const out = {};
 const warnings = [];

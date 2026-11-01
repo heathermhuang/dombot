@@ -11,7 +11,7 @@ import { listEvents } from '../core/services/domain-events';
 import { ownershipByDomain } from '../shared/ownership';
 import { canonicalDomain } from '../shared/publication';
 import { salesControlClockToleranceMs } from '../shared/sales-domain-control';
-import type { SaleDraft } from '../shared/sales';
+import type { SaleDraft } from '../shared/hosted-sales';
 import {
   SalesStore,
   type SaleObservation,
@@ -52,7 +52,8 @@ export function createSaleObserver(
     const observedAt = matched.length
       ? Math.min(...matched.map((a) => a?.sync.lastSyncedAt ?? 0))
       : 0;
-    const archived = ownership.get(draft.domain)?.archived;
+    const record = ownership.get(draft.domain);
+    const archived = Boolean(record?.sale || record?.removal);
     const managed = managedControl(env, draft.domain, now);
     if (managed && !archived)
       return {
@@ -109,8 +110,8 @@ export function createVerifiedSaleObserver(env: Env): SaleObserver {
       env.SALES_DNS_CONTROL_ENABLED !== 'true'
     )
       return normal;
-    if (ownershipByDomain(listEvents()).get(draft.domain)?.archived)
-      return normal;
+    const record = ownershipByDomain(listEvents()).get(draft.domain);
+    if (record?.sale || record?.removal) return normal;
     storage ??= SalesStore.from(env);
     const store = await storage;
     const row = await env.DB.prepare(

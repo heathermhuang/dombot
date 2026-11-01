@@ -33,8 +33,10 @@
   --brand: var(--color-brand-500);
   /* Domains table "needs attention" state — auto-renew off, privacy off,
      unlocked — a warm yellow that sits apart from the brand green switches
-     and from the warm expiry ramp. A shade deeper/more golden on white. */
-  --flag-off: #d69800;
+     and from the warm expiry ramp. Bright on white too, not brownish. */
+  --flag-off: #eba70c;
+  /* Domains table: a cell that acts as one button, on hover (see below). */
+  --cell-hover: var(--color-brand-100);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -84,6 +86,7 @@
   --primary-foreground: #ffffff;
   --brand: var(--color-brand-500);
   --flag-off: #e1a322;
+  --cell-hover: var(--color-brand-900);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -123,6 +126,8 @@
    saturation mid-ramp. Every green in the UI should come from this ramp, via
    the semantic tokens above (--primary, --brand, --ring). */
 @theme {
+  /* Between lg and xl: where a row of cards goes to five. */
+  --breakpoint-wide: 75rem;
   /* Dark-mode "expires within 30 days" orange: a quarter step from Tailwind's
      orange-400 toward orange-300 (interpolated in OKLCH), since 400 reads too
      deep next to the deeper red and 300 goes peach. */
@@ -237,6 +242,38 @@
   button:not(:disabled),
   [role='button']:not(:disabled) {
     cursor: pointer;
+  }
+  /* Domains table cells that act as one button. The cell's control carries
+     `data-cell-action`, and its ::after stretches over the whole cell, so a
+     click anywhere in the cell is a click on it. The cell turns green on
+     hover and while its menu or editor is open. Other links and buttons in
+     the cell (the domain name, the notes icon) sit above the overlay and
+     keep their own clicks. So does anything with a tooltip, so the tooltip
+     shows: a listing's status (inside its control, so a click still
+     reaches it). The row's select checkbox cell lights with the cell beside
+     it (the Domain cell). */
+  td:has([data-cell-action]),
+  td:has(> [role='checkbox']) {
+    position: relative;
+    isolation: isolate;
+    transition: background-color 150ms;
+  }
+  td [data-cell-action]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  td:has([data-cell-action]) :is(a, button, [title]):not([data-cell-action]) {
+    position: relative;
+    z-index: 1;
+  }
+  td:has([data-cell-action]:not(:disabled)):hover,
+  td:has([data-cell-action]):has([aria-expanded='true']),
+  td:has(> [role='checkbox']):has(
+      + td:hover [data-cell-action]:not(:disabled),
+      + td [aria-expanded='true']
+    ) {
+    background-color: var(--cell-hover);
   }
 }
 

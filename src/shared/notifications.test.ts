@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from './domain-events';
+import type { MarketAccountView, MarketInfo } from './markets';
 import {
+  marketSyncFailures,
   notificationBadge,
   notifications,
-  reviewPriority,
+  reviewAlerts,
 } from './notifications';
-import { resolvedIds } from './sync-diff';
 
 const event = (patch: Partial<DomainEvent>): DomainEvent => ({
   id: 'E1',
@@ -19,18 +20,36 @@ const event = (patch: Partial<DomainEvent>): DomainEvent => ({
   ...patch,
 });
 
-describe('reviewPriority', () => {
-  it('is high for a departure, low for an arrival, null otherwise', () => {
-    const none = new Set<string>();
-    expect(reviewPriority(event({}), none)).toBe('high');
-    expect(reviewPriority(event({ type: 'added' }), none)).toBe('low');
-    expect(reviewPriority(event({ type: 'moved' }), none)).toBeNull();
-    expect(reviewPriority(event({ dismissed: true }), none)).toBeNull();
+describe('notifications', () => {
+  it('lists new arrivals and departures only', () => {
+    const none = (patch: Partial<DomainEvent>) =>
+      notifications([event(patch)], []).map((n) => n.kind);
+    expect(none({})).toEqual(['departure']);
+    expect(none({ type: 'added' })).toEqual(['arrival']);
+    expect(none({ type: 'moved' })).toEqual([]);
+    expect(none({ dismissed: true })).toEqual([]);
+    expect(none({ dropped: true })).toEqual([]);
     const events = [
       event({}),
       event({ id: 'E2', type: 'sold', source: 'user', resolves: 'E1' }),
     ];
-    expect(reviewPriority(events[0], resolvedIds(events))).toBeNull();
+    expect(notifications(events, [])).toEqual([]);
+  });
+});
+
+describe('reviewAlerts', () => {
+  it('lists Needs review, saying which are dismissed', () => {
+    const events = [
+      event({ type: 'added' }),
+      event({ id: 'E2', domain: 'b.com', dismissed: true, updatedAt: 2 }),
+      event({ id: 'E3', domain: 'c.com', dismissed: true }),
+    ];
+    expect(
+      reviewAlerts(events).map((n) => [n.eventId, n.kind, n.dismissed]),
+    ).toEqual([
+      ['E2', 'departure', true],
+      ['E1', 'arrival', false],
+    ]);
   });
 });
 
@@ -66,6 +85,59 @@ describe('notifications', () => {
       [],
     );
     expect(list.map((n) => n.domain)).toEqual(['second.com', 'first.com']);
+  });
+});
+
+describe('marketSyncFailures', () => {
+  const account = (patch: Partial<MarketAccountView>): MarketAccountView => ({
+    id: 'm1',
+    market: 'afternic',
+    label: 'Afternic',
+    enabled: true,
+    configured: true,
+    createdAt: 1,
+    sync: null,
+    ...patch,
+  });
+  const failed = (lastError: string) => ({
+    at: 7,
+    lastError,
+    listings: 0,
+    sales: 0,
+    incomplete: false,
+    notes: [],
+  });
+  const catalog = [{ id: 'afternic', name: 'Afternic' }] as MarketInfo[];
+
+  it('lists enabled accounts whose sync failed, named as their cards are', () => {
+    expect(
+      marketSyncFailures(
+        [
+          account({ sync: failed('Afternic: Bad key') }),
+          account({
+            id: 'm2',
+            label: 'Business',
+            sync: failed('Business: Timed out'),
+          }),
+          account({ id: 'm3', enabled: false, sync: failed('x: y') }),
+          account({ id: 'm4', configured: false, sync: failed('x: y') }),
+          account({ id: 'm5' }),
+        ],
+        catalog,
+      ),
+    ).toEqual([
+      { accountId: 'm1', account: 'Afternic', message: 'Bad key', at: 7 },
+      {
+        accountId: 'm2',
+        account: 'Afternic · Business',
+        message: 'Timed out',
+        at: 7,
+      },
+    ]);
+  });
+
+  it('is empty before the accounts load', () => {
+    expect(marketSyncFailures(null, catalog)).toEqual([]);
   });
 });
 

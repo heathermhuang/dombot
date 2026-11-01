@@ -6,7 +6,7 @@ import {
   resolvedPreviewLinks,
   type PreviewSalesTerm,
 } from '../../../shared/preview-sales-links';
-import type { PublishedSale } from '../../../shared/sales';
+import type { PublishedSale } from '../../../shared/hosted-sales';
 import { renderOwnerSite } from '../../../shared/render-owner-site';
 /** Keep all preview browsing in the approved projection, including conversion.
  * The iframe permits no scripts, forms or external navigation of its own. */

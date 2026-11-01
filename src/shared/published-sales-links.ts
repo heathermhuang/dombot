@@ -6,7 +6,7 @@ export interface PublishedReadStatement {
 export interface PublishedReadDatabase {
   prepare(sql: string): PublishedReadStatement;
 }
-import { type PublishedSale } from './sales';
+import { type PublishedSale } from './hosted-sales';
 import {
   publicSalesLinkTermsSchema,
   publicSalesLinkTermsQuery,

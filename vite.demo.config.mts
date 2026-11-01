@@ -34,29 +34,67 @@ function demoHead(): Plugin {
       order: 'pre',
       handler(html) {
         const tags = [
-            { tag: 'meta', attrs: { name: 'theme-color', content: '#0a0a0a' } },
-            { tag: 'meta', attrs: { name: 'description', content: DESCRIPTION } },
-            { tag: 'link', attrs: { rel: 'canonical', href: 'https://demo.dombot.ai/' } },
-            { tag: 'meta', attrs: { property: 'og:site_name', content: 'DomBot' } },
-            { tag: 'meta', attrs: { property: 'og:title', content: TITLE } },
-            { tag: 'meta', attrs: { property: 'og:description', content: DESCRIPTION } },
-            { tag: 'meta', attrs: { property: 'og:type', content: 'website' } },
-            { tag: 'meta', attrs: { property: 'og:url', content: 'https://demo.dombot.ai/' } },
-            { tag: 'meta', attrs: { property: 'og:image', content: 'https://dombot.ai/og-image.png' } },
-            { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
-            { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
-            {
-              tag: 'meta',
-              attrs: {
-                property: 'og:image:alt',
-                content: 'DomBot Domains screen — every domain across all your registrars in one table',
-              },
+          { tag: 'meta', attrs: { name: 'theme-color', content: '#0a0a0a' } },
+          { tag: 'meta', attrs: { name: 'description', content: DESCRIPTION } },
+          {
+            tag: 'link',
+            attrs: { rel: 'canonical', href: 'https://demo.dombot.ai/' },
+          },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:site_name', content: 'DomBot' },
+          },
+          { tag: 'meta', attrs: { property: 'og:title', content: TITLE } },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:description', content: DESCRIPTION },
+          },
+          { tag: 'meta', attrs: { property: 'og:type', content: 'website' } },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:url', content: 'https://demo.dombot.ai/' },
+          },
+          {
+            tag: 'meta',
+            attrs: {
+              property: 'og:image',
+              content: 'https://dombot.ai/og-image.png',
             },
-            { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-            { tag: 'link', attrs: { rel: 'icon', type: 'image/svg+xml', href: '/site/public/favicon.svg' } },
+          },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:image:width', content: '1200' },
+          },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:image:height', content: '630' },
+          },
+          {
+            tag: 'meta',
+            attrs: {
+              property: 'og:image:alt',
+              content:
+                'DomBot Domains screen — every domain across all your registrars in one table',
+            },
+          },
+          {
+            tag: 'meta',
+            attrs: { name: 'twitter:card', content: 'summary_large_image' },
+          },
+          {
+            tag: 'link',
+            attrs: {
+              rel: 'icon',
+              type: 'image/svg+xml',
+              href: '/site/public/favicon.svg',
+            },
+          },
         ];
         return {
-          html: html.replace('<title>DomBot</title>', `<title>${TITLE}</title>`),
+          html: html.replace(
+            '<title>DomBot</title>',
+            `<title>${TITLE}</title>`,
+          ),
           tags: tags.map((t) => ({ ...t, injectTo: 'head' as const })),
         };
       },

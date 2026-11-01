@@ -3,11 +3,15 @@ import { toAscii } from '../../shared/domain-name';
 import { domainsCsvFilename, domainsToCsv } from '../../shared/domain-csv';
 import type { Domain } from '../../shared/ipc';
 import { importedRows } from '../../shared/imported-domains';
-import { archiveRows, ownershipByDomain } from '../../shared/ownership';
+import {
+  archiveRows,
+  ownershipByDomain,
+  standingOf,
+} from '../../shared/ownership';
 import { useAppStore } from '../store/app';
 import { accountName } from './domain-history';
 
-// "Export all domains" from outside the Domains page (Settings → Sync): the
+// "Export all domains" from outside the Domains page (Settings → Import/Export): the
 // same rows the page lists, Owned and Archive, in the DomBot CSV.
 
 /** Every name DomBot lists: synced (with any loaded detail), imported, and Archive. */
@@ -23,7 +27,7 @@ export function allDomainRows(): Domain[] {
       : d,
   );
   const imported = importedRows(s.importedDomains, s.portfolio);
-  const ownership = ownershipByDomain(s.domainEvents);
+  const ownership = ownershipByDomain(s.domainEvents, s.marketSales);
   return [
     ...synced,
     ...imported,
@@ -35,7 +39,7 @@ export function allDomainRows(): Domain[] {
 export async function exportAllDomains(): Promise<number | null> {
   const s = useAppStore.getState();
   const rows = allDomainRows();
-  const ownership = ownershipByDomain(s.domainEvents);
+  const ownership = ownershipByDomain(s.domainEvents, s.marketSales);
   const csv = domainsToCsv(rows, {
     registrarLabels: s.portfolioRegistrarLabels,
     folders: s.folders,
@@ -44,7 +48,15 @@ export async function exportAllDomains(): Promise<number | null> {
     listPrices: s.listPrices,
     pricing: s.pricing,
     manualPrices: await window.api.getManualPrices(),
-    archiveLabel: (name) => ownership.get(name)?.label ?? null,
+    statusOf: (d) => {
+      const key = toAscii(d.domainName);
+      const st = standingOf(
+        d,
+        ownership.get(key),
+        s.registrationLookups[key]?.registered,
+      );
+      return st.label ?? (st.salePending ? 'sold' : null);
+    },
     accountName: (d) =>
       accountName(s.registrars, d.accountId ?? d.registrar) ??
       s.portfolioRegistrarLabels[d.registrar] ??

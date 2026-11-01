@@ -1,4 +1,4 @@
-import { publishedSaleSchema } from './sales';
+import { publishedSaleSchema } from './hosted-sales';
 /** Minimal public commercial projection shared by live and private preview readers. */
 export const publicSalesLinkTermsSchema = publishedSaleSchema.pick({
   version: true,

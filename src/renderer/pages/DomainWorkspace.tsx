@@ -16,8 +16,7 @@ import {
 } from '../../shared/domain-catalog';
 import { domainKey } from '../../shared/account-key';
 import { importedRows } from '../../shared/imported-domains';
-import { HIDDEN_FOLDER_ID } from '../../shared/ipc';
-import { useRegistrarManagement } from '../components/domain-workspace/RegistrarManagement';
+const HIDDEN_FOLDER_ID = '__hidden__';
 import LegacyDomains from './Domains';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -89,11 +88,7 @@ import { PortfolioReview } from '../components/portfolio/PortfolioReview';
 import '../components/portfolio/portfolio.css';
 import { usePreferences } from '../lib/preferences';
 
-export default function DomainWorkspace({
-  area,
-}: {
-  area: 'domains' | 'page';
-}) {
+function PublicPortfolioWorkspace({ area }: { area: 'domains' | 'page' }) {
   const pageSize = usePreferences((s) => s.pageSize);
   const density = usePreferences((s) => s.density);
   const {
@@ -145,7 +140,9 @@ export default function DomainWorkspace({
   const view =
     area === 'domains'
       ? 'domains'
-      : requestedView === 'preview' || requestedView === 'review'
+      : requestedView === 'preview' ||
+          requestedView === 'review' ||
+          requestedView === 'domains'
         ? requestedView
         : 'settings';
   const list = useDomainList();
@@ -157,7 +154,8 @@ export default function DomainWorkspace({
       draft.listings.some((item) => item.visibility === 'private'),
     );
   }, [area, draft, state, accounts, inventory.length, initializeScope]);
-  const { mode, scope, query, collection, sort, page, picked } = list;
+  const { scope, query, collection, sort, page, picked } = list;
+  const mode = 'publish';
   const hasActiveFilters =
     [
       list.query,
@@ -178,9 +176,7 @@ export default function DomainWorkspace({
     list.setFilters({ ownership });
   const refreshTick = useAppStore((s) => s.refreshTick);
   const [editing, setEditing] = useState<string | null>(null);
-  const [registrarExpanded, setRegistrarExpanded] = useState<Set<string>>(
-    new Set(),
-  );
+  const [registrarExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
@@ -311,21 +307,7 @@ export default function DomainWorkspace({
     pricing,
     folders,
   ]);
-  const displayedPage = Math.min(
-    page,
-    Math.max(1, Math.ceil(filtered.length / pageSize)),
-  );
-  const visibleNames = filtered
-    .slice((displayedPage - 1) * pageSize, displayedPage * pageSize)
-    .map((item) => item.domain);
-  const management = useRegistrarManagement({
-    catalog,
-    selected: picked,
-    visible: visibleNames,
-    active: area === 'domains' && mode === 'manage',
-    needsAllDetails: !!list.nameserver,
-    clearSelection: () => setPicked(new Set()),
-  });
+
   const collections = useMemo(
     () =>
       [
@@ -349,7 +331,7 @@ export default function DomainWorkspace({
     }
   };
   if (area === 'domains' && requestedView === 'archive')
-    return <LegacyDomains hidePublication />;
+    return <LegacyDomains />;
   if ((!draft || !state) && error && area === 'domains')
     return (
       <>
@@ -357,7 +339,7 @@ export default function DomainWorkspace({
           Public-page metadata is unavailable. Registrar management remains
           available.
         </div>
-        <LegacyDomains hidePublication />
+        <LegacyDomains />
       </>
     );
   if (!draft || !state)
@@ -691,7 +673,7 @@ export default function DomainWorkspace({
                   >
                     Preview public profile
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => list.setMode('manage')}>
+                  <DropdownMenuItem onSelect={() => navigate('/')}>
                     Show registrar details
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => list.setMode('publish')}>
@@ -734,9 +716,9 @@ export default function DomainWorkspace({
                   )}
                   <DropdownMenuItem
                     disabled={!registrarRows.length}
-                    onSelect={() => void management.exportRows(registrarRows)}
+                    onSelect={() => navigate('/')}
                   >
-                    Export {registrarRows.length} registered domains (CSV)
+                    Open Domains to export CSV
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setImporting(true)}>
                     <Upload />
@@ -1593,7 +1575,7 @@ export default function DomainWorkspace({
                 )}
               </div>
             )}
-            {management.toolbar}
+
             <label className="pf-mobile-select">
               <Checkbox
                 aria-label="Select visible domains"
@@ -1635,30 +1617,14 @@ export default function DomainWorkspace({
                     </th>
                     <th>Domain</th>
                     {mode === 'publish' && <th>Public profile</th>}
-                    {mode === 'manage' ? (
-                      <>
-                        <th>Registrar / account</th>
-                        <th>Folder</th>
-                        <th>Created</th>
-                        <th>Expires</th>
-                        <th>Status</th>
-                        <th>Renewal</th>
-                        <th>Auto renew</th>
-                        <th>Privacy</th>
-                        <th>Locked</th>
-                        <th>Nameservers</th>
-                        <th>
-                          <span className="sr-only">Actions</span>
-                        </th>
-                      </>
-                    ) : (
+                    {
                       <>
                         <th>Availability</th>
                         <th className="pf-collection-cell">Collections</th>
                         <th>Asking price</th>
                         <th className="pf-check-column">Ownership</th>
                       </>
-                    )}
+                    }
                   </tr>
                 </thead>
                 <tbody>
@@ -1693,26 +1659,7 @@ export default function DomainWorkspace({
                           >
                             {item.domain}
                           </button>
-                          {mode === 'manage' && (
-                            <button
-                              className="pf-mobile-registrar-toggle"
-                              aria-label={`More details for ${item.domain}`}
-                              aria-expanded={registrarExpanded.has(item.domain)}
-                              onClick={() =>
-                                setRegistrarExpanded((previous) => {
-                                  const next = new Set(previous);
-                                  if (next.has(item.domain))
-                                    next.delete(item.domain);
-                                  else next.add(item.domain);
-                                  return next;
-                                })
-                              }
-                            >
-                              {registrarExpanded.has(item.domain)
-                                ? 'Hide details'
-                                : 'More details'}
-                            </button>
-                          )}
+                          {false}
                         </td>
                         {mode === 'publish' && (
                           <td className="page-action-cell">
@@ -1795,9 +1742,7 @@ export default function DomainWorkspace({
                             </div>
                           </td>
                         )}
-                        {mode === 'manage' ? (
-                          management.cells(catalog.get(item.domain))
-                        ) : (
+                        {
                           <>
                             <td className="pf-availability-cell">
                               {isCurrent(item) ? (
@@ -1881,7 +1826,7 @@ export default function DomainWorkspace({
                               </span>
                             </td>
                           </>
-                        )}
+                        }
                       </tr>
                     );
                   })}
@@ -1990,7 +1935,7 @@ export default function DomainWorkspace({
           )}
         </>
       )}
-      {management.dialogs}
+
       <PortfolioInspector
         item={inspector}
         check={inspector ? checks.get(inspector.domain) : undefined}
@@ -2222,5 +2167,17 @@ export default function DomainWorkspace({
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+export default function DomainWorkspace({
+  area,
+}: {
+  area: 'domains' | 'page';
+}) {
+  return area === 'domains' ? (
+    <LegacyDomains />
+  ) : (
+    <PublicPortfolioWorkspace area="page" />
   );
 }

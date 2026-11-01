@@ -2,13 +2,15 @@ import { isCurrencyCode } from '../../shared/currencies';
 import { isDomainKey, toAscii } from '../../shared/domain-name';
 import {
   DomainEventSource,
+  DomainEventType,
   isDomainEventSource,
   isDomainEventType,
+  isDomainSetting,
   newEventId,
   type DomainEvent,
   type DomainNote,
 } from '../../shared/domain-events';
-import { ownershipByDomain, type ArchiveLabel } from '../../shared/ownership';
+import { ownershipByDomain } from '../../shared/ownership';
 import { parseCanonicalAmount, parsePurchaseDate } from '../../shared/money';
 import { Namespace } from '../storage/namespace';
 
@@ -75,31 +77,30 @@ export function deleteDomainEvents(ids: string[], domain?: string): void {
 }
 
 /**
- * Setting a name's state replaces the one you set: if its current state is
- * your Sold, Dropped, or Archived, that event is deleted, and the alert it
- * answered is returned for the new one to answer instead. So a name you
- * change your mind about keeps one entry, not a trail of them. A state that
- * sync set (a removal) is left alone.
+ * Recording a sale replaces the one you'd recorded: if the name has a sale of
+ * yours on record, that event is deleted, and the alert it answered is
+ * returned for the new one to answer instead. So a name you change your mind
+ * about keeps one entry, not a trail of them. A sale a market sync wrote is
+ * left alone.
  */
 export function replaceLabel(domain: string): {
   /** The label that was replaced, or null when there was none of yours. */
-  label: ArchiveLabel | null;
+  label: 'sold' | null;
   resolves: string | undefined;
 } {
   const key = toAscii(domain);
-  const o = ownershipByDomain(eventsFor(key)).get(key);
-  const e = o?.event;
-  if (!o?.label || !e || e.source === DomainEventSource.Sync)
+  const e = ownershipByDomain(eventsFor(key)).get(key)?.sale;
+  if (!e || e.source === DomainEventSource.Sync)
     return { label: null, resolves: undefined };
   deleteDomainEvents([e.id]);
-  return { label: o.label, resolves: e.resolves };
+  return { label: 'sold', resolves: e.resolves };
 }
 
-/** A name's current state, when it's one you set (for skipping no-ops). */
-export function currentLabel(domain: string): ArchiveLabel | null {
+/** 'sold' when the name has a sale of yours on record (for skipping no-ops). */
+export function currentLabel(domain: string): 'sold' | null {
   const key = toAscii(domain);
-  const o = ownershipByDomain(eventsFor(key)).get(key);
-  return o?.event && o.event.source !== DomainEventSource.Sync ? o.label : null;
+  const e = ownershipByDomain(eventsFor(key)).get(key)?.sale;
+  return e && e.source !== DomainEventSource.Sync ? 'sold' : null;
 }
 
 // ── notes ───────────────────────────────────────────────────────────────────
@@ -181,6 +182,10 @@ export function setNameNotes(entries: [domain: string, text: string][]): void {
 const optionalId = (v: unknown) =>
   v === undefined || v === null || typeof v === 'string';
 
+const isSettingValue = (v: unknown) =>
+  typeof v === 'boolean' ||
+  (Array.isArray(v) && v.every((line) => typeof line === 'string'));
+
 /** An event read from a data bundle, re-checked; null when it doesn't hold. */
 export function cleanEvent(id: string, value: unknown): DomainEvent | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -195,7 +200,16 @@ export function cleanEvent(id: string, value: unknown): DomainEvent | null {
   if (v.resolves !== undefined && typeof v.resolves !== 'string') return null;
   if (v.dismissed !== undefined && typeof v.dismissed !== 'boolean')
     return null;
+  if (v.transferred !== undefined && typeof v.transferred !== 'boolean')
+    return null;
   if (v.importId !== undefined && typeof v.importId !== 'string') return null;
+  if (v.marketSale !== undefined && typeof v.marketSale !== 'string')
+    return null;
+  if (
+    v.expires !== undefined &&
+    !(typeof v.expires === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.expires))
+  )
+    return null;
   let date: string | null;
   try {
     date = v.date === null ? null : parsePurchaseDate(String(v.date), 'Date');
@@ -215,6 +229,14 @@ export function cleanEvent(id: string, value: unknown): DomainEvent | null {
       return null;
     }
   }
+  if (v.fees !== undefined && v.fees !== null) {
+    if (!hasAmount || typeof v.fees !== 'string') return null;
+    try {
+      parseCanonicalAmount(v.fees, String(v.currency));
+    } catch {
+      return null;
+    }
+  }
   if (
     v.years !== undefined &&
     v.years !== null &&
@@ -222,6 +244,15 @@ export function cleanEvent(id: string, value: unknown): DomainEvent | null {
   ) {
     return null;
   }
+  // A settings change says which setting and what it became.
+  if (v.setting !== undefined && !isDomainSetting(v.setting)) return null;
+  if (v.before !== undefined && !isSettingValue(v.before)) return null;
+  if (v.after !== undefined && !isSettingValue(v.after)) return null;
+  if (
+    v.type === DomainEventType.Changed &&
+    (v.setting === undefined || v.after === undefined)
+  )
+    return null;
   return {
     ...(v as unknown as DomainEvent),
     domain,

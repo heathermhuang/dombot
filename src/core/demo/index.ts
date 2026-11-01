@@ -1,4 +1,4 @@
-import type { RegistrarName } from '@aoxborrow/registrar-client';
+import { registrars, type RegistrarName } from '@aoxborrow/registrar-client';
 import { createAccount } from '../services/accounts';
 import { setStoredCredentials } from '../services/credentials';
 import { assignFolder, createFolder, getFolders } from '../services/folders';
@@ -8,6 +8,18 @@ import {
   resetRegistrarClients,
 } from '../services/registrars';
 import { flushWrites } from '../storage/namespace';
+import { setListPrices } from '../services/list-prices';
+import {
+  connectMarketAccount,
+  marketAccountViews,
+} from '../services/markets/accounts';
+import { configureMarketFactory } from '../services/markets/registry';
+import {
+  DEMO_MARKET_ACCOUNTS,
+  DemoMarketWorld,
+  demoMarketFactory,
+  seedDemoMarkets,
+} from './markets';
 import { DemoRegistrar, DemoWorld } from './registrar';
 import {
   DEFAULT_DEMO_SEED,
@@ -48,6 +60,8 @@ export interface InstallDemoOptions {
 export interface DemoInstallation {
   seed: DemoSeed;
   world: DemoWorld;
+  /** The demo's Afternic, Sedo and Atom accounts. */
+  markets: DemoMarketWorld;
   /** Changes the fake registrar's per-call latency from now on. */
   setLatency(ms: number): void;
 }
@@ -110,10 +124,67 @@ export async function installDemo(
       });
   }
 
+  // Markets: an Afternic, a Sedo and an Atom account listing some of the
+  // portfolio, connected the way a user would (the host syncs them).
+  const markets = new DemoMarketWorld(options.now?.getTime());
+  setListPrices(
+    Object.entries(seed.askingPrices).map(([domainName, p]) => ({
+      domainName,
+      ...p,
+      currency: 'USD',
+    })),
+  );
+  const authCodeNames = new Set(
+    seed.records
+      .filter((r) => registrars[r.registrar].features.includes('getAuthCode'))
+      .map((r) => r.domainName),
+  );
+  const approvesTransfer = (name: string) => {
+    const record = world.get(name);
+    return (
+      !!record &&
+      registrars[record.registrar].features.includes('approveTransferOut')
+    );
+  };
+  seedDemoMarkets(
+    markets,
+    seed.records.map((r) => r.domainName),
+    seed.askingPrices,
+    (name) => authCodeNames.has(name),
+    approvesTransfer,
+  );
+  // The sale at its transfer step: the buyer's registrar has asked for the
+  // name, and its registrar holds it for you to answer (Approve transfer).
+  // A transfer only gets this far on an unlocked name.
+  const transferring = markets.sales
+    .get('demo-afternic')
+    ?.find((s) => s.action === 'transfer');
+  const record = transferring && world.get(transferring.name);
+  if (record && approvesTransfer(record.domainName)) {
+    const day = 24 * 60 * 60 * 1000;
+    record.locked = false;
+    record.transferOut = {
+      status: 'pending',
+      // As Dynadot reports a pending one: "None", and no expiry date.
+      rawStatus: 'None',
+      id: `demo-${record.domainName}`,
+      requestedDate: new Date(markets.now - 2 * day),
+      expirationDate: null,
+      completedDate: null,
+    };
+  }
+  configureMarketFactory(demoMarketFactory(markets));
+  const connected = new Set(marketAccountViews().map((a) => a.id));
+  for (const a of DEMO_MARKET_ACCOUNTS) {
+    if (!connected.has(a.id))
+      await connectMarketAccount(a.market, { ...a.credentials }, a.label, a.id);
+  }
+
   await flushWrites();
   return {
     seed,
     world,
+    markets,
     setLatency: (ms) => {
       latencyMs = ms;
     },
@@ -123,5 +194,6 @@ export async function installDemo(
 /** Puts the real provider factory back (tests; leaving demo mode). */
 export function uninstallDemo(): void {
   configureRegistrarFactory(null);
+  configureMarketFactory(null);
   resetRegistrarClients();
 }

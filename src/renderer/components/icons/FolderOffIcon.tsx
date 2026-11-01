@@ -6,7 +6,10 @@ import type { SVGProps } from 'react';
  * dropdowns (clear/remove folder). Fills with `currentColor` so `text-*`
  * classes tint it, and sizes from `size-*` / width-height classes.
  */
-export function FolderOffIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
+export function FolderOffIcon({
+  className,
+  ...props
+}: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

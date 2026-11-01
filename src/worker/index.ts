@@ -11,6 +11,7 @@ import { ApiValidationError, invoke, type ApiMethodName } from '../core/api';
 import { MCP_PUBLIC_PATHS, createMcpRoutes } from '../core/mcp/routes';
 import { setAppIdentity } from '../core/app-info';
 import { syncAll } from '../core/services/auto-sync';
+import { enableRateFetch } from '../core/services/exchange-rates';
 import { configureSyncDiagnostics } from '../core/services/sync-diagnostics';
 import {
   configureIncrementalRenewalPricing,
@@ -124,6 +125,7 @@ async function bootOnce(env: Env): Promise<Boot> {
   publicationReads.clear();
   const initialized = await (async () => {
     setAppIdentity({ version: APP_VERSION, platform: 'web' });
+    enableRateFetch();
     const root = parseRootSecret(env.DOMBOT_SECRET);
     const cipher = await aesGcmCipher(await deriveEncryptionKey(root));
     const raw = new D1DocStore(env.DB);

@@ -53,7 +53,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
           Public-site information is unavailable. Your private domains remain
           available. <button onClick={reload}>Retry site information</button>
         </div>
-        <Domains hidePublication />
+        <Domains />
       </>
     );
   if (!state)
@@ -69,7 +69,7 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
       <>
         <PresenceInspector />
         {isOwnerSite(state.draft) ? (
-          <Domains hidePublication />
+          <Domains />
         ) : (
           <DomainWorkspace area="domains" />
         )}
