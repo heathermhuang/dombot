@@ -391,7 +391,7 @@ describe('listing writes', () => {
 
   it('deletes, and says false when the name was not listed', async () => {
     const { afternic } = client((call) =>
-      call.url.pathname.endsWith('example.com')
+      call.url.pathname.split('/').at(-1) === 'example.com'
         ? { status: 204 }
         : { status: 404, body: { code: 'RESOURCE_NOT_FOUND' } },
     );

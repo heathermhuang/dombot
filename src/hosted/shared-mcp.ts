@@ -255,7 +255,11 @@ export function sharedMcpRoutes() {
         allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       }),
     );
-  app.use('*', bodyLimit({ maxSize: 16384 }));
+  const oauthBodyLimit = bodyLimit({ maxSize: 16384 });
+  const rpcBodyLimit = bodyLimit({ maxSize: 8 * 1024 * 1024 });
+  app.use('*', (c, next) =>
+    (c.req.path === '/mcp' ? rpcBodyLimit : oauthBodyLimit)(c, next),
+  );
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     if (

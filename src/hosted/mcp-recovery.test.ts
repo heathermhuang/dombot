@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFileSync } from 'node:fs';
 import { Accounts } from './accounts';
@@ -21,6 +29,18 @@ let sessions: string[];
 let clientId: string;
 
 beforeAll(async () => {
+  const NativeRequest = globalThis.Request;
+  vi.stubGlobal(
+    'Request',
+    class extends NativeRequest {
+      constructor(
+        input: ConstructorParameters<typeof NativeRequest>[0],
+        init?: RequestInit,
+      ) {
+        super(input, { ...init, duplex: 'half' } as RequestInit);
+      }
+    },
+  );
   mf = new Miniflare(
     convertV4MiniflareOptions({
       cf: false,
@@ -46,6 +66,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await mf?.dispose();
+  vi.unstubAllGlobals();
 });
 beforeEach(async () => {
   await db.exec(
@@ -555,4 +576,44 @@ it('issues paid registrar permission only after an explicit fresh consent with i
   expect((await mcpAdmission(grant.access_token)).status).toBe(200);
   expect(delegatedScopes.at(-1)).toEqual(permissions.split(' '));
   // Admission/discovery only: this fixture never calls a paid registrar operation.
+});
+
+it('supports upstream bulk-sized RPC bodies while keeping OAuth registration bounded', async () => {
+  const token = await grant(0);
+  const rpc = await gateway.fetch(
+    new Request(origin + '/mcp', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: { _meta: { note: 'x'.repeat(20000) } },
+      }),
+    }),
+    env,
+  );
+  expect(rpc.status).toBe(200);
+  const oversized = await gateway.fetch(
+    new Request(origin + '/mcp', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: 'x'.repeat(8 * 1024 * 1024 + 1),
+    }),
+    env,
+  );
+  expect(oversized.status).toBe(413);
+  const registration = await post('/register', {
+    client_name: 'Bounded test',
+    redirect_uris: ['http://127.0.0.1:4567/callback'],
+    extra: 'x'.repeat(20000),
+  });
+  expect(registration.status).toBe(413);
 });
