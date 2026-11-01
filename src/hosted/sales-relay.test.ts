@@ -196,21 +196,27 @@ describe('private reply address generation', () => {
       { id: workspace, binding: 'WORKSPACE_0', label: 'Fixture' },
     ]),
   } as HostedEnv;
-  it('generates separate 192-bit aliases within the SMTP local-part limit', () => {
-    const a = newReplyAddress(env, workspace)!,
-      b = newReplyAddress(env, workspace)!;
+  it('generates separate 192-bit aliases within the SMTP local-part limit', async () => {
+    const a = (await newReplyAddress(env, workspace))!,
+      b = (await newReplyAddress(env, workspace))!;
     expect(a.address).not.toBe(b.address);
     expect(a.raw).toMatch(/^[a-f0-9]{48}$/);
     expect(a.address.split('@')[0].length).toBeLessThanOrEqual(64);
   });
-  it('fails closed for disabled/unlisted/ambiguous workspaces', () => {
+  it('fails closed for disabled/unlisted/ambiguous workspaces', async () => {
     expect(
-      newReplyAddress({ ...env, SALES_RELAY_ENABLED: 'false' }, workspace),
+      await newReplyAddress(
+        { ...env, SALES_RELAY_ENABLED: 'false' },
+        workspace,
+      ),
     ).toBeNull();
     expect(
-      newReplyAddress({ ...env, SALES_RELAY_WORKSPACES: '[]' }, workspace),
+      await newReplyAddress(
+        { ...env, SALES_RELAY_WORKSPACES: '[]' },
+        workspace,
+      ),
     ).toBeNull();
-    expect(() =>
+    await expect(
       relaySettings(
         {
           ...env,
@@ -225,6 +231,6 @@ describe('private reply address generation', () => {
         },
         workspace,
       ),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });

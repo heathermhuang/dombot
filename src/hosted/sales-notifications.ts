@@ -178,11 +178,11 @@ export async function drainSalesWorkspace(
     } else if (!(await reserveBudget(env, workspace))) {
       state = 'retryable';
     } else {
-      let replyAddress: ReturnType<typeof newReplyAddress> = null;
+      let replyAddress: Awaited<ReturnType<typeof newReplyAddress>> = null;
       try {
         replyAddress =
           item.mail.context && item.kind !== 'verification'
-            ? newReplyAddress(env, workspace)
+            ? await newReplyAddress(env, workspace)
             : null;
       } catch {
         await salesInternal(env, workspace, 'ack', {

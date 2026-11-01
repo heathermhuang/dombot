@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { Accounts } from './accounts';
-import { workspaceSchema } from './workspaces';
 import {
   salesInternal,
   salesMailReady,
@@ -9,7 +8,7 @@ import {
 } from './sales-notifications';
 import { parseRelayEmail, RelayInputError } from '../../hosted/email';
 import { relayMessageSchema } from '../shared/sales-relay';
-import { relaySettings } from './sales-relay-address';
+import { relaySettings, relayWorkspaceForPrefix } from './sales-relay-address';
 
 /** Gmail may use its base mailbox as the SMTP envelope for a plus-address From.
  * This permits that transport discrepancy only; the exact From still has to
@@ -33,20 +32,18 @@ export async function receiveSalesReply(
     );
     return;
   }
-  const workspaces = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
   const [local, domain, extra] = message.to.toLowerCase().split('@');
   const detail = local?.match(
     /^([a-z0-9_-]{1,5})\+([a-f0-9]{8})\.([a-f0-9]{48})$/,
   );
-  const candidates = detail
-    ? workspaces.filter((w) => w.id.slice(0, 8) === detail[2])
-    : [];
-  if (extra || candidates.length !== 1 || !detail) {
+  const workspace = detail
+    ? await relayWorkspaceForPrefix(env, detail[2])
+    : null;
+  if (extra || !workspace || !detail) {
     message.setReject('Conversation reply address unavailable.');
     return;
   }
-  const workspace = candidates[0].id,
-    settings = relaySettings(env, workspace);
+  const settings = await relaySettings(env, workspace);
   if (!settings || detail[1] !== settings.local || domain !== settings.domain) {
     message.setReject('Conversation reply address unavailable.');
     return;

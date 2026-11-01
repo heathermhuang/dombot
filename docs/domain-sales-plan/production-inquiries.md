@@ -110,3 +110,15 @@ After a DNS lease is written, use a compatible reader for repair. Do not roll ba
 to an engine that cannot process its revocation. Pause/unpublish and detach before
 retiring routing policy or verification configuration; do not use configuration
 removal as a revocation workflow. Preserve failed and unknown receipts.
+
+
+## Qualified platform account replies
+
+Reply aliases use the immutable account ID for both legacy bindings and qualified
+platform accounts. A platform account must be explicitly listed in the existing
+relay allowlist, have an enabled qualified dispatcher route, and pass the same
+verified-recipient and tenant-local participant-grant checks as a legacy account.
+The eight-character routing prefix must be unique across configured legacy IDs
+and control-registry rows, including reserved/disabled records. Collisions fail
+closed instead of selecting one account. No legacy mapping, provider enrolment or
+DNS change is created by this lookup.
