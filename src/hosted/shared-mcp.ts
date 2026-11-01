@@ -16,7 +16,11 @@ import {
 } from '../shared/gateway-proof';
 
 const scope = 'portfolio:read';
-const supportedScopes = ['portfolio:read', 'domains:write'] as const;
+const supportedScopes = [
+  'portfolio:read',
+  'domains:write',
+  'domains:spend',
+] as const;
 function requestedScopes(value?: string): string[] | null {
   const requested = (value ?? scope).trim().split(/\s+/);
   if (
@@ -383,13 +387,13 @@ export function sharedMcpRoutes() {
     const permissions = requestedScopes(q.scope);
     if (
       !permissions ||
-      (permissions.includes('domains:write') &&
+      (permissions.some((s) => s !== 'portfolio:read') &&
         c.env.SHARED_MCP_MANAGEMENT_ENABLED !== 'true')
     )
       return fail(
         c,
         'invalid_scope',
-        'Use portfolio:read and, with explicit approval, domains:write.',
+        'Use portfolio:read, domains:write and domains:spend; write and paid permissions require explicit approval.',
       );
     const id = opaqueToken(),
       now = Date.now();
@@ -463,7 +467,7 @@ export function sharedMcpRoutes() {
     return c.html(
       page(
         'Connect your AI assistant',
-        `<form action="/oauth/consent" method="post"><span class="eyebrow">AI assistant access</span><h1>Connect ${e(metadata.client_name)}?</h1><p>Signed in as <strong>${e(user.email)}</strong><br>Portfolio: <strong>${e(user.label)}</strong></p><p>${row.scope.split(' ').includes('domains:write') ? 'You are granting management access: this connection can change domain settings and DNS, create or change marketplace listings and prices, send marketplace sale messages and auth codes, and approve outgoing transfers using your connected accounts. Paid registrations, renewals and transfers remain blocked by the hosted spending policy.' : 'This connection can read your portfolio and refresh registrar information. It cannot change domain settings, transfer domains, renew domains, or make purchases.'}</p><p class="note">Client name supplied by the application. Access returns to <strong>${e(new URL(row.redirect_uri).origin)}</strong>.</p><input type="hidden" name="id" value="${id}"><input type="hidden" name="csrf" value="${csrf}"><button name="decision" value="approve" type="submit">Allow ${row.scope.split(' ').includes('domains:write') ? 'management' : 'portfolio'} access</button> <button name="decision" value="deny" type="submit">Cancel</button><p class="note">Expires after 30 days. Revoke access any time in MCP settings.</p></form>`,
+        `<form action="/oauth/consent" method="post"><span class="eyebrow">AI assistant access</span><h1>Connect ${e(metadata.client_name)}?</h1><p>Signed in as <strong>${e(user.email)}</strong><br>Portfolio: <strong>${e(user.label)}</strong></p><p>${row.scope.split(' ').includes('domains:write') ? 'You are granting management access: this connection can change domain settings and DNS, create or change marketplace listings and prices, send marketplace sale messages and auth codes, and approve outgoing transfers using your connected accounts.' : row.scope.split(' ').includes('domains:spend') ? 'You are granting paid registrar access as described below. Other domain-setting and marketplace changes are not included unless separately requested.' : 'This connection can read your portfolio and refresh registrar information. It cannot change domain settings, transfer domains, renew domains, or make purchases.'}</p>${row.scope.split(' ').includes('domains:spend') ? '<p class="notice"><strong>Paid registrar permission:</strong> this client can register, renew and transfer domains using your connected registrar accounts. These operations can charge your registrar account. This permission lasts for the connection and does not ask for approval again on each operation. Approve only an application you trust.</p>' : '<p>Paid registrations, renewals and transfers are not permitted by this connection.</p>'}<p class="note">Client name supplied by the application. Access returns to <strong>${e(new URL(row.redirect_uri).origin)}</strong>.</p><input type="hidden" name="id" value="${id}"><input type="hidden" name="csrf" value="${csrf}"><button name="decision" value="approve" type="submit">Allow ${row.scope.split(' ').includes('domains:spend') ? 'paid registrar' : row.scope.split(' ').includes('domains:write') ? 'management' : 'portfolio'} access</button> <button name="decision" value="deny" type="submit">Cancel</button><p class="note">Expires after 30 days. Revoke access any time in MCP settings.</p></form>`,
       ),
     );
   });
@@ -546,7 +550,7 @@ export function sharedMcpRoutes() {
         'Invalid or expired code, redirect, resource, or PKCE verifier.',
       );
     if (
-      row.scope.split(' ').includes('domains:write') &&
+      row.scope.split(' ').some((s) => s !== 'portfolio:read') &&
       c.env.SHARED_MCP_MANAGEMENT_ENABLED !== 'true'
     )
       return fail(
@@ -623,7 +627,7 @@ export function sharedMcpRoutes() {
     const grantedScopes = requestedScopes(grant.scope);
     if (!grantedScopes) return unauthorized();
     if (
-      grantedScopes.includes('domains:write') &&
+      grantedScopes.some((s) => s !== 'portfolio:read') &&
       c.env.SHARED_MCP_MANAGEMENT_ENABLED !== 'true'
     )
       return fail(
@@ -652,6 +656,7 @@ export function sharedMcpRoutes() {
         rpc,
         grant.workspace_id,
         c.env.MCP_POLICIES,
+        grantedScopes,
       );
       if (denied) return fail(c, 'access_denied', denied, 403);
     }

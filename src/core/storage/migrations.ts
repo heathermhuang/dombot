@@ -195,7 +195,7 @@ export async function runMigrations(
     await store.put('meta', 'schemaVersion', 4);
   }
   if (version < 5) {
-    await migration5(store);
+    await migration5(raw, store);
     await store.put('meta', 'schemaVersion', 5);
   }
 }
@@ -267,19 +267,25 @@ async function migration4(raw: DocStore): Promise<void> {
  * comes back to Owned; the Hidden folder goes, so its names return to no
  * folder. Nothing changes meaning: every other event and assignment stays.
  */
-async function migration5(store: DocStore): Promise<void> {
+async function migration5(raw: DocStore, store: DocStore): Promise<void> {
   const events = await store.list(EVENTS_NAMESPACE);
   for (const [id, e] of Object.entries(events)) {
     const type = (e as { type?: unknown } | null)?.type;
     if (typeof type === 'string' && LEGACY_EVENT_TYPES.has(type)) {
-      await store.put('hosted-legacy-events', id, e);
+      const original = await raw.get(EVENTS_NAMESPACE, id);
+      if (original === null)
+        throw new Error('[storage] ownership record changed during migration');
+      await raw.put('hosted-legacy-events', id, original);
       await store.delete(EVENTS_NAMESPACE, id);
     }
   }
   const assignments = await store.list(FOLDER_ASSIGNMENTS_NAMESPACE);
   for (const [name, id] of Object.entries(assignments))
     if (isLegacyBuiltInFolder(id)) {
-      await store.put('hosted-legacy-folders', name, id);
+      const original = await raw.get(FOLDER_ASSIGNMENTS_NAMESPACE, name);
+      if (original === null)
+        throw new Error('[storage] folder record changed during migration');
+      await raw.put('hosted-legacy-folders', name, original);
       await store.delete(FOLDER_ASSIGNMENTS_NAMESPACE, name);
     }
 }

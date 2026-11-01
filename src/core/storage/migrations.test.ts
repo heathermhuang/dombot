@@ -231,3 +231,29 @@ it('retains removed ownership history and folder intent in exportable namespaces
   await runMigrations(store, store);
   expect(await store.get('hosted-legacy-events', 'old-drop')).toEqual(event);
 });
+
+it('moves hosted schema-5 history without changing its encrypted bytes', async () => {
+  const sealed = new EncryptedDocStore(raw, cipher);
+  await sealed.put('meta', 'schemaVersion', 4);
+  const event = {
+    id: 'kept-drop',
+    domain: 'kept.example',
+    type: 'dropped',
+    source: 'user',
+    date: '2026-01-01',
+  };
+  await sealed.put('domain-events', event.id, event);
+  await sealed.put('domain-folders', 'kept.example', '__hidden__');
+  const beforeEvent = await raw.get('domain-events', event.id),
+    beforeFolder = await raw.get('domain-folders', 'kept.example');
+  await runMigrations(raw, sealed);
+  expect(await raw.get('hosted-legacy-events', event.id)).toEqual(beforeEvent);
+  expect(await raw.get('hosted-legacy-folders', 'kept.example')).toEqual(
+    beforeFolder,
+  );
+  expect(await sealed.get('hosted-legacy-events', event.id)).toEqual(event);
+  expect(await sealed.get('hosted-legacy-folders', 'kept.example')).toBe(
+    '__hidden__',
+  );
+  expect(await sealed.get('meta', 'schemaVersion')).toBe(5);
+});

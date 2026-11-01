@@ -26,9 +26,12 @@ in scope. The merge ancestry must contain the pinned upstream head.
   account isolation and existing gateway budgets remain authoritative. Market
   credential reads/changes and market writes have the same fresh-auth protection
   as registrar operations. Read-only OAuth cannot register market writes or
-  transfer approvals. Existing free-service paid-MCP policy remains unchanged;
-  the underlying upstream methods and explicit browser operations remain present.
-  Shared MCP supports explicit read/manage consent, with existing grants migrated
+  transfer approvals. Paid registrar tools require an explicit newly approved
+  `domains:spend` grant, with fresh identity and a charge warning. Legacy grants
+  stay read-only, legacy workspace connections stay unable to spend, and token
+  request parameters cannot expand permissions. No paid provider call is made
+  during release qualification.
+  Shared MCP supports explicit read/manage/paid consent, with existing grants migrated
   as read-only. Control migration 0021 persists the granted scopes; token parameters
   cannot upgrade them. `SHARED_MCP_MANAGEMENT_ENABLED` remains off during reader
   rollout and is enabled only after every serving tenant understands scoped proofs.

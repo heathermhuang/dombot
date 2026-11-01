@@ -6,9 +6,9 @@ export const MCP_DELEGATION_TOKEN = 'gateway-mcp-delegation';
 const mcpSchema = z.object({
   clientId: z.string().uuid(),
   scopes: z
-    .array(z.enum(['portfolio:read', 'domains:write']))
+    .array(z.enum(['portfolio:read', 'domains:write', 'domains:spend']))
     .min(1)
-    .max(2)
+    .max(3)
     .refine((s) => new Set(s).size === s.length),
   expiresAt: z.number().int().positive(),
 });

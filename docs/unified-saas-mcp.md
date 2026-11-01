@@ -27,9 +27,9 @@ The canonical OAuth resource is the public origin plus `/mcp`. The gateway is
 the authorization server and resource boundary. External tokens are opaque and
 stored only as SHA-256 hashes. They are never forwarded into tenant Workers.
 The tenant accepts only an authenticated gateway delegation for its own immutable
-workspace, limited to `/mcp` and `portfolio:read`; it cannot authorize browser APIs.
+workspace and `/mcp`, limited to the scopes persisted after owner consent; it cannot authorize browser APIs.
 Every request checks account enablement, grant expiry and revocation. Existing
-MCP policy restrictions and the zero spending budget still apply.
+MCP policy restrictions still apply; existing connections remain read-only.
 
 Authorization requires S256 PKCE, a registered redirect URI, explicit consent,
 same-origin POST, and fresh account authentication. Consent is bound to the user
@@ -49,9 +49,19 @@ and browser logout retain the existing separate MCP revocation policy; revoke
 connections in MCP settings. Workspace-specific legacy pairings are stored in
 tenant databases and remain separately managed there.
 
-The shared resource advertises only read access. `portfolio:read` retains the
-existing engine definition, including sync and non-mutating registrar queries.
-Mutation and purchase permissions require a separate future release.
+The shared resource defaults to `portfolio:read`. Full upstream integration adds
+explicit `domains:write` management consent and `domains:spend` paid registrar
+consent for new connections. The paid consent warns that the client may register,
+renew and transfer through the owner's connected registrar accounts without a
+second approval per operation. Existing grants do not gain permissions. Migration
+0021 stores the canonical scope string on authorizations and grants, defaulting
+all previous rows to read-only. Token request parameters cannot widen the grant.
+The paired-client screen reports management or paid access where granted.
+
+`SHARED_MCP_MANAGEMENT_ENABLED` defaults off while compatible tenant proof readers
+roll out. The release enables it only after all serving coordinators are verified;
+turning it off denies elevated grants while existing read-only grants keep working.
+Legacy workspace connections retain their old zero-paid-operation policy.
 
 ## Migration and verification
 

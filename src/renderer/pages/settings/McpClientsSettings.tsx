@@ -166,7 +166,7 @@ export default function McpClientsSettings() {
                     <p className="text-xs text-muted-foreground">
                       Paired {formatDate(c.pairedAt)}
                       {c.scopes &&
-                        ` · ${c.scopes.includes('domains:write') ? 'Management access' : 'Read only'}`}
+                        ` · ${c.scopes.includes('domains:spend') ? 'Paid registrar access' : c.scopes.includes('domains:write') ? 'Management access' : 'Read only'}`}
                     </p>
                   </div>
                   <Button

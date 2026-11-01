@@ -524,3 +524,35 @@ it('keeps existing read grants usable while the management rollout gate is off',
   );
   expect((await gateway.fetch(request, env)).status).toBe(400);
 });
+
+it('issues paid registrar permission only after an explicit fresh consent with its charge warning', async () => {
+  const permissions = 'portfolio:read domains:write domains:spend';
+  const form = await consent(0, permissions);
+  const page = await gateway.fetch(
+    new Request(origin + '/oauth/consent?id=' + form.id, {
+      headers: { Cookie: '__Host-dd_session=' + sessions[0] },
+    }),
+    env,
+  );
+  const html = await page.text();
+  expect(html).toContain('can charge your registrar account');
+  const refreshed = {
+    ...form,
+    csrf: html.match(/name="csrf" value="([a-f0-9]+)"/)![1],
+  };
+  const approved = await post('/oauth/consent', refreshed, sessions[0]);
+  expect(approved.status).toBe(303);
+  const code = new URL(approved.headers.get('location')!).searchParams.get(
+    'code',
+  )!;
+  const result = await exchange(code);
+  expect(result.status).toBe(200);
+  const grant = (await result.json()) as {
+    access_token: string;
+    scope: string;
+  };
+  expect(grant.scope).toBe(permissions);
+  expect((await mcpAdmission(grant.access_token)).status).toBe(200);
+  expect(delegatedScopes.at(-1)).toEqual(permissions.split(' '));
+  // Admission/discovery only: this fixture never calls a paid registrar operation.
+});
