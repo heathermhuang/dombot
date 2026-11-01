@@ -1,0 +1,28 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "0.12.0-hosted.1",
+  "upstreamVersion": "0.12.0",
+  "upstreamTarball": "https://registry.npmjs.org/@aoxborrow/registrar-client/-/registrar-client-0.12.0.tgz",
+  "upstreamIntegrity": "sha512-WTS+Ir2i6E2XE0vFYkXnSdRWle4HKk1hDFDccn+5ZQzNQ/Nf3n44Y0Ot2+2jXxLgeL9Krcwiwn8K2hGCJejCsA==",
+  "archive": "vendor/aoxborrow-registrar-client-0.12.0-hosted.1.tgz",
+  "sha256": "fb6e8f1e9ef172e92916243d84653dd7f98225c1211b7e4ac82148bd89a86af3",
+  "integrity": "sha512-ln3fjBRtdMnCHp1c7qokJOFq9gAAetz8J5rmHVj0//mq3Y6ALtao3x4tvi8ICddV0WAQgOGr9am5zgkmQvSaQg==",
+  "license": "MIT",
+  "changes": [
+    "Use two-year .ai price-only quotes and annualize their returned fee",
+    "Preserve retryable classic-quote errors rather than hiding cooldowns",
+    "Validate IDNA/DNS domain names, reject Gandi path separators/dot segments, and encode path components",
+    "Quote Cloudflare forwarding-host values as single expression literals",
+    "Jitter exponential read retries and share one request timeout budget across attempts and backoff; preserve Retry-After and unknown-write safety",
+    "Read the exact authenticated owned .in renewal quote when Core per-name pricing returns 422; preserve all other errors and TLD behavior",
+    "Read exact annual owned-domain prices through REST single search; bound unsupported-TLD and incompatible-classic-key retries; preserve cooldowns and supported annual terms",
+    "Rebase hosted patches on upstream 0.12.0, including manual renewal for Dynadot auto-renew off and in-place Gandi forwarding updates; retain Gandi path validation on new transfer-out and forwarding paths"
+  ],
+  "build": "ESM/CJS and source maps rebuilt with esbuild --packages=external; unchanged public declaration contract; SDK source typechecked",
+  "patches": [
+    {
+      "path": "vendor/registrar-client-0.12.0-hosted.1.patch",
+      "sha256": "480798fbd935864288ba70edca58be6ad7455bf0f1b5f68c89943a444e121841"
+    }
+  ]
+}

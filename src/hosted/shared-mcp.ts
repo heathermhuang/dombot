@@ -105,7 +105,7 @@ async function form(c: Context): Promise<Record<string, string>> {
   )
     ? await c.req.json().catch(() => null)
     : await c.req.parseBody().catch(() => null);
-  const parsed = z.record(z.string().max(4096)).safeParse(input);
+  const parsed = z.record(z.string(), z.string().max(4096)).safeParse(input);
   return parsed.success ? parsed.data : {};
 }
 function redirectMatches(requested: string, registered: string) {

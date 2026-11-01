@@ -62,16 +62,101 @@ function PurchaseCell({
 }
 
 /**
- * Money columns for the Domains table: Archive gets the sold date and
- * amount, Owned gets the BIN price and minimum offer. What you paid is edited
- * from the row menu (Purchase details).
+ * The purchase date. A click opens Purchase details. Archive shows this
+ * all the time; Active shows it only while the Purchased filter is set.
+ */
+export function purchaseDateColumn(
+  purchases: Record<string, DomainPurchase>,
+  onEdit?: (domain: Domain) => void,
+): PurchaseColumn {
+  return {
+    key: 'purchaseDate',
+    label: 'Purchase date',
+    hideOnMobile: true,
+    render: (d) => {
+      const date = recordOf(purchases, d)?.purchaseDate;
+      const text = date || '—';
+      if (!onEdit) {
+        return (
+          <span className={!date ? 'text-muted-foreground' : undefined}>
+            {text}
+          </span>
+        );
+      }
+      return (
+        <PurchaseCell
+          domain={d}
+          onEdit={onEdit}
+          empty={!date}
+          editLabel="Purchase details"
+        >
+          {text}
+        </PurchaseCell>
+      );
+    },
+    sortValue: (d) => recordOf(purchases, d)?.purchaseDate ?? null,
+  };
+}
+
+/** What you paid. Sits beside Purchased, the same way Sold for sits beside Sold. */
+export function purchaseAmountColumn(
+  purchases: Record<string, DomainPurchase>,
+  preferredCurrency: string,
+  numberFormat: NumberFormatId,
+  onEdit?: (domain: Domain) => void,
+): PurchaseColumn {
+  return {
+    key: 'purchaseAmount',
+    label: 'Purchase price',
+    align: 'right',
+    render: (d) => {
+      const record = recordOf(purchases, d);
+      const text =
+        record?.amount && record.currency
+          ? formatMoney(
+              record.amount,
+              record.currency,
+              preferredCurrency,
+              numberFormat,
+            )
+          : null;
+      const shown = text || '—';
+      if (!onEdit) {
+        return (
+          <span className={!text ? 'text-muted-foreground' : undefined}>
+            {shown}
+          </span>
+        );
+      }
+      return (
+        <PurchaseCell
+          domain={d}
+          onEdit={onEdit}
+          align="right"
+          empty={!text}
+          editLabel="Purchase details"
+        >
+          {shown}
+        </PurchaseCell>
+      );
+    },
+    sortValue: (d) => {
+      const amount = recordOf(purchases, d)?.amount;
+      return amount == null ? null : Number(amount);
+    },
+  };
+}
+
+/**
+ * Money columns for the Domains table. The column picker decides which of
+ * these a view shows. Floor stays in the editor.
  */
 export function purchaseColumns({
   purchases,
   preferredCurrency,
   numberFormat,
+  onEditPurchase,
   onEditSale,
-  showSale = false,
   isSold,
   listPrices,
   onEditListPrice,
@@ -79,11 +164,10 @@ export function purchaseColumns({
   purchases: Record<string, DomainPurchase>;
   preferredCurrency: string;
   numberFormat: NumberFormatId;
+  onEditPurchase?: (domain: Domain) => void;
   onEditSale?: (domain: Domain) => void;
-  /** Archive view: sold date and sold amount. */
-  showSale?: boolean;
   isSold?: (domain: Domain) => boolean;
-  /** Owned view: the BIN price and Min offer columns. */
+  /** BIN price and Min offer. */
   listPrices?: Record<string, ListPrice>;
   onEditListPrice?: (domain: Domain) => void;
 }): PurchaseColumn[] {
@@ -129,83 +213,91 @@ export function purchaseColumns({
     },
   });
   const pricing: PurchaseColumn[] =
-    listPrices && onEditListPrice && !showSale
+    listPrices && onEditListPrice
       ? [
           listPriceColumn('binPrice', 'BIN price', 'amount', 'BIN price'),
           listPriceColumn('minOffer', 'Min offer', 'minOffer', 'Minimum offer'),
         ]
       : [];
-  const sale: PurchaseColumn[] = showSale
-    ? [
-        {
-          key: 'saleDate',
-          label: 'Sold',
-          hideOnMobile: true,
-          render: (d) => {
-            const date = recordOf(purchases, d)?.saleDate;
-            const text = date || '—';
-            if (!onEditSale || !isSold?.(d)) {
-              return (
-                <span className={!date ? 'text-muted-foreground' : undefined}>
-                  {text}
-                </span>
-              );
-            }
-            return (
-              <PurchaseCell
-                domain={d}
-                onEdit={onEditSale}
-                empty={!date}
-                editLabel="Sale details"
-              >
-                {text}
-              </PurchaseCell>
-            );
-          },
-          sortValue: (d) => recordOf(purchases, d)?.saleDate ?? null,
-        },
-        {
-          key: 'saleAmount',
-          label: 'Sold for',
-          align: 'right',
-          render: (d) => {
-            const record = recordOf(purchases, d);
-            const text =
-              record?.saleAmount && record.saleCurrency
-                ? formatMoney(
-                    record.saleAmount,
-                    record.saleCurrency,
-                    preferredCurrency,
-                    numberFormat,
-                  )
-                : null;
-            const shown = text || '—';
-            if (!onEditSale || !isSold?.(d)) {
-              return (
-                <span className={!text ? 'text-muted-foreground' : undefined}>
-                  {shown}
-                </span>
-              );
-            }
-            return (
-              <PurchaseCell
-                domain={d}
-                onEdit={onEditSale}
-                align="right"
-                empty={!text}
-                editLabel="Sale details"
-              >
-                {shown}
-              </PurchaseCell>
-            );
-          },
-          sortValue: (d) => {
-            const amount = recordOf(purchases, d)?.saleAmount;
-            return amount == null ? null : Number(amount);
-          },
-        },
-      ]
-    : [];
+  const sale: PurchaseColumn[] = [
+    {
+      key: 'saleDate',
+      label: 'Sold',
+      hideOnMobile: true,
+      render: (d) => {
+        const date = recordOf(purchases, d)?.saleDate;
+        const text = date || '—';
+        if (!onEditSale || !isSold?.(d)) {
+          return (
+            <span className={!date ? 'text-muted-foreground' : undefined}>
+              {text}
+            </span>
+          );
+        }
+        return (
+          <PurchaseCell
+            domain={d}
+            onEdit={onEditSale}
+            empty={!date}
+            editLabel="Sale details"
+          >
+            {text}
+          </PurchaseCell>
+        );
+      },
+      sortValue: (d) => recordOf(purchases, d)?.saleDate ?? null,
+    },
+    {
+      key: 'saleAmount',
+      label: 'Sold for',
+      align: 'right',
+      render: (d) => {
+        const record = recordOf(purchases, d);
+        const text =
+          record?.saleAmount && record.saleCurrency
+            ? formatMoney(
+                record.saleAmount,
+                record.saleCurrency,
+                preferredCurrency,
+                numberFormat,
+              )
+            : null;
+        const shown = text || '—';
+        if (!onEditSale || !isSold?.(d)) {
+          return (
+            <span className={!text ? 'text-muted-foreground' : undefined}>
+              {shown}
+            </span>
+          );
+        }
+        return (
+          <PurchaseCell
+            domain={d}
+            onEdit={onEditSale}
+            align="right"
+            empty={!text}
+            editLabel="Sale details"
+          >
+            {shown}
+          </PurchaseCell>
+        );
+      },
+      sortValue: (d) => {
+        const amount = recordOf(purchases, d)?.saleAmount;
+        return amount == null ? null : Number(amount);
+      },
+    },
+  ];
 
-  return [...sale, ...pricing];
+  const bought: PurchaseColumn[] = [
+    purchaseDateColumn(purchases, onEditPurchase),
+    purchaseAmountColumn(
+      purchases,
+      preferredCurrency,
+      numberFormat,
+      onEditPurchase,
+    ),
+  ];
+
+  return [...bought, ...sale, ...pricing];
 }

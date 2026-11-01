@@ -525,7 +525,7 @@ export class SalesHostnames {
       signal: AbortSignal.timeout(10_000),
     });
     const edgeKey = z
-      .record(z.string().min(32))
+      .record(z.string(), z.string().min(32))
       .parse(JSON.parse(this.env.SALES_EDGE_KEYS ?? '{}'))[workspace];
     if (!edgeKey) throw new Error('Public edge admission is not configured.');
     probe.headers.set(

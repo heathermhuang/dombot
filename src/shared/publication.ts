@@ -39,7 +39,7 @@ export const listingSchema = z
     currency: z.string().regex(/^[A-Z]{3}$/),
   })
   .strict();
-export const draftSchema = z
+export const draftObjectSchema = z
   .object({
     handle: z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/),
     title: z.string().trim().min(1).max(100),
@@ -47,22 +47,21 @@ export const draftSchema = z
     contactEmail: z.union([z.literal(''), z.string().email().max(254)]),
     listings: z.array(listingSchema).max(20_000),
   })
-  .strict()
-  .superRefine((draft, ctx) => {
-    if (
-      new Set(draft.listings.map((item) => item.domain)).size !==
-      draft.listings.length
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Each domain must appear only once.',
-        path: ['listings'],
-      });
-    }
-  });
+  .strict();
+export const draftSchema = draftObjectSchema.superRefine((draft, ctx) => {
+  if (
+    new Set(draft.listings.map((item) => item.domain)).size !==
+    draft.listings.length
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Each domain must appear only once.',
+      path: ['listings'],
+    });
+  }
+});
 export type PortfolioListing = z.infer<typeof listingSchema>;
-export const publishedSchema = draftSchema
-  .innerType()
+export const publishedSchema = draftObjectSchema
   .extend({
     listings: z
       .array(

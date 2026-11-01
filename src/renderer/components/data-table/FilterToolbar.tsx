@@ -83,6 +83,7 @@ export function FilterToolbar({
   fields,
   presets,
   children,
+  className,
 }: {
   /** Names the filter bar, for its memory of removed presets. */
   id: string;
@@ -93,15 +94,21 @@ export function FilterToolbar({
   fields: FilterField[];
   presets?: string[];
   children?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-3.5 sm:mt-3">
+    <div
+      className={cn(
+        'mt-1 flex flex-wrap items-center gap-3.5 sm:mt-3',
+        className,
+      )}
+    >
       {viewSwitch}
       <SearchField
         value={search}
         onChange={onSearch}
         placeholder={searchPlaceholder}
-        className="flex-[0_1_216px]"
+        className="flex-[0_1_198px]"
       />
       <FilterBar id={id} fields={fields} presets={presets} variant="flat" />
       {children}

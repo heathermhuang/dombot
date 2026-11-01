@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const policySchema = z.record(
+  z.string(),
   z.object({
     // No policy grants OAuth scope. This is an additional restriction only.
     allowedTools: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,79}$/)).max(80),

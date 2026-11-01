@@ -393,7 +393,7 @@ function SiteAuthor() {
                           askingPrice: 'Asking price',
                           currency: 'Currency',
                         } as Record<string, string>
-                      )[part] ?? part),
+                      )[String(part)] ?? String(part)),
                 )
                 .join(' → ')}
               : {issue.message}
