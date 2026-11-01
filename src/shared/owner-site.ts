@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { saleMoneySchema, saleModeSchema } from './sales';
 import {
   draftSchema,
+  draftObjectSchema,
   publishedSchema,
   type PortfolioDraft,
   type PublishedPortfolio,
@@ -74,7 +75,7 @@ const projectSchema = z
 const shape = z
   .object({
     version: z.literal(2),
-    handle: draftSchema.innerType().shape.handle,
+    handle: draftObjectSchema.shape.handle,
     profile: z
       .object({
         name: z.string().trim().min(1).max(100),
@@ -82,7 +83,7 @@ const shape = z
         intro: z.string().trim().max(600),
         interests: z.array(z.string().trim().min(1).max(100)).max(20),
         opportunities: z.array(z.string().trim().min(1).max(100)).max(20),
-        contactEmail: draftSchema.innerType().shape.contactEmail,
+        contactEmail: draftObjectSchema.shape.contactEmail,
         links: z
           .array(
             z

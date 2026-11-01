@@ -1,30 +1,25 @@
 # Current hosted registrar dependency
 
-The hosted engine pins `@aoxborrow/registrar-client@0.9.2-hosted.4` from the local
-archive. This is a reviewed MIT-licensed fork of the registry's 0.9.2 release,
-not an upstream-published version. `registrar-client-0.9.2-hosted.4.json` records
-upstream integrity, the patch series and archive hashes. Source and unchanged public types
-are included; `HOSTED-PATCH.md` in the archive records the ESM/CJS build commands.
+The engine pins `@aoxborrow/registrar-client@0.12.0-hosted.1`, based on the
+published MIT-licensed 0.12.0 package. The adjacent JSON provenance records the
+upstream integrity, cumulative source patch, and built archive hashes.
 
-The hosted.4 patch adds a narrow read-only fallback for owned `.in` names rejected
-by Core per-name pricing: use the exact account-owned renewal quote, never a generic
-TLD estimate. The package preserves HTTP error privacy, authentication/rate-limit
-failures, sandbox routing and all paid-operation behavior.
+This rebase includes upstream's Dynadot manual-renewal setting when auto-renew
+is disabled, Gandi forwarding updates that preserve HTTPS, and transfer-out
+support in the dependency. It retains our annualized Dynadot price-only quotes,
+owned-domain REST and Name.com renewal fallbacks, bounded retry deadlines,
+Gandi path validation, and Cloudflare expression serialization. New Gandi
+transfer-out and forwarding paths use the same path guards. The app does not
+register new transfer-approval tools as part of this dependency update.
 
-The earlier patch requests Dynadot's required two-year `.ai` price-only renewal quote,
-normalizes its fee to an annual estimate, and preserves transient/rate-limit
-errors so the hosted job respects cooldowns. Paid register/renew operations are
-unchanged. `src/core/services/dynadot-pricing.test.ts` exercises the installed
-provider's actual request shape and proves price_check=1 remains present.
-The engine source archive includes this dependency, provenance and patch so its
-standalone build lock remains usable.
-
-The second patch, `registrar-client-path-literals.patch`, validates Gandi DNS
-domain names using IDNA, rejects path separators and dot/empty components before
-transport, and encodes path components. Cloudflare forwarding host names are
-serialized as single quoted expression literals. Local transport fixtures cover
-read/write paths, Unicode names, ESM/CommonJS exports and quote/backslash input;
-they do not contact registrar APIs or create live redirect rules.
+To reproduce, extract the upstream 0.12.0 archive, apply
+`registrar-client-0.12.0-hosted.1.patch` with `git apply --unidiff-zero`, set the version to
+`0.12.0-hosted.1`, then bundle `src/index.ts` with esbuild for ESM (`dist/index.js`)
+and CommonJS (`dist/index.cjs`), using `bundle`, `packages: external`,
+`platform: neutral`, `target: es2022`, and source maps. Keep upstream's unchanged
+declarations and license; pack with `npm pack --ignore-scripts`.
+The archive ships patched source and both rebuilt module formats. Synthetic
+transport tests cover renewal settings, pricing, retry budgets and path guards.
 
 ## Historical 0.5.0 artifact
 

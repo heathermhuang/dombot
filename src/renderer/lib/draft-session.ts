@@ -9,7 +9,7 @@ export interface DraftAdapter<D, S> {
   editable(state: S): D;
   issues(draft: D): unknown[];
   valid(draft: D, saved: D): D;
-  schema: z.ZodType<D, z.ZodTypeDef, unknown>;
+  schema: z.ZodType<D, unknown>;
   validationMessage?: string;
 }
 export type DraftEditorSnapshot<D, S> = {

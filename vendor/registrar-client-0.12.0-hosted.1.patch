@@ -1,0 +1,334 @@
+--- a/src/http.ts
++++ b/src/http.ts
+@@ -70,2 +70,2 @@
+-    return this.withRetries(req, async () => {
+-      const text = await this.send(req);
++    return this.withRetries(req, async attemptReq => {
++      const text = await this.send(attemptReq);
+@@ -85 +85 @@
+-    return this.withRetries(req, () => this.send(req));
++    return this.withRetries(req, attemptReq => this.send(attemptReq));
+@@ -102 +102 @@
+-  protected async withRetries<T>(req: RequestConfig, attemptFn: () => Promise<T>): Promise<T> {
++  protected async withRetries<T>(req: RequestConfig, attemptFn: (attemptReq: RequestConfig) => Promise<T>): Promise<T> {
+@@ -105,0 +106,3 @@
++    // One timeout budget covers all attempts and backoff, rather than resetting
++    // a full 30-second deadline for each retry.
++    const deadline = Date.now() + (req.timeout ?? this.config.options.timeout);
+@@ -109 +112,3 @@
+-        return await attemptFn();
++        const remaining = deadline - Date.now();
++        if (remaining <= 0) throw new TimeoutError('Registrar request deadline exceeded');
++        return await attemptFn({ ...req, timeout: remaining });
+@@ -132,0 +138,2 @@
++        // Never retry sooner than Retry-After, or extend the operation budget.
++        if (delay >= deadline - Date.now()) throw lastError;
+--- a/src/registrars/cloudflare.ts
++++ b/src/registrars/cloudflare.ts
+@@ -598 +598 @@
+-          expression: `http.host eq "${fqdn}"`,
++          expression: `http.host eq ${JSON.stringify(fqdn)}`,
+--- a/src/registrars/dynadot.ts
++++ b/src/registrars/dynadot.ts
+@@ -24 +24,7 @@
+-import { NotFoundError, NotImplementedError, toRegistrarError } from '../errors';
++import {
++  NotFoundError,
++  NotImplementedError,
++  InvalidResponseError,
++  RegistrarError,
++  toRegistrarError,
++} from '../errors';
+@@ -195,0 +202,2 @@
++  private classicPricingRejectedUntil = 0;
++  private readonly restPricingUnsupported = new Map<string, number>();
+@@ -456,2 +464,2 @@
+-   * the price check first and fall back to `bulk_search` for names not in the
+-   * account (e.g. pricing a domain before registering it).
++   * compatible classic price-only quotes first. When unavailable, single-domain
++   * REST search retains owned-name prices that bulk_search omits.
+@@ -466,26 +474,47 @@
+-    const tld = tldOrDomain.slice(tldOrDomain.indexOf('.') + 1);
+-
+-    // Owned domain: the price-check renew quote is the exact renewal (premium
+-    // included). Skips bulk_search, which returns nothing for a registered name.
+-    const checked = await this.renewPriceCheck(tldOrDomain, opts);
+-    if (checked) {
+-      return { tld, currency: checked.currency, renewal: checked.renewal };
+-    }
+-
+-    // Not in the account — fall back to bulk_search for available-name pricing.
+-    const list = encodeURIComponent(tldOrDomain);
+-    const data = await this.read<{ domain_result_list?: V2SearchResult[] }>(
+-      'GET',
+-      `/restful/v2/domains/bulk_search?domain_name_list=${list}&show_price=true`,
+-      undefined,
+-      opts
+-    );
+-    const result = (data.domain_result_list ?? [])[0];
+-    const price = oneYearPrice(result?.price_list);
+-    return {
+-      tld,
+-      currency: price?.currency ?? 'USD',
+-      registration: price?.registration,
+-      renewal: price?.renewal,
+-      transfer: price?.transfer,
+-    };
++    const tld = tldOrDomain.slice(tldOrDomain.indexOf('.') + 1).toLowerCase();
++
++    // Preserve working exact legacy quotes. Remember a rejected classic key
++    // so REST-only credentials do not keep producing failed API3 requests.
++    if (this.classicPricingRejectedUntil <= Date.now()) {
++      const checked = await this.renewPriceCheck(tldOrDomain, opts);
++      if (checked) return { tld, currency: checked.currency, renewal: checked.renewal };
++    }
++
++    // Single search returns per-name renewal prices even for taken names.
++    // bulk_search omits those prices; repeatedly trying an incompatible
++    // classic key also contributes to Dynadot's failed-request IP limit.
++    let restPrice: TldPricing | undefined;
++    let restError: unknown;
++    if ((this.restPricingUnsupported.get(tld) ?? 0) > Date.now()) {
++      restError = new NotImplementedError(`Dynadot: REST pricing is unavailable for .${tld}`);
++    } else {
++      try {
++        const data = await this.read<V2SearchResult>(
++          'GET',
++          `/restful/v2/domains/${encodeURIComponent(tldOrDomain.toLowerCase())}/search?show_price=true&currency=usd`,
++          undefined,
++          opts
++        );
++        if (data.domain_name?.toLowerCase() !== tldOrDomain.toLowerCase()) {
++          throw new InvalidResponseError('Dynadot pricing returned a different domain');
++        }
++        const price = annualSearchPrice(data.price_list, tld.toLowerCase());
++        restPrice = {
++          tld,
++          currency: price?.currency ?? 'USD',
++          registration: price?.registration,
++          renewal: price?.renewal,
++          transfer: price?.transfer,
++        };
++        if (restPrice.renewal !== undefined) return restPrice;
++      } catch (error) {
++        if (error instanceof RegistrarError && error.shouldRetry()) throw error;
++        restError = error;
++        if (error instanceof Error && /This TLD isn't supported via the API/i.test(error.message)) {
++          this.restPricingUnsupported.set(tld, Date.now() + 60 * 60_000);
++          restError = new NotImplementedError(`Dynadot: REST pricing is unavailable for .${tld}`);
++        }
++      }
++    }
++    if (restError) throw restError;
++    return restPrice ?? { tld, currency: 'USD' };
+@@ -506,0 +536,2 @@
++    // .ai requires a two-year renewal. TldPricing remains an annual estimate.
++    const years = domain.toLowerCase().endsWith('.ai') ? 2 : 1;
+@@ -511 +542 @@
+-      duration: '1',
++      duration: String(years),
+@@ -516 +547,2 @@
+-        RenewResponse?: { Status?: string; PriceInfo?: string };
++        RenewResponse?: { Status?: string; PriceInfo?: string; Error?: string };
++        Response?: { Error?: string };
+@@ -518,0 +551,4 @@
++      if ((res.Response?.Error ?? info?.Error)?.trim().toLowerCase() === 'invalid key') {
++        this.classicPricingRejectedUntil = Date.now() + 60 * 60_000;
++        return null;
++      }
+@@ -522,3 +558,10 @@
+-      const renewal = Number(match[1]);
+-      return Number.isNaN(renewal) ? null : { renewal, currency: match[2].toUpperCase() };
+-    } catch {
++      const renewal = Number(match[1]) / years;
++      return Number.isFinite(renewal) && renewal >= 0
++        ? { renewal, currency: match[2].toUpperCase() }
++        : null;
++    } catch (error) {
++      // Preserve cooldown/retry classification; an optional quote must not
++      // hide rate limits and immediately issue a second API request.
++      if (error instanceof RegistrarError && error.shouldRetry()) throw error;
++      if (error instanceof RegistrarError && error.status === 401)
++        this.classicPricingRejectedUntil = Date.now() + 60 * 60_000;
+@@ -1147,0 +1191,30 @@
++}
++
++// A full-domain renewal estimate must have an explicit supported annual term.
++// .ai's mandatory two-year renewal is divided by two; registration/transfer
++// products are reported only for a one-year entry, preserving their term.
++function annualSearchPrice(
++  prices: V2Price[] | undefined,
++  tld: string
++): { currency: string; registration?: number; renewal?: number; transfer?: number } | undefined {
++  if (!Array.isArray(prices)) return undefined;
++  const entry =
++    prices.find(p => /\b1\s*year\b/i.test(p.unit ?? '')) ??
++    (tld === 'ai' ? prices.find(p => /\b2\s*years?\b/i.test(p.unit ?? '')) : undefined);
++  if (!entry || typeof entry.currency !== 'string' || !/^[A-Z]{3}$/i.test(entry.currency))
++    return undefined;
++  const years = /\b1\s*year\b/i.test(entry.unit ?? '') ? 1 : 2;
++  const valid = (raw: unknown): number | undefined => {
++    if (typeof raw !== 'number' && (typeof raw !== 'string' || !/^\d+(?:\.\d+)?$/.test(raw.trim())))
++      return undefined;
++    const n = Number(raw);
++    return Number.isFinite(n) && n >= 0 ? n : undefined;
++  };
++  const renewal = valid(entry.renewal_price);
++  return {
++    currency: entry.currency.toUpperCase(),
++    ...(years === 1
++      ? { registration: valid(entry.registration_price), transfer: valid(entry.transfer_price) }
++      : {}),
++    renewal: renewal === undefined ? undefined : renewal / years,
++  };
+--- a/src/registrars/gandi.ts
++++ b/src/registrars/gandi.ts
+@@ -35,0 +36,27 @@
++// Reject separators even after Unicode compatibility normalization. Encoded
++// separators must never depend on an upstream router's decoding behavior.
++function gandiPathSegment(value: string): string {
++  const normalized = value.normalize('NFKC');
++  if (!normalized || normalized === '.' || normalized === '..' || /[\\/\?#%]/.test(normalized)) {
++    throw new Error('Invalid Gandi request path component');
++  }
++  return encodeURIComponent(value);
++}
++
++function gandiDomainPath(value: string): string {
++  gandiPathSegment(value);
++  let hostname: string;
++  try {
++    if (/[\s:@\[\]]/.test(value)) throw new Error();
++    hostname = new URL('https://' + value).hostname.replace(/\.$/, '');
++  } catch {
++    throw new Error('Invalid Gandi domain path component');
++  }
++  const labels = hostname.split('.');
++  if (hostname.length > 253 || labels.length < 2 || /^[0-9.]+$/.test(hostname) ||
++      !labels.every(label => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) {
++    throw new Error('Invalid Gandi domain path component');
++  }
++  return encodeURIComponent(hostname);
++}
++
+@@ -294 +321 @@
+-      path: `/domain/domains/${domainName}`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}`,
+@@ -304 +331 @@
+-      path: `/domain/domains/${domainName}/nameservers`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}/nameservers`,
+@@ -314 +341 @@
+-      path: `/domain/domains/${domainName}/contacts`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`,
+@@ -334 +361 @@
+-      path: `/livedns/domains/${domainName}/records`,
++      path: `/livedns/domains/${gandiDomainPath(domainName)}/records`,
+@@ -447 +474 @@
+-      { method: 'POST', path: `/domain/domains/${domainName}/renew`, body: { duration: years } },
++      { method: 'POST', path: `/domain/domains/${gandiDomainPath(domainName)}/renew`, body: { duration: years } },
+@@ -462 +489 @@
+-      { method: 'PUT', path: `/domain/domains/${domainName}/nameservers`, body: { nameservers } },
++      { method: 'PUT', path: `/domain/domains/${gandiDomainPath(domainName)}/nameservers`, body: { nameservers } },
+@@ -477 +504 @@
+-        path: `/domain/domains/${domainName}/status`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/status`,
+@@ -489 +516 @@
+-        path: `/domain/domains/${domainName}/status`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/status`,
+@@ -503 +530 @@
+-      path: `/domain/domains/${domainName}`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}`,
+@@ -522 +549 @@
+-      path: `/domain/domains/${domainName}`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}`,
+@@ -558 +585 @@
+-        path: `/domain/domains/${domainName}`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}`,
+@@ -570 +597 @@
+-        path: `/domain/domains/${domainName}/transferout`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/transferout`,
+@@ -585 +612 @@
+-      path: `/livedns/domains/${domainName}/keys`,
++      path: `/livedns/domains/${gandiDomainPath(domainName)}/keys`,
+@@ -603 +630 @@
+-        path: `/livedns/domains/${domainName}/keys`,
++        path: `/livedns/domains/${gandiDomainPath(domainName)}/keys`,
+@@ -610 +637 @@
+-          path: `/livedns/domains/${domainName}/keys/${encodeURIComponent(k.id)}`,
++          path: `/livedns/domains/${gandiDomainPath(domainName)}/keys/${encodeURIComponent(k.id)}`,
+@@ -630 +657 @@
+-      path: `/email/forwards/${domainName}`,
++      path: `/email/forwards/${gandiDomainPath(domainName)}`,
+@@ -660 +687 @@
+-        path: `/email/forwards/${domainName}`,
++        path: `/email/forwards/${gandiDomainPath(domainName)}`,
+@@ -671 +698 @@
+-            path: `/email/forwards/${domainName}/${encodeURIComponent(source)}`,
++            path: `/email/forwards/${gandiDomainPath(domainName)}/${gandiPathSegment(source)}`,
+@@ -680 +707 @@
+-            path: `/email/forwards/${domainName}/${encodeURIComponent(source)}`,
++            path: `/email/forwards/${gandiDomainPath(domainName)}/${gandiPathSegment(source)}`,
+@@ -687 +714 @@
+-            path: `/email/forwards/${domainName}`,
++            path: `/email/forwards/${gandiDomainPath(domainName)}`,
+@@ -763 +790 @@
+-        `/domain/domains/${domainName}/webredirs/${gandiHostToFqdn(host, domainName)}`;
++        `/domain/domains/${gandiDomainPath(domainName)}/webredirs/${gandiPathSegment(gandiHostToFqdn(host, domainName))}`;
+@@ -772 +799 @@
+-                path: `/domain/domains/${domainName}/webredirs`,
++                path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs`,
+@@ -836 +863 @@
+-      path: `/domain/domains/${domainName}/webredirs`,
++      path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs`,
+@@ -850 +877 @@
+-        path: `/domain/domains/${domainName}/autorenew`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/autorenew`,
+@@ -887 +914 @@
+-        path: `/domain/domains/${domainName}/contacts`,
++        path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`,
+@@ -909 +936 @@
+-        path: `/livedns/domains/${domainName}/records`,
++        path: `/livedns/domains/${gandiDomainPath(domainName)}/records`,
+@@ -936 +963 @@
+-      { method: 'PATCH', path: `/domain/domains/${domainName}/contacts`, body },
++      { method: 'PATCH', path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`, body },
+@@ -997 +1024 @@
+-      { method: 'POST', path: `/domain/transferin/${domainName}`, body },
++      { method: 'POST', path: `/domain/transferin/${gandiDomainPath(domainName)}`, body },
+--- a/src/registrars/namecom.ts
++++ b/src/registrars/namecom.ts
+@@ -57,0 +58 @@
++  renewalPrice?: number | null;
+@@ -252 +253,22 @@
+-    const result = await this.domainPricing(name, 1, opts);
++    let result: NamecomPricing;
++    try {
++      result = await this.domainPricing(name, 1, opts);
++    } catch (error) {
++      // Core rejects .in at :getPricing but still returns the authenticated
++      // owner's one-year renewal price on the exact domain-list record. Keep
++      // this verified annual-term fallback narrow; never estimate a premium
++      // name from general TLD pricing or reinterpret another registry's term.
++      if (!(error instanceof RegistrarError) || error.status !== 422 ||
++          name.slice(name.indexOf('.') + 1) !== 'in') throw error;
++      const owned = await this.http.request<{ domains?: NamecomDomain[] }>({
++        path: '/domains',
++        query: { domainName: name, includeRenewalPrice: true, perPage: 1, page: 1 },
++        ...opts,
++      });
++      const exact = Array.isArray(owned.domains)
++        ? owned.domains.filter(d => typeof d.domainName === 'string' && d.domainName.toLowerCase() === name)
++        : [];
++      const renewal = exact.length === 1 ? price(exact[0].renewalPrice) : undefined;
++      if (renewal === undefined) throw error;
++      return { tld: 'in', currency: 'USD', renewal };
++    }
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -81 +81 @@
+-// exponential backoff delay: backoff * 2^attempt
++// Equal jitter spreads retries over the upper half of the exponential window.
+@@ -83 +83,2 @@
+-  return backoff * Math.pow(2, attempt);
++  const ceiling = backoff * Math.pow(2, attempt);
++  return Math.floor(ceiling / 2 + Math.random() * ceiling / 2);

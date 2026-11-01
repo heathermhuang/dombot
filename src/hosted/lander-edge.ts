@@ -114,7 +114,7 @@ export default {
       .parse(JSON.parse(env.WORKSPACES))
       .find((w) => w.id === row.workspace_id);
     const key = z
-      .record(z.string().min(32))
+      .record(z.string(), z.string().min(32))
       .parse(JSON.parse(env.SALES_EDGE_KEYS ?? '{}'))[row.workspace_id];
     if (!configured || !key) return missing();
     if (row.status === 'checking-page') {

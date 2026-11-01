@@ -99,7 +99,7 @@ export async function provisionPortfolio(
   )
     throw Error('Unsafe template bindings');
   const secrets = z
-    .record(z.string().min(1))
+    .record(z.string(), z.string().min(1))
     .parse(JSON.parse(env.TENANT_SECRETS_JSON));
   if (
     Object.keys(secrets).some(

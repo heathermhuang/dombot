@@ -40,7 +40,7 @@ export function workspaceService(
   return service as Pick<Fetcher, 'fetch'>;
 }
 export function gatewayKey(env: HostedEnv, id: string): string {
-  const schema = z.record(z.string().min(32));
+  const schema = z.record(z.string(), z.string().min(32));
   const existing = schema.parse(JSON.parse(env.GATEWAY_KEYS));
   const added = schema.parse(JSON.parse(env.EXTRA_GATEWAY_KEYS ?? '{}'));
   if (Object.keys(added).some((key) => key in existing))
