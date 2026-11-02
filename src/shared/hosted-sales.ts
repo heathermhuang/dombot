@@ -155,6 +155,7 @@ export const publishedSaleSchema = z
     mode: saleModeSchema,
     description: z.string().max(400),
     categories: z.array(z.string().max(40)).max(10),
+    providerIntent: z.enum(['buy', 'offer', 'view']).optional(),
     publicPrice: saleMoneySchema.nullable(),
     publicMinimumOffer: saleMoneySchema.nullable(),
     destination: destinationSchema

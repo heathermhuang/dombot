@@ -8,6 +8,7 @@ const tools: Record<string, (typeof HOSTED_SCOPES)[number]> = {
   domain_transfer_out_get: 'portfolio:read',
   domain_transfer_out_approve: 'domains:write',
   market_list: 'portfolio:read',
+  market_public_page_propose: 'portfolio:read',
   market_sync: 'portfolio:read',
   market_listings: 'portfolio:read',
   domain_listing_get: 'portfolio:read',

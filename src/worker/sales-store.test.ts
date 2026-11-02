@@ -1541,3 +1541,110 @@ describe('all reviewed publication writers reserve before tenant commit', () => 
     expect(attempts[2]).toEqual(attempts[1]);
   });
 });
+
+describe('market-only private page preparation', () => {
+  it('copies exact selected terms and public identity destination without control or auto-publication, and rejects stale-tab saves', async () => {
+    configureStore(new MemoryDocStore());
+    await hydrateStores();
+    const { Namespace } = await import('../core/storage/namespace');
+    const { putMarketListings } = await import('../core/services/markets/sync');
+    const { flushWrites } = await import('../core/storage/namespace');
+    const { preparePrivatePage, prepareMarketPage, marketOffersFor } =
+      await import('./market-page-preparation');
+    const { createVerifiedSaleObserver } = await import('./sales-observation');
+    const account = 'private-market-account';
+    const seed = async (name: string, key: string, value: unknown) => {
+      const namespace = new Namespace(name);
+      await namespace.load();
+      await namespace.set(key, value);
+    };
+    await seed('market-accounts', account, {
+      id: account,
+      market: 'sedo',
+      label: 'Market only',
+      enabled: true,
+      createdAt: Date.now(),
+    });
+    await seed('market-credentials', account, {
+      user: 'PRIVATE',
+      password: 'PRIVATE',
+    });
+    await seed('market-last-sync', account, {
+      at: Date.now(),
+      lastError: null,
+      listings: 1,
+      sales: 0,
+      incomplete: false,
+      notes: [],
+    });
+    putMarketListings(account, [
+      {
+        market: 'sedo',
+        accountId: account,
+        name: 'marketonly.io',
+        displayName: null,
+        status: 'active',
+        statusRaw: 'active',
+        forSale: true,
+        price: '1479.09',
+        buyNow: true,
+        minOffer: null,
+        floor: 'SECRET',
+        discount: null,
+        currency: 'USD',
+        leaseToOwn: null,
+        tier: null,
+        listedAt: null,
+        updatedAt: null,
+        publicObservedAt: Date.now(),
+        extra: {
+          market: 'sedo',
+          categories: [],
+          language: null,
+          parkingEarnings: null,
+          keywords: [],
+        },
+      },
+    ]);
+    await flushWrites();
+    await hydrateStores();
+    const prepared = await preparePrivatePage(store, 'marketonly.io', account),
+      saved = prepared.item;
+    expect(saved.draft.priceSource?.kind).toBe('market');
+    expect(saved.published).toBeNull();
+    const offers = await marketOffersFor('marketonly.io');
+    expect(offers[0].price?.amount).toBe('1479.09');
+    expect((await store.destination(saved.draft.destinationId))?.url).toBe(
+      'https://sedo.com/search/details/?domain=marketonly.io',
+    );
+    await expect(
+      store.prepare(
+        [{ id: saved.draft.id, revision: saved.revision }],
+        createVerifiedSaleObserver({ DB: db, DOMBOT_AUTH: 'external' } as Env),
+      ),
+    ).rejects.toThrow(/registrar|DNS/);
+    await expect(
+      prepareMarketPage(
+        store,
+        { ...saved, revision: crypto.randomUUID() },
+        account,
+        saved.revision,
+      ),
+    ).rejects.toThrow(/changed/);
+    const existing = await preparePrivatePage(store, 'marketonly.io', account);
+    expect(existing.existing).toBe(true);
+    expect(existing.item.revision).toBe(saved.revision);
+    const review = await store.prepare(
+      [{ id: saved.draft.id, revision: saved.revision }],
+      () => ({ ...observation(), marketOffer: offers[0] }),
+    );
+    expect(JSON.stringify(review.items[0].after)).not.toMatch(
+      /SECRET|private-market-account|PRIVATE/,
+    );
+    expect(review.items[0].after.publicPrice?.amount).toBe('1479.09');
+    expect(review.items[0].after.providerIntent).toBe('buy');
+    const html = renderSalesLander(review.items[0].after, '', null);
+    expect(html).toContain('Buy through Sedo');
+    expect(html.indexOf('href="https://sedo.com/')).toBeGreaterThan(0);
+  });
+});

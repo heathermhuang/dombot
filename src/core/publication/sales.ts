@@ -105,6 +105,16 @@ export function salesProjection(
     mode: d.mode,
     description: d.description,
     categories: d.categories,
+    ...(d.priceSource?.kind === 'market'
+      ? {
+          providerIntent:
+            marketOffer?.buyNow && publicPrice
+              ? ('buy' as const)
+              : publicPrice
+                ? ('offer' as const)
+                : ('view' as const),
+        }
+      : {}),
     publicPrice,
     publicMinimumOffer: d.minimumOffer,
     destination: destination
