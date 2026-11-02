@@ -223,7 +223,7 @@ export class SalesStore {
     };
   }
   async save(input: SaleDraft, expected: string | null): Promise<string> {
-    const draft = saleDraftSchema.parse(input),
+    const draft = saleDraftSchema.parse({ ...input, version: 2 }),
       revision = crypto.randomUUID(),
       hash = await this.hash('domain', draft.domain);
     if (expected) {

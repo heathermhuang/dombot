@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import type { MarketAccountView } from '../../../shared/markets';
 import type { SaleDestination } from '../../../shared/hosted-sales';
 import {
   salesRequest,
@@ -10,6 +12,9 @@ import { SalesShell, SalesFeedback, Field } from './shared';
 export default function Channels() {
   const remote = useSalesData<{ items: SaleDestination[] }>('/destinations'),
     action = useSalesAction();
+  const accounts = useSalesData<{ items: MarketAccountView[] }>(
+    '/market-accounts',
+  );
   const [provider, setProvider] = useState('Spaceship'),
     [url, setUrl] = useState(''),
     [domain, setDomain] = useState('');
@@ -113,11 +118,28 @@ export default function Channels() {
         </button>
       </form>
       <section className="sales-section">
-        <h2>API connections</h2>
+        <h2>Connected marketplace accounts</h2>
+        {accounts.error && <p role="alert">{accounts.error}</p>}
+        <ul>
+          {accounts.data?.items.map((account) => (
+            <li key={account.id}>
+              {account.label} · {account.market} ·{' '}
+              {account.enabled && account.configured
+                ? account.sync?.lastError
+                  ? 'Sync needs attention'
+                  : 'Connected'
+                : 'Disabled or not configured'}
+            </li>
+          ))}
+        </ul>
         <p className="small">
-          Automatic marketplace connections are not available yet. Add a manual
-          link above and review it before publishing. Exports can be uploaded to
-          your provider; they do not keep listings synchronized.
+          Afternic, Atom and Sedo use the accounts in Settings → Markets.
+          Connected listing data can prepare private pages; it does not prove
+          domain control or create a verified checkout. Public links require
+          separate review. Exports remain manual.{' '}
+          <Link className="link" to="/settings?tab=markets">
+            Manage market accounts
+          </Link>
         </p>
       </section>
     </SalesShell>

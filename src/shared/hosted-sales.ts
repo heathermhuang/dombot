@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { canonicalDomain } from './publication';
-import { toCurrencyCode } from './currencies';
+import { toCurrencyCode, CURRENCIES, type CurrencyCode } from './currencies';
+import { parseCanonicalAmount, formatAmountInput } from './money';
 
 export const saleDomainSchema = z
   .string()
@@ -16,16 +17,40 @@ export const saleDomainSchema = z
       return z.NEVER;
     }
   });
+/** Exact, bounded checkout money; no floating point or implicit rounding. */
 export const saleMoneySchema = z
   .object({
-    amount: z
-      .string()
-      .regex(/^[1-9][0-9]{0,11}$/, 'Use a positive whole amount.'),
+    amount: z.string().regex(/^(0|[1-9][0-9]{0,11})(\.[0-9]{1,4})?$/),
     currency: z
       .string()
       .refine((v) => toCurrencyCode(v) === v, 'Choose a supported currency.'),
   })
-  .strict();
+  .strict()
+  .superRefine((money, ctx) => {
+    try {
+      const amount = parseCanonicalAmount(
+        money.amount,
+        money.currency,
+        'Price',
+      );
+      if (!amount || !/[1-9]/.test(amount))
+        throw new Error('Use a positive amount.');
+    } catch (error) {
+      ctx.addIssue({
+        code: 'custom',
+        message: String(error instanceof Error ? error.message : error),
+      });
+    }
+  });
+export function saleMinorUnits(money: {
+  amount: string;
+  currency: string;
+}): bigint {
+  const value = saleMoneySchema.parse(money);
+  const decimals = CURRENCIES[value.currency as CurrencyCode];
+  const [integer, fraction = ''] = value.amount.split('.');
+  return BigInt(integer + fraction.padEnd(decimals, '0'));
+}
 export type SaleMoney = z.infer<typeof saleMoneySchema>;
 export const saleModeSchema = z.enum([
   'inquiry',
@@ -68,7 +93,7 @@ export const priceSourceSchema = z.discriminatedUnion('kind', [
 ]);
 export const saleDraftSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     id: z.string().uuid(),
     domain: saleDomainSchema,
     mode: saleModeSchema,
@@ -103,7 +128,7 @@ export const saleDraftSchema = z
 export type SaleDraft = z.infer<typeof saleDraftSchema>;
 export const publishedSaleSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     id: z.string().uuid(),
     domain: saleDomainSchema,
     displayName: z.string().min(1).max(253),
@@ -186,7 +211,7 @@ export type DeliveryState = z.infer<typeof deliveryStateSchema>;
 export function emptySale(domain: string, priceFingerprint: string): SaleDraft {
   domain = canonicalDomain(domain);
   return {
-    version: 1,
+    version: 2,
     id: crypto.randomUUID(),
     domain,
     displayName: domain,
@@ -203,7 +228,7 @@ export function emptySale(domain: string, priceFingerprint: string): SaleDraft {
 }
 export function salePriceLabel(price: SaleMoney | null): string {
   return price
-    ? `${price.currency} ${BigInt(price.amount).toLocaleString('en-US')}`
+    ? `${price.currency} ${formatAmountInput(price.amount, price.currency, 'us')}`
     : 'Request price';
 }
 

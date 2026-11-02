@@ -18,7 +18,7 @@ const privateRow = z
   .strict();
 export const salesBackupSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     drafts: z.array(saleDraftSchema).max(20_000),
     destinations: z.array(destinationSchema).max(100),
     shop: shopDraftSchema.nullable(),
@@ -177,7 +177,7 @@ export async function exportSales(
   const open = async (r: Record<string, unknown>) =>
     JSON.parse(await store.cipher.open(String(r.sealed)));
   return salesBackupSchema.parse({
-    version: 1,
+    version: 2,
     suppressions: await Promise.all(
       (await read('sales_suppression')).map(async (r) => ({
         email: z.object({ email: z.string().email() }).parse(await open(r))
