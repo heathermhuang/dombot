@@ -53,6 +53,7 @@ beforeAll(async () => {
     '0001_docs.sql',
     '0002_publication.sql',
     '0004_sales.sql',
+    '0009_sales_lifecycle.sql',
     '0005_sales_inquiries.sql',
     '0006_sales_control_leases.sql',
     '0008_publication_change_sets.sql',
@@ -662,9 +663,7 @@ it('publishes v3 and Sales together without a public owner email and suppresses 
   expect(site.salesLinks[0].publishedRevision).toBe(
     (await sales.get(sale.id)).published!.revision,
   );
-  expect(receipt.urls).toContain(
-    'https://public.example/linked.example',
-  );
+  expect(receipt.urls).toContain('https://public.example/linked.example');
   const saved = await sales.get(sale.id);
   await sales.save(
     {

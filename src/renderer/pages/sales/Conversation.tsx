@@ -48,6 +48,7 @@ export default function Conversation({
     [evidence, setEvidence] = useState(''),
     [outcomeAmount, setOutcomeAmount] = useState(''),
     [outcomeCurrency, setOutcomeCurrency] = useState(''),
+    [coreSale, setCoreSale] = useState(''),
     [older, setOlder] = useState<SalesThread['messages']>([]),
     [olderCursor, setOlderCursor] = useState<string | null | undefined>(
       undefined,
@@ -169,10 +170,19 @@ export default function Conversation({
           <h2>Sale observations</h2>
           {thread.outcomes?.map((o) => (
             <p key={o.id} className="small">
-              {o.state} · seller-entered · {o.provider} ·{' '}
+              {o.state === 'completed' ? 'Completion reported' : o.state} ·
+              seller-entered · {o.provider} ·{' '}
               {new Date(o.createdAt).toLocaleString()}
               <br />
               {o.evidence}
+              {o.coreEvidence && (
+                <span>
+                  <br />
+                  Core Sales: {o.coreEvidence.status} · {o.coreEvidence.source}{' '}
+                  · payout{' '}
+                  {o.coreEvidence.paidOutOn ?? 'not separately confirmed'}
+                </span>
+              )}
             </p>
           ))}
           <h2>Delivery records</h2>
@@ -332,6 +342,27 @@ export default function Conversation({
               Price agreed does not mean paid. A checkout click never marks a
               sale paid automatically.
             </p>
+            <p className="small">
+              Reports do not create completed revenue. Payment and transfer
+              reports hold new selling actions. Record actual transaction terms
+              in core Sales, then explicitly link the evidence here.
+            </p>
+            <Field label="Core Sales evidence (optional)">
+              <select
+                value={coreSale}
+                onChange={(e) => setCoreSale(e.target.value)}
+              >
+                <option value="">Keep as a seller report</option>
+                {thread.saleEvidence?.map((candidate) => (
+                  <option
+                    key={JSON.stringify(candidate.reference)}
+                    value={JSON.stringify(candidate.reference)}
+                  >
+                    {candidate.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Observed outcome">
               <select
                 value={outcome}
@@ -352,7 +383,7 @@ export default function Conversation({
             <div className="grid-two">
               <Field label="Reported price (optional)">
                 <input
-                  inputMode="numeric"
+                  inputMode="decimal"
                   value={outcomeAmount}
                   onChange={(e) => setOutcomeAmount(e.target.value)}
                 />
@@ -391,6 +422,7 @@ export default function Conversation({
                     followUpAt: thread.followUpAt,
                     outcome: {
                       state: outcome,
+                      ...(coreSale ? { coreSale: JSON.parse(coreSale) } : {}),
                       source: 'seller-entered',
                       evidence,
                       price: outcomeAmount

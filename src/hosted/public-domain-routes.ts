@@ -45,12 +45,15 @@ export async function publicDomainRequest(
   )
     return null;
   const legacy = incoming.pathname.match(
-    /^\/w\/([a-f0-9-]{36})\/d\/([^/]+)(\/inquiries)?\/?$/,
+    /^\/w\/([a-f0-9-]{36})\/d\/([^/]+)(\/(?:inquiries|provider))?\/?$/,
   );
-  const short = incoming.pathname.match(/^\/([^/]+\.[^/]+)(\/inquiries)?\/?$/);
+  const short = incoming.pathname.match(
+    /^\/([^/]+\.[^/]+)(\/(?:inquiries|provider))?\/?$/,
+  );
   if (!legacy && !short) return null;
   const raw = legacy?.[2] ?? short![1];
-  const inquiry = Boolean(legacy?.[3] ?? short?.[2]);
+  const suffix = legacy?.[3] ?? short?.[2] ?? '';
+  const inquiry = suffix === '/inquiries';
   let domain: string;
   try {
     domain = canonicalDomain(decodeURIComponent(raw));
@@ -120,7 +123,7 @@ export async function publicDomainRequest(
     )
       return unavailable();
     await directory.settle(route, result.revision);
-    const canonicalPath = `/${domain}${inquiry ? '/inquiries' : ''}`;
+    const canonicalPath = `/${domain}${suffix}`;
     if (legacy || incoming.pathname !== canonicalPath)
       return new Response(null, {
         status: 308,
@@ -130,7 +133,7 @@ export async function publicDomainRequest(
     const workspace = await workspaceFor(env, id);
     if (!workspace) return unavailable(503);
     const url = new URL(incoming);
-    url.pathname = `/d/${domain}${inquiry ? '/inquiries' : ''}`;
+    url.pathname = `/d/${domain}${suffix}`;
     const forwardedHeaders = new Headers(request.headers);
     for (const name of [...forwardedHeaders.keys()])
       if (

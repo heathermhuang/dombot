@@ -1,3 +1,4 @@
+import type { CoreSaleReference } from './sales-events';
 import type { MarketPublicOffer } from './market-public-offer';
 import type {
   PublishedSale,
@@ -58,11 +59,25 @@ export interface SalesInboxItem {
   followUpAt: number | null;
 }
 export interface SalesThread {
+  saleEvidence?: {
+    reference: CoreSaleReference;
+    label: string;
+    status: string;
+    price: SaleMoney | null;
+  }[];
   outcomes: {
     id: string;
     createdAt: number;
     state: string;
     source: 'seller-entered';
+    coreSale?: CoreSaleReference;
+    coreEvidence?: {
+      status: string;
+      source?: string;
+      paymentEvidence?: string;
+      transferEvidence?: string;
+      paidOutOn?: string | null;
+    };
     evidence: string;
     provider: string;
     price: SaleMoney | null;

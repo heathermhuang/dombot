@@ -26,7 +26,9 @@ export function validateSalesDestination(
       decodeURIComponent(u.pathname),
     ) ||
     [...u.searchParams.keys()].some((key) =>
-      /token|secret|signature|session|auth|key|redirect|return|url/i.test(key),
+      /token|secret|signature|session|auth|key|redirect|return|url|invoice|payment|checkout|negotiat|buyer|email|access|expires|transaction/i.test(
+        key,
+      ),
     ) ||
     !hosts[provider].includes(u.hostname.toLowerCase())
   )

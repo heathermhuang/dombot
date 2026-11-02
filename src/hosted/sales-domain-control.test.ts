@@ -93,6 +93,7 @@ beforeAll(async () => {
   for (const file of [
     '0002_publication.sql',
     '0004_sales.sql',
+    '0009_sales_lifecycle.sql',
     '0005_sales_inquiries.sql',
     '0006_sales_control_leases.sql',
   ])

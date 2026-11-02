@@ -115,6 +115,9 @@ export function salesProjection(
                 : ('view' as const),
         }
       : {}),
+    ...(d.priceSource?.kind === 'market'
+      ? { sourceValidUntil: marketOffer!.source.validUntil }
+      : {}),
     publicPrice,
     publicMinimumOffer: d.minimumOffer,
     destination: destination

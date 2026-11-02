@@ -526,7 +526,7 @@ describe('sales as sold events', () => {
     ]);
   });
 
-  it('links your own sale of the name and fills in its price', async () => {
+  it('retains an amount-less seller sale for explicit matching without duplicate revenue', async () => {
     putEvents([
       newEvent({
         domain: 'mine.com',
@@ -544,8 +544,8 @@ describe('sales as sold events', () => {
       expect.objectContaining({
         source: DomainEventSource.User,
         date: '2026-10-10',
-        amount: '499.00',
-        marketSale: `${ACCOUNT}:t1`,
+        amount: null,
+        currency: null,
       }),
     ]);
   });

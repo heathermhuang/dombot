@@ -1,3 +1,5 @@
+import { recordJourney } from './sales-journey';
+import { validateSalesDestination } from '../shared/sales-provider';
 import {
   publicDomainPath,
   publicDomainUrl,
@@ -161,6 +163,28 @@ export function createPublicSalesRoutes() {
     );
   };
   const base = (c: { get: (key: 'salesBase') => string }) => c.get('salesBase');
+  app.get('/d/:domain/provider', async (c) => {
+    const snapshot = await readPublicSale(
+      c.env.DB,
+      canonicalDomain(c.req.param('domain')),
+    );
+    if (
+      !snapshot?.destination ||
+      !['buy-now', 'external'].includes(snapshot.mode)
+    )
+      return c.text('Provider path unavailable', 404, salesHeaders);
+    const destination = validateSalesDestination(
+      snapshot.destination.provider,
+      snapshot.destination.url,
+      snapshot.domain,
+    );
+    if (c.req.method !== 'HEAD')
+      await recordJourney(c.env.DB, snapshot.id, 'provider-opened');
+    return new Response(null, {
+      status: 303,
+      headers: { ...salesHeaders, Location: destination },
+    });
+  });
   app.get('/d/:domain', async (c) => {
     const snapshot = await readPublicSale(
       c.env.DB,
@@ -172,6 +196,8 @@ export function createPublicSalesRoutes() {
         ? await verifyTenantAdmission(c.env, c.req.raw)
         : null;
     c.header('X-Domains-Sales-Revision', snapshot.revision);
+    if (c.req.method !== 'HEAD')
+      await recordJourney(c.env.DB, snapshot.id, 'page-rendered');
     return c.html(
       renderSalesLander(
         snapshot,
@@ -189,6 +215,7 @@ export function createPublicSalesRoutes() {
                 c.env.DOMBOT_SALES_ORIGIN,
               ),
               inquiryPath: '/inquiries',
+              providerPath: '/provider',
               privacyUrl: new URL(
                 '/privacy',
                 c.env.DOMBOT_SALES_ORIGIN ?? c.req.url,

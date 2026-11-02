@@ -47,7 +47,10 @@ export async function publicLinkedSales(
       byId.set(parsed.data.id, {
         sale: parsed.data,
         actionable:
-          r.availability === 'available' && r.control_expires_at > Date.now(),
+          r.availability === 'available' &&
+          r.control_expires_at > Date.now() &&
+          (parsed.data.sourceValidUntil == null ||
+            parsed.data.sourceValidUntil > Date.now()),
       });
   }
   const result = new Map<string, ResolvedSiteLink>();

@@ -13,6 +13,7 @@ export const MAINTENANCE_TABLES = [
   'portfolio_drafts',
   'published_portfolios',
   'sale_drafts',
+  'sale_public_sources',
   'sale_destinations',
   'published_sales',
   'sales_reviews',
@@ -33,6 +34,9 @@ export const MAINTENANCE_TABLES = [
   'sales_control_leases',
 ] as const;
 const infrastructure = new Set([
+  // Historical aggregate counters do not schedule background work.
+  'sales_journey_daily',
+  'sales_journey_receipts',
   'publication_dependencies',
   'publication_authority',
   'docs',

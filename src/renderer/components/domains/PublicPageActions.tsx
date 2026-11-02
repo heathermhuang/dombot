@@ -67,7 +67,7 @@ export function PublicPageActions({ domain }: { domain: string }) {
                 void navigator.clipboard
                   .writeText(
                     new URL(
-                      publicDomainPath('', domain),
+                      publicDomainPath(hostPath('/'), domain),
                       window.location.origin,
                     ).href,
                   )

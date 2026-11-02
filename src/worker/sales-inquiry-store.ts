@@ -1,3 +1,8 @@
+import { recordJourney } from './sales-journey';
+import {
+  resolveSaleEvidence,
+  saleEvidenceChoices,
+} from './sales-outcome-evidence';
 import { z } from 'zod';
 import {
   inquirySchema,
@@ -227,8 +232,8 @@ export class SalesInquiryStore {
     try {
       await this.sales.atomic([
         ...this.sales.guard(
-          "EXISTS(SELECT 1 FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id=? AND p.revision=? AND d.availability='available' AND d.control_expires_at>?)",
-          [snapshot.id, input.observedRevision, now],
+          "EXISTS(SELECT 1 FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id=? AND p.revision=? AND d.availability IN ('available','source-stale') AND d.control_expires_at>? AND (?=0 OR (d.availability='available' AND COALESCE(json_extract(p.payload,'$.sourceValidUntil'),9223372036854775807)>?)))",
+          [snapshot.id, input.observedRevision, now, input.offer ? 1 : 0, now],
         ),
         this.db
           .prepare(
@@ -292,7 +297,16 @@ export class SalesInquiryStore {
         'This confirmation link expired or was revoked.',
         403,
       );
-    if (grant.consumed_at) return;
+    if (grant.consumed_at) {
+      const lead = await this.lead(grant.lead_id);
+      await recordJourney(
+        this.db,
+        lead.listing_id,
+        'inquiry-verified',
+        grant.lead_id,
+      );
+      return;
+    }
     const marker = crypto.randomUUID(),
       now = Date.now();
     try {
@@ -321,6 +335,13 @@ export class SalesInquiryStore {
     } catch (e) {
       if (!(await this.token(raw, 'verify'))?.consumed_at) throw e;
     }
+    const lead = await this.lead(grant.lead_id);
+    await recordJourney(
+      this.db,
+      lead.listing_id,
+      'inquiry-verified',
+      grant.lead_id,
+    );
   }
   async lead(id: string) {
     const row = await this.db
@@ -470,11 +491,29 @@ export class SalesInquiryStore {
       .bind(id)
       .all<{ id: string; sealed: string; created_at: number }>();
     const outcomes = await Promise.all(
-      events.results.map(async (r) => ({
-        id: r.id,
-        createdAt: r.created_at,
-        ...(await this.sales.open(r.sealed, saleOutcomeSchema)),
-      })),
+      events.results.map(async (r) => {
+        const outcome = await this.sales.open(r.sealed, saleOutcomeSchema);
+        let coreEvidence:
+          | ReturnType<typeof resolveSaleEvidence>
+          | { status: string }
+          | undefined;
+        if (outcome.coreSale) {
+          try {
+            coreEvidence = resolveSaleEvidence(
+              l.payload.snapshot.domain,
+              outcome.coreSale,
+            );
+          } catch {
+            coreEvidence = { status: 'unknown-or-unavailable' };
+          }
+        }
+        return {
+          id: r.id,
+          createdAt: r.created_at,
+          ...outcome,
+          ...(coreEvidence ? { coreEvidence } : {}),
+        };
+      }),
     );
     return {
       ...common,
@@ -485,6 +524,7 @@ export class SalesInquiryStore {
       followUpAt: l.follow_up_at,
       deliveries: deliveries.results,
       outcomes,
+      saleEvidence: saleEvidenceChoices(l.payload.snapshot.domain),
     };
   }
   async message(
@@ -661,6 +701,12 @@ export class SalesInquiryStore {
       );
     if (outcome) {
       outcome = saleOutcomeSchema.parse(outcome);
+      if (outcome.coreSale)
+        resolveSaleEvidence(
+          l.payload.snapshot.domain,
+          outcome.coreSale,
+          outcome.price,
+        );
       statements.push(
         this.db
           .prepare(
@@ -683,11 +729,31 @@ export class SalesInquiryStore {
         statements.push(
           this.db
             .prepare(
-              "UPDATE sale_drafts SET availability='sold',operational_revision=? WHERE id=?",
+              'UPDATE sale_drafts SET availability=?,operational_revision=? WHERE id=?',
+            )
+            .bind(
+              outcome.state === 'completed' ? 'sold' : 'sale-pending',
+              crypto.randomUUID(),
+              l.listing_id,
+            ),
+        );
+      if (outcome.state === 'canceled')
+        statements.push(
+          this.db
+            .prepare(
+              "UPDATE sale_drafts SET availability='paused',operational_revision=? WHERE id=? AND availability IN ('sale-pending','sold','available','source-stale')",
             )
             .bind(crypto.randomUUID(), l.listing_id),
         );
     }
+    if (status === 'agreed')
+      statements.push(
+        this.db
+          .prepare(
+            "UPDATE sale_drafts SET availability='sale-pending',operational_revision=? WHERE id=? AND availability IN ('available','source-stale')",
+          )
+          .bind(crypto.randomUUID(), l.listing_id),
+      );
     await this.sales.atomic(statements);
   }
   async resend(raw: string, purpose: 'thread' | 'verify'): Promise<void> {

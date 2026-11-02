@@ -123,3 +123,16 @@ it('sleeps after the last real work is removed and gives a stable empty revision
   expect(first.revision).toMatch(/^[a-f0-9]{64}$/);
   expect(await readMaintenanceState(env)).toEqual(first);
 });
+
+it('does not keep an otherwise empty account awake for historical journey counts', async () => {
+  await doc('meta', 'schemaVersion', 5);
+  sqlite
+    .prepare(
+      'INSERT INTO sales_journey_daily(day,listing_id,event,count) VALUES(?,?,?,1)',
+    )
+    .run('2026-11-02', 'synthetic-listing', 'page-rendered');
+  sqlite
+    .prepare('INSERT INTO sales_journey_receipts(event,receipt) VALUES(?,?)')
+    .run('inquiry-verified', 'synthetic-receipt');
+  expect((await readMaintenanceState(env)).state).toBe('empty');
+});
