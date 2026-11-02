@@ -1,3 +1,7 @@
+import {
+  publicDomainPath,
+  publicDomainUrl,
+} from '../shared/public-publishing-links';
 import { publishedBacklinks } from './publication-links';
 import { publicShop, publicSalesCsv } from './sales-shop';
 import {
@@ -8,7 +12,11 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { canonicalDomain } from '../shared/publication';
-import { inquirySchema, salePriceLabel, saleModeLabel } from '../shared/hosted-sales';
+import {
+  inquirySchema,
+  salePriceLabel,
+  saleModeLabel,
+} from '../shared/hosted-sales';
 import {
   renderSalesLander,
   salesPage,
@@ -174,6 +182,7 @@ export function createPublicSalesRoutes() {
           : null,
         admission?.sales?.purpose === 'sales-public' && admission.sales.listing
           ? {
+              canonicalUrl: new URL(c.req.url).origin + '/',
               backlinks: await publishedBacklinks(
                 c.env.DB,
                 snapshot,
@@ -186,6 +195,9 @@ export function createPublicSalesRoutes() {
               ).href,
             }
           : {
+              canonicalUrl: c.env.DOMBOT_SALES_ORIGIN
+                ? publicDomainUrl(c.env.DOMBOT_SALES_ORIGIN, snapshot.domain)
+                : undefined,
               backlinks: await publishedBacklinks(
                 c.env.DB,
                 snapshot,
@@ -457,7 +469,7 @@ export function createPublicSalesRoutes() {
               )} · <a href="?">Reset filters</a>`
             : ''
         }</p>
-<table class="ledger"><thead><tr><th>Domain</th><th>Price</th><th>Sales path</th></tr></thead><tbody>${items.map((s) => `<tr><td><a href="${e(base(c))}/d/${e(s.domain)}">${e(s.displayName)}</a><span class="shop-mobile-mode">${e(saleModeLabel(s.mode))}</span></td><td>${e(salePriceLabel(s.publicPrice))}</td><td>${e(saleModeLabel(s.mode))}</td></tr>`).join('')}</tbody></table>${!items.length ? '<p>No matching domains. Adjust your filters or <a href="?">reset filters</a>.</p>' : ''}${cursor ? `<a class="cta secondary" href="?${e(values.toString())}">Next page</a>` : ''}<p class="note"><a href="${e(base(c))}/shop/${e(shop.handle)}/export?${e(exportQuery.toString())}">Download these results as CSV (up to 100)</a></p>`,
+<table class="ledger"><thead><tr><th>Domain</th><th>Price</th><th>Sales path</th></tr></thead><tbody>${items.map((s) => `<tr><td><a href="${e(publicDomainPath(base(c), s.domain))}">${e(s.displayName)}</a><span class="shop-mobile-mode">${e(saleModeLabel(s.mode))}</span></td><td>${e(salePriceLabel(s.publicPrice))}</td><td>${e(saleModeLabel(s.mode))}</td></tr>`).join('')}</tbody></table>${!items.length ? '<p>No matching domains. Adjust your filters or <a href="?">reset filters</a>.</p>' : ''}${cursor ? `<a class="cta secondary" href="?${e(values.toString())}">Next page</a>` : ''}<p class="note"><a href="${e(base(c))}/shop/${e(shop.handle)}/export?${e(exportQuery.toString())}">Download these results as CSV (up to 100)</a></p>`,
       ),
     );
   });

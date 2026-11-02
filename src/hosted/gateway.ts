@@ -1,4 +1,5 @@
 import { pendingWorkspace, activateWorkspace, accountLimit } from './on-demand';
+import { publicDomainRequest } from './public-domain-routes';
 import {
   portfolioStart,
   onboardingScriptPath,
@@ -170,6 +171,8 @@ app.use('*', async (c, next) => {
   if (publicSiteResponse) return publicSiteResponse;
   const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
   if (redirect) return redirect;
+  const domainResponse = await publicDomainRequest(c.req.raw, c.env);
+  if (domainResponse) return domainResponse;
   c.header('Cache-Control', 'no-store');
   c.header('X-Content-Type-Options', 'nosniff');
   // Native POST forms may send Origin:null under no-referrer. same-origin

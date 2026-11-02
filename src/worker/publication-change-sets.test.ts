@@ -283,7 +283,7 @@ it('keeps v3 strict, preserves legacy fractional prices, and suppresses changed 
     (await publicLinkedSales(db, site, 'https://public.example/w/fixture')).get(
       'domain',
     )?.url,
-  ).toBe('https://public.example/w/fixture/d/linked.example');
+  ).toBe('https://public.example/linked.example');
   await sales.availability(
     d.id,
     (await sales.get(d.id)).operationalRevision,
@@ -663,7 +663,7 @@ it('publishes v3 and Sales together without a public owner email and suppresses 
     (await sales.get(sale.id)).published!.revision,
   );
   expect(receipt.urls).toContain(
-    'https://public.example/w/fixture/d/linked.example',
+    'https://public.example/linked.example',
   );
   const saved = await sales.get(sale.id);
   await sales.save(
@@ -983,7 +983,7 @@ it('resolves preview terms in one published-only batch and suppresses stale, mis
   expect(terms).toHaveLength(200);
   expect(terms[0]).toMatchObject({
     price: { amount: '12345', currency: 'USD' },
-    url: 'https://public.example/w/fixture/d/preview.example',
+    url: 'https://public.example/preview.example',
   });
   expect(JSON.stringify(terms)).not.toContain('PRIVATE OVERRIDE');
   expect(
