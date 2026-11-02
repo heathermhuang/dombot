@@ -30,3 +30,5 @@ Final exact source qualification: 233 test files passed, 2,532 passing tests, on
 - [ ] Exact lifecycle PR-head CI/Security: status and immutable run receipts are recorded in PR metadata after push.
 - [ ] Meaningful browser owner/buyer flow: blocked by locked Mac and no connected browser; synthetic fixture is ready, user unlock requested.
 - [ ] Merge/release/backfill/provider/customer qualification: outside this PR-only authorization; release sequence documented.
+
+Final host-only correction: backfill compare-and-set cannot replace a newer reviewed reservation or reopen a tombstone. All 13 routing/transfer/backfill/500-account tests passed; typecheck, focused lint, gateway dry run and unchanged engine integrity passed. Previous lifecycle head `f31816fc` passed CI; exact corrected-head CI/Security status is tracked on PR #142. Browser remains blocked awaiting Mac unlock.

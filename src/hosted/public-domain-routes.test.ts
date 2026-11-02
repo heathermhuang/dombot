@@ -147,7 +147,7 @@ beforeAll(async () => {
     for (const file of [
       '0002_publication.sql',
       '0004_sales.sql',
-    '0009_sales_lifecycle.sql',
+      '0009_sales_lifecycle.sql',
       '0005_sales_inquiries.sql',
       '0006_sales_control_leases.sql',
     ])
@@ -425,6 +425,30 @@ describe('canonical public domain routing', () => {
     expect(second.done).toBe(true);
     expect((await route('/second.io')).status).toBe(200);
     expect((await backfillDomainRoutes(env, ids[0], 1)).done).toBe(true);
+  });
+  it('does not let an older backfill observation replace a newer reservation or tombstone', async () => {
+    const listing = await publish(),
+      directory = new PublicDomainDirectory(control),
+      old = (await directory.get('working.io'))!;
+    const newer = await directory.reserve(ids[0], {
+      domain: 'working.io',
+      listing,
+      revision: crypto.randomUUID(),
+    });
+    await backfillDomainRoutes(env, ids[0], 1);
+    expect(await directory.get('working.io')).toMatchObject({
+      revision: newer.revision,
+      generation: newer.generation,
+      state: 'reserved',
+    });
+    await directory.withdraw(newer);
+    const tombstone = await directory.get('working.io');
+    await directory.reserve(
+      ids[0],
+      { domain: 'working.io', listing, revision: old.revision },
+      'backfill',
+    );
+    expect(await directory.get('working.io')).toEqual(tombstone);
   });
   it('requires fresh control plus explicit generation-bound transfer and never reactivates the former publication', async () => {
     await publish(0);

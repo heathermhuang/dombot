@@ -34,7 +34,11 @@ export class PublicDomainDirectory {
       .bind(canonicalDomain(domain))
       .first<DomainRoute>();
   }
-  async reserve(workspace: string, raw: RouteClaim): Promise<DomainRoute> {
+  async reserve(
+    workspace: string,
+    raw: RouteClaim,
+    mode: 'reviewed' | 'backfill' = 'reviewed',
+  ): Promise<DomainRoute> {
     const claim = routeClaimSchema.parse(raw);
     const row = await this.db
       .prepare(
@@ -44,11 +48,27 @@ export class PublicDomainDirectory {
       ON CONFLICT(domain) DO UPDATE SET revision=excluded.revision,state='reserved',
         generation=public_domain_routes.generation+CASE WHEN public_domain_routes.revision=excluded.revision AND public_domain_routes.state IN ('reserved','active') THEN 0 ELSE 1 END,updated_at=excluded.updated_at
       WHERE public_domain_routes.workspace_id=excluded.workspace_id AND public_domain_routes.listing_id=excluded.listing_id AND public_domain_routes.state!='hold'
+      AND (?6=0 OR (public_domain_routes.revision=excluded.revision AND public_domain_routes.state IN ('reserved','active')))
       RETURNING *`,
       )
-      .bind(claim.domain, workspace, claim.listing, claim.revision, Date.now())
+      .bind(
+        claim.domain,
+        workspace,
+        claim.listing,
+        claim.revision,
+        Date.now(),
+        mode === 'backfill' ? 1 : 0,
+      )
       .first<DomainRoute>();
     if (row) return row;
+    if (mode === 'backfill') {
+      const existing = await this.get(claim.domain);
+      if (
+        existing?.workspace_id === workspace &&
+        existing.listing_id === claim.listing
+      )
+        return existing;
+    }
     // A conflicting attempt leaves a durable manifest and suppresses ambiguity.
     await this.db.batch([
       this.db
@@ -318,8 +338,13 @@ export async function backfillDomainRoutes(
     conflicts: string[] = [];
   for (const item of page.items) {
     try {
-      const route = await directory.reserve(workspace, item);
-      await directory.settle(route, item.revision);
+      const route = await directory.reserve(workspace, item, 'backfill');
+      if (
+        route.revision === item.revision &&
+        ['reserved', 'active'].includes(route.state)
+      )
+        await directory.settle(route, item.revision);
+      if (route.state === 'hold') conflicts.push(item.domain);
     } catch (error) {
       if (!(error instanceof DirectoryConflict)) throw error;
       conflicts.push(item.domain);
