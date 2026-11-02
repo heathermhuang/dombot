@@ -7,6 +7,7 @@ export interface DomBotEnvironment {
   DOMBOT_MANAGED_PROXY_IP?: string;
   DOMBOT_PROXY_SCHEDULER_IP?: string;
   DOMBOT_PROXY_SCHEDULER?: Fetcher;
+  DOMBOT_PUBLIC_DIRECTORY?: Fetcher;
   DOMBOT_PROXY_RELAY_URL?: string;
   DOMBOT_PROXY_ALTERNATE_HOST?: string;
   DOMBOT_PROXY_ALTERNATE_IP?: string;

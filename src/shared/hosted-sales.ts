@@ -79,6 +79,17 @@ export type SaleDestination = z.infer<typeof destinationSchema>;
 export const priceSourceSchema = z.discriminatedUnion('kind', [
   z
     .object({
+      kind: z.literal('market'),
+      market: z.enum(['afternic', 'atom', 'sedo']),
+      accountId: z.string().min(1).max(128),
+      listingName: saleDomainSchema,
+      fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      observedAt: z.number().int().nonnegative(),
+      validUntil: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal('portfolio'),
       fingerprint: z.string().min(1).max(128),
     })
@@ -117,6 +128,15 @@ export const saleDraftSchema = z
         code: 'custom',
         path: ['displayName'],
         message: 'Display name must be this domain.',
+      });
+    if (
+      d.priceSource?.kind === 'market' &&
+      d.priceSource.listingName !== d.domain
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['priceSource'],
+        message: 'The selected market listing must be this domain.',
       });
     if (d.minimumOffer && d.mode !== 'offer')
       ctx.addIssue({

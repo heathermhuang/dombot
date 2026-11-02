@@ -1,4 +1,8 @@
 import {
+  backfillDomainRoutes,
+  PublicDomainDirectory,
+} from './public-domain-directory';
+import {
   beforeAll,
   beforeEach,
   afterAll,
@@ -48,6 +52,15 @@ async function publish(index = 0, domain = 'working.io') {
   const draft = { ...emptySale(domain, 'synthetic'), priceSource: null };
   const revision = await store.save(draft, null);
   const review = await store.prepare([{ id: draft.id, revision }], observation);
+  try {
+    await new PublicDomainDirectory(control).reserve(ids[index], {
+      domain,
+      listing: draft.id,
+      revision: review.items[0].after.revision,
+    });
+  } catch {
+    /* Conflict manifest is exercised below. */
+  }
   await store.publish(review.id, observation);
   return draft.id;
 }
@@ -172,7 +185,9 @@ beforeAll(async () => {
             expect(req.headers.get('cookie')).toBeNull();
             expect(req.headers.get('authorization')).toBeNull();
             if (
-              new URL(req.url).pathname === '/platform-internal/public-domain'
+              new URL(req.url).pathname.startsWith(
+                '/platform-internal/public-domain',
+              )
             )
               expect(proof?.sales).toBeUndefined();
             else expect(proof?.sales?.purpose).toBe('sales-public');
@@ -190,7 +205,7 @@ beforeEach(async () => {
   delete env.DISPATCHER;
   calls.mockClear();
   await control.exec(
-    'DELETE FROM sales_domain_controls; DELETE FROM closure_requests; DELETE FROM users; DELETE FROM platform_workspaces; DELETE FROM rate_limits; DELETE FROM workspaces;',
+    'DELETE FROM public_domain_route_transfers; DELETE FROM public_domain_route_conflicts; DELETE FROM public_domain_route_backfill; DELETE FROM public_domain_routes; DELETE FROM sales_domain_controls; DELETE FROM closure_requests; DELETE FROM users; DELETE FROM platform_workspaces; DELETE FROM rate_limits; DELETE FROM workspaces;',
   );
   for (const id of ids)
     await control
@@ -221,7 +236,7 @@ describe('canonical public domain routing', () => {
     expect(html).not.toContain('/w/');
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(response.headers.get('Set-Cookie')).toBeNull();
-    expect(calls).toHaveBeenCalledTimes(3);
+    expect(calls).toHaveBeenCalledTimes(2);
   });
   it('permanently redirects legacy and normalized addresses while retaining query parameters', async () => {
     await publish();
@@ -269,7 +284,7 @@ describe('canonical public domain routing', () => {
     await dbs[0].exec('DELETE FROM published_sales');
     expect((await route()).status).toBe(404);
   });
-  it('fails closed on duplicate eligible publications and unavailable readers', async () => {
+  it('holds conflicting claims until explicit ownership review', async () => {
     await publish(0);
     await publish(1);
     const conflict = await route();
@@ -278,7 +293,7 @@ describe('canonical public domain routing', () => {
     expect((await route(`/w/${ids[0]}/d/working.io`)).status).toBe(409);
     await dbs[1].exec('DELETE FROM published_sales');
     broken = 1;
-    expect((await route()).status).toBe(503);
+    expect((await route()).status).toBe(409);
   });
   it('excludes disabled and closed accounts', async () => {
     await publish();
@@ -312,7 +327,7 @@ describe('canonical public domain routing', () => {
       .run();
     expect((await route()).status).toBe(404);
   });
-  it('includes qualified platform accounts and rejects fleet sizes above the bounded reader limit', async () => {
+  it('serves qualified platform accounts at 500-account scale with constant selected-tenant reads', async () => {
     await publish(1);
     const staticWorkspaces = env.WORKSPACES;
     env.WORKSPACES = JSON.stringify(JSON.parse(staticWorkspaces).slice(0, 1));
@@ -338,20 +353,125 @@ describe('canonical public domain routing', () => {
       await insert(ids[1], 'synthetic-db');
       expect((await route()).status).toBe(200);
       expect(get).toHaveBeenCalledWith(`dombot-wfp-${ids[1]}`);
-      for (let i = 0; i < 63; i++) {
-        const id = crypto.randomUUID();
-        await control
-          .prepare('INSERT INTO workspaces(id,label) VALUES(?,?)')
-          .bind(id, 'Synthetic capacity')
-          .run();
-        await insert(id, `synthetic-db-${i}`);
+      const extra = await Promise.all(
+        Array.from({ length: 498 }, async (_, i) => {
+          const id = crypto.randomUUID();
+          return {
+            id,
+            database: `synthetic-db-${i}`,
+            key: await sealPlatformKey(env.AUTH_PEPPER, id, keys[1]),
+          };
+        }),
+      );
+      for (let offset = 0; offset < extra.length; offset += 100) {
+        const encoded = JSON.stringify(extra.slice(offset, offset + 100));
+        await control.batch([
+          control
+            .prepare(
+              "INSERT INTO workspaces(id,label) SELECT json_extract(value,'$.id'),'Synthetic capacity' FROM json_each(?)",
+            )
+            .bind(encoded),
+          control
+            .prepare(
+              "INSERT INTO platform_workspaces(workspace_id,database_id,gateway_key_box,engine_version,qualified_at,created_at) SELECT json_extract(value,'$.id'),json_extract(value,'$.database'),json_extract(value,'$.key'),'synthetic',?1,?1 FROM json_each(?2)",
+            )
+            .bind(Date.now(), encoded),
+        ]);
       }
       calls.mockClear();
-      expect((await route()).status).toBe(503);
-      expect(calls).not.toHaveBeenCalled();
+      broken = 0;
+      expect((await route()).status).toBe(200);
+      expect(calls).toHaveBeenCalledTimes(2);
+      expect(calls.mock.calls.every(([index]) => index === 1)).toBe(true);
     } finally {
       env.WORKSPACES = staticWorkspaces;
     }
+  });
+  it('reconciles interrupted reservations, fences stale writers and never serves an unrelated tenant failure', async () => {
+    const listing = await publish();
+    broken = 1;
+    expect((await route()).status).toBe(200);
+    const directory = new PublicDomainDirectory(control),
+      old = (await directory.get('working.io'))!;
+    const pending = await directory.reserve(ids[0], {
+      domain: 'working.io',
+      listing,
+      revision: crypto.randomUUID(),
+    });
+    expect(pending.generation).toBeGreaterThan(old.generation);
+    await directory.withdraw(old);
+    expect((await directory.get('working.io'))?.generation).toBe(
+      pending.generation,
+    );
+    expect((await route()).status).toBe(404);
+    await directory.reserve(ids[0], {
+      domain: 'working.io',
+      listing,
+      revision: old.revision,
+    });
+    expect((await route()).status).toBe(200);
+    broken = 0;
+    expect((await route()).status).toBe(503);
+  });
+  it('backfills only published eligible rows with resumable checkpoint and durable conflict holds', async () => {
+    await publish(0, 'first.io');
+    await publish(0, 'second.io');
+    await control.exec('DELETE FROM public_domain_routes');
+    const first = await backfillDomainRoutes(env, ids[0], 1);
+    expect(first.done).toBe(false);
+    expect(first.cursor).toBe('first.io');
+    const second = await backfillDomainRoutes(env, ids[0], 1);
+    expect(second.done).toBe(true);
+    expect((await route('/second.io')).status).toBe(200);
+    expect((await backfillDomainRoutes(env, ids[0], 1)).done).toBe(true);
+  });
+  it('requires fresh control plus explicit generation-bound transfer and never reactivates the former publication', async () => {
+    await publish(0);
+    const next = await publish(1),
+      directory = new PublicDomainDirectory(control),
+      revision = crypto.randomUUID();
+    await expect(
+      directory.reviewTransfer(ids[1], {
+        domain: 'working.io',
+        listing: next,
+        revision,
+      }),
+    ).rejects.toThrow(/control/);
+    await control
+      .prepare(
+        "INSERT INTO sales_domain_controls(workspace_id,listing_id,domain,epoch,revision,proof,status,observed_at,expires_at,updated_at) VALUES(?,?,?,1,?,?,'verified',?,?,?)",
+      )
+      .bind(
+        ids[1],
+        next,
+        'working.io',
+        crypto.randomUUID(),
+        'fresh-proof',
+        Date.now(),
+        Date.now() + 3600000,
+        Date.now(),
+      )
+      .run();
+    const review = await directory.reviewTransfer(ids[1], {
+      domain: 'working.io',
+      listing: next,
+      revision,
+    });
+    expect((await route()).status).toBe(409);
+    const transferred = await directory.commitTransfer(ids[1], review.id);
+    expect(transferred?.workspace_id).toBe(ids[1]);
+    expect(
+      (await directory.commitTransfer(ids[1], review.id))?.generation,
+    ).toBe(transferred?.generation);
+    expect((await route()).status).toBe(404); // transfer reserves; it cannot publish terms
+    expect((await route(`/w/${ids[0]}/d/working.io`)).status).toBe(404);
+    await expect(
+      directory.reserve(ids[0], {
+        domain: 'working.io',
+        listing: crypto.randomUUID(),
+        revision: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow(/conflicting/);
   });
   it('checks origin before inquiry discovery, redirects old POSTs with their method, and never probes with a mutation', async () => {
     await publish();

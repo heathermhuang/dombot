@@ -21,6 +21,13 @@ export function validateSalesDestination(
     u.username ||
     u.password ||
     u.port ||
+    u.hash ||
+    /(?:^|[\/_-])(?:checkout|payment|invoice|negotiat(?:e|ion)|login|auth|pay)(?:[\/_-]|$)/i.test(
+      decodeURIComponent(u.pathname),
+    ) ||
+    [...u.searchParams.keys()].some((key) =>
+      /token|secret|signature|session|auth|key|redirect|return|url/i.test(key),
+    ) ||
     !hosts[provider].includes(u.hostname.toLowerCase())
   )
     throw new SalesError(
@@ -32,7 +39,7 @@ export function validateSalesDestination(
       decodeURIComponent(u.pathname + u.search).match(
         /(?:[a-z0-9-]+\.)+[a-z]{2,}/gi,
       ) ?? [];
-    if (names.length && !names.some((n) => canonicalDomain(n) === domain))
+    if (names.length && names.some((n) => canonicalDomain(n) !== domain))
       throw new SalesError(
         'DESTINATION_MISMATCH',
         'This link appears to refer to another domain. Check it before publishing.',

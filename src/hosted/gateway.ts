@@ -1,3 +1,9 @@
+import {
+  PublicDomainDirectory,
+  routeClaimSchema,
+  DirectoryConflict,
+  directoryInternal,
+} from './public-domain-directory';
 import { pendingWorkspace, activateWorkspace, accountLimit } from './on-demand';
 import { publicDomainRequest } from './public-domain-routes';
 import {
@@ -162,6 +168,11 @@ app.use(
   }),
 );
 app.use('*', async (c, next) => {
+  const directoryPath = c.req.path.match(
+    /^\/internal\/public-directory\/([a-f0-9-]{36})$/,
+  );
+  if (directoryPath)
+    return directoryInternal(c.req.raw, c.env, directoryPath[1]);
   const customSiteResponse = await portfolioDomainPublicRequest(
     c.req.raw,
     c.env,
@@ -1636,6 +1647,37 @@ app.all('/w/:workspace/*', async (c) => {
     ) {
       await revokeSharedMcpClient(c.env, user, body.args[0]);
       return c.json({ result: null });
+    }
+  }
+  if (
+    path.startsWith('/sales/routes/transfer/') &&
+    c.req.method === 'POST' &&
+    owner &&
+    user
+  ) {
+    if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    const directory = new PublicDomainDirectory(c.env.CONTROL_DB);
+    try {
+      if (path === '/sales/routes/transfer/reviews')
+        return c.json(
+          await directory.reviewTransfer(
+            id,
+            routeClaimSchema.parse(await c.req.json()),
+          ),
+        );
+      if (path === '/sales/routes/transfer/commit') {
+        const body = z
+          .object({ reviewId: z.string().uuid() })
+          .strict()
+          .parse(await c.req.json());
+        const route = await directory.commitTransfer(id, body.reviewId);
+        return c.json({ generation: route?.generation, state: route?.state });
+      }
+      return c.json({ error: 'Unknown transfer action' }, 404);
+    } catch (error) {
+      if (error instanceof DirectoryConflict)
+        return c.json({ error: error.message }, 409);
+      throw error;
     }
   }
   const headers = new Headers(c.req.raw.headers);

@@ -375,6 +375,8 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
           o.price,
           await db.destination(saved.draft.destinationId),
           saved.revision,
+          Date.now(),
+          o.marketOffer,
         ),
         c.env.DOMBOT_PUBLIC_BASE_PATH ?? '',
         null,

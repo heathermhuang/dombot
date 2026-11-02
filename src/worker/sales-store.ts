@@ -1,3 +1,8 @@
+import type { MarketPublicOffer } from '../shared/market-public-offer';
+import {
+  saleRouteReservation,
+  type ReserveSaleRoute,
+} from './sales-route-reservation';
 import type { SalesListing } from '../shared/sales-api';
 import { anyPublishedSchema, isOwnerSite } from '../shared/owner-site';
 import { canonicalDomain } from '../shared/publication';
@@ -26,12 +31,21 @@ import type { ListPrice } from '../shared/ipc';
 import { deriveSalesKey, parseRootSecret, salesIndexer } from './keys';
 
 export interface SaleObservation {
+  marketOffer?: MarketPublicOffer | null;
   controlSource?: 'registrar' | 'operator-dns' | 'dns';
   price: ListPrice | null;
   ownershipFingerprint: string;
   controlExpiresAt: number;
   available: boolean;
   reason: string | null;
+}
+export function saleObservationFingerprint(
+  draft: SaleDraft,
+  observation: SaleObservation,
+) {
+  return draft.priceSource?.kind === 'market'
+    ? (observation.marketOffer?.source.fingerprint ?? 'market-unavailable')
+    : sourcePriceFingerprint(observation.price);
 }
 export type SaleObserver = (
   draft: SaleDraft,
@@ -42,15 +56,17 @@ export class SalesStore {
     readonly db: D1Database,
     readonly cipher: Cipher,
     readonly root: Uint8Array,
+    readonly reserveRoute?: ReserveSaleRoute,
   ) {}
   static async from(
-    env: Pick<Env, 'DB' | 'DOMBOT_SECRET'>,
+    env: Pick<Env, 'DB' | 'DOMBOT_SECRET'> & Partial<Env>,
   ): Promise<SalesStore> {
     const root = parseRootSecret(env.DOMBOT_SECRET);
     return new SalesStore(
       env.DB,
       await aesGcmCipher(await deriveSalesKey(root)),
       root,
+      saleRouteReservation(env),
     );
   }
   private readonly indexers = new Map<
@@ -382,7 +398,7 @@ export class SalesStore {
         id: ref.id,
         revision: ref.revision,
         operationalRevision: saved.operationalRevision,
-        priceFingerprint: sourcePriceFingerprint(observation.price),
+        priceFingerprint: saleObservationFingerprint(saved.draft, observation),
         ownershipFingerprint: observation.ownershipFingerprint,
         destinationRevision: destination?.revision ?? null,
         includeInShop:
@@ -412,6 +428,8 @@ export class SalesStore {
           observation.price,
           destination,
           crypto.randomUUID(),
+          Date.now(),
+          observation.marketOffer,
         ),
       });
     }
@@ -458,8 +476,25 @@ export class SalesStore {
       .prepare('SELECT receipt,expires_at FROM sales_reviews WHERE id=?')
       .bind(id)
       .first<{ receipt: string | null; expires_at: number }>();
-    if (row?.receipt)
-      return { statements: [], receipt: JSON.parse(row.receipt) };
+    if (row?.receipt) {
+      const receipt = JSON.parse(row.receipt) as {
+        id: string;
+        revision: string;
+        domain: string;
+      }[];
+      // Retry only repairs the exact currently committed revision; an old
+      // receipt must never move a locator back from a newer publication.
+      for (const item of receipt) {
+        const current = await this.get(item.id);
+        if (current.published?.revision === item.revision)
+          await this.reserveRoute?.({
+            domain: item.domain,
+            listing: item.id,
+            revision: item.revision,
+          });
+      }
+      return { statements: [], receipt };
+    }
     const review = await this.review(id);
     if (!row || row.expires_at <= Date.now())
       throw conflict('This review expired. Review the latest changes.');
@@ -526,7 +561,7 @@ export class SalesStore {
         !o.available ||
         o.controlExpiresAt <= Date.now() ||
         o.ownershipFingerprint !== item.ownershipFingerprint ||
-        sourcePriceFingerprint(o.price) !== item.priceFingerprint ||
+        saleObservationFingerprint(saved.draft, o) !== item.priceFingerprint ||
         destination?.revision !== (item.destinationRevision ?? undefined)
       )
         throw conflict(
@@ -538,9 +573,15 @@ export class SalesStore {
         destination,
         item.after.revision,
         item.after.publishedAt,
+        o.marketOffer,
       );
       if (JSON.stringify(current) !== JSON.stringify(item.after))
         throw conflict();
+      await this.reserveRoute?.({
+        domain: item.after.domain,
+        listing: item.id,
+        revision: item.after.revision,
+      });
       statements.push(
         ...this.guard(
           'EXISTS(SELECT 1 FROM sale_drafts WHERE id=? AND revision=? AND operational_revision=?)',

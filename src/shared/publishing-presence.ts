@@ -26,7 +26,7 @@ export interface DomainPresence {
     price: { amount: string; currency: string } | null;
     pendingChanges: boolean;
     newPublicationBlockers: string[];
-    priceSource: 'portfolio' | 'override' | null;
+    priceSource: 'portfolio' | 'override' | 'market' | null;
     url: string | null;
   }>;
   shop: PresenceSurface<{

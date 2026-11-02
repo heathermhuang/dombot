@@ -1,3 +1,4 @@
+import { directoryInternal } from './public-domain-directory';
 import {
   beforeAll,
   beforeEach,
@@ -108,6 +109,9 @@ beforeEach(async () => {
   await hydrateStores();
   await control.batch(
     [
+      'public_domain_route_transfers',
+      'public_domain_route_conflicts',
+      'public_domain_routes',
       'public_hostname_claims',
       'sales_hostnames',
       'sales_domain_controls',
@@ -134,6 +138,9 @@ beforeEach(async () => {
     DOMBOT_AUTH: 'gateway',
     DOMBOT_WORKSPACE_ID: workspace,
     DOMBOT_GATEWAY_SECRET: key,
+    DOMBOT_PUBLIC_DIRECTORY: {
+      fetch: (request: Request) => directoryInternal(request, env, workspace),
+    },
     SALES_DNS_CONTROL_ENABLED: 'true',
   } as Env;
   const internal = new Hono()

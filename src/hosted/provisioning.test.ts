@@ -38,7 +38,13 @@ beforeEach(async () => {
     moduleSha256: await tokenHash(module),
     bootstrapSha256: await tokenHash(schema),
     compatibilityDate: '2026-10-28',
-    bindings: [],
+    bindings: [
+      {
+        type: 'service',
+        name: 'DOMBOT_PUBLIC_DIRECTORY',
+        service: 'synthetic-gateway',
+      },
+    ],
   });
   journal = {
     get: async () => (saved ? structuredClone(saved) : undefined),
