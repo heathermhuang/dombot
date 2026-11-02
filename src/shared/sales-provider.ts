@@ -22,7 +22,7 @@ export function validateSalesDestination(
     u.password ||
     u.port ||
     u.hash ||
-    /(?:^|[\/_-])(?:checkout|payment|invoice|negotiat(?:e|ion)|login|auth|pay)(?:[\/_-]|$)/i.test(
+    /(?:^|[/_-])(?:checkout|payment|invoice|negotiat(?:e|ion)|login|auth|pay)(?:[/_-]|$)/i.test(
       decodeURIComponent(u.pathname),
     ) ||
     [...u.searchParams.keys()].some((key) =>
