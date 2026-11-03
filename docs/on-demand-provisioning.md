@@ -147,3 +147,36 @@ provider resources. Disabled workspace identities and the audit remain, so fleet
 updates cannot recreate retired slots. Deletion results and final customer
 preservation checks belong in the private operation receipt; this documentation
 does not replace those checks or authorize another retirement.
+
+## Recovering an interrupted setup across a template release
+
+Do not reset a setup journal or create a replacement pair when its template guard
+stops a retry. Retain its Worker, database, coordinator namespace, original schema
+receipt, owner and private setup keys. Capture current control/tenant recovery
+exports and exact binding/source receipts before any repair.
+
+An operator can upgrade that existing Worker with inherited secrets and namespace,
+apply only the missing reviewed additive migrations, and requalify it using the
+private `Provisioner.recover(plan)` RPC. The RPC is disabled unless
+`RECOVERY_PLAN_SHA256` matches the canonical parsed plan JSON. The plan pins the
+workspace/owner/database/coordinator, original template/bootstrap and current
+qualified template. It refuses admitted, closed, changed, nonempty, unknown or
+alarm-bearing setups. Retain the original bootstrap bytes at
+`_recovery/<original-bootstrap-digest>.json` in the provisioner's private assets;
+this replays the existing bootstrap receipt without applying the new template's
+bootstrap to an existing database.
+
+Recovery and ordinary provisioning share the same setup-object queue. Recovery
+performs provider reads and signed native checks; it neither replaces journal
+state nor creates/overwrites provider resources. Pass its qualified receipt through
+the existing `activateWorkspace` path, which encrypts the original gateway key and
+atomically records registry admission. Keep that single key in memory only; never
+write it or the setup root to operator output. Reconcile uncertain admission by
+reading control state before any retry. An already-admitted setup is refused.
+
+Afterward verify resource identity, native source, gateway routing, owner read/import
+preview and maintenance state. Remove the recovery-plan binding and retained
+recovery asset from the live provisioner, confirm recovery is disabled, and retain
+protected receipts. Do not mutate an owner's inventory or contact a registrar to
+prove setup. An owner-browser visit is separate evidence from private runtime
+qualification; use the owner's existing session without impersonation.

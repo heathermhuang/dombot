@@ -1,6 +1,11 @@
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { z } from 'zod';
 import {
+  recoverPortfolio,
+  recoveryPlanSchema,
+  type RecoveryPlan,
+} from './provisioning-recovery';
+import {
   provisionPortfolio,
   type SetupState,
   type ProvisioningEnv,
@@ -8,6 +13,17 @@ import {
 const safeId = (id: string) => z.string().uuid().parse(id);
 export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   private queue: Promise<unknown> = Promise.resolve();
+  recover(plan: RecoveryPlan) {
+    const work = this.queue.then(async () =>
+      recoverPortfolio(
+        this.env,
+        await this.ctx.storage.get<SetupState>('setup'),
+        plan,
+      ),
+    );
+    this.queue = work.catch(() => undefined);
+    return work;
+  }
   provision(workspace: string, user: string) {
     const work = this.queue.then(() =>
       provisionPortfolio(
@@ -25,6 +41,12 @@ export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   }
 }
 export class Provisioner extends WorkerEntrypoint<ProvisioningEnv> {
+  recover(input: unknown) {
+    const plan = recoveryPlanSchema.parse(input);
+    return this.env.SETUPS.get(
+      this.env.SETUPS.idFromName(plan.workspace),
+    ).recover(plan);
+  }
   provision(workspace: string, user: string) {
     safeId(workspace);
     safeId(user);
