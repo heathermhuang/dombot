@@ -30,6 +30,8 @@
 
 ## Managed release information
 
+- The 3 November 2026 listing/core rollout released application source `15bc7dbd028ac64161f76a2058e246f05d1e8bb1` and engine/UI `1.5.2-hosted.41` to the 43 admitted tenants, gateway, provisioner and public edge. Directory-only routing and the new future template are active; original allocation/feature flags were restored. See `docs/listing-core-production-release-20261103/README.md` for immutable evidence and the separate unfinished-allocation recovery hold. Re-check live state before future operations.
+
 - Settings → About and the header badge show the live hosted engine version and gateway source revision. Managed accounts use service update information; desktop and self-hosted users retain their existing release/update controls. Do not identify the hosted release using only the root package version.
 - Credit the hosted service and SaaS layer to Heatherm Huang, linking https://github.com/heathermhuang and https://x.com/heathermhuang. Keep this contribution credit separate from Aaron Oxborrow's original DomBot credit and retain the source/license notices.
 

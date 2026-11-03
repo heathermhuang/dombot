@@ -26,3 +26,7 @@ The fixture supplies invented market data, credentials and trusted control admis
 - Previous #142 `.40` head `3f1a6c06dca79f4b0fb236cfa0d50491e8a8feca`: CI 41449863203 and Security analysis 41449852283 passed. The current `.41` correction requires its own exact-head checks; immutable receipts are recorded in PR #142 metadata after push.
 
 PR order is #138 → #139 → #140 → #141 → #142. Before an authorized release, coordinate additive schemas, compatible readers/writers for all admitted tenants and future templates, bounded published-only backfill and conflict review, then directory cutover. Main-push self-hosted deployment can run when Cloudflare credentials are configured; treat merges as potentially releasing code. Browser qualification is no longer blocked. Merge/deployment and independent provider/customer qualification remain separate decisions.
+
+## Authorized production release
+
+The user subsequently approved merge and coordinated production release. The stack plus checked rollout follow-up #143 were merged; migrations, 43-tenant native compatibility, future-template update, published-only backfill/conflict review, gateway cutover, allocation restoration and production reads/preservation checks completed. See `listing-core-production-release-20261103/README.md`. The earlier PR-only authorization/status paragraphs are historical, not current blockers.
