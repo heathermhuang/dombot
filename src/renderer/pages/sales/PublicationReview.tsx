@@ -1,3 +1,4 @@
+import { publicDomainPath } from '../../../shared/public-publishing-links';
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { SalesReview } from '../../../shared/sales-review';
@@ -110,7 +111,7 @@ function PublicationReviewView() {
             <p key={r.id}>
               <a
                 className="link"
-                href={hostPath(`/d/${r.domain}`)}
+                href={publicDomainPath(hostPath('/'), r.domain)}
                 target="_blank"
                 rel="noreferrer"
               >

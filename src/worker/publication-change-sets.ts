@@ -22,7 +22,10 @@ import type { PublicationInputs } from './publication-inputs';
 import { PublicationStore } from './publication-store';
 import { SalesStore, type SaleObserver } from './sales-store';
 import { bindSiteLinks } from './publication-links';
-import { canonicalPublicUrl } from '../shared/public-publishing-links';
+import {
+  canonicalPublicUrl,
+  publicDomainUrl,
+} from '../shared/public-publishing-links';
 
 const manifestSchema = z
   .object({
@@ -644,7 +647,7 @@ export class PublicationChangeSets {
       urls.push(canonicalPublicUrl(this.origin, `/p/${m.after.handle}`));
     if (m.salesReviewId)
       for (const item of (await this.sales.review(m.salesReviewId)).items)
-        urls.push(canonicalPublicUrl(this.origin, `/d/${item.after.domain}`));
+        urls.push(publicDomainUrl(this.origin, item.after.domain));
     const receipt: PublicationReceipt = {
       id,
       requestKey: key,

@@ -43,7 +43,7 @@ const term = (): PreviewSalesTerm => ({
   mode: 'offer',
   price: { amount: '12345', currency: 'USD' },
   minimumOffer: { amount: '1000', currency: 'USD' },
-  url: 'https://public.example/w/fixture/d/linked.example',
+  url: 'https://public.example/linked.example',
 });
 it('shows the exact bound public price in preview while disabling the action', () => {
   const s = site(),
@@ -56,7 +56,7 @@ it('shows the exact bound public price in preview while disabling the action', (
   expect(html).toContain('USD 12,345');
   expect(html).toContain('View domain page · disabled in preview');
   expect(html).not.toContain(
-    'href="https://public.example/w/fixture/d/linked.example"',
+    'href="https://public.example/linked.example"',
   );
   expect(html).not.toContain('mailto:');
 });

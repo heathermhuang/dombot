@@ -18,5 +18,14 @@ export function canonicalPublicUrl(
     throw new Error('Invalid canonical public routing.');
   return `${base.origin}${base.pathname.replace(/\/$/, '')}${path}`;
 }
-export const publicDomainUrl = (origin: string | undefined, domain: string) =>
-  canonicalPublicUrl(origin, `/d/${canonicalDomain(domain)}`);
+/** Hosted workspace prefixes are private routing, never listing identities.
+ * Self-hosted instances retain their existing /d/ routes. */
+export function publicDomainPath(base: string, domain: string): string {
+  const prefix = base.replace(/\/$/, '');
+  return `${/\/w\/[^/]+$/.test(prefix) ? '' : prefix + '/d'}/${canonicalDomain(domain)}`;
+}
+export function publicDomainUrl(origin: string | undefined, domain: string) {
+  // Validate the operator origin before using any of its components.
+  const validated = new URL(canonicalPublicUrl(origin, '/'));
+  return validated.origin + publicDomainPath(validated.pathname, domain);
+}

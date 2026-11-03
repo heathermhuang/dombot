@@ -1,3 +1,4 @@
+import { publicDomainPath } from '../../../shared/public-publishing-links';
 import { useListingDraft } from '../../lib/sales-drafts';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -441,11 +442,11 @@ function ListingEditorView() {
                 Shareable URL:{' '}
                 <a
                   className="link"
-                  href={hostPath(`/d/${draft.domain}`)}
+                  href={publicDomainPath(hostPath('/'), draft.domain)}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {hostPath(`/d/${draft.domain}`)}
+                  {publicDomainPath(hostPath('/'), draft.domain)}
                 </a>
               </p>
               <p>

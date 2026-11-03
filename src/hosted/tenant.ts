@@ -1,4 +1,5 @@
 import { publicSite } from './public-site';
+import { publicDomainEligibility } from './public-domain-reader';
 import {
   verifyTenantAdmission,
   verifyGatewayRequest,
@@ -32,6 +33,9 @@ export default {
       );
     }
     const platformPath = new URL(request.url).pathname;
+    if (platformPath === '/platform-internal/public-domain') {
+      return publicDomainEligibility(request, env);
+    }
     if (platformPath === '/platform-internal/public-site') {
       const proof = await verifyGatewayRequest(
         env.DOMBOT_GATEWAY_SECRET ?? '',

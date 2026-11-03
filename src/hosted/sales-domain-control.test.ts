@@ -24,6 +24,7 @@ import { configureStore, hydrateStores } from '../core/storage/namespace';
 import { emptySale } from '../shared/hosted-sales';
 import { sourcePriceFingerprint } from '../core/publication/sales';
 import { Hono } from 'hono';
+import { publicDomainEligibility } from './public-domain-reader';
 import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
 
 let mf: Miniflare, control: D1Database, tenant: D1Database, store: SalesStore;
@@ -136,6 +137,9 @@ beforeEach(async () => {
     SALES_DNS_CONTROL_ENABLED: 'true',
   } as Env;
   const internal = new Hono()
+    .get('/platform-internal/public-domain', (c) =>
+      publicDomainEligibility(c.req.raw, tenantEnv),
+    )
     .route('/sales-internal', createSalesInternalRoutes())
     .route('/', createPublicSalesRoutes());
   env = {
@@ -511,11 +515,16 @@ it('requires review after a loss even if revocation delivery failed, and does no
       }),
       env,
     );
-  for (const path of [
-    `/d/${domain}.`,
-    '/shop/fixture',
-    '/shop/fixture/export',
-  ]) {
+  const oldListing = await request(`/d/${domain}.`);
+  expect(oldListing.status).toBe(308);
+  expect(oldListing.headers.get('Location')).toBe(`/${domain}`);
+  const cleanListing = await gateway.fetch(
+    new Request(`https://accounts.example/${domain}`),
+    env,
+  );
+  expect(cleanListing.status, await cleanListing.clone().text()).toBe(200);
+  expect(await cleanListing.text()).toContain(domain);
+  for (const path of ['/shop/fixture', '/shop/fixture/export']) {
     const response = await request(path);
     expect(response.status, await response.clone().text()).toBe(200);
     expect(await response.text()).toContain(domain);

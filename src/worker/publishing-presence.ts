@@ -1,3 +1,4 @@
+import { publicDomainPath } from '../shared/public-publishing-links';
 import { z } from 'zod';
 import { canonicalDomain, privateListing } from '../shared/publication';
 import {
@@ -225,7 +226,7 @@ export async function publishingPresence(
                 ? []
                 : ['Refresh or verify domain control before new exposure.'],
             priceSource: d?.priceSource?.kind ?? null,
-            url: p ? `${base}/d/${domain}` : null,
+            url: p ? publicDomainPath(base, domain) : null,
           },
           row?.revision ?? null,
         );

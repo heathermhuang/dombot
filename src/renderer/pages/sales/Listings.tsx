@@ -1,3 +1,4 @@
+import { publicDomainPath } from '../../../shared/public-publishing-links';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type {
@@ -466,7 +467,7 @@ export default function Listings() {
                     {r.published && (
                       <a
                         className="link"
-                        href={hostPath(`/d/${r.draft.domain}`)}
+                        href={publicDomainPath(hostPath('/'), r.draft.domain)}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -498,7 +499,7 @@ export default function Listings() {
                   {r.published && (
                     <a
                       className="link"
-                      href={hostPath(`/d/${r.draft.domain}`)}
+                      href={publicDomainPath(hostPath('/'), r.draft.domain)}
                       target="_blank"
                       rel="noreferrer"
                     >
