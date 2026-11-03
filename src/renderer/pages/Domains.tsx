@@ -1,3 +1,4 @@
+import { marketObservationRows } from '../../shared/market-observation-rows';
 import { PublicPageActions } from '../components/domains/PublicPageActions';
 import { supportsSales } from '../lib/platform';
 import { salesRequest } from '../lib/sales-client';
@@ -64,7 +65,7 @@ import {
 } from '../components/actions/OwnershipDialogs';
 import { useAppStore } from '../store/app';
 import { domainsCsvFilename, domainsToCsv } from '../../shared/domain-csv';
-import { importedRow, importedRows } from '../../shared/imported-domains';
+import { importedRows } from '../../shared/imported-domains';
 import { priceMoney } from '../lib/renewals';
 import { SALE_STEP_LABEL, saleSourceLabel } from '../lib/sales';
 import { nameserverGroup } from '../lib/nameservers';
@@ -736,7 +737,7 @@ const COLUMNS: Column[] = [
             variant="outline"
             className="px-1.5 py-0 text-[11px] font-normal text-muted-foreground"
           >
-            Imported
+            {d.marketObservation ? 'Market listing' : 'Imported'}
           </Badge>
         )}
       </span>
@@ -1209,25 +1210,7 @@ export default function Domains() {
       ),
       ...importedList,
       ...(listingsView
-        ? Object.entries(marketListings)
-            .filter(
-              ([name]) =>
-                ![...portfolio, ...importedList].some(
-                  (d) => toAscii(d.domainName) === name,
-                ),
-            )
-            .map(([name, listings]) =>
-              importedRow(name, {
-                addedAt: Math.min(
-                  ...listings.map((l) => l.publicObservedAt ?? 0),
-                ),
-                updatedAt: Math.max(
-                  ...listings.map((l) => l.publicObservedAt ?? 0),
-                ),
-                registrar: null,
-                registrarLabel: 'Marketplace observation · control unverified',
-              }),
-            )
+        ? marketObservationRows(marketListings, [...portfolio, ...importedList])
         : []),
     ],
     [portfolio, enriched, importedList, listingsView, marketListings],

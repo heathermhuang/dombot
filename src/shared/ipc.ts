@@ -52,6 +52,8 @@ export interface RegistrarAccount {
 export type DomainSource = 'registrar' | 'imported';
 
 export type Domain = ProviderDomain & {
+  /** Ephemeral marketplace-only table projection; not a saved holding or control proof. */
+  marketObservation?: boolean;
   accountId?: string;
   accountLabel?: string;
   /**

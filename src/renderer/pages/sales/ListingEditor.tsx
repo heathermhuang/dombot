@@ -287,7 +287,7 @@ function ListingEditorView() {
               )}
               {draft.priceSource?.kind === 'market' && (
                 <p className="small">
-                  Approved source selection: {draft.priceSource.market} ·
+                  Selected marketplace source: {draft.priceSource.market} ·
                   observed{' '}
                   {new Date(draft.priceSource.observedAt).toLocaleString()}.
                   Public terms remain unchanged until reviewed. Payment options
