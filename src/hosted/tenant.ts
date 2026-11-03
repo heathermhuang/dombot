@@ -33,7 +33,12 @@ export default {
       );
     }
     const platformPath = new URL(request.url).pathname;
-    if (platformPath === '/platform-internal/public-domain') {
+    if (
+      [
+        '/platform-internal/public-domain',
+        '/platform-internal/public-domain-backfill',
+      ].includes(platformPath)
+    ) {
       return publicDomainEligibility(request, env);
     }
     if (platformPath === '/platform-internal/public-site') {

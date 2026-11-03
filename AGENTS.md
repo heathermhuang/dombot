@@ -35,7 +35,7 @@
 
 ## Public portfolio addresses
 
-- Hosted individual domain listings use `/<canonical-domain>` (for example `/working.io`). Keep workspace IDs out of listing sharing links; old `/w/<id>/d/<domain>` addresses redirect permanently after eligibility checks. Preserve duplicate-publication rejection, anonymous admission and ownership/withdrawal checks. See `docs/public-domain-urls.md` for the bounded resolver and compatible-reader release sequence.
+- Hosted individual domain listings use `/<canonical-domain>` (for example `/working.io`). Keep workspace IDs out of listing sharing links; old `/w/<id>/d/<domain>` addresses redirect permanently after eligibility checks. Preserve duplicate-publication rejection, anonymous admission and ownership/withdrawal checks. See `docs/public-domain-directory.md` for directory reservations, reviewed transfers, published-only backfill and compatible-reader release sequence. Managed publication requires the directory service binding; no visitor fleet scan is permitted.
 - Public handles are globally unique identities in `portfolio_addresses`, separate from immutable account IDs and private draft handles. Claiming an address never publishes content. Keep claims after unpublish, closure and suspension; do not recycle names.
 - `PUBLIC_SITE_ADDRESSES_ENABLED` requires control migration 0015 and compatible tenant public readers before activation. Preserve existing long public links. Subdomain routing and portfolio custom domains have separate DNS/TLS verification requirements; do not infer support from Sales listing custom hosts. See `docs/portfolio-addresses.md`.
 

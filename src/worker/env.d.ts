@@ -7,6 +7,7 @@ interface Env {
   DOMBOT_MANAGED_PROXY_IP?: string;
   DOMBOT_PROXY_SCHEDULER_IP?: string;
   DOMBOT_PROXY_SCHEDULER?: Fetcher;
+  DOMBOT_PUBLIC_DIRECTORY?: Fetcher;
   /** Host-only HTTPS relay, never stored in customer data. */
   DOMBOT_PROXY_RELAY_URL?: string;
   DOMBOT_SALES_DNS_CONTROL?: string;

@@ -1,3 +1,4 @@
+import type { MarketPublicOffer } from '../../shared/market-public-offer';
 import type { ListPrice } from '../../shared/ipc';
 import {
   publishedSaleSchema,
@@ -24,6 +25,7 @@ export function salesProjection(
   destination: SaleDestination | null,
   revision: string,
   now = Date.now(),
+  marketOffer?: MarketPublicOffer | null,
 ): PublishedSale {
   const d = saleDraftSchema.parse(input);
   if (destination)
@@ -37,12 +39,42 @@ export function salesProjection(
       'The portfolio price changed. Review the latest price before publishing.',
       409,
     );
+  if (
+    d.priceSource?.kind === 'market' &&
+    (!marketOffer?.eligible ||
+      marketOffer.source.fingerprint !== d.priceSource.fingerprint ||
+      marketOffer.source.accountId !== d.priceSource.accountId ||
+      marketOffer.source.market !== d.priceSource.market ||
+      marketOffer.source.listingName !== d.domain ||
+      marketOffer.source.validUntil <= now ||
+      !destination ||
+      destination.provider !== marketOffer.provider ||
+      destination.url !== marketOffer.url)
+  )
+    throw new SalesError(
+      'MARKET_CHANGED',
+      marketOffer?.reason ??
+        'The selected marketplace terms or destination changed. Review the current offer.',
+      409,
+    );
+  if (
+    d.priceSource?.kind === 'market' &&
+    d.mode === 'buy-now' &&
+    !marketOffer?.buyNow
+  )
+    throw new SalesError(
+      'MARKET_NOT_FIXED',
+      'This market price is asking only. Use the provider offer path.',
+      409,
+    );
   const publicPrice =
-    d.priceSource?.kind === 'override'
-      ? d.priceSource.price
-      : d.priceSource?.kind === 'portfolio' && price?.amount
-        ? { amount: price.amount, currency: price.currency }
-        : null;
+    d.priceSource?.kind === 'market'
+      ? (marketOffer?.price ?? null)
+      : d.priceSource?.kind === 'override'
+        ? d.priceSource.price
+        : d.priceSource?.kind === 'portfolio' && price?.amount
+          ? { amount: price.amount, currency: price.currency }
+          : null;
   if (d.destinationId && (!destination || destination.id !== d.destinationId))
     throw new SalesError('DESTINATION_MISSING', 'Choose a saved destination.');
   if (

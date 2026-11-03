@@ -233,7 +233,16 @@ async function runMarketSync(accountId: string): Promise<void> {
     // which case add and update only, so no name is dropped by mistake.
     const read = await adapter.allListings();
     const prefix = `${accountId}:`;
-    const fresh = new Map(read.listings.map((l) => [prefix + l.name, l]));
+    const observedAt = Date.now();
+    const fresh = new Map<string, MarketListing>(
+      read.listings.map((l) => [
+        prefix + l.name,
+        {
+          ...l,
+          publicObservedAt: read.complete ? observedAt : undefined,
+        },
+      ]),
+    );
     // A market that checks new listings before adding them (Sedo) leaves
     // them out of its list meanwhile: keep DomBot's pending row for a while,
     // then drop it and say so, since the market may have refused it.

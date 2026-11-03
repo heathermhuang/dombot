@@ -68,6 +68,9 @@ for (const [i, w] of saved.workspaces.entries()) {
     compatibility_flags: ['nodejs_compat'],
     workers_dev: false,
     preview_urls: false,
+    services: [
+      { binding: 'DOMBOT_PUBLIC_DIRECTORY', service: 'domains-staging' },
+    ],
     durable_objects: {
       bindings: [
         { name: 'WORKSPACE_COORDINATOR', class_name: 'WorkspaceCoordinator' },

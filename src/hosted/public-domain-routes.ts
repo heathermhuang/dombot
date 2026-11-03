@@ -1,12 +1,8 @@
+import { PublicDomainDirectory } from './public-domain-directory';
 import { z } from 'zod';
 import { canonicalDomain } from '../shared/publication';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
-import {
-  workspaceFor,
-  workspaceKey,
-  workspaceSchema,
-  workspaceService,
-} from './workspaces';
+import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
 import { Accounts } from './accounts';
 
 const headers = {
@@ -23,12 +19,13 @@ const unavailable = (status = 404) =>
     { status, headers },
   );
 const eligibility = z
-  .object({ revision: z.string().uuid().nullable() })
+  .object({
+    revision: z.string().uuid().nullable(),
+    listing: z.string().uuid().nullable(),
+  })
   .strict();
 
-/** Published-only discovery: no inventory, private initialization, provider reads,
- * or caller authority. Check every admitted account so a conflict cannot choose
- * an arbitrary seller. Reads are bounded to 64 accounts, four at a time. */
+/** Constant-fleet-cost locator lookup followed by the selected tenant eligibility read. */
 export async function publicDomainRequest(
   request: Request,
   env: HostedEnv,
@@ -83,70 +80,46 @@ export async function publicDomainRequest(
         status: 429,
         headers,
       });
-    const configured = workspaceSchema.parse(JSON.parse(env.WORKSPACES));
-    const rows = await env.CONTROL_DB.prepare(
-      `SELECT w.id FROM workspaces w WHERE w.enabled=1
-       AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)
-       AND (w.id IN (SELECT value FROM json_each(?)) OR
-         (?=1 AND EXISTS(SELECT 1 FROM platform_workspaces p WHERE p.workspace_id=w.id AND p.qualified_at>0)))
-       ORDER BY w.id LIMIT 65`,
+    const directory = new PublicDomainDirectory(env.CONTROL_DB);
+    const route = await directory.get(domain);
+    if (!route || route.state === 'tombstone') return unavailable();
+    if (route.state === 'hold') return unavailable(409);
+    const id = route.workspace_id;
+    if (legacy && id !== legacy[1]) return unavailable();
+    const admitted = await env.CONTROL_DB.prepare(
+      `SELECT 1 FROM workspaces w WHERE w.id=? AND w.enabled=1
+      AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)
+      AND NOT EXISTS(SELECT 1 FROM sales_domain_controls s WHERE s.workspace_id=w.id AND s.domain=? AND s.status IN ('lost','recovering'))`,
     )
-      .bind(
-        JSON.stringify(configured.map((w) => w.id)),
-        env.PLATFORM_ENABLED === 'true' && env.DISPATCHER ? 1 : 0,
-      )
-      .all<{ id: string }>();
-    if (rows.results.length > 64) return unavailable(503);
-    const losses = await env.CONTROL_DB.prepare(
-      "SELECT workspace_id FROM sales_domain_controls WHERE domain=? AND status IN ('lost','recovering')",
-    )
-      .bind(domain)
-      .all<{ workspace_id: string }>();
-    const lost = new Set(losses.results.map((row) => row.workspace_id));
-    const candidates = rows.results.filter((row) => !lost.has(row.id));
-    const found: { id: string; revision: string }[] = [];
-    for (let offset = 0; offset < candidates.length; offset += 4) {
-      const results = await Promise.allSettled(
-        candidates.slice(offset, offset + 4).map(async ({ id }) => {
-          const workspace = await workspaceFor(env, id);
-          if (!workspace) throw new Error('Account unavailable');
-          const url = new URL(
-            '/platform-internal/public-domain',
-            env.CANONICAL_ORIGIN,
-          );
-          url.searchParams.set('domain', domain);
-          const probe = new Request(url, {
-            signal: AbortSignal.timeout(5_000),
-          });
-          probe.headers.set(
-            PROOF_HEADER,
-            await signGatewayRequest(
-              await workspaceKey(env, id),
-              id,
-              null,
-              probe,
-            ),
-          );
-          const response = await workspaceService(env, workspace.binding).fetch(
-            probe,
-          );
-          if (!response.ok) {
-            await response.body?.cancel();
-            throw new Error('Public reader unavailable');
-          }
-          const result = eligibility.parse(await response.json());
-          return result.revision ? { id, revision: result.revision } : null;
-        }),
-      );
-      if (results.some((result) => result.status === 'rejected'))
-        return unavailable(503);
-      for (const result of results)
-        if (result.status === 'fulfilled' && result.value)
-          found.push(result.value);
-      if (found.length > 1) return unavailable(409);
+      .bind(id, domain)
+      .first();
+    if (!admitted) return unavailable();
+    const selected = await workspaceFor(env, id);
+    if (!selected) return unavailable(503);
+    const probeUrl = new URL(
+      '/platform-internal/public-domain',
+      env.CANONICAL_ORIGIN,
+    );
+    probeUrl.searchParams.set('domain', domain);
+    const probe = new Request(probeUrl, { signal: AbortSignal.timeout(5000) });
+    probe.headers.set(
+      PROOF_HEADER,
+      await signGatewayRequest(await workspaceKey(env, id), id, null, probe),
+    );
+    const checked = await workspaceService(env, selected.binding).fetch(probe);
+    if (!checked.ok) {
+      await checked.body?.cancel();
+      return unavailable(503);
     }
-    if (found.length !== 1 || (legacy && found[0].id !== legacy[1]))
+    const result = eligibility.parse(await checked.json());
+    if (!result.revision && route.state === 'active')
+      await directory.withdraw(route);
+    if (
+      result.revision !== route.revision ||
+      result.listing !== route.listing_id
+    )
       return unavailable();
+    await directory.settle(route, result.revision);
     const canonicalPath = `/${domain}${inquiry ? '/inquiries' : ''}`;
     if (legacy || incoming.pathname !== canonicalPath)
       return new Response(null, {
@@ -154,7 +127,6 @@ export async function publicDomainRequest(
         headers: { ...headers, Location: canonicalPath + incoming.search },
       });
 
-    const id = found[0].id;
     const workspace = await workspaceFor(env, id);
     if (!workspace) return unavailable(503);
     const url = new URL(incoming);
@@ -189,6 +161,15 @@ export async function publicDomainRequest(
     const response = await workspaceService(env, workspace.binding).fetch(
       forwarded,
     );
+    const current = await directory.get(domain);
+    if (
+      !current ||
+      current.generation !== route.generation ||
+      current.state !== 'active'
+    ) {
+      await response.body?.cancel();
+      return unavailable();
+    }
     const outgoing = new Headers(response.headers);
     outgoing.delete('set-cookie');
     outgoing.set('Cache-Control', 'no-store');

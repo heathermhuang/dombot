@@ -126,7 +126,21 @@ async function prepare() {
   // release. Per-tenant identities and secrets are never template inputs.
   const bindings = process.argv[2]
     ? JSON.parse(await fs.readFile(process.argv[2], 'utf8'))
-    : [];
+    : [
+        {
+          type: 'service',
+          name: 'DOMBOT_PUBLIC_DIRECTORY',
+          service: 'domains-staging',
+        },
+      ];
+  if (
+    !bindings.some(
+      (b) => b.name === 'DOMBOT_PUBLIC_DIRECTORY' && b.type === 'service',
+    )
+  )
+    throw new Error(
+      'Provisioning templates require the public directory service binding.',
+    );
   const manifest = JSON.stringify({
     engine: engine.version,
     sourceSha256: engine.sourceSha256,

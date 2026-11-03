@@ -1,3 +1,9 @@
+import { cachedListing } from '../core/services/markets/sync';
+import {
+  activeMarketAccounts,
+  getMarketSyncState,
+} from '../core/services/markets/accounts';
+import { publicMarketOffer } from '../shared/market-public-offer';
 import {
   managedControl,
   managedControls,
@@ -99,7 +105,7 @@ export function createSaleObserver(
   };
 }
 /** DNS leases are tenant-local and never portable; a live registrar remains an alternative. */
-export function createVerifiedSaleObserver(env: Env): SaleObserver {
+function createControlObserver(env: Env): SaleObserver {
   const observe = createSaleObserver(env);
   let storage: Promise<SalesStore> | undefined;
   return async (draft) => {
@@ -194,4 +200,28 @@ export function changedSalesDomains(
   return [...new Set([...before.keys(), ...after.keys()])].filter(
     (name) => before.get(name) !== after.get(name),
   );
+}
+
+/** Market reads add terms; they never grant control. */
+export function createVerifiedSaleObserver(env: Env): SaleObserver {
+  const control = createControlObserver(env);
+  return async (draft) => {
+    const observation = await control(draft),
+      source = draft.priceSource;
+    if (source?.kind !== 'market') return observation;
+    const listing = cachedListing(source.accountId, draft.domain);
+    if (
+      !listing ||
+      listing.market !== source.market ||
+      !activeMarketAccounts().some((a) => a.id === source.accountId)
+    )
+      return { ...observation, marketOffer: null };
+    return {
+      ...observation,
+      marketOffer: await publicMarketOffer(
+        listing,
+        getMarketSyncState(source.accountId),
+      ),
+    };
+  };
 }

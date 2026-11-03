@@ -1508,3 +1508,36 @@ describe('imported Sales inventory', () => {
     },
   );
 });
+
+describe('all reviewed publication writers reserve before tenant commit', () => {
+  it('fails without publishing and reconciles a lost reservation response under the same review', async () => {
+    const draft = {
+      ...emptySale('reservation.io', 'synthetic'),
+      priceSource: null,
+    };
+    const revision = await store.save(draft, null),
+      review = await store.prepare([{ id: draft.id, revision }], observation);
+    const attempts: { domain: string; listing: string; revision: string }[] =
+      [];
+    const guarded = new SalesStore(
+      db,
+      store.cipher,
+      store.root,
+      async (claim) => {
+        attempts.push(claim);
+        if (attempts.length === 1) throw new Error('unknown reserve response');
+      },
+    );
+    await expect(guarded.publish(review.id, observation)).rejects.toThrow(
+      /unknown/,
+    );
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+    await guarded.publish(review.id, observation);
+    expect(attempts[0]).toEqual(attempts[1]);
+    expect((await readPublicSale(db, draft.domain))?.revision).toBe(
+      attempts[1].revision,
+    );
+    await guarded.publish(review.id, observation);
+    expect(attempts[2]).toEqual(attempts[1]);
+  });
+});

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { backfillDomainRoutes } from './public-domain-directory';
 import { onDemandSchemaReady } from './on-demand';
 import { readWorkspace } from './workspace-observation';
 import {
@@ -141,6 +143,12 @@ export function adminRoutes(
       .bind(crypto.randomUUID(), user.id, action, Date.now(), target)
       .run();
   };
+  app.post('/public-domain-backfill/:workspace', async (c) => {
+    if (c.req.header('origin') !== new URL(c.req.url).origin)
+      return c.text('Bad origin', 403);
+    const workspace = z.string().uuid().parse(c.req.param('workspace'));
+    return c.json(await backfillDomainRoutes(c.env, workspace));
+  });
   app.get('/', async (c) => {
     const rows = (
       await c.env.CONTROL_DB.prepare(

@@ -42,6 +42,8 @@ export type ListingStatus =
   | 'unknown';
 
 export interface MarketListing {
+  /** Successful complete listing observation; never the provider updatedAt or account test time. */
+  publicObservedAt?: number;
   market: MarketId;
   accountId: string;
   /** toAscii(name). */

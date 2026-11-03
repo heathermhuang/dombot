@@ -95,7 +95,10 @@ export async function provisionPortfolio(
   const names = template.bindings.map((b) => b.name);
   if (
     new Set(names).size !== names.length ||
-    names.some((n) => reserved.has(n))
+    names.some((n) => reserved.has(n)) ||
+    !template.bindings.some(
+      (b) => b.type === 'service' && b.name === 'DOMBOT_PUBLIC_DIRECTORY',
+    )
   )
     throw Error('Unsafe template bindings');
   const secrets = z
