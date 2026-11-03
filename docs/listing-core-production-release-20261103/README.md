@@ -43,3 +43,11 @@ One pre-existing unfinished allocation (approximately eight hours old when ident
 These are operator deployment/runtime checks and controlled-page observations. They do not establish independent customer acceptance, real marketplace checkout availability, paid settlement, transfer/payout completion or conversion uplift. The earlier synthetic owner/buyer qualification remains at `../listing-browser-qualification-20261103/README.md`.
 
 After any new schema-5 / backup-12 / exact-money-v2 writes, do not install an older incompatible runtime as a blind rollback. Use the retained recovery points and a compatible recovery/revert plan.
+
+## Subsequent recovery · 3 November 2026
+
+The separate unfinished-allocation hold above was resolved under new explicit user
+authorization. Its original Worker/database/setup identity and keys were preserved;
+native `.41` qualification, normal admission, owner API/import-preview and gateway
+checks passed. See [the recovery receipt](../allocation-recovery-20261103/README.md)
+for the repair source, preservation evidence and remaining owner-browser limit.
