@@ -101,6 +101,24 @@ export async function provisionPortfolio(
     )
   )
     throw Error('Unsafe template bindings');
+  const originBinding = template.bindings.find(
+    (b) => b.name === 'DOMBOT_SALES_ORIGIN',
+  );
+  let salesOrigin: string | undefined;
+  if (originBinding) {
+    if (originBinding.type !== 'plain_text')
+      throw Error('Invalid sales origin binding');
+    const origin = new URL(originBinding.text);
+    if (
+      origin.protocol !== 'https:' ||
+      origin.username ||
+      origin.password ||
+      origin.search ||
+      origin.hash
+    )
+      throw Error('Invalid sales origin binding');
+    salesOrigin = origin.origin + '/w/' + workspace;
+  }
   const secrets = z
     .record(z.string(), z.string().min(1))
     .parse(JSON.parse(env.TENANT_SECRETS_JSON));
@@ -220,7 +238,16 @@ export async function provisionPortfolio(
     state.uploadAttempted = true;
     await journal.put(state);
     const bindings = [
-      ...template.bindings,
+      ...template.bindings.filter((b) => b.name !== 'DOMBOT_SALES_ORIGIN'),
+      ...(salesOrigin
+        ? [
+            {
+              name: 'DOMBOT_SALES_ORIGIN',
+              type: 'plain_text',
+              text: salesOrigin,
+            },
+          ]
+        : []),
       ...Object.entries(secrets).map(([name, text]) => ({
         name,
         text,
