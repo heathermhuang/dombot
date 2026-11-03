@@ -18,6 +18,7 @@ let database: boolean,
   lostUpload: boolean,
   failQualification: boolean;
 let creates: number, uploads: number, admitted: boolean;
+let uploadedMetadata: { bindings: { name: string; text?: string }[] };
 let module: string, schema: string, manifest: string;
 const ok = (result: unknown) => Response.json({ success: true, result });
 beforeEach(async () => {
@@ -153,6 +154,7 @@ const transport: typeof fetch = async (input, init = {}) => {
     worker = true;
     const body = init.body as FormData;
     const metadata = JSON.parse(await (body.get('metadata') as Blob).text());
+    uploadedMetadata = metadata;
     expect(
       metadata.bindings.find((b: { name: string }) => b.name === 'DB').id,
     ).toBe(databaseId);
@@ -286,4 +288,40 @@ describe('durable portfolio provisioning', () => {
     expect(calls).toBe(2);
     expect(uploads).toBe(0);
   });
+});
+
+it('scopes a copied public sales origin to the newly provisioned account', async () => {
+  const parsed = JSON.parse(manifest);
+  parsed.bindings.push({
+    type: 'plain_text',
+    name: 'DOMBOT_SALES_ORIGIN',
+    text: 'https://domains.domains/w/old-account',
+  });
+  manifest = JSON.stringify(parsed);
+  env.TEMPLATE_SHA256 = await tokenHash(manifest);
+  await provisionPortfolio(env, journal, workspace, user, transport);
+  expect(
+    uploadedMetadata.bindings.filter((b) => b.name === 'DOMBOT_SALES_ORIGIN'),
+  ).toEqual([
+    {
+      name: 'DOMBOT_SALES_ORIGIN',
+      type: 'plain_text',
+      text: 'https://domains.domains/w/' + workspace,
+    },
+  ]);
+});
+it('rejects an unsafe future sales origin before allocating resources', async () => {
+  const parsed = JSON.parse(manifest);
+  parsed.bindings.push({
+    type: 'plain_text',
+    name: 'DOMBOT_SALES_ORIGIN',
+    text: 'http://invalid.example',
+  });
+  manifest = JSON.stringify(parsed);
+  env.TEMPLATE_SHA256 = await tokenHash(manifest);
+  await expect(
+    provisionPortfolio(env, journal, workspace, user, transport),
+  ).rejects.toThrow(/origin/);
+  expect(creates).toBe(0);
+  expect(uploads).toBe(0);
 });

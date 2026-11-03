@@ -201,6 +201,7 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => mf?.dispose());
 beforeEach(async () => {
+  delete env.PUBLIC_DOMAIN_DIRECTORY_READY;
   broken = -1;
   delete env.PLATFORM_ENABLED;
   delete env.DISPATCHER;
@@ -238,6 +239,23 @@ describe('canonical public domain routing', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(response.headers.get('Set-Cookie')).toBeNull();
     expect(calls).toHaveBeenCalledTimes(2);
+  });
+  it('preserves only unmapped legacy paths during an explicit release bridge', async () => {
+    env.PUBLIC_DOMAIN_DIRECTORY_READY = 'false';
+    const legacy = `/w/${ids[0]}/d/working.io`;
+    expect(await publicDomainRequest(request(legacy), env)).toBeNull();
+    expect((await route('/working.io')).status).toBe(404);
+    env.PUBLIC_DOMAIN_DIRECTORY_READY = 'true';
+    expect((await route(legacy)).status).toBe(404);
+    delete env.PUBLIC_DOMAIN_DIRECTORY_READY;
+    expect((await route(legacy)).status).toBe(404);
+    await publish();
+    env.PUBLIC_DOMAIN_DIRECTORY_READY = 'false';
+    expect((await route(legacy)).status).toBe(308);
+    const directory = new PublicDomainDirectory(control),
+      record = (await directory.get('working.io'))!;
+    await directory.withdraw(record);
+    expect((await route(legacy)).status).toBe(404);
   });
   it('permanently redirects legacy and normalized addresses while retaining query parameters', async () => {
     await publish();
@@ -425,6 +443,34 @@ describe('canonical public domain routing', () => {
     expect(second.done).toBe(true);
     expect((await route('/second.io')).status).toBe(200);
     expect((await backfillDomainRoutes(env, ids[0], 1)).done).toBe(true);
+  });
+  it('backfills eligible neutral stale pages and advances past ineligible published snapshots', async () => {
+    await publish(0, 'a.io');
+    await publish(0, 'b.io');
+    const row = await dbs[0]
+      .prepare("SELECT payload FROM published_sales WHERE domain='a.io'")
+      .first<{ payload: string }>();
+    const payload = {
+      ...JSON.parse(row!.payload),
+      mode: 'offer',
+      allowQuestions: false,
+      sourceValidUntil: Date.now() - 1,
+    };
+    await dbs[0]
+      .prepare("UPDATE published_sales SET payload=? WHERE domain='a.io'")
+      .bind(JSON.stringify(payload))
+      .run();
+    await dbs[0].exec(
+      "UPDATE sale_drafts SET availability='source-stale' WHERE id IN (SELECT id FROM published_sales WHERE domain='b.io')",
+    );
+    await control.exec('DELETE FROM public_domain_routes');
+    const first = await backfillDomainRoutes(env, ids[0], 1);
+    expect(first.done).toBe(false);
+    expect(first.cursor).toBe('a.io');
+    expect(await new PublicDomainDirectory(control).get('a.io')).toBeNull();
+    const second = await backfillDomainRoutes(env, ids[0], 1);
+    expect(second.done).toBe(true);
+    expect((await route('/b.io')).status).toBe(200);
   });
   it('does not let an older backfill observation replace a newer reservation or tombstone', async () => {
     const listing = await publish(),
