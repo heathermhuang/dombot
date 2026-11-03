@@ -17,3 +17,15 @@ The primary dirty checkout and original clean-URL branch/plan are preserved. Imp
 All prior PR heads remain independently checked: #139 `4d3642e6`, #140 `0852ba9b`, #141 `e1de7364` passed CI and Security analysis. Previous #142 head `3f1a6c06` passed 233 files, 2,533 tests plus one skip in CI, security/relay checks and required build/dry-run jobs. The current `.41` browser copy correction requires its own final checks.
 
 Release handoff: #138 → #139 → #140 → #141 → #142. Coordinate additive schemas, every admitted tenant reader/writer and future templates, published-only backfill/conflict review, then directory cutover. Main-push self-hosted deployment can run when Cloudflare credentials are configured; treat merges as potentially releasing code. Real provider checkout/purchase, independent customer acceptance and production release qualification remain separate.
+
+## Approved production release · 3 November 2026
+
+- [x] #138–#142 and the checked rollout follow-up #143 merged.
+- [x] Protected control/tenant recovery exports and code/configuration snapshots retained.
+- [x] Control 0022 and tenant 0009 migrations applied.
+- [x] All 43 admitted serving runtimes qualified at engine/UI `.41`; future template and public edge updated.
+- [x] All 43 backfill checkpoints complete; two active routes, zero conflicts.
+- [x] Directory-only cutover completed; allocation restored and template hashes matched.
+- [x] Production canonical/legacy/profile/custom-host/source/preservation checks passed.
+
+Release evidence supersedes earlier PR-only and locked-browser notes: `listing-core-production-release-20261103/README.md`. One pre-existing unfinished allocation remains an explicit recovery hold with its existing resources preserved. Independent customer/payment/provider acceptance is not implied.
