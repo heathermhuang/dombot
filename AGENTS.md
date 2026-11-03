@@ -21,7 +21,7 @@
 
 ## Hosted authentication
 
-- On-demand provisioning is implemented behind `ON_DEMAND_ENABLED`; it is not enabled by source changes alone. Signup creates only control metadata. Allocate on the first credential submission or explicit import, qualify runtime identity/idle state before admission, and retain stable setup identities/keys across retries. Existing customers are never migrated or reclaimed by this path. See `docs/on-demand-provisioning.md`.
+- On-demand provisioning is implemented behind `ON_DEMAND_ENABLED`; it is not enabled by source changes alone. Signup creates only control metadata. Allocate on the first credential submission or a valid import submission (opening Import and local preview allocate nothing), qualify runtime identity/idle state before admission, and retain stable setup identities/keys across retries. Existing customers are never migrated or reclaimed by this path. See `docs/on-demand-provisioning.md`.
 - Conference reserve retirement is a separate, exact-manifest operation. Unowned rows and initialization records do not by themselves prove deletion eligibility. The planner is read-only, checkpoints completed reads and stops on actual provider rate limits; preserve unknown/data-bearing resources.
 
 - Run `npm ci --prefix hosted --ignore-scripts` and `node hosted/build-auth.mjs` after the normal root dependency install, before hosted typechecks/tests/bundles. Auth dependencies belong to `hosted/package.json` so they do not change the pinned tenant engine.

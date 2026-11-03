@@ -15,10 +15,16 @@ email signup use the same transaction/cap rules. The default total-account cap i
 
 The gateway serves onboarding directly. Reading that page, choosing a registrar,
 opening account settings and signing in again do not allocate a tenant. The first
-submission with the required registrar credential fields, or an explicit CSV
-import action, requests provisioning. The credentials remain in the browser and
-the original connection request; they never enter setup RPC or control metadata.
-After qualification, the original request uses the normal tenant connection path.
+submission with the required registrar credential fields, or a valid import
+submission to `importDomains`, requests provisioning. Opening Import, selecting a
+file, matching columns and reviewing rows run before allocation. The CSV is parsed
+locally; only the normalized rows are submitted when the owner selects Save domains.
+Credentials remain in the browser and the original connection request; they never
+enter setup RPC or control metadata.
+The gateway rejects empty, malformed or invalid first-import rows before recording
+a setup request. It validates dates, currencies, amounts, pricing and domain names
+on the server as well as in the local preview. After qualification, the original
+request uses the normal tenant connection/import path.
 Registrar credentials are saved only after that connection succeeds.
 
 Allocation starts on the connection **attempt**, since the isolated engine must
@@ -76,7 +82,7 @@ account access available, but permits no new allocation or reserve-pool fallback
 6. Configure the gateway's `PROVISIONER` service binding with entrypoint `Provisioner`,
    and set `ON_DEMAND_TEMPLATE_SHA256` to the exact qualified digest. Prove a controlled
    signup creates no provider resources; repeated visits and invalid/foreign requests
-   create none; connection/import creates one isolated pair; retries reuse that pair.
+   create none; valid connection/import submission creates one isolated pair; opening Import, preview and invalid submissions create none; retries reuse that pair.
    Existing customer runtimes, keys, grants, access and stored records must remain
    unchanged. Source/unit/CI checks are separate from these live release receipts.
 7. Enable on-demand signup only after those receipts pass. Retain the template digest
@@ -180,3 +186,27 @@ recovery asset from the live provisioner, confirm recovery is disabled, and reta
 protected receipts. Do not mutate an owner's inventory or contact a registrar to
 prove setup. An owner-browser visit is separate evidence from private runtime
 qualification; use the owner's existing session without impersonation.
+
+## Import submission gate · 3 November 2026
+
+Pending accounts use a gateway-served import editor with local CSV/text parsing,
+column matching, preview and error correction. The old `POST /start` Import button
+redirects to this editor without requesting setup. Only an authenticated same-origin
+`POST /api/importDomains` containing valid nonempty normalized rows and an import ID
+can allocate. The original request then continues to the normal tenant import API;
+raw CSV and import rows never enter setup RPC or control metadata.
+
+The client keeps its reviewed input and stable import ID after errors, uses the
+existing 2,000-row import batch size, and retries against the same setup identity.
+Already-admitted accounts continue through the existing tenant API without another
+allocation. This change does not reclaim, rename, disable or replace an existing
+account, Worker, database, key or setup journal.
+
+Repeat the local integration qualification with
+`node scripts/import-allocation-qualification.mjs --check`. It uses the real gateway,
+provisioning function, bootstrap and pinned tenant engine, with local control state,
+synthetic provider receipts and external provider access blocked. It checks opening,
+invalid input, ownership/origin rejection, lost upload reconciliation, one pair,
+normal admission, import/readback and idempotent retry. Run without `--check` for
+the local browser fixture at `http://127.0.0.1:5196/__qualification/session`. This
+synthetic session route exists only in the local qualification script.
