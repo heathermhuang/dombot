@@ -201,6 +201,7 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => mf?.dispose());
 beforeEach(async () => {
+  delete env.PUBLIC_DOMAIN_DIRECTORY_READY;
   broken = -1;
   delete env.PLATFORM_ENABLED;
   delete env.DISPATCHER;
@@ -238,6 +239,23 @@ describe('canonical public domain routing', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(response.headers.get('Set-Cookie')).toBeNull();
     expect(calls).toHaveBeenCalledTimes(2);
+  });
+  it('preserves only unmapped legacy paths during an explicit release bridge', async () => {
+    env.PUBLIC_DOMAIN_DIRECTORY_READY = 'false';
+    const legacy = `/w/${ids[0]}/d/working.io`;
+    expect(await publicDomainRequest(request(legacy), env)).toBeNull();
+    expect((await route('/working.io')).status).toBe(404);
+    env.PUBLIC_DOMAIN_DIRECTORY_READY = 'true';
+    expect((await route(legacy)).status).toBe(404);
+    delete env.PUBLIC_DOMAIN_DIRECTORY_READY;
+    expect((await route(legacy)).status).toBe(404);
+    await publish();
+    env.PUBLIC_DOMAIN_DIRECTORY_READY = 'false';
+    expect((await route(legacy)).status).toBe(308);
+    const directory = new PublicDomainDirectory(control),
+      record = (await directory.get('working.io'))!;
+    await directory.withdraw(record);
+    expect((await route(legacy)).status).toBe(404);
   });
   it('permanently redirects legacy and normalized addresses while retaining query parameters', async () => {
     await publish();

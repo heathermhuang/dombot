@@ -239,6 +239,8 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
       limit: 100,
     });
     return {
+      engine: engineManifest.version,
+      engineSource: engineManifest.sourceSha256,
       ...summarizeAdmin(
         domains.domains,
         imported,

@@ -1,4 +1,6 @@
 interface HostedEnv {
+  /** Temporary explicit legacy fallback during directory rollout; default is strict. */
+  PUBLIC_DOMAIN_DIRECTORY_READY?: string;
   DOMBOT_MANAGED_PROXY_IP?: string;
   ON_DEMAND_ENABLED?: string;
   ON_DEMAND_TEMPLATE_SHA256?: string;

@@ -85,6 +85,10 @@ export async function publicDomainRequest(
       });
     const directory = new PublicDomainDirectory(env.CONTROL_DB);
     const route = await directory.get(domain);
+    // Explicit release bridge only: preserve the old qualified tenant path
+    // until its directory row exists. Known holds/tombstones never fall back.
+    if (!route && legacy && env.PUBLIC_DOMAIN_DIRECTORY_READY === 'false')
+      return null;
     if (!route || route.state === 'tombstone') return unavailable();
     if (route.state === 'hold') return unavailable(409);
     const id = route.workspace_id;

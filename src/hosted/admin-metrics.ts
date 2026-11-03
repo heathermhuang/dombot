@@ -31,6 +31,11 @@ export const operationSchema = z.object({
 });
 export type Operation = z.infer<typeof operationSchema>;
 export const adminSnapshotSchema = z.object({
+  engine: z.string().max(80).optional(),
+  engineSource: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   maintenance: z
     .object({
       policy: z.boolean(),
