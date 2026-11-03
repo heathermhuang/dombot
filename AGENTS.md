@@ -30,6 +30,8 @@
 
 ## Managed release information
 
+- The import submission gate was qualified on actual production on 4 November 2026 at gateway source `b7d9be213a6983fd58bf592573fac7a6fd30be9f`: zero allocation on open/preview, one pair on valid Save, same pair and import ID on two retries. All existing accounts were preserved. The ordinary operator QA identity/pair is retained with maintenance paused and sessions revoked; it is not public signup capacity. See `docs/import-production-qualification-20261104/README.md`; protected identity/credential custody stays in the ignored `.wrangler/production-import-qualification-20261104` directory.
+
 - The 3 November 2026 listing/core rollout released application source `15bc7dbd028ac64161f76a2058e246f05d1e8bb1` and engine/UI `1.5.2-hosted.41` to the 43 admitted tenants, gateway, provisioner and public edge. Directory-only routing and the new future template are active; original allocation/feature flags were restored. See `docs/listing-core-production-release-20261103/README.md` for immutable release evidence. The separate unfinished allocation was subsequently recovered with its original identity/resources; see `docs/allocation-recovery-20261103/README.md` for qualification and the owner-browser evidence limit. Re-check live state before future operations.
 
 - Settings → About and the header badge show the live hosted engine version and gateway source revision. Managed accounts use service update information; desktop and self-hosted users retain their existing release/update controls. Do not identify the hosted release using only the root package version.

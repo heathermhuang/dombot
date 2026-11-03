@@ -36,3 +36,13 @@ customer import, registrar ownership, external provider operation or independent
 adoption. Production deployment/source and preservation receipts are recorded by
 the release owner after this candidate passes CI; they remain distinct from local
 provider simulation.
+
+## Controlled production qualification · 4 November 2026
+
+The production gap described above was subsequently closed with a dedicated
+operator QA account. Opening/invalid preview/valid preview created no resources;
+Save domains created exactly one real Worker/database pair. Two retries with the
+original import ID kept that pair and returned one unchanged domain, zero new.
+All pre-existing account mappings and credentials were preserved. See the
+[production receipt](../import-production-qualification-20261104/README.md), its
+machine-readable counts and actual production browser screenshots.

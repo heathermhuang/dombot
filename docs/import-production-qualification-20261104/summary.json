@@ -1,0 +1,46 @@
+{
+  "production": true,
+  "source": "b7d9be213a6983fd58bf592573fac7a6fd30be9f",
+  "opening": {
+    "workers": 0,
+    "databases": 0
+  },
+  "invalidPreview": {
+    "workers": 0,
+    "databases": 0
+  },
+  "validPreview": {
+    "workers": 0,
+    "databases": 0
+  },
+  "validSubmission": {
+    "workers": 1,
+    "databases": 1,
+    "admitted": true
+  },
+  "retries": {
+    "count": 2,
+    "workers": 1,
+    "databases": 1,
+    "unchanged": 1,
+    "new": 0,
+    "workerVersionAndBindingsUnchanged": true,
+    "databaseAndCoordinatorUnchanged": true,
+    "keyEnvelopeUnchanged": true,
+    "originalImportIdReused": true
+  },
+  "existingUsersPreserved": 55,
+  "existingWorkspacesPreserved": 531,
+  "existingPlatformRowsPreserved": 39,
+  "existingPendingRowsPreserved": 8,
+  "gatewayAndProvisionerUnchanged": true,
+  "at": "2026-11-03T23:43:27.527Z",
+  "qaCleanup": {
+    "qaSessionsRemaining": 0,
+    "publicSignupCapacity": false,
+    "maintenancePaused": true,
+    "alarmAt": null,
+    "qaIdentityAndDataRetained": true,
+    "at": "2026-11-03T23:44:32.966Z"
+  }
+}
