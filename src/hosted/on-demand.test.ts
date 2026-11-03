@@ -144,6 +144,28 @@ function request(
     env,
   );
 }
+const validImportBody = {
+  args: [[{ line: 1, domain: 'working.io' }], { importId: 'test-import' }],
+};
+function submitImport(
+  workspace: string,
+  token: string,
+  body: unknown = validImportBody,
+  origin = 'https://domains.domains',
+) {
+  return gateway.fetch(
+    new Request(`https://domains.domains/w/${workspace}/api/importDomains`, {
+      method: 'POST',
+      headers: {
+        Cookie: '__Host-dd_session=' + token,
+        Origin: origin,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }),
+    env,
+  );
+}
 describe('on-demand account lifecycle', () => {
   it('shows the configured hosted Namecheap IP before allocating a tenant', async () => {
     env.DOMBOT_MANAGED_PROXY_IP = '1.2.3.4';
@@ -257,7 +279,7 @@ describe('on-demand account lifecycle', () => {
     expect(invalid.status).toBe(400);
     expect(provision).not.toHaveBeenCalled();
   });
-  it.each(['registrar', 'market', 'import'])(
+  it.each(['registrar', 'market'])(
     'allocates only after the owner chooses %s and admits the qualified resource with a sealed key',
     async (reason) => {
       const s = await signup(),
@@ -287,7 +309,12 @@ describe('on-demand account lifecycle', () => {
             );
       expect(r.status).toBe(reason === 'import' ? 303 : 200);
       expect(provision).toHaveBeenCalledWith(s.user.workspace_id, s.user.id);
-      expect(await db.prepare('SELECT reason FROM pending_workspaces WHERE workspace_id=?').bind(s.user.workspace_id).first('reason')).toBe(reason);
+      expect(
+        await db
+          .prepare('SELECT reason FROM pending_workspaces WHERE workspace_id=?')
+          .bind(s.user.workspace_id)
+          .first('reason'),
+      ).toBe(reason);
       expect(await workspaceKey(env, s.user.workspace_id)).toBe(key);
       expect(
         await db
@@ -301,6 +328,123 @@ describe('on-demand account lifecycle', () => {
       ).toBe(0);
     },
   );
+  it('opens and reviews import input without requesting setup, including the old Import button', async () => {
+    const a = await signup(),
+      b = await signup('other@example.test');
+    const base = `/w/${a.user.workspace_id}`;
+    const home = await request(base + '/', a.token);
+    expect(await home.text()).toContain(`href="${base}/import"`);
+    const editor = await request(base + '/import', a.token);
+    expect(editor.status).toBe(200);
+    expect(await editor.text()).toContain('data-first-import');
+    expect((await request(base + '/import', b.token)).status).toBe(403);
+    expect((await request(base + '/import')).status).toBe(303);
+    const legacy = await request(base + '/start', a.token, 'import');
+    expect(legacy.status).toBe(303);
+    expect(legacy.headers.get('Location')).toBe(base + '/import');
+    expect(
+      await db
+        .prepare(
+          'SELECT requested_at FROM pending_workspaces WHERE workspace_id=?',
+        )
+        .bind(a.user.workspace_id)
+        .first('requested_at'),
+    ).toBeNull();
+    expect(provision).not.toHaveBeenCalled();
+  });
+  it('rejects empty, malformed, semantically invalid, foreign and cross-origin imports without allocating', async () => {
+    const a = await signup(),
+      b = await signup('other@example.test');
+    for (const body of [
+      null,
+      { args: [[], { importId: 'id' }] },
+      { args: [[{ line: 1, domain: 'bad row' }], { importId: 'id' }] },
+      {
+        args: [
+          [
+            {
+              line: 1,
+              domain: 'working.io',
+              registration: { expirationDate: '2026-02-30' },
+            },
+          ],
+          { importId: 'id' },
+        ],
+      },
+    ]) {
+      expect(
+        (await submitImport(a.user.workspace_id, a.token, body)).status,
+      ).toBe(400);
+    }
+    expect((await submitImport(a.user.workspace_id, b.token)).status).toBe(403);
+    expect((await submitImport(a.user.workspace_id, '')).status).toBe(401);
+    expect(
+      (
+        await submitImport(
+          a.user.workspace_id,
+          a.token,
+          validImportBody,
+          'https://evil.test',
+        )
+      ).status,
+    ).toBe(403);
+    expect(provision).not.toHaveBeenCalled();
+    expect(
+      await db
+        .prepare(
+          'SELECT count(*) n FROM pending_workspaces WHERE requested_at IS NOT NULL',
+        )
+        .first('n'),
+    ).toBe(0);
+  });
+  it('allocates only on valid submission, forwards the same import, and preserves identity and key on retries', async () => {
+    const a = await signup();
+    const forwarded = vi.fn(async (request: Request) => {
+      expect(new URL(request.url).pathname).toBe('/api/importDomains');
+      expect(await request.json()).toEqual(validImportBody);
+      return Response.json({
+        result: { importId: 'test-import', counts: { new: 1 } },
+      });
+    });
+    env.DISPATCHER = {
+      get: () => ({ fetch: forwarded }),
+    } as unknown as DispatchNamespace;
+    expect((await submitImport(a.user.workspace_id, a.token)).status).toBe(200);
+    expect(provision).toHaveBeenCalledTimes(1);
+    expect(await workspaceKey(env, a.user.workspace_id)).toBe(key);
+    const before = await db
+      .prepare('SELECT * FROM platform_workspaces WHERE workspace_id=?')
+      .bind(a.user.workspace_id)
+      .first();
+    expect((await submitImport(a.user.workspace_id, a.token)).status).toBe(200);
+    expect(provision).toHaveBeenCalledTimes(1);
+    expect(resources.size).toBe(1);
+    expect(
+      await db
+        .prepare('SELECT * FROM platform_workspaces WHERE workspace_id=?')
+        .bind(a.user.workspace_id)
+        .first(),
+    ).toEqual(before);
+    expect(forwarded).toHaveBeenCalledTimes(2);
+    expect(
+      await db
+        .prepare('SELECT reason FROM pending_workspaces WHERE workspace_id=?')
+        .bind(a.user.workspace_id)
+        .first('reason'),
+    ).toBe('import');
+  });
+  it('keeps the editor available while allocation is paused and retains input for a valid retry', async () => {
+    const a = await signup();
+    env.ON_DEMAND_ENABLED = 'false';
+    expect(
+      (await request(`/w/${a.user.workspace_id}/import`, a.token)).status,
+    ).toBe(200);
+    expect((await submitImport(a.user.workspace_id, a.token)).status).toBe(503);
+    expect(provision).not.toHaveBeenCalled();
+    env.ON_DEMAND_ENABLED = 'true';
+    expect((await submitImport(a.user.workspace_id, a.token)).status).toBe(200);
+    expect(provision).toHaveBeenCalledTimes(1);
+  });
   it('rejects a receipt belonging to another workspace without admitting it', async () => {
     const s = await signup();
     env.PROVISIONER = {

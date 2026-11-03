@@ -5,6 +5,8 @@ import {
   directoryInternal,
 } from './public-domain-directory';
 import { pendingWorkspace, activateWorkspace, accountLimit } from './on-demand';
+import { validFirstImport } from './first-import';
+import { importStart, importStartScriptPath } from './import-start-views';
 import { publicDomainRequest } from './public-domain-routes';
 import {
   portfolioStart,
@@ -46,7 +48,7 @@ import {
   AuthEmailUnavailable,
 } from './auth-policy';
 import { Passkeys, passkeyNameSchema } from './passkeys';
-import { authScript } from '../../hosted/generated-auth';
+import { authScript, importStartScript } from '../../hosted/generated-auth';
 import {
   emailStart,
   authRetry,
@@ -290,6 +292,9 @@ app.get('/privacy', (c) =>
 );
 app.get(onboardingScriptPath, (c) =>
   c.body(onboardingScript, 200, { 'Content-Type': 'text/javascript' }),
+);
+app.get(importStartScriptPath, (c) =>
+  c.body(importStartScript, 200, { 'Content-Type': 'text/javascript' }),
 );
 app.get('/auth/browser.js', (c) => {
   c.header('Content-Type', 'text/javascript; charset=utf-8');
@@ -1231,21 +1236,51 @@ app.all('/w/:workspace/*', async (c) => {
     if (user.workspace_id !== id)
       return c.json({ error: 'Account access denied' }, 403);
     const path = new URL(c.req.url).pathname.slice(`/w/${id}`.length);
-    if (path === '/' && c.req.method === 'GET') {
+    if (['/', '/import'].includes(path) && c.req.method === 'GET') {
       c.header(
         'Content-Security-Policy',
         "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
       );
       return c.html(
-        portfolioStart(id, '', c.env.DOMBOT_MANAGED_PROXY_IP ?? ''),
+        path === '/import'
+          ? importStart(id)
+          : portfolioStart(id, '', c.env.DOMBOT_MANAGED_PROXY_IP ?? ''),
       );
     }
     const marketConnection = path === '/api/connectMarketAccount';
     const connecting =
       marketConnection || path === '/api/connectRegistrarAccount';
-    if ((!connecting && path !== '/start') || c.req.method !== 'POST')
+    const importing = path === '/api/importDomains';
+    if (
+      (!connecting && !importing && path !== '/start') ||
+      c.req.method !== 'POST'
+    )
       return c.notFound();
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    // Old open onboarding pages may still submit the former Import button.
+    // Navigation never requests setup, even for that legacy form.
+    if (path === '/start') {
+      const form = await c.req.parseBody();
+      return form.reason === 'import'
+        ? c.redirect(`/w/${id}/import`, 303)
+        : c.text('Choose how to add your domains.', 400);
+    }
+    if (
+      importing &&
+      !validFirstImport(
+        await c.req.raw
+          .clone()
+          .json()
+          .catch(() => null),
+      )
+    )
+      return c.json(
+        {
+          error:
+            'Submit at least one valid domain and correct any invalid import fields before saving.',
+        },
+        400,
+      );
     if (!(await account(c.env).rateLimit(`provision:${id}`, 6)))
       return c.json(
         { error: 'Setup request limit reached. Please try again later.' },
@@ -1266,10 +1301,6 @@ app.all('/w/:workspace/*', async (c) => {
           },
           400,
         );
-    } else {
-      const form = await c.req.parseBody();
-      if (form.reason !== 'import')
-        return c.text('Choose how to add your domains.', 400);
     }
     try {
       await activateWorkspace(
@@ -1279,9 +1310,8 @@ app.all('/w/:workspace/*', async (c) => {
       );
       configured = await workspaceFor(c.env, id);
       if (!configured) throw Error('Portfolio not admitted');
-      if (!connecting) return c.redirect(`/w/${id}/`, 303);
-      // Continue through the usual owner/API checks and tenant connection path.
-      // The original credentials stay in this request, never in setup metadata.
+      // Continue through the usual owner/API checks and tenant mutation path.
+      // Credentials/import rows stay in this request, never in setup metadata.
     } catch {
       return c.json(
         {
