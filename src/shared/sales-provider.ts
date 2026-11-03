@@ -43,7 +43,10 @@ export function validateSalesDestination(
 export const SALES_PROVIDER_CAPABILITIES = {
   mode: 'Manual link',
   csv: 'Generic sales settings export for manual review',
-  apiRead: false,
-  apiWrite: false,
+  connectedMarkets: ['afternic', 'atom', 'sedo'],
+  apiRead: 'Core market accounts',
+  apiWrite: 'Core listing review and jobs',
+  domainControl: false,
+  availabilityVerification: false,
   checkoutCreation: false,
 } as const;

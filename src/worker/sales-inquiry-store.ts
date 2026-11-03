@@ -4,6 +4,7 @@ import {
   publishedSaleSchema,
   conversationStatusSchema,
   saleMoneySchema,
+  saleMinorUnits,
   messageSchema,
   type SaleInquiry,
   type PublishedSale,
@@ -183,7 +184,8 @@ export class SalesInquiryStore {
         );
       if (
         snapshot.publicMinimumOffer &&
-        BigInt(input.offer.amount) < BigInt(snapshot.publicMinimumOffer.amount)
+        saleMinorUnits(input.offer) <
+          saleMinorUnits(snapshot.publicMinimumOffer)
       )
         throw new SalesError(
           'OFFER_BELOW_MINIMUM',

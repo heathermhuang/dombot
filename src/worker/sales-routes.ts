@@ -1,3 +1,5 @@
+import { marketListings } from '../core/services/markets/sync';
+import { marketAccountViews } from '../core/services/markets/accounts';
 import { listEvents } from '../core/services/domain-events';
 import { toUnicode } from '../shared/domain-name';
 import { verifyGatewayRequest } from '../shared/gateway-proof';
@@ -68,6 +70,7 @@ const salesInventoryNames = async (env: Env) => {
         canonicalDomain(d.domainName),
       ),
       ...Object.keys(getImportedDomains()).map(canonicalDomain),
+      ...marketListings().map((listing) => canonicalDomain(listing.name)),
       ...collection.map((item) => item.domain),
     ]),
   ];
@@ -165,6 +168,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       provider: SALES_PROVIDER_CAPABILITIES,
     }),
   );
+  app.get('/market-accounts', (c) => c.json({ items: marketAccountViews() }));
   app.get('/inventory', async (c) => {
     const q = (c.req.query('q') ?? '').toLowerCase().slice(0, 253),
       cursor = c.req.query('cursor') ?? '';
@@ -179,6 +183,16 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
             o = await observe(draft);
           return {
             domain,
+            markets: marketListings()
+              .filter((listing) => listing.name === domain)
+              .map((listing) => ({
+                market: listing.market,
+                accountId: listing.accountId,
+                status: listing.status,
+                currency: listing.currency,
+                price: listing.price,
+                buyNow: listing.buyNow,
+              })),
             price: o.price
               ? {
                   amount: o.price.amount,

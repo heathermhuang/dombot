@@ -1,6 +1,7 @@
 import type { ListPrice } from '../../shared/ipc';
 import {
   publishedSaleSchema,
+  saleMinorUnits,
   saleDraftSchema,
   type PublishedSale,
   type SaleDraft,
@@ -58,14 +59,14 @@ export function salesProjection(
     d.minimumOffer &&
     publicPrice &&
     (d.minimumOffer.currency !== publicPrice.currency ||
-      BigInt(d.minimumOffer.amount) > BigInt(publicPrice.amount))
+      saleMinorUnits(d.minimumOffer) > saleMinorUnits(publicPrice))
   )
     throw new SalesError(
       'MINIMUM_INVALID',
       'Minimum offer must use the asking currency and be at or below the asking price.',
     );
   return publishedSaleSchema.parse({
-    version: 1,
+    version: 2,
     id: d.id,
     domain: d.domain,
     displayName: d.displayName,

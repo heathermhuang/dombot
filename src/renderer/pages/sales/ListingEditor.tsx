@@ -277,7 +277,7 @@ function ListingEditorView() {
                   <div className="grid-two">
                     <Field label="Public asking amount">
                       <input
-                        inputMode="numeric"
+                        inputMode="decimal"
                         value={draft.priceSource.price.amount}
                         onChange={(e) => {
                           if (draft.priceSource?.kind === 'override')
@@ -326,7 +326,7 @@ function ListingEditorView() {
               {draft.mode === 'offer' && (
                 <Field label="Public minimum offer (optional)">
                   <input
-                    inputMode="numeric"
+                    inputMode="decimal"
                     value={draft.minimumOffer?.amount ?? ''}
                     onChange={(e) =>
                       update(
