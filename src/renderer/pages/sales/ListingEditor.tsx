@@ -38,7 +38,8 @@ function ListingEditorView() {
     [categoryText, setCategoryText] = useState(
       draft?.categories.join(', ') ?? '',
     ),
-    [comparison, setComparison] = useState(false);
+    [comparison, setComparison] = useState(false),
+    [marketAccount, setMarketAccount] = useState('');
   const action = useSalesAction();
   useEffect(() => {
     if (remote.data?.draft.id === id && !editor.getSnapshot()) {
@@ -214,6 +215,77 @@ function ListingEditorView() {
             </section>
             <section className="sales-section">
               <h2>Price and terms</h2>
+              {!!remote.data.marketOffers?.length && (
+                <fieldset disabled={action.busy}>
+                  <legend>Prepare from a connected marketplace</legend>
+                  <p className="small">
+                    Copy the selected observed price and public provider
+                    destination into this private draft. It will not change your
+                    owner asking price or the provider listing.
+                  </p>
+                  <Field label="Observed listing">
+                    <select
+                      value={marketAccount}
+                      onChange={(e) => setMarketAccount(e.target.value)}
+                    >
+                      <option value="">Choose a marketplace listing</option>
+                      {remote.data.marketOffers.map((offer) => (
+                        <option
+                          key={offer.source.accountId}
+                          value={offer.source.accountId}
+                        >
+                          {offer.provider} · {offer.accountLabel} ·{' '}
+                          {offer.price
+                            ? `${offer.price.currency} ${offer.price.amount}`
+                            : 'Request price'}{' '}
+                          ·{' '}
+                          {offer.buyNow
+                            ? 'Fixed price'
+                            : 'Asking / provider offer'}{' '}
+                          · {offer.eligible ? 'Observed listing' : offer.reason}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <button
+                    type="button"
+                    disabled={!marketAccount || dirty || action.busy}
+                    onClick={() =>
+                      void action.run(async () => {
+                        const result = await salesRequest<{
+                          draft: SaleDraft;
+                          revision: string;
+                          notice: string;
+                        }>(`/listings/${id}/prepare-market`, 'POST', {
+                          accountId: marketAccount,
+                          revision,
+                        });
+                        editor.reset(result.draft, result.revision);
+                        setCategoryText(result.draft.categories.join(', '));
+                        await remote.reload();
+                        action.setNotice(result.notice);
+                      })
+                    }
+                  >
+                    Prepare private marketplace draft
+                  </button>
+                  {dirty && (
+                    <p className="small">
+                      Save or reload your current edits before preparing
+                      marketplace terms.
+                    </p>
+                  )}
+                </fieldset>
+              )}
+              {draft.priceSource?.kind === 'market' && (
+                <p className="small">
+                  Approved source selection: {draft.priceSource.market} ·
+                  observed{' '}
+                  {new Date(draft.priceSource.observedAt).toLocaleString()}.
+                  Public terms remain unchanged until reviewed. Payment options
+                  are explained by the provider.
+                </p>
+              )}
               <Field label="Public price source">
                 <select
                   value={draft.priceSource?.kind ?? 'none'}
@@ -229,7 +301,7 @@ function ListingEditorView() {
                           ? {
                               kind: 'override',
                               price: {
-                                amount: source?.amount ?? '1000',
+                                amount: source?.amount ?? '',
                                 currency: source?.currency ?? 'USD',
                               },
                               reason: 'Public channel override',
@@ -238,7 +310,12 @@ function ListingEditorView() {
                     )
                   }
                 >
-                  <option value="portfolio">Portfolio asking price</option>
+                  {draft.priceSource?.kind === 'market' && (
+                    <option value="market">
+                      Selected marketplace observation
+                    </option>
+                  )}
+                  <option value="portfolio">Owner asking price</option>
                   <option value="override">
                     Public/channel price override
                   </option>

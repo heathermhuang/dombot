@@ -1,3 +1,7 @@
+import { PublicPageActions } from '../components/domains/PublicPageActions';
+import { supportsSales } from '../lib/platform';
+import { salesRequest } from '../lib/sales-client';
+import { PresenceInspector } from '../components/owner-site/PresenceInspector';
 import { accountNumber, accountTitle } from '../../shared/account-label';
 import { syncProblems } from '../lib/activity';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
@@ -60,7 +64,7 @@ import {
 } from '../components/actions/OwnershipDialogs';
 import { useAppStore } from '../store/app';
 import { domainsCsvFilename, domainsToCsv } from '../../shared/domain-csv';
-import { importedRows } from '../../shared/imported-domains';
+import { importedRow, importedRows } from '../../shared/imported-domains';
 import { priceMoney } from '../lib/renewals';
 import { SALE_STEP_LABEL, saleSourceLabel } from '../lib/sales';
 import { nameserverGroup } from '../lib/nameservers';
@@ -598,6 +602,7 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
   owned: {
     order: [
       'domainName',
+      'publicPage',
       FOLDER,
       'binPrice',
       'minOffer',
@@ -618,6 +623,7 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
   listings: {
     order: [
       'domainName',
+      'publicPage',
       FOLDER,
       'binPrice',
       'minOffer',
@@ -642,6 +648,7 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
   archive: {
     order: [
       'domainName',
+      'publicPage',
       FOLDER,
       'registrar',
       'purchaseDate',
@@ -1036,6 +1043,8 @@ export default function Domains() {
   );
   const [purchaseFor, setPurchaseFor] = useState<Domain | null>(null);
   const [importing, setImporting] = useState(false);
+  const [publicMarketAccount, setPublicMarketAccount] = useState('');
+  const [preparingPages, setPreparingPages] = useState(false);
   // Asking price for one name (its cell or row menu) or the selection.
   const [listPriceFor, setListPriceFor] = useState<Domain[] | null>(null);
   // One name's listing on one market (its cell in that market's column).
@@ -1119,6 +1128,15 @@ export default function Domains() {
         },
       });
     }
+    if (supportsSales())
+      byKey.set('publicPage', {
+        key: 'publicPage',
+        label: 'Public page',
+        sortValue: (domain: Domain) => toAscii(domain.domainName),
+        render: (domain: Domain) => (
+          <PublicPageActions domain={toAscii(domain.domainName)} />
+        ),
+      });
     for (const extra of purchaseColumns({
       purchases,
       preferredCurrency: settings?.preferredCurrency ?? DEFAULT_CURRENCY,
@@ -1190,8 +1208,29 @@ export default function Domains() {
           : d,
       ),
       ...importedList,
+      ...(listingsView
+        ? Object.entries(marketListings)
+            .filter(
+              ([name]) =>
+                ![...portfolio, ...importedList].some(
+                  (d) => toAscii(d.domainName) === name,
+                ),
+            )
+            .map(([name, listings]) =>
+              importedRow(name, {
+                addedAt: Math.min(
+                  ...listings.map((l) => l.publicObservedAt ?? 0),
+                ),
+                updatedAt: Math.max(
+                  ...listings.map((l) => l.publicObservedAt ?? 0),
+                ),
+                registrar: null,
+                registrarLabel: 'Marketplace observation · control unverified',
+              }),
+            )
+        : []),
     ],
-    [portfolio, enriched, importedList],
+    [portfolio, enriched, importedList, listingsView, marketListings],
   );
 
   // Names in Archive that no registrar reports any more. They're not in
@@ -1803,7 +1842,11 @@ export default function Domains() {
             ? listingMarkets.map((m) => ({ ...c, key: listingColumnKey(m) }))
             : [c],
         )
-        .filter((c) => marketsOn || !isMarketColumnKey(c.key)),
+        .filter(
+          (c) =>
+            (marketsOn || !isMarketColumnKey(c.key)) &&
+            (c.key !== 'publicPage' || supportsSales()),
+        ),
     [columnView, marketsOn, listingMarkets],
   );
   const { layout: columnLayout, setLayout: setColumnLayout } = useColumnLayout(
@@ -2529,6 +2572,61 @@ export default function Domains() {
         />
       </div>
 
+      {supportsSales() && selectedDomains.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 py-2">
+          <label className="text-sm">
+            Public page source{' '}
+            <select
+              className="border rounded p-2"
+              value={publicMarketAccount}
+              onChange={(e) => setPublicMarketAccount(e.target.value)}
+            >
+              <option value="">Owner asking price</option>
+              {(marketAccounts ?? []).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} · {a.market}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="border rounded px-3 py-2 text-sm"
+            disabled={preparingPages || selectedDomains.length > 100}
+            onClick={() => {
+              setPreparingPages(true);
+              void salesRequest<{
+                results: {
+                  domain: string;
+                  ok: boolean;
+                  existing?: boolean;
+                  error?: string;
+                }[];
+              }>('/preparation', 'POST', {
+                domains: selectedDomains.map((d) => toAscii(d.domainName)),
+                ...(publicMarketAccount
+                  ? { accountId: publicMarketAccount }
+                  : {}),
+              })
+                .then((r) => {
+                  const failed = r.results.filter((item) => !item.ok);
+                  toast[failed.length ? 'error' : 'success'](
+                    `${r.results.filter((item) => item.ok).length} private drafts prepared or already present.${failed.length ? ' ' + failed.map((item) => `${item.domain}: ${item.error}`).join('; ') : ' Review each page before publishing.'}`,
+                  );
+                })
+                .catch((e) => toast.error(e.message))
+                .finally(() => setPreparingPages(false));
+            }}
+          >
+            Prepare private pages ({selectedDomains.length})
+          </button>
+          {selectedDomains.length > 100 && (
+            <span className="text-sm">
+              Choose at most 100 names for one preparation batch.
+            </span>
+          )}
+        </div>
+      )}
+      {supportsSales() && <PresenceInspector />}
       <DataTable
         className="mt-[13px]"
         rows={filtered}

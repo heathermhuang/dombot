@@ -1,3 +1,5 @@
+import { PublicPageActions } from './PublicPageActions';
+import { supportsSales } from '../../lib/platform';
 import { useMemo, useState } from 'react';
 import { toAscii } from '../../../shared/domain-name';
 import type { Domain } from '../../../shared/ipc';
@@ -83,6 +85,12 @@ export function ImportedDomainDialog({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-md">
         <ActionHeader title="Edit details" names={[domain.domainName]} />
+        {supportsSales() && (
+          <section aria-label="Public page">
+            <h2 className="text-sm font-medium">Public page</h2>
+            <PublicPageActions domain={toAscii(domain.domainName)} />
+          </section>
+        )}
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
             No connected account holds this name, so DomBot keeps what you enter

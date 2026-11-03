@@ -1,3 +1,8 @@
+import {
+  marketOffersFor,
+  prepareMarketPage,
+  preparePrivatePage,
+} from './market-page-preparation';
 import { marketListings } from '../core/services/markets/sync';
 import { marketAccountViews } from '../core/services/markets/accounts';
 import { listEvents } from '../core/services/domain-events';
@@ -286,6 +291,55 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
     }
     return c.json({ items });
   });
+  app.post('/preparation', async (c) => {
+    const input = z
+      .object({
+        domains: z.array(z.string()).min(1).max(100),
+        accountId: z.string().max(128).optional(),
+      })
+      .strict()
+      .parse(await c.req.json());
+    const db = await SalesStore.from(c.env),
+      names = new Set(await salesInventoryNames(c.env)),
+      results = [];
+    for (const domain of [...new Set(input.domains.map(canonicalDomain))]) {
+      try {
+        if (!names.has(domain))
+          throw new SalesError(
+            'NOT_IN_INVENTORY',
+            'Select a name from your inventory.',
+          );
+        const prepared = await preparePrivatePage(db, domain, input.accountId);
+        results.push({
+          domain,
+          ok: true,
+          id: prepared.item.draft.id,
+          existing: prepared.existing,
+        });
+      } catch (error) {
+        results.push({
+          domain,
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not prepare this private page.',
+        });
+      }
+    }
+    return c.json({ results });
+  });
+  app.post('/listings/:id/prepare-market', async (c) => {
+    const input = z
+      .object({ accountId: z.string().min(1).max(128), revision })
+      .strict()
+      .parse(await c.req.json());
+    const db = await SalesStore.from(c.env),
+      saved = await db.get(c.req.param('id'));
+    return c.json(
+      await prepareMarketPage(db, saved, input.accountId, input.revision),
+    );
+  });
   app.get('/listings/:id', async (c) => {
     const db = await SalesStore.from(c.env),
       saved = await db.get(c.req.param('id')),
@@ -304,6 +358,7 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
           : null,
       },
       destinations: await db.destinations(),
+      marketOffers: await marketOffersFor(saved.draft.domain),
     });
   });
   app.put('/listings/:id', async (c) => {

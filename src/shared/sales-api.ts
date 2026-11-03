@@ -1,3 +1,4 @@
+import type { MarketPublicOffer } from './market-public-offer';
 import type {
   PublishedSale,
   SaleDraft,
@@ -19,6 +20,7 @@ export interface SalesListing {
 }
 export interface SalesListingDetail extends SalesListing {
   dnsVerificationEnabled?: boolean;
+  marketOffers?: MarketPublicOffer[];
   observation: {
     controlSource?: 'registrar' | 'operator-dns' | 'dns';
     price: {

@@ -21,6 +21,7 @@ export interface MarketOfferSelection {
   validUntil: number;
 }
 export interface MarketPublicOffer {
+  accountLabel?: string;
   source: MarketOfferSelection;
   price: SaleMoney | null;
   buyNow: boolean;

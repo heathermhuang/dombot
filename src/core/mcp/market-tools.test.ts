@@ -425,3 +425,21 @@ describe('report tools', () => {
     ]);
   });
 });
+
+describe('read-only public-page proposals', () => {
+  it('returns selected source-backed terms without saving or provider writes', async () => {
+    const proposal = await call('market_public_page_propose', {
+      domain: 'alpha.com',
+      accountId: ID,
+    });
+    expect(proposal.saved).toBe(false);
+    expect(proposal.published).toBe(false);
+    expect(proposal.proposal.publicPrice.amount).toBe('2500');
+    expect(proposal.proposal.priceSource.accountId).toBe(ID);
+    expect(proposal.proposal.includeInShop).toBe(false);
+    expect(proposal.blockers.join(' ')).toMatch(/control/);
+    expect(fake.writes).toHaveLength(0);
+    expect(fake.messages).toHaveLength(0);
+    expect(JSON.stringify(proposal)).not.toContain('floor');
+  });
+});

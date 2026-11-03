@@ -1,3 +1,4 @@
+import { publicMarketOffer } from '../../shared/market-public-offer';
 import { permitsTool } from './scopes';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -15,6 +16,7 @@ import { getSettings } from '../services/settings';
 import { storedTraffic, trafficTotals } from '../services/markets/traffic';
 import {
   activeMarketAccounts,
+  getMarketSyncState,
   marketAccount,
   marketAccountViews,
   marketAdapter,
@@ -143,6 +145,57 @@ export function registerMarketTools(
             capabilities: marketInfo(a.market).capabilities,
           })),
         }),
+    );
+
+  if (allow('market_public_page_propose'))
+    server.registerTool(
+      'market_public_page_propose',
+      {
+        title: 'Propose a private public-page draft',
+        description:
+          'Inspect cached selected marketplace terms and return a suggested private public-page draft with exact money, source fingerprint, public provider identity destination and eligibility warnings. Does not save, publish, sync or write to a provider. Market connectivity does not verify domain control. Save through existing management authority; publish through separate explicit review.',
+        inputSchema: {
+          domain: z.string().max(253),
+          accountId: z.string().min(1).max(128),
+        },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ domain, accountId }) => {
+        const name = toAscii(domain),
+          listing = marketListings().find(
+            (l) => l.name === name && l.accountId === accountId,
+          );
+        if (!listing)
+          return json({
+            error:
+              'No cached listing on the selected enabled account. Sync it through the existing authorized workflow.',
+          });
+        const offer = await publicMarketOffer(
+          listing,
+          getMarketSyncState(accountId),
+        );
+        return json({
+          domain: name,
+          proposal: {
+            priceSource: offer.source,
+            publicPrice: offer.price,
+            destination: {
+              provider: offer.provider,
+              url: offer.url,
+              check: 'manual',
+            },
+            mode: offer.buyNow && offer.price ? 'buy-now' : 'external',
+            includeInShop: false,
+          },
+          eligible: offer.eligible,
+          blockers: [
+            ...(offer.reason ? [offer.reason] : []),
+            'Domain control and explicit publication review are required.',
+          ],
+          saved: false,
+          published: false,
+        });
+      },
     );
 
   if (allow('market_sync'))

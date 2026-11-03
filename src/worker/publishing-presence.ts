@@ -1,3 +1,4 @@
+import { marketListings } from '../core/services/markets/sync';
 import { publicDomainPath } from '../shared/public-publishing-links';
 import { z } from 'zod';
 import { canonicalDomain, privateListing } from '../shared/publication';
@@ -75,6 +76,7 @@ export async function publishingPresence(
     ...new Set([
       ...input.domains.map((d) => canonicalDomain(d.domainName)),
       ...Object.keys(getImportedDomains()).map(canonicalDomain),
+      ...marketListings().map((l) => canonicalDomain(l.name)),
       ...(draft ? records(draft.draft).map((d) => d.domain) : []),
       ...(published ? records(published.snapshot).map((d) => d.domain) : []),
     ]),

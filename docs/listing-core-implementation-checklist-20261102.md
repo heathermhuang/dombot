@@ -6,7 +6,7 @@ Base verified 2 November 2026: fork main `760237ec`; draft #138 remains open at 
 
 - [x] Phase 1: existing market connections, draft inventory, exact money v2 and backup compatibility.
 - [x] Phase 2: authoritative directory, reservation/fencing, reviewed transfers, resumable published-only backfill, 500-account isolation; typed source/destination contracts.
-- [ ] Phase 3: Domains/editor preparation, selected source, existing review/publication and explicit optional surfaces.
+- [x] Phase 3: Domains/editor preparation, selected source, existing review/publication and explicit optional surfaces.
 - [ ] Phase 4: source freshness/suppression, outcomes/core Sales reconciliation, distinct measurements.
 - [ ] Final checks: pinned engine/UI repack/reinstall/verify; typecheck/lint/tests/security/relay/builds/six dry runs; exact candidate CI/security; PR release order and evidence.
 
@@ -15,3 +15,5 @@ Money migration: legacy v1 payloads retain their original exact whole strings on
 Phase 1 verification: targeted money/store/backup suite 59 passed; typecheck/lint passed. Full run: 229/231 files passed (2,511 tests passed, one skip); remaining two assertions expected bundle v10 and were updated to v11, to be rerun before commit. Pinned engine `.37`.
 
 Phase 1: PR #139 at `4d3642e6`, CI success; Security analysis manually dispatched because stacked PR bases are excluded by its main-only automatic trigger. Phase 2: targeted routing/source/store/composite suite 84 passed; corrected DNS/provisioning/backfill suite 55 passed; typecheck/lint and engine `.38` integrity/boundary checks pass. Full phase-2 local run encountered EADDRNOTAVAIL loopback exhaustion and eight missing synthetic directory bindings (corrected); full final-candidate rerun and exact CI remain required. Directory release/backfill details are in `public-domain-directory.md`.
+
+Phase 3: Domains Public page column and existing detail/presence paths; market-only rows in Listings; bounded per-name private preparation; selected market terms/destination in editor; provider buy/offer/view handoff; optional shop/profile surfaces retained. New read-only MCP proposal returns a suggestion without saving/syncing/publishing/provider writes. Targeted preparation/composite tests: 71 passed; MCP/proposal/preparation suite: 64 passed. Typecheck/lint passed after correcting purity and URL-regex lint; engine `.39` repacked/reinstalled/verified. PR #140 requires a backported regex lint correction with a refreshed `.38` artifact before CI can pass.
