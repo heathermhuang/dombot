@@ -1,3 +1,4 @@
+import { journeyReady } from './sales-journey';
 import {
   marketOffersFor,
   prepareMarketPage,
@@ -173,6 +174,33 @@ export function createSalesRoutes(stateful: MiddlewareHandler<SalesEnv>) {
       provider: SALES_PROVIDER_CAPABILITIES,
     }),
   );
+  app.get('/journey', async (c) => {
+    const db = await SalesStore.from(c.env),
+      domain = canonicalDomain(c.req.query('domain') ?? '');
+    const measured = await journeyReady(c.env.DB);
+    const listing = await db.db
+      .prepare('SELECT id FROM sale_drafts WHERE domain_hash=?')
+      .bind(await db.hash('domain', domain))
+      .first<{ id: string }>();
+    const rows =
+      measured && listing
+        ? (
+            await db.db
+              .prepare(
+                'SELECT day,event,count FROM sales_journey_daily WHERE listing_id=? ORDER BY day DESC,event LIMIT 400',
+              )
+              .bind(listing.id)
+              .all()
+          ).results
+        : null;
+    return c.json({
+      source: 'hosted-request-and-event-counts',
+      measured,
+      rows,
+      attribution:
+        'No unique-visitor or completed-sale attribution. Provider traffic is reported separately.',
+    });
+  });
   app.get('/market-accounts', (c) => c.json({ items: marketAccountViews() }));
   app.get('/inventory', async (c) => {
     const q = (c.req.query('q') ?? '').toLowerCase().slice(0, 253),

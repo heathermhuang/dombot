@@ -32,6 +32,7 @@ import { deriveSalesKey, parseRootSecret, salesIndexer } from './keys';
 
 export interface SaleObservation {
   marketOffer?: MarketPublicOffer | null;
+  transactionState?: 'pending' | 'completed' | null;
   controlSource?: 'registrar' | 'operator-dns' | 'dns';
   price: ListPrice | null;
   ownershipFingerprint: string;
@@ -387,7 +388,10 @@ export class SalesStore {
           observation.reason ?? 'Refresh domain control before publishing.',
           409,
         );
-      if (['sold', 'control-lost'].includes(saved.availability))
+      if (
+        ['sold', 'control-lost', 'sale-pending'].includes(saved.availability) ||
+        observation.transactionState
+      )
         throw new SalesError(
           'UNAVAILABLE',
           'This name is unavailable. Review its availability before publishing.',
@@ -559,6 +563,7 @@ export class SalesStore {
         destination = await this.destination(saved.draft.destinationId);
       if (
         !o.available ||
+        o.transactionState ||
         o.controlExpiresAt <= Date.now() ||
         o.ownershipFingerprint !== item.ownershipFingerprint ||
         saleObservationFingerprint(saved.draft, o) !== item.priceFingerprint ||
@@ -615,6 +620,13 @@ export class SalesStore {
             item.after.publishedAt,
             item.revision,
           ),
+      );
+      statements.push(
+        this.db
+          .prepare(
+            'INSERT INTO sale_public_sources(listing_id,revision,sealed) VALUES(?,?,?) ON CONFLICT(listing_id) DO UPDATE SET revision=excluded.revision,sealed=excluded.sealed',
+          )
+          .bind(item.id, item.after.revision, await this.seal(saved.draft)),
       );
       if (item.includeInShop) selected.add(item.id);
       else selected.delete(item.id);
@@ -790,26 +802,56 @@ export class SalesStore {
       if (!hashes.length) continue;
       const rows = await this.db
         .prepare(
-          `SELECT id,sealed FROM sale_drafts WHERE availability='available' AND domain_hash IN (${hashes.map(() => '?').join(',')})`,
+          `SELECT d.id,d.sealed,d.availability,s.sealed AS source FROM sale_drafts d LEFT JOIN sale_public_sources s ON s.listing_id=d.id WHERE d.availability IN ('available','source-stale') AND d.domain_hash IN (${hashes.map(() => '?').join(',')})`,
         )
         .bind(...hashes)
-        .all<{ id: string; sealed: string }>();
+        .all<{
+          id: string;
+          sealed: string;
+          availability: string;
+          source: string | null;
+        }>();
       for (const row of rows.results) {
-        const o = await observe(await this.open(row.sealed, saleDraftSchema));
-        if (!o.available)
-          await this.db
-            .prepare(
-              "UPDATE sale_drafts SET availability='ownership-uncertain',operational_revision=? WHERE id=? AND availability='available'",
-            )
-            .bind(crypto.randomUUID(), row.id)
-            .run();
-        else
-          await this.db
-            .prepare(
-              "UPDATE sale_drafts SET control_expires_at=? WHERE id=? AND availability='available'",
-            )
-            .bind(o.controlExpiresAt, row.id)
-            .run();
+        // Editing an unpublished draft cannot replace the approved source contract.
+        const approved = await this.open(
+            row.source ?? row.sealed,
+            saleDraftSchema,
+          ),
+          o = await observe(approved);
+        let state = row.availability;
+        if (o.transactionState === 'completed') state = 'sold';
+        else if (o.transactionState === 'pending') state = 'sale-pending';
+        else if (!o.available) state = 'ownership-uncertain';
+        else if (approved.priceSource?.kind === 'market') {
+          if (
+            o.marketOffer &&
+            /not active and public/.test(o.marketOffer.reason ?? '')
+          )
+            state = 'paused';
+          else if (
+            !o.marketOffer?.eligible ||
+            o.marketOffer.source.fingerprint !==
+              approved.priceSource.fingerprint
+          )
+            state = 'source-stale';
+        } else if (
+          approved.priceSource?.kind === 'portfolio' &&
+          approved.priceSource.fingerprint !== sourcePriceFingerprint(o.price)
+        )
+          state = 'source-stale';
+        await this.db
+          .prepare(
+            'UPDATE sale_drafts SET availability=?,control_expires_at=?,operational_revision=CASE WHEN availability=? THEN operational_revision ELSE ? END WHERE id=? AND availability=?',
+          )
+          .bind(
+            state,
+            o.controlExpiresAt,
+            state,
+            crypto.randomUUID(),
+            row.id,
+            row.availability,
+          )
+          .run();
       }
     }
   }

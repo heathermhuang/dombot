@@ -61,6 +61,8 @@ export const saleModeSchema = z.enum([
 export const availabilitySchema = z.enum([
   'available',
   'paused',
+  'source-stale',
+  'sale-pending',
   'sold',
   'ownership-uncertain',
   'control-lost',
@@ -155,6 +157,7 @@ export const publishedSaleSchema = z
     mode: saleModeSchema,
     description: z.string().max(400),
     categories: z.array(z.string().max(40)).max(10),
+    sourceValidUntil: z.number().int().nonnegative().nullable().optional(),
     providerIntent: z.enum(['buy', 'offer', 'view']).optional(),
     publicPrice: saleMoneySchema.nullable(),
     publicMinimumOffer: saleMoneySchema.nullable(),

@@ -22,7 +22,7 @@ export type SalesAdmission = z.infer<typeof salesAdmissionSchema>;
 export function salesPublicPath(path: string, method: string): boolean {
   if (method === 'GET' || method === 'HEAD')
     return (
-      /^\/d\/[a-z0-9.-]+$/.test(path) ||
+      /^\/d\/[a-z0-9.-]+(?:\/provider)?$/.test(path) ||
       /^\/(?:i|t)\/[A-Za-z0-9_-]{43}$/.test(path) ||
       /^\/shop\/[a-z0-9-]{1,40}(?:\/export)?$/.test(path)
     );

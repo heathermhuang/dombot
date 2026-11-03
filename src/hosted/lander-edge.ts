@@ -134,13 +134,19 @@ export default {
     const path =
       url.pathname === '/'
         ? `/d/${row.domain}`
-        : url.pathname === '/inquiries'
-          ? `/d/${row.domain}/inquiries`
-          : url.pathname;
+        : url.pathname === '/provider'
+          ? `/d/${row.domain}/provider`
+          : url.pathname === '/inquiries'
+            ? `/d/${row.domain}/inquiries`
+            : url.pathname;
     // No arbitrary /d, /sales, login, assets or POST forwarding on customer hosts.
     if (
       !(url.pathname === '/' && ['GET', 'HEAD'].includes(incoming.method)) &&
       !(url.pathname === '/inquiries' && incoming.method === 'POST') &&
+      !(
+        url.pathname === '/provider' &&
+        ['GET', 'HEAD'].includes(incoming.method)
+      ) &&
       !/^\/(?:i|t)\/[A-Za-z0-9_-]{43}(?:\/(?:confirm|messages|resend))?$/.test(
         url.pathname,
       )

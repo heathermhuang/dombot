@@ -1,3 +1,4 @@
+import { PublicPageJourney } from '../../components/domains/PublicPageJourney';
 import { publicDomainPath } from '../../../shared/public-publishing-links';
 import { useListingDraft } from '../../lib/sales-drafts';
 import { useEffect, useState } from 'react';
@@ -215,6 +216,13 @@ function ListingEditorView() {
             </section>
             <section className="sales-section">
               <h2>Price and terms</h2>
+              {remote.data.availability === 'source-stale' && (
+                <p role="alert">
+                  The published source terms changed or could not be refreshed.
+                  Numerical claims are suppressed. Prepare current terms and
+                  review an update.
+                </p>
+              )}
               {!!remote.data.marketOffers?.length && (
                 <fieldset disabled={action.busy}>
                   <legend>Prepare from a connected marketplace</legend>
@@ -279,7 +287,7 @@ function ListingEditorView() {
               )}
               {draft.priceSource?.kind === 'market' && (
                 <p className="small">
-                  Approved source selection: {draft.priceSource.market} ·
+                  Selected marketplace source: {draft.priceSource.market} ·
                   observed{' '}
                   {new Date(draft.priceSource.observedAt).toLocaleString()}.
                   Public terms remain unchanged until reviewed. Payment options
@@ -607,6 +615,7 @@ function ListingEditorView() {
                 </div>
               </section>
             )}
+            <PublicPageJourney domain={draft.domain} />
           </form>
           <aside className={tab === 'settings' ? 'hide-mobile' : ''}>
             <h2>Saved buyer preview</h2>

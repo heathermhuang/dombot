@@ -29,7 +29,6 @@ import {
 /** A sale this recent is recorded even while an account still holds the name. */
 export const RECENT_SALE_DAYS = 90;
 /** Your own `sold` event within this many days of the market's is the same sale. */
-const SAME_SALE_DAYS = 14;
 
 const DAY = 86_400_000;
 
@@ -128,25 +127,26 @@ export function recordSaleEvents(
     }
 
     const money = amountOf(sale);
-    // Your own record of this sale: the latest `sold` without a market link,
-    // undated or close to the market's date.
+    // An unlinked seller record in this holding cycle needs an explicit match.
+    const acquired = events
+      .filter((e) => ACQUISITION_TYPES.has(e.type) && e.date)
+      .map((e) => e.date!)
+      .sort()
+      .at(-1);
     const mine = events
       .filter(
         (e) =>
           e.type === DomainEventType.Sold &&
           !e.marketSale &&
-          (!e.date || daysBetween(e.date, soldOn) <= SAME_SALE_DAYS),
+          (!e.date || !acquired || e.date >= acquired),
       )
       .sort((a, b) => b.id.localeCompare(a.id))[0];
     if (mine) {
-      writes.push({
-        ...mine,
-        marketSale: key,
-        date: mine.date ?? soldOn,
-        ...(mine.amount ? {} : (money ?? {})),
-        updatedAt: now,
-      });
-      result.linked++;
+      // Date proximity is not an explicit transaction match. Retain the seller
+      // record and provider transaction separately until the owner links them.
+      // Do not synthesize a second sold event or fill an unknown price.
+      result.skipped++;
+      continue;
     } else {
       // Answers the name's open "removed" alert, if it has one.
       const alert = events

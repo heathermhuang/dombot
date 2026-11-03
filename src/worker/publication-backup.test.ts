@@ -40,6 +40,7 @@ beforeAll(async () => {
   for (const f of [
     '0002_publication.sql',
     '0004_sales.sql',
+    '0009_sales_lifecycle.sql',
     '0005_sales_inquiries.sql',
   ])
     await db.exec(

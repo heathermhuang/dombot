@@ -66,11 +66,12 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // v10 retains upstream schema-5 history and marketplaces alongside hosted extensions.
 // Older hosted builds must reject it instead of dropping unknown namespaces.
 // v11 adds exact decimal public-offer money and marketplace source bindings.
-export const BUNDLE_VERSION = 11;
+// v12 retains hosted source bindings, explicit sale evidence references and journey counts.
+export const BUNDLE_VERSION = 12;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | typeof BUNDLE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -121,7 +122,7 @@ export function parseBundle(
     );
   }
   if (
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, BUNDLE_VERSION].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, BUNDLE_VERSION].includes(
       head.version as number,
     )
   ) {

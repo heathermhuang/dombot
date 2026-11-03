@@ -1,7 +1,14 @@
-import { cachedListing } from '../core/services/markets/sync';
+import { ACQUISITION_TYPES } from '../shared/domain-events';
+import { sourcePriceFingerprint } from '../core/publication/sales';
+import {
+  cachedListing,
+  marketListings,
+  marketSales,
+} from '../core/services/markets/sync';
 import {
   activeMarketAccounts,
   getMarketSyncState,
+  marketAccountViews,
 } from '../core/services/markets/accounts';
 import { publicMarketOffer } from '../shared/market-public-offer';
 import {
@@ -48,7 +55,26 @@ export function createSaleObserver(
   const accounts = new Map(
     getRegistrarMetadata().map((a) => [a.accountId ?? a.name, a]),
   );
-  const ownership = ownershipByDomain(listEvents()),
+  const events = listEvents(),
+    arrived = new Map<string, string>();
+  for (const event of events)
+    if (
+      ACQUISITION_TYPES.has(event.type) &&
+      event.date &&
+      event.date > (arrived.get(event.domain) ?? '')
+    )
+      arrived.set(event.domain, event.date);
+  const transactions = marketSales(),
+    pending = new Set(
+      transactions
+        .filter(
+          (s) =>
+            ['in_progress', 'unknown'].includes(s.status) &&
+            (!s.soldOn || (arrived.get(s.name) ?? '') < s.soldOn),
+        )
+        .map((s) => s.name),
+    );
+  const ownership = ownershipByDomain(events, transactions),
     prices = getListPrices(),
     now = Date.now();
   return (draft) => {
@@ -65,6 +91,11 @@ export function createSaleObserver(
       return {
         price: prices[draft.domain] ?? null,
         available: true,
+        transactionState: record?.sale
+          ? 'completed'
+          : pending.has(draft.domain)
+            ? 'pending'
+            : null,
         reason: null,
         controlSource: 'operator-dns',
         controlExpiresAt: managed.expiresAt,
@@ -96,6 +127,11 @@ export function createSaleObserver(
       ]),
       controlExpiresAt: observedAt + 86400_000,
       available,
+      transactionState: record?.sale
+        ? 'completed'
+        : pending.has(draft.domain)
+          ? 'pending'
+          : null,
       reason: available
         ? null
         : ids.size > 1
@@ -168,10 +204,44 @@ export function salesControlState(
     >
   > = {},
 ): Map<string, string> {
+  const listings = marketListings(),
+    sales = marketSales(),
+    prices = getListPrices();
+  const listingState = new Map<string, unknown[]>(),
+    saleState = new Map<string, unknown[]>();
+  for (const l of listings)
+    listingState.set(l.name, [
+      ...(listingState.get(l.name) ?? []),
+      [
+        l.accountId,
+        l.status,
+        l.forSale,
+        l.price,
+        l.currency,
+        l.buyNow,
+        l.minOffer,
+        l.discount,
+        l.publicObservedAt,
+      ],
+    ]);
+  for (const sale of sales)
+    saleState.set(sale.name, [
+      ...(saleState.get(sale.name) ?? []),
+      [sale.accountId, sale.id, sale.status, sale.action],
+    ]);
+  const accountState = marketAccountViews().map((a) => [
+    a.id,
+    a.enabled,
+    a.configured,
+    a.sync?.lastError,
+    a.sync?.incomplete,
+  ]);
   const observer = createSaleObserver(env),
     names = new Set(
       [
         ...(getCachedPortfolio()?.domains ?? []),
+        ...listings.map((l) => ({ domainName: l.name })),
+        ...sales.map((l) => ({ domainName: l.name })),
         ...listEvents().map((event) => ({ domainName: event.domain })),
         ...managedControls(env.DOMBOT_SALES_DNS_CONTROL).map((p) => ({
           domainName: p.domain,
@@ -189,7 +259,13 @@ export function salesControlState(
       .filter(Boolean)
       .map((domain) => [
         domain,
-        observer({ domain } as SaleDraft).ownershipFingerprint,
+        JSON.stringify([
+          observer({ domain } as SaleDraft).ownershipFingerprint,
+          listingState.get(domain) ?? [],
+          accountState,
+          saleState.get(domain) ?? [],
+          sourcePriceFingerprint(prices[domain]),
+        ]),
       ]),
   );
 }

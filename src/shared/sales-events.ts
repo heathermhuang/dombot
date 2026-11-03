@@ -1,6 +1,29 @@
 import { z } from 'zod';
 import { saleMoneySchema, saleDomainSchema } from './hosted-sales';
 
+export const coreSaleReferenceSchema = z.discriminatedUnion('kind', [
+  z
+    .object({ kind: z.literal('event'), eventId: z.string().min(1).max(128) })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('market'),
+      market: z.enum(['afternic', 'atom', 'sedo']),
+      accountId: z.string().min(1).max(128),
+      transactionId: z.string().min(1).max(200),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('match'),
+      market: z.enum(['afternic', 'atom', 'sedo']),
+      accountId: z.string().min(1).max(128),
+      transactionId: z.string().min(1).max(200),
+      eventId: z.string().min(1).max(128),
+    })
+    .strict(),
+]);
+export type CoreSaleReference = z.infer<typeof coreSaleReferenceSchema>;
 export const saleOutcomeSchema = z
   .object({
     state: z.enum([
@@ -16,6 +39,7 @@ export const saleOutcomeSchema = z
     evidence: z.string().trim().min(1).max(1000),
     price: saleMoneySchema.nullable(),
     provider: z.string().max(100),
+    coreSale: coreSaleReferenceSchema.optional(),
   })
   .strict();
 export type SaleOutcome = z.infer<typeof saleOutcomeSchema>;

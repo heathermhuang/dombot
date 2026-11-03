@@ -1,9 +1,12 @@
-import { markSold } from '../core/services/purchases';
 import { flushWrites } from '../core/storage/namespace';
 import { saleOutcomeSchema } from '../shared/sales-events';
 import { SalesStore } from './sales-store';
+import { matchSaleEvidence } from './sales-outcome-evidence';
+import { SalesError } from '../shared/sales-review';
+import { recordJourney } from './sales-journey';
 
-/** Suppression was already committed with the outcome. A history failure cannot reopen it. */
+/** Seller reports suppress conflicting actions, but never book completed revenue.
+ * Core Sales owns transactions; only an explicit evidence match links records. */
 export async function reconcileSalesOutcomes(store: SalesStore): Promise<void> {
   const rows = await store.db
     .prepare(
@@ -12,15 +15,27 @@ export async function reconcileSalesOutcomes(store: SalesStore): Promise<void> {
     .all<{ id: string; listing_id: string; sealed: string }>();
   for (const row of rows.results) {
     const outcome = await store.open(row.sealed, saleOutcomeSchema);
-    if (
-      ['payment-reported', 'transfer-reported', 'completed'].includes(
-        outcome.state,
-      )
-    ) {
+    if (outcome.coreSale) {
       const listing = await store.get(row.listing_id);
-      // markSold is idempotent and preserves acquisition prices and private notes.
-      markSold([{ domainName: listing.draft.domain }]);
+      try {
+        matchSaleEvidence(listing.draft.domain, outcome.coreSale);
+      } catch (error) {
+        if (!(error instanceof SalesError)) throw error;
+        await store.db
+          .prepare(
+            "UPDATE sales_events SET reconciled_at=?,provenance='link-needs-review' WHERE id=? AND reconciled_at IS NULL",
+          )
+          .bind(Date.now(), row.id)
+          .run();
+        continue;
+      }
       await flushWrites();
+      await recordJourney(
+        store.db,
+        row.listing_id,
+        'sale-evidence-linked',
+        row.id,
+      );
     }
     await store.db
       .prepare(

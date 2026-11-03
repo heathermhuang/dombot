@@ -212,13 +212,17 @@ export async function publishingPresence(
             actionable:
               !!p &&
               row?.availability === 'available' &&
-              row.control_expires_at > Date.now(),
+              row.control_expires_at > Date.now() &&
+              (p.sourceValidUntil == null || p.sourceValidUntil > Date.now()),
             suppression: p
               ? row?.availability !== 'available'
                 ? row!.availability
                 : row.control_expires_at <= Date.now()
                   ? 'Control observation expired'
-                  : null
+                  : p.sourceValidUntil != null &&
+                      p.sourceValidUntil <= Date.now()
+                    ? 'Marketplace terms expired; review a fresh observation'
+                    : null
               : null,
             mode: p?.mode ?? null,
             price: p?.publicPrice ?? null,

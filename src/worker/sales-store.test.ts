@@ -75,6 +75,7 @@ beforeAll(async () => {
   for (const file of [
     '0002_publication.sql',
     '0004_sales.sql',
+    '0009_sales_lifecycle.sql',
     '0005_sales_inquiries.sql',
   ])
     await db.exec(
@@ -90,8 +91,12 @@ beforeAll(async () => {
 }, 30_000);
 afterAll(async () => mf?.dispose());
 beforeEach(async () => {
+  configureStore(new MemoryDocStore());
+  await hydrateStores();
   await db.batch(
     [
+      'sales_journey_daily',
+      'sales_journey_receipts',
       'portfolio_drafts',
       'published_portfolios',
       'sales_events',
@@ -1645,6 +1650,339 @@ describe('market-only private page preparation', () => {
     expect(review.items[0].after.providerIntent).toBe('buy');
     const html = renderSalesLander(review.items[0].after, '', null);
     expect(html).toContain('Buy through Sedo');
-    expect(html.indexOf('href="https://sedo.com/')).toBeGreaterThan(0);
+    expect(html.indexOf('href="/d/marketonly.io/provider')).toBeGreaterThan(0);
+  });
+});
+
+describe('source maintenance, transactions and honest measurements', () => {
+  async function marketPublication(domain = 'lifecycle.io') {
+    const draft = {
+      ...emptySale(domain, 'none'),
+      mode: 'buy-now' as const,
+      allowQuestions: true,
+    };
+    const { publicMarketOffer } = await import('../shared/market-public-offer');
+    const offer = await publicMarketOffer(
+      {
+        market: 'sedo',
+        accountId: 'private-account',
+        name: domain,
+        displayName: null,
+        status: 'active',
+        statusRaw: 'active',
+        forSale: true,
+        price: '100.50',
+        buyNow: true,
+        minOffer: null,
+        floor: 'PRIVATE',
+        discount: null,
+        currency: 'USD',
+        leaseToOwn: null,
+        tier: null,
+        listedAt: null,
+        updatedAt: null,
+        publicObservedAt: Date.now(),
+        extra: {
+          market: 'sedo',
+          categories: [],
+          language: null,
+          parkingEarnings: null,
+          keywords: [],
+        },
+      },
+      null,
+    );
+    const destination = {
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+      provider: offer.provider,
+      url: offer.url,
+      check: 'manual' as const,
+      checkedAt: null,
+    };
+    await store.saveDestination(destination, null);
+    draft.priceSource = offer.source;
+    draft.destinationId = destination.id;
+    const revision = await store.save(draft, null),
+      observe = () => ({ ...observation(), marketOffer: offer });
+    const review = await store.prepare([{ id: draft.id, revision }], observe);
+    await store.publish(review.id, observe);
+    return { draft, offer, observe };
+  }
+  it('retains the approved source across later private edits, removes drifted prices, and never reopens on recovery alone', async () => {
+    const { draft, offer, observe } = await marketPublication();
+    let saved = await store.get(draft.id);
+    await store.save(
+      {
+        ...saved.draft,
+        priceSource: {
+          kind: 'override',
+          price: { amount: '999', currency: 'USD' },
+          reason: 'Private pending edit',
+        },
+      },
+      saved.revision,
+    );
+    await store.reconcile(
+      (approved) => {
+        expect(approved.priceSource?.kind).toBe('market');
+        return {
+          ...observation(),
+          marketOffer: {
+            ...offer,
+            source: { ...offer.source, fingerprint: 'f'.repeat(64) },
+          },
+        };
+      },
+      [draft.domain],
+    );
+    saved = await store.get(draft.id);
+    expect(saved.availability).toBe('source-stale');
+    const live = await readPublicSale(db, draft.domain);
+    expect(live?.publicPrice).toBeNull();
+    expect(live?.providerIntent).toBe('view');
+    expect(saved.published?.publicPrice?.amount).toBe('100.50');
+    await store.reconcile(observe, [draft.domain]);
+    expect((await store.get(draft.id)).availability).toBe('source-stale');
+    await store.reconcile(
+      () => ({
+        ...observation(),
+        marketOffer: {
+          ...offer,
+          eligible: false,
+          reason: 'This marketplace listing is not active and public.',
+        },
+      }),
+      [draft.domain],
+    );
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+    await store.reconcile(observe, [draft.domain]);
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+  });
+  it('does not enable an unapproved inquiry when stale offer-only terms have no provider destination', async () => {
+    const draft = {
+      ...emptySale('offer-only.io', sourcePriceFingerprint(price)),
+      mode: 'offer' as const,
+      allowQuestions: false,
+    };
+    const revision = await store.save(draft, null),
+      review = await store.prepare([{ id: draft.id, revision }], observation);
+    await store.publish(review.id, observation);
+    await store.reconcile(
+      () => ({ ...observation(), price: { ...price, amount: '14800.01' } }),
+      [draft.domain],
+    );
+    expect((await store.get(draft.id)).availability).toBe('source-stale');
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+  });
+  it('bounds discounts/price leases at read time and suppresses pending/completed sales across public readers', async () => {
+    const { draft, offer, observe } = await marketPublication('expiry.io');
+    const saved = await store.get(draft.id);
+    await db
+      .prepare('UPDATE published_sales SET payload=? WHERE id=?')
+      .bind(
+        JSON.stringify({
+          ...saved.published,
+          sourceValidUntil: Date.now() - 1,
+        }),
+        draft.id,
+      )
+      .run();
+    expect((await readPublicSale(db, draft.domain))?.publicPrice).toBeNull();
+    await store.reconcile(
+      () => ({ ...observe(), transactionState: 'pending' }),
+      [draft.domain],
+    );
+    expect((await store.get(draft.id)).availability).toBe('sale-pending');
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+    await store.reconcile(
+      () => ({ ...observation(), marketOffer: offer }),
+      [draft.domain],
+    );
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+    const pending = await store.get(draft.id);
+    await store.availability(draft.id, pending.operationalRevision, 'paused');
+    const review = await store.prepare(
+      [{ id: draft.id, revision: pending.revision }],
+      observe,
+    );
+    await store.publish(review.id, observe);
+    await store.reconcile(
+      () => ({ ...observe(), transactionState: 'completed' }),
+      [draft.domain],
+    );
+    expect((await store.get(draft.id)).availability).toBe('sold');
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+    await store.reconcile(observe, [draft.domain]);
+    expect((await store.get(draft.id)).availability).toBe('sold');
+  });
+  it('counts provider opens separately, preserves aggregate backups, and never treats requests as completed sales', async () => {
+    const { draft } = await marketPublication('counts.io');
+    const route = new Hono<{ Bindings: Env }>().route(
+      '/',
+      createPublicSalesRoutes(),
+    );
+    const env = { DB: db, DOMBOT_AUTH: 'external' } as Env;
+    expect((await route.request('/d/counts.io', {}, env)).status).toBe(200);
+    const opened = await route.request('/d/counts.io/provider', {}, env);
+    expect(opened.status).toBe(303);
+    expect(opened.headers.get('location')).toBe(
+      'https://sedo.com/search/details/?domain=counts.io',
+    );
+    const { recordJourney } = await import('./sales-journey');
+    await recordJourney(db, draft.id, 'inquiry-verified', 'one-receipt');
+    await recordJourney(db, draft.id, 'inquiry-verified', 'one-receipt');
+    const counts = (
+      await db
+        .prepare(
+          'SELECT event,count FROM sales_journey_daily WHERE listing_id=? ORDER BY event',
+        )
+        .bind(draft.id)
+        .all()
+    ).results;
+    expect(counts).toEqual([
+      { event: 'inquiry-verified', count: 1 },
+      { event: 'page-rendered', count: 1 },
+      { event: 'provider-opened', count: 1 },
+    ]);
+    const exported = await exportSales(store);
+    expect(exported.version).toBe(3);
+    expect(exported.journey).toHaveLength(3);
+    await restoreSales(store, exported);
+    expect(await readPublicSale(db, draft.domain)).toBeNull();
+    expect((await exportSales(store)).journey).toEqual(exported.journey);
+    const { listEvents } = await import('../core/services/domain-events');
+    expect(listEvents()).toHaveLength(0);
+  });
+  it('compares decimal public shop boundaries exactly rather than truncating fractions', async () => {
+    const { draft } = await marketPublication('range.io');
+    const shop = {
+      version: 1 as const,
+      handle: 'exact',
+      title: 'Exact range',
+      intro: '',
+      listingIds: [draft.id],
+    };
+    await store.saveShop(shop, null);
+    await db
+      .prepare("UPDATE sales_shop SET published=? WHERE id='main'")
+      .bind(JSON.stringify(shop))
+      .run();
+    expect(
+      (await publicShop(db, 'exact', { currency: 'USD', max: '100.49' })).items,
+    ).toHaveLength(0);
+    expect(
+      (await publicShop(db, 'exact', { currency: 'USD', min: '100.51' })).items,
+    ).toHaveLength(0);
+    expect(
+      (
+        await publicShop(db, 'exact', {
+          currency: 'USD',
+          min: '100.50',
+          max: '100.50',
+        })
+      ).items,
+    ).toHaveLength(1);
+    await expect(
+      publicShop(db, 'exact', { currency: 'JPY', max: '100.50' }),
+    ).rejects.toThrow(/decimal/);
+  });
+  it('keeps seller payment and transfer reports out of completed core Sales', async () => {
+    const { draft } = await marketPublication('reported.io');
+    const { reconcileSalesOutcomes } = await import('./sales-reconciliation');
+    for (const state of [
+      'payment-reported',
+      'transfer-reported',
+      'completed',
+    ] as const)
+      await db
+        .prepare(
+          "INSERT INTO sales_events(id,listing_id,kind,created_at,sealed) VALUES(?,?,'outcome',?,?)",
+        )
+        .bind(
+          crypto.randomUUID(),
+          draft.id,
+          Date.now(),
+          await store.seal({
+            state,
+            source: 'seller-entered',
+            evidence: 'Seller report only',
+            price: null,
+            provider: 'Sedo',
+          }),
+        )
+        .run();
+    await reconcileSalesOutcomes(store);
+    const { listEvents } = await import('../core/services/domain-events');
+    expect(listEvents()).toHaveLength(0);
+  });
+  it('requires an explicit exact match and deduplicates a completed provider transaction without overwriting seller facts', async () => {
+    const { newEvent, putEvents, listEvents } =
+      await import('../core/services/domain-events');
+    const { DomainEventType, DomainEventSource } =
+      await import('../shared/domain-events');
+    const { Namespace, flushWrites } =
+      await import('../core/storage/namespace');
+    const event = newEvent({
+      domain: 'matched.io',
+      type: DomainEventType.Sold,
+      source: DomainEventSource.User,
+      date: '2026-11-01',
+      amount: '100.50',
+      currency: 'USD',
+      fees: '1.01',
+    });
+    putEvents([event]);
+    await flushWrites();
+    const sales = new Namespace('market-sales');
+    await sales.load();
+    await sales.set('account:transaction', {
+      market: 'sedo',
+      accountId: 'account',
+      id: 'transaction',
+      name: 'matched.io',
+      soldOn: '2026-11-01',
+      status: 'completed',
+      statusRaw: 'completed',
+      kind: 'buy_now',
+      price: '100.50',
+      commission: '1.01',
+      commissionEstimated: false,
+      net: '99.49',
+      currency: 'USD',
+      installments: null,
+      paidOutOn: '2026-11-02',
+      action: null,
+    });
+    await flushWrites();
+    await hydrateStores();
+    const { matchSaleEvidence, resolveSaleEvidence } =
+      await import('./sales-outcome-evidence');
+    const reference = {
+      kind: 'match' as const,
+      market: 'sedo' as const,
+      accountId: 'account',
+      transactionId: 'transaction',
+      eventId: event.id,
+    };
+    expect(() => resolveSaleEvidence('other.io', reference)).toThrow(
+      /this domain/,
+    );
+    expect(() =>
+      resolveSaleEvidence('matched.io', reference, {
+        amount: '100.51',
+        currency: 'USD',
+      }),
+    ).toThrow(/differs/);
+    matchSaleEvidence('matched.io', reference);
+    matchSaleEvidence('matched.io', reference);
+    expect(listEvents()).toHaveLength(1);
+    expect(listEvents()[0]).toMatchObject({
+      amount: '100.50',
+      currency: 'USD',
+      fees: '1.01',
+      source: 'user',
+      marketSale: 'account:transaction',
+    });
   });
 });

@@ -1,3 +1,5 @@
+import { journeyRowSchema } from '../shared/sales-journey';
+import { journeyReady } from './sales-journey';
 import { z } from 'zod';
 import {
   saleDraftSchema,
@@ -18,7 +20,8 @@ const privateRow = z
   .strict();
 export const salesBackupSchema = z
   .object({
-    version: z.union([z.literal(1), z.literal(2)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    journey: z.array(journeyRowSchema).max(100000).default([]),
     drafts: z.array(saleDraftSchema).max(20_000),
     destinations: z.array(destinationSchema).max(100),
     shop: shopDraftSchema.nullable(),
@@ -152,6 +155,9 @@ export async function hasSalesData(db: D1Database): Promise<boolean> {
     'sales_outbox',
     'sales_abuse',
     'sales_suppression',
+    ...((await journeyReady(db))
+      ? ['sales_journey_daily', 'sales_journey_receipts']
+      : []),
   ];
   const row = await db
     .prepare(
@@ -177,7 +183,15 @@ export async function exportSales(
   const open = async (r: Record<string, unknown>) =>
     JSON.parse(await store.cipher.open(String(r.sealed)));
   return salesBackupSchema.parse({
-    version: 2,
+    version: 3,
+    journey: (await journeyReady(store.db))
+      ? (await read('sales_journey_daily')).map((r) => ({
+          day: r.day,
+          listingId: r.listing_id,
+          event: r.event,
+          count: r.count,
+        }))
+      : [],
     suppressions: await Promise.all(
       (await read('sales_suppression')).map(async (r) => ({
         email: z.object({ email: z.string().email() }).parse(await open(r))
@@ -438,10 +452,22 @@ export async function restoreSales(
       suppression,
     ),
   );
+  if (await journeyReady(store.db))
+    writes.push(
+      ...rowInserts(
+        store.db,
+        'sales_journey_daily',
+        ['day', 'listing_id', 'event', 'count'],
+        v.journey.map((r) => [r.day, r.listingId, r.event, r.count]),
+      ),
+    );
   // Every payload and row is validated and resealed before the one atomic replacement.
   await store.db.batch([
     ...[
       'sales_events',
+      ...((await journeyReady(store.db))
+        ? ['sales_journey_daily', 'sales_journey_receipts']
+        : []),
       'sales_leads',
       'sales_reviews',
       'sales_shop_reviews',
