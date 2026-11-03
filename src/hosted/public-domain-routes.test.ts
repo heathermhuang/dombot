@@ -444,6 +444,34 @@ describe('canonical public domain routing', () => {
     expect((await route('/second.io')).status).toBe(200);
     expect((await backfillDomainRoutes(env, ids[0], 1)).done).toBe(true);
   });
+  it('backfills eligible neutral stale pages and advances past ineligible published snapshots', async () => {
+    await publish(0, 'a.io');
+    await publish(0, 'b.io');
+    const row = await dbs[0]
+      .prepare("SELECT payload FROM published_sales WHERE domain='a.io'")
+      .first<{ payload: string }>();
+    const payload = {
+      ...JSON.parse(row!.payload),
+      mode: 'offer',
+      allowQuestions: false,
+      sourceValidUntil: Date.now() - 1,
+    };
+    await dbs[0]
+      .prepare("UPDATE published_sales SET payload=? WHERE domain='a.io'")
+      .bind(JSON.stringify(payload))
+      .run();
+    await dbs[0].exec(
+      "UPDATE sale_drafts SET availability='source-stale' WHERE id IN (SELECT id FROM published_sales WHERE domain='b.io')",
+    );
+    await control.exec('DELETE FROM public_domain_routes');
+    const first = await backfillDomainRoutes(env, ids[0], 1);
+    expect(first.done).toBe(false);
+    expect(first.cursor).toBe('a.io');
+    expect(await new PublicDomainDirectory(control).get('a.io')).toBeNull();
+    const second = await backfillDomainRoutes(env, ids[0], 1);
+    expect(second.done).toBe(true);
+    expect((await route('/b.io')).status).toBe(200);
+  });
   it('does not let an older backfill observation replace a newer reservation or tombstone', async () => {
     const listing = await publish(),
       directory = new PublicDomainDirectory(control),

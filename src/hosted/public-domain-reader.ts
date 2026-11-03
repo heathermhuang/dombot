@@ -35,15 +35,24 @@ export async function publicDomainEligibility(
       .max(253)
       .parse(url.searchParams.get('cursor') ?? '');
     const rows = await env.DB.prepare(
-      "SELECT p.domain,p.id AS listing,p.revision FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.domain>? AND d.availability='available' AND d.control_expires_at>? ORDER BY p.domain LIMIT ?",
+      "SELECT p.domain,p.id AS listing,p.revision FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.domain>? AND d.availability IN ('available','source-stale') AND d.control_expires_at>? ORDER BY p.domain LIMIT ?",
     )
       .bind(cursor, Date.now(), limit + 1)
       .all<{ domain: string; listing: string; revision: string }>();
-    const items = rows.results.slice(0, limit);
+    const candidates = rows.results.slice(0, limit),
+      items: typeof candidates = [];
+    for (const candidate of candidates) {
+      const sale = await readPublicSale(env.DB, candidate.domain);
+      if (
+        sale?.id === candidate.listing &&
+        sale.revision === candidate.revision
+      )
+        items.push(candidate);
+    }
     return Response.json(
       {
         items,
-        cursor: rows.results.length > limit ? items.at(-1)!.domain : null,
+        cursor: rows.results.length > limit ? candidates.at(-1)!.domain : null,
       },
       { headers },
     );
