@@ -6,6 +6,8 @@ import type { ProvisionReceipt } from './on-demand';
 export interface ProvisioningEnv extends ProvisioningBindings {
   CF_PROVISIONING_TOKEN: string;
   TENANT_SECRETS_JSON: string;
+  /** Operator-approved one-allocation plan; unset outside a recovery window. */
+  RECOVERY_PLAN_SHA256?: string;
 }
 const bindingSchema = z.union([
   z
