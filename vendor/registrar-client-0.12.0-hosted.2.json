@@ -23,7 +23,7 @@
   "patches": [
     {
       "path": "vendor/registrar-client-0.12.0-hosted.2.patch",
-      "sha256": "4932d69d5b8dcc84ca0e515c1ebfd5c7083a1e42c88a041a2583de38438d882d"
+      "sha256": "81ba9ff35a012f74c9a951a47ae5f17e38a69b9562432292ac6787d797ee0979"
     }
   ]
 }

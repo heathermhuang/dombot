@@ -1,76 +1,39 @@
 diff --git a/src/http.ts b/src/http.ts
 --- a/src/http.ts
 +++ b/src/http.ts
-@@ -67,8 +67,8 @@
- 
-   // perform a request and parse a JSON response body
-   async request<T = unknown>(req: RequestConfig): Promise<T> {
+@@ -70,2 +70,2 @@
 -    return this.withRetries(req, async () => {
 -      const text = await this.send(req);
 +    return this.withRetries(req, async attemptReq => {
 +      const text = await this.send(attemptReq);
-       if (text.length === 0) return undefined as T;
-       try {
-         return JSON.parse(text) as T;
-@@ -82,7 +82,7 @@
- 
-   // perform a request and return the raw response body text (e.g. XML APIs)
-   async requestText(req: RequestConfig): Promise<string> {
+@@ -85 +85 @@
 -    return this.withRetries(req, () => this.send(req));
 +    return this.withRetries(req, attemptReq => this.send(attemptReq));
-   }
- 
-   // Shared retry-with-backoff wrapper around a single-attempt operation.
-@@ -99,14 +99,19 @@
-   // A write whose outcome is unknown may have been applied, so it is never
-   // re-sent: a second renewal charges twice, a second record-create leaves a
-   // duplicate. The caller re-reads the domain instead.
+@@ -102 +102 @@
 -  protected async withRetries<T>(req: RequestConfig, attemptFn: () => Promise<T>): Promise<T> {
 +  protected async withRetries<T>(req: RequestConfig, attemptFn: (attemptReq: RequestConfig) => Promise<T>): Promise<T> {
-     const retries = req.retries ?? this.config.options.retries;
-     const backoff = req.backoff ?? this.config.options.backoff;
- 
+@@ -105,0 +106,3 @@
 +    // One timeout budget covers all attempts and backoff, rather than resetting
 +    // a full 30-second deadline for each retry.
 +    const deadline = Date.now() + (req.timeout ?? this.config.options.timeout);
-     let lastError: RegistrarError | undefined;
-     for (let attempt = 0; attempt <= retries; attempt++) {
-       try {
+@@ -109 +112,3 @@
 -        return await attemptFn();
 +        const remaining = deadline - Date.now();
 +        if (remaining <= 0) throw new TimeoutError('Registrar request deadline exceeded');
 +        return await attemptFn({ ...req, timeout: remaining });
-       } catch (error) {
-         lastError = toRegistrarError(error);
- 
-@@ -130,6 +135,8 @@
-           lastError instanceof RateLimitError && lastError.retryAfter != null
-             ? lastError.retryAfter * 1000
-             : backoffDelay(backoff, attempt);
+@@ -132,0 +138,2 @@
 +        // Never retry sooner than Retry-After, or extend the operation budget.
 +        if (delay >= deadline - Date.now()) throw lastError;
-         await sleep(delay);
-       }
-     }
 diff --git a/src/registrars/cloudflare.ts b/src/registrars/cloudflare.ts
 --- a/src/registrars/cloudflare.ts
 +++ b/src/registrars/cloudflare.ts
-@@ -595,7 +595,7 @@
-       const rules = settable.map(f => {
-         const fqdn = toFqdn(f.host || '@', zone.name);
-         return {
+@@ -598 +598 @@
 -          expression: `http.host eq "${fqdn}"`,
 +          expression: `http.host eq ${JSON.stringify(fqdn)}`,
-           description: `forward ${fqdn}`,
-           action: 'redirect',
-           action_parameters: {
 diff --git a/src/registrars/dynadot.ts b/src/registrars/dynadot.ts
 --- a/src/registrars/dynadot.ts
 +++ b/src/registrars/dynadot.ts
-@@ -21,7 +21,13 @@
- } from '../types';
- import { REST_SAFE_METHODS } from '../http';
- import { createDomain, filterDomains, requireConsent, settableForwards } from '../utils';
+@@ -24 +24,7 @@
 -import { NotFoundError, NotImplementedError, toRegistrarError } from '../errors';
 +import {
 +  NotFoundError,
@@ -79,33 +42,15 @@ diff --git a/src/registrars/dynadot.ts b/src/registrars/dynadot.ts
 +  RegistrarError,
 +  toRegistrarError,
 +} from '../errors';
- import { BaseRegistrar, selectBaseUrl } from '../registrar';
- import { Feature, type RegistrarFeature } from '../features';
- import type { RegistrarCredentials } from '../types';
-@@ -193,6 +199,8 @@
-  * Dynadot sandbox (`api-sandbox.dynadot.com`), which mirrors the API.
-  */
- export class DynadotRegistrar extends BaseRegistrar {
+@@ -195,0 +202,2 @@
 +  private classicPricingRejectedUntil = 0;
 +  private readonly restPricingUnsupported = new Map<string, number>();
-   readonly name = 'dynadot';
-   // a REST API: GET and HEAD never change state
-   static override readonly safeMethods = REST_SAFE_METHODS;
-@@ -453,8 +461,8 @@
-    * `price_check=1` returns the exact renewal fee — premium names included —
-    * without renewing. `bulk_search` (the v2 pricing path) only quotes names
-    * *available to register*, so it can't price an owned domain's renewal. We try
+@@ -456,2 +464,2 @@
 -   * the price check first and fall back to `bulk_search` for names not in the
 -   * account (e.g. pricing a domain before registering it).
 +   * compatible classic price-only quotes first. When unavailable, single-domain
 +   * REST search retains owned-name prices that bulk_search omits.
-    */
-   override async getPricing(tldOrDomain: string, opts?: RequestOptions): Promise<TldPricing> {
-     if (!tldOrDomain.includes('.')) {
-@@ -463,32 +471,53 @@
-           'Dynadot v2 has no standalone per-TLD price endpoint'
-       );
-     }
+@@ -466,26 +474,47 @@
 -    const tld = tldOrDomain.slice(tldOrDomain.indexOf('.') + 1);
 -
 -    // Owned domain: the price-check renew quote is the exact renewal (premium
@@ -179,37 +124,22 @@ diff --git a/src/registrars/dynadot.ts b/src/registrars/dynadot.ts
 +    }
 +    if (restError) throw restError;
 +    return restPrice ?? { tld, currency: 'USD' };
-   }
- 
-   /**
-@@ -504,24 +533,38 @@
-     domain: string,
-     opts?: RequestOptions
-   ): Promise<{ renewal: number; currency: string } | null> {
+@@ -506,0 +536,2 @@
 +    // .ai requires a two-year renewal. TldPricing remains an annual estimate.
 +    const years = domain.toLowerCase().endsWith('.ai') ? 2 : 1;
-     const params = new URLSearchParams({
-       key: this.credentials.apiKey,
-       command: 'renew',
-       domain,
+@@ -511 +542 @@
 -      duration: '1',
 +      duration: String(years),
-       price_check: '1',
-     });
-     try {
-       const res = await this.http.request<{
+@@ -516 +547,2 @@
 -        RenewResponse?: { Status?: string; PriceInfo?: string };
 +        RenewResponse?: { Status?: string; PriceInfo?: string; Error?: string };
 +        Response?: { Error?: string };
-       }>({ method: 'GET', path: `/api3.json?${params.toString()}`, ...opts });
-       const info = res.RenewResponse;
+@@ -518,0 +551,4 @@
 +      if ((res.Response?.Error ?? info?.Error)?.trim().toLowerCase() === 'invalid key') {
 +        this.classicPricingRejectedUntil = Date.now() + 60 * 60_000;
 +        return null;
 +      }
-       if (info?.Status !== 'price_check_success' || !info.PriceInfo) return null;
-       const match = info.PriceInfo.match(/Renew Fee:\s*([\d.]+)\s+in\s+([A-Za-z]{3})/);
-       if (!match) return null;
+@@ -522,3 +558,10 @@
 -      const renewal = Number(match[1]);
 -      return Number.isNaN(renewal) ? null : { renewal, currency: match[2].toUpperCase() };
 -    } catch {
@@ -223,13 +153,7 @@ diff --git a/src/registrars/dynadot.ts b/src/registrars/dynadot.ts
 +      if (error instanceof RegistrarError && error.shouldRetry()) throw error;
 +      if (error instanceof RegistrarError && error.status === 401)
 +        this.classicPricingRejectedUntil = Date.now() + 60 * 60_000;
-       return null;
-     }
-   }
-@@ -1145,6 +1188,36 @@
-   const p = (privacy ?? '').toLowerCase();
-   if (!p || p.includes('off') || p.startsWith('no')) return false;
-   return p.includes('full') || p.includes('partial') || p.includes('privacy');
+@@ -1147,0 +1191,30 @@
 +}
 +
 +// A full-domain renewal estimate must have an explicit supported annual term.
@@ -260,16 +184,10 @@ diff --git a/src/registrars/dynadot.ts b/src/registrars/dynadot.ts
 +      : {}),
 +    renewal: renewal === undefined ? undefined : renewal / years,
 +  };
- }
- 
- // pick the 1-year price entry (falling back to the first), mapping to numbers
 diff --git a/src/registrars/gandi.ts b/src/registrars/gandi.ts
 --- a/src/registrars/gandi.ts
 +++ b/src/registrars/gandi.ts
-@@ -33,6 +33,33 @@
- import { Feature, type RegistrarFeature } from '../features';
- import type { RegistrarCredentials } from '../types';
- 
+@@ -35,0 +36,27 @@
 +// Reject separators even after Unicode compatibility normalization. Encoded
 +// separators must never depend on an upstream router's decoding behavior.
 +function gandiPathSegment(value: string): string {
@@ -297,285 +215,101 @@ diff --git a/src/registrars/gandi.ts b/src/registrars/gandi.ts
 +  return encodeURIComponent(hostname);
 +}
 +
- // A contact as returned under `GET /v5/domain/domains/{fqdn}/contacts` (and
- // nested in the domain-detail `contacts` object). Gandi names fields `given`/
- // `family`/`streetaddr`/`zip`; privacy is `data_obfuscated` on the detail
-@@ -277,7 +304,9 @@
-       status: statuses.join(','),
-       createdDate: d.dates?.created_at ?? d.dates?.registry_created_at,
-       expirationDate: d.dates?.registry_ends_at,
+@@ -280 +307,3 @@
 -      renewalDate: d.dates?.updated_at,
 +      // updated_at is the last modification, not a renewal deadline. Gandi
 +      // supplies registry_ends_at for expiry; an actual next charge is unknown.
 +      renewalDate: null,
-       autoRenew,
-       locked: statuses.some(s => /transferprohibited|locked/i.test(s)),
-       privacy:
-@@ -291,7 +320,7 @@
-   // `GET /v5/domain/domains/{fqdn}` and normalize through the shared toDomain.
-   override async getDomain(domainName: string, opts?: RequestOptions): Promise<Domain> {
-     const d = await this.http.request<GandiDomain>({
+@@ -294 +323 @@
 -      path: `/domain/domains/${domainName}`,
 +      path: `/domain/domains/${gandiDomainPath(domainName)}`,
-       ...opts,
-     });
-     return this.toDomain({ ...d, fqdn: d.fqdn ?? domainName });
-@@ -301,7 +330,7 @@
-   // JSON array of hostname strings.
-   override async getNameservers(domainName: string, opts?: RequestOptions): Promise<string[]> {
-     const res = await this.http.request<string[]>({
+@@ -304 +333 @@
 -      path: `/domain/domains/${domainName}/nameservers`,
 +      path: `/domain/domains/${gandiDomainPath(domainName)}/nameservers`,
-       ...opts,
-     });
-     return Array.isArray(res) ? res.map(String) : [];
-@@ -311,7 +340,7 @@
-   // owner/admin/tech/bill; `owner` is the registrant and `bill` the billing role.
-   override async getContacts(domainName: string, opts?: RequestOptions): Promise<ContactSet> {
-     const res = await this.http.request<GandiContacts>({
+@@ -314 +343 @@
 -      path: `/domain/domains/${domainName}/contacts`,
 +      path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`,
-       ...opts,
-     });
-     return {
-@@ -331,7 +360,7 @@
-    */
-   override async getDnsRecords(domainName: string, opts?: RequestOptions): Promise<DnsRecord[]> {
-     const rrsets = await this.http.request<GandiRecord[]>({
+@@ -334 +363 @@
 -      path: `/livedns/domains/${domainName}/records`,
 +      path: `/livedns/domains/${gandiDomainPath(domainName)}/records`,
-       ...opts,
-     });
-     const records: DnsRecord[] = [];
-@@ -444,7 +473,7 @@
-     opts?: RequestOptions
-   ): Promise<OperationResult> {
-     return this.mutate(
+@@ -447 +476 @@
 -      { method: 'POST', path: `/domain/domains/${domainName}/renew`, body: { duration: years } },
 +      { method: 'POST', path: `/domain/domains/${gandiDomainPath(domainName)}/renew`, body: { duration: years } },
-       'Domain renewed successfully',
-       opts
-     );
-@@ -459,7 +488,7 @@
-       throw new Error('At least 1 nameserver is required');
-     }
-     return this.mutate(
+@@ -462 +491 @@
 -      { method: 'PUT', path: `/domain/domains/${domainName}/nameservers`, body: { nameservers } },
 +      { method: 'PUT', path: `/domain/domains/${gandiDomainPath(domainName)}/nameservers`, body: { nameservers } },
-       'Nameservers updated successfully',
-       opts
-     );
-@@ -474,7 +503,7 @@
-     return this.mutate(
-       {
-         method: 'PATCH',
+@@ -477 +506 @@
 -        path: `/domain/domains/${domainName}/status`,
 +        path: `/domain/domains/${gandiDomainPath(domainName)}/status`,
-         body: { clientTransferProhibited: true },
-       },
-       'Domain locked successfully',
-@@ -486,7 +515,7 @@
-     return this.mutate(
-       {
-         method: 'PATCH',
+@@ -489 +518 @@
 -        path: `/domain/domains/${domainName}/status`,
 +        path: `/domain/domains/${gandiDomainPath(domainName)}/status`,
-         body: { clientTransferProhibited: false },
-       },
-       'Domain unlocked successfully',
-@@ -500,7 +529,7 @@
-   // domain-details endpoint (present for domains the account manages).
-   override async getAuthCode(domainName: string, opts?: RequestOptions): Promise<string> {
-     const d = await this.http.request<{ authinfo?: string }>({
+@@ -503 +532 @@
 -      path: `/domain/domains/${domainName}`,
 +      path: `/domain/domains/${gandiDomainPath(domainName)}`,
-       ...opts,
-     });
-     return d.authinfo ?? '';
-@@ -519,7 +548,7 @@
-     opts?: RequestOptions
-   ): Promise<TransferOut | null> {
-     const d = await this.http.request<GandiDomain>({
+@@ -522 +551 @@
 -      path: `/domain/domains/${domainName}`,
 +      path: `/domain/domains/${gandiDomainPath(domainName)}`,
-       ...opts,
-     });
-     return pendingTransferOut(d);
-@@ -555,7 +584,7 @@
-     let d: GandiDomain;
-     try {
-       d = await this.http.request<GandiDomain>({
+@@ -558 +587 @@
 -        path: `/domain/domains/${domainName}`,
 +        path: `/domain/domains/${gandiDomainPath(domainName)}`,
-         ...opts,
-       });
-     } catch (error) {
-@@ -567,7 +596,7 @@
-     return this.mutate(
-       {
-         method: 'POST',
+@@ -570 +599 @@
 -        path: `/domain/domains/${domainName}/transferout`,
 +        path: `/domain/domains/${gandiDomainPath(domainName)}/transferout`,
-         body: { accept, authinfo: d.authinfo ?? '' },
-       },
-       `Transfer of ${domainName} ${accept ? 'approved' : 'rejected'}`,
-@@ -582,7 +611,7 @@
-    */
-   override async getDnssec(domainName: string, opts?: RequestOptions): Promise<DnssecStatus> {
-     const keys = await this.http.request<GandiKey[]>({
+@@ -585 +614 @@
 -      path: `/livedns/domains/${domainName}/keys`,
 +      path: `/livedns/domains/${gandiDomainPath(domainName)}/keys`,
-       ...opts,
-     });
-     const active = (keys ?? []).filter(k => !k.deleted);
-@@ -600,14 +629,14 @@
-   ): Promise<OperationResult> {
-     try {
-       const keys = await this.http.request<GandiKey[]>({
+@@ -603 +632 @@
 -        path: `/livedns/domains/${domainName}/keys`,
 +        path: `/livedns/domains/${gandiDomainPath(domainName)}/keys`,
-         ...opts,
-       });
-       for (const k of keys ?? []) {
-         if (k.deleted || !k.id) continue;
-         await this.http.request({
-           method: 'DELETE',
+@@ -610 +639 @@
 -          path: `/livedns/domains/${domainName}/keys/${encodeURIComponent(k.id)}`,
 +          path: `/livedns/domains/${gandiDomainPath(domainName)}/keys/${encodeURIComponent(k.id)}`,
-           ...opts,
-         });
-       }
-@@ -627,7 +656,7 @@
-     opts?: RequestOptions
-   ): Promise<EmailForward[]> {
-     const forwards = await this.http.request<GandiForward[]>({
+@@ -630 +659 @@
 -      path: `/email/forwards/${domainName}`,
 +      path: `/email/forwards/${gandiDomainPath(domainName)}`,
-       ...opts,
-     });
-     const out: EmailForward[] = [];
-@@ -657,7 +686,7 @@
-         desired.set(f.alias, list);
-       }
-       const current = await this.http.request<GandiForward[]>({
+@@ -660 +689 @@
 -        path: `/email/forwards/${domainName}`,
 +        path: `/email/forwards/${gandiDomainPath(domainName)}`,
-         ...opts,
-       });
-       const currentSources = new Set(
-@@ -668,7 +697,7 @@
-         if (!desired.has(source)) {
-           await this.http.request({
-             method: 'DELETE',
+@@ -671 +700 @@
 -            path: `/email/forwards/${domainName}/${encodeURIComponent(source)}`,
 +            path: `/email/forwards/${gandiDomainPath(domainName)}/${gandiPathSegment(source)}`,
-             ...opts,
-           });
-         }
-@@ -677,14 +706,14 @@
-         if (currentSources.has(source)) {
-           await this.http.request({
-             method: 'PUT',
+@@ -680 +709 @@
 -            path: `/email/forwards/${domainName}/${encodeURIComponent(source)}`,
 +            path: `/email/forwards/${gandiDomainPath(domainName)}/${gandiPathSegment(source)}`,
-             body: { destinations },
-             ...opts,
-           });
-         } else {
-           await this.http.request({
-             method: 'POST',
+@@ -687 +716 @@
 -            path: `/email/forwards/${domainName}`,
 +            path: `/email/forwards/${gandiDomainPath(domainName)}`,
-             body: { source, destinations },
-             ...opts,
-           });
-@@ -760,7 +789,7 @@
- 
-       const writes: { label: string; run: () => Promise<unknown> }[] = [];
-       const webredirPath = (host: string): string =>
+@@ -763 +792 @@
 -        `/domain/domains/${domainName}/webredirs/${gandiHostToFqdn(host, domainName)}`;
 +        `/domain/domains/${gandiDomainPath(domainName)}/webredirs/${gandiPathSegment(gandiHostToFqdn(host, domainName))}`;
-       for (const [host, f] of desired) {
-         const existing = current.get(host);
-         if (!existing) {
-@@ -769,7 +798,7 @@
-             run: () =>
-               this.http.request({
-                 method: 'POST',
+@@ -772 +801 @@
 -                path: `/domain/domains/${domainName}/webredirs`,
 +                path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs`,
-                 body: {
-                   host: gandiHostToFqdn(host, domainName),
-                   type: GANDI_FORWARD_TYPE[f.type],
-@@ -833,7 +862,7 @@
- 
-   private async listWebredirs(domainName: string, opts?: RequestOptions): Promise<GandiWebredir[]> {
-     const redirs = await this.http.request<GandiWebredir[]>({
+@@ -836 +865 @@
 -      path: `/domain/domains/${domainName}/webredirs`,
 +      path: `/domain/domains/${gandiDomainPath(domainName)}/webredirs`,
-       ...opts,
-     });
-     return redirs ?? [];
-@@ -847,7 +876,7 @@
-     try {
-       await this.http.request({
-         method: 'PATCH',
+@@ -850 +879 @@
 -        path: `/domain/domains/${domainName}/autorenew`,
 +        path: `/domain/domains/${gandiDomainPath(domainName)}/autorenew`,
-         body: { enabled },
-         ...opts,
-       });
-@@ -884,7 +913,7 @@
-     return this.mutate(
-       {
-         method: 'PATCH',
+@@ -887 +916 @@
 -        path: `/domain/domains/${domainName}/contacts`,
 +        path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`,
-         body: { owner: { data_obfuscated: enabled } },
-       },
-       `WHOIS privacy ${enabled ? 'enabled' : 'disabled'} successfully`,
-@@ -906,7 +935,7 @@
-     return this.mutate(
-       {
-         method: 'PUT',
+@@ -909 +938 @@
 -        path: `/livedns/domains/${domainName}/records`,
 +        path: `/livedns/domains/${gandiDomainPath(domainName)}/records`,
-         body: { items: toGandiRrsets(records) },
-       },
-       'DNS records updated successfully',
-@@ -933,7 +962,7 @@
-       throw new Error(`${this.name}: updateContacts requires at least one contact role`);
-     }
-     return this.mutate(
+@@ -936 +965 @@
 -      { method: 'PATCH', path: `/domain/domains/${domainName}/contacts`, body },
 +      { method: 'PATCH', path: `/domain/domains/${gandiDomainPath(domainName)}/contacts`, body },
-       'Contacts updated successfully',
-       opts
-     );
-@@ -994,7 +1023,7 @@
-     };
-     if (input.years != null) body.duration = input.years;
-     return this.mutate(
+@@ -997 +1026 @@
 -      { method: 'POST', path: `/domain/transferin/${domainName}`, body },
 +      { method: 'POST', path: `/domain/transferin/${gandiDomainPath(domainName)}`, body },
-       `Domain ${domainName} transfer requested successfully`,
-       opts
-     );
 diff --git a/src/registrars/namecom.ts b/src/registrars/namecom.ts
 --- a/src/registrars/namecom.ts
 +++ b/src/registrars/namecom.ts
-@@ -55,6 +55,7 @@
-   privacyEnabled?: boolean;
-   nameservers?: string[];
-   contacts?: Partial<Record<keyof ContactSet, NamecomContact>>;
+@@ -57,0 +58 @@
 +  renewalPrice?: number | null;
- }
- interface NamecomPricing {
-   premium?: boolean;
-@@ -249,7 +250,28 @@
-         transfer: price(entry.transferInPrice),
-       };
-     }
+@@ -252 +253,22 @@
 -    const result = await this.domainPricing(name, 1, opts);
 +    let result: NamecomPricing;
 +    try {
@@ -599,22 +333,13 @@ diff --git a/src/registrars/namecom.ts b/src/registrars/namecom.ts
 +      if (renewal === undefined) throw error;
 +      return { tld: 'in', currency: 'USD', renewal };
 +    }
-     return {
-       tld: name.slice(name.indexOf('.') + 1),
-       currency: 'USD',
 diff --git a/src/utils.ts b/src/utils.ts
 --- a/src/utils.ts
 +++ b/src/utils.ts
-@@ -78,9 +78,10 @@
-   return domain.trim().toLowerCase().replace(/\.$/, '');
- }
- 
+@@ -81 +81 @@
 -// exponential backoff delay: backoff * 2^attempt
 +// Equal jitter spreads retries over the upper half of the exponential window.
- export function backoffDelay(backoff: number, attempt: number): number {
+@@ -83 +83,2 @@
 -  return backoff * Math.pow(2, attempt);
 +  const ceiling = backoff * Math.pow(2, attempt);
 +  return Math.floor(ceiling / 2 + Math.random() * ceiling / 2);
- }
- 
- // parse a variety of date representations into a Date (or null)
