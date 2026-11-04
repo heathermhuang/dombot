@@ -1,3 +1,6 @@
+import { connectionResponse } from './connection-response';
+import { CONNECTION_RESULT_HEADER } from '../shared/connection-contract';
+import type { ConnectRegistrarResult } from '../shared/ipc';
 import { getAdminInventory } from '../core/services/admin-inventory';
 import { adminInventoryQuerySchema } from '../shared/admin-inventory';
 import {
@@ -432,6 +435,11 @@ app.post(
         )[name];
       }
       const result = await invoke(name, entry, args);
+      if (name === 'connectRegistrarAccount')
+        return connectionResponse(
+          result as ConnectRegistrarResult,
+          c.req.header(CONNECTION_RESULT_HEADER),
+        );
       if (name === 'deleteDomains' && (await hasSales(c.env.DB)))
         await (await SalesStore.from(c.env)).removeNames(args[0] as string[]);
       return c.json({ result: result === undefined ? null : result });

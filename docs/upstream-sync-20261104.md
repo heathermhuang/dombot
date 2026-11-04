@@ -2,7 +2,7 @@
 
 The coordinated release merges all upstream history through
 `ccb918deed20f8d01009970064027fcb021bac97` and retains the three weekly-review
-fixes from PRs #153–#155. The final candidate is `2.0.0-hosted.1`; do not deploy
+fixes from PRs #153–#155. The final candidate is `2.0.0-hosted.2`; do not deploy
 intermediate `1.5.2-hosted.42`–`.44` artifacts. Its pinned SDK is upstream 0.15.1
 with documented hosted patches and matching rebuilt declarations.
 
@@ -30,3 +30,10 @@ The authorized rollout follows `weekly-review-coordinated-release.md`, with fres
 private roster, account/credential/publication fingerprints, encrypted D1 recovery
 exports and code/settings snapshots. No registrar or marketplace mutation is an
 acceptance action, and all existing accounts must be preserved.
+
+The controlled canary qualified the 2.0.0 runtime before fleet promotion. The
+release review additionally caught the changed account-connection response expected
+by already-open browser tabs. The final engine negotiates structured results only
+for new clients; legacy clients retain their original success/failure contract.
+This header grants no authorization. Shared renderer assets cut over only after
+all serving runtimes qualify, and retained cached asset URLs remain available.

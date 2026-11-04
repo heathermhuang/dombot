@@ -10,11 +10,15 @@ views; it never changes registrar settings or automatically renews/archives a na
 3. #155: quote-observation/combined release PR (`hosted.44`), stacked on #154. This also
    hardens the Gandi read/write boundary for failed inventory syncs.
 
-4. Full upstream DomBot 2.0.0 sync (`2.0.0-hosted.1`), stacked on #155.
+4. Full upstream DomBot 2.0.0 sync (#156, `2.0.0-hosted.1`), stacked on #155.
+
+5. Preserve the connection response expected by already-open browser tabs
+   (`2.0.0-hosted.2`). The new renderer and onboarding negotiate structured results;
+   legacy clients retain bare-account success and rejected HTTP failures.
 
 Merge in that dependency order, retargeting/rechecking each head against the
 updated main. Do not deploy intermediate engines. Only the final checked
-`2.0.0-hosted.1` source/artifact/UI pair is the coordinated production candidate.
+`2.0.0-hosted.2` source/artifact/UI pair is the coordinated production candidate.
 `hosted/dombot-engine.lock.json` binds its source/archive/Worker/asset hashes.
 The registrar dependency is `0.15.1-hosted.1`, with cumulative patch/integrity
 provenance under `vendor/`. Private customer review inputs stay outside Git.
