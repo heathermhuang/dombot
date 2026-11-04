@@ -1,6 +1,7 @@
 # Coordinated weekly-review release
 
-Status: coordinated release authorized; candidate qualification in progress. This stack changes read qualification and owner
+Status: released and verified as `2.0.0-hosted.2`. See the
+[production receipt](weekly-review-production-release-20261104/README.md). This stack changes read qualification and owner
 views; it never changes registrar settings or automatically renews/archives a name.
 
 ## Merge and artifact order
