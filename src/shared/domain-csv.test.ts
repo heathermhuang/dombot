@@ -54,6 +54,20 @@ function read(csv: string): Record<string, string>[] {
 }
 
 describe('domainsToCsv', () => {
+  it('exports expiry verification separately without changing Owned or inventing a registrar status', () => {
+    const d = domain({
+      domainName: 'past.example',
+      expirationDate: new Date(NOW - 3 * 86400000),
+      status: 'active',
+    });
+    const [r] = read(domainsToCsv([d], ctx()));
+    expect(r).toMatchObject({
+      Status: 'Owned',
+      'Expiry attention': 'Verify past reported expiry',
+      'Registrar status': 'active',
+    });
+    expect(parseCsv(domainsCsvTemplate())[0]).not.toContain('Expiry attention');
+  });
   it('writes the canonical headers, in order', () => {
     expect(parseCsv(domainsToCsv([], ctx()))[0]).toEqual(DOMAIN_CSV_HEADERS);
     expect(DOMAIN_CSV_HEADERS[0]).toBe('Domain');

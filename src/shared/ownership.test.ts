@@ -164,6 +164,49 @@ describe('a market sale under way', () => {
 });
 
 describe('standingOf', () => {
+  it('flags held past-expiry observations for every auto-renew state without changing ownership', () => {
+    for (const autoRenew of [true, false]) {
+      const d = row({ expirationDate: inDays(-3), autoRenew });
+      expect(standingOf(d, undefined, false, NOW)).toMatchObject({
+        archived: false,
+        label: null,
+        expiring: false,
+        pastReportedExpiry: true,
+      });
+      expect(
+        standingOf({ ...d, autoRenewUnknown: true }, undefined, undefined, NOW)
+          .pastReportedExpiry,
+      ).toBe(true);
+      expect(
+        standingOf({ ...d, source: 'imported' }, undefined, undefined, NOW)
+          .pastReportedExpiry,
+      ).toBe(false);
+      expect(
+        standingOf({ ...d, departed: true }, undefined, undefined, NOW)
+          .pastReportedExpiry,
+      ).toBe(false);
+    }
+    expect(
+      standingOf(row({ expirationDate: null }), undefined, undefined, NOW)
+        .pastReportedExpiry,
+    ).toBe(false);
+    const today = row({
+      expirationDate: new Date('2026-10-29T00:00:00Z'),
+      autoRenew: false,
+    });
+    expect(standingOf(today, undefined, undefined, NOW)).toMatchObject({
+      expiring: true,
+      pastReportedExpiry: false,
+    });
+    expect(
+      standingOf(
+        today,
+        undefined,
+        undefined,
+        Date.parse('2026-10-30T00:00:00Z'),
+      ).pastReportedExpiry,
+    ).toBe(true);
+  });
   it('keeps every name an account holds in Owned', () => {
     const o = owner([event({ type: 'sold', source: 'user' })]);
     expect(standingOf(row(), o, false, NOW)).toEqual({
@@ -171,6 +214,7 @@ describe('standingOf', () => {
       label: null,
       salePending: true,
       expiring: false,
+      pastReportedExpiry: false,
     });
   });
 

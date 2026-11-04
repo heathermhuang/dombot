@@ -139,6 +139,8 @@ export interface Standing {
   salePending: boolean;
   /** Owned, auto-renew off, expiring within {@link EXPIRING_DAYS}. */
   expiring: boolean;
+  /** Still reported by a registrar after its reported expiry day; verify status. */
+  pastReportedExpiry: boolean;
 }
 
 const OWNED: Standing = {
@@ -146,6 +148,7 @@ const OWNED: Standing = {
   label: null,
   salePending: false,
   expiring: false,
+  pastReportedExpiry: false,
 };
 
 /** `now`'s UTC calendar day as ms (expiry days are UTC days). */
@@ -161,9 +164,20 @@ function daysUntil(
 ): number | null {
   if (!day) return null;
   const ms =
-    day instanceof Date ? day.getTime() : Date.parse(`${day}T00:00:00Z`);
+    day instanceof Date
+      ? day.getTime()
+      : Date.parse(day.length === 10 ? `${day}T00:00:00Z` : day);
   if (Number.isNaN(ms)) return null;
   return Math.round((utcDayOf(ms) - utcDayOf(now)) / DAY_MS);
+}
+
+/** A contradictory observation, not evidence of deletion or restore eligibility. */
+export function hasPastReportedExpiry(
+  d: Pick<Domain, 'source' | 'departed' | 'expirationDate'>,
+  now = Date.now(),
+): boolean {
+  const days = daysUntil(d.expirationDate, now);
+  return d.source === 'registrar' && !d.departed && days !== null && days < 0;
 }
 
 /**
@@ -211,6 +225,7 @@ export function standingOf(
   return {
     ...OWNED,
     salePending: !!sale,
+    pastReportedExpiry: hasPastReportedExpiry(d, now),
     expiring:
       !d.autoRenew &&
       !d.autoRenewUnknown &&

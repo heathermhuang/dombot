@@ -85,6 +85,7 @@ export interface QueryArgs {
   expiresBefore?: string;
   expiresAfter?: string;
   expiringWithinDays?: number;
+  pastReportedExpiry?: boolean;
   sort?: QuerySort;
   order?: 'asc' | 'desc';
   limit?: number;
@@ -164,6 +165,7 @@ export interface QueryRow {
   archiveLabel: ArchiveLabel | null;
   /** Owned, auto-renew off, and expiring within 30 days. */
   expiring: boolean;
+  pastReportedExpiry: boolean;
   /** A sale recorded on a name you still hold: the buyer hasn't taken it. */
   salePending: boolean;
   /** Whether an account still reports it. When false, the fields an account
@@ -351,6 +353,11 @@ export function queryPortfolio(
   };
 
   const filtered = domains.filter((d) => {
+    if (
+      args.pastReportedExpiry != null &&
+      standingFor(d).pastReportedExpiry !== args.pastReportedExpiry
+    )
+      return false;
     // Owned vs Archive, as on the Domains page: a name an account holds is
     // always Owned.
     const label = labelOf(d);
@@ -482,6 +489,7 @@ export function queryPortfolio(
       ownership: label ? 'archive' : 'owned',
       archiveLabel: label,
       expiring: standingFor(d).expiring,
+      pastReportedExpiry: standingFor(d).pastReportedExpiry,
       salePending: standingFor(d).salePending,
       inAccount,
       status: d.status,

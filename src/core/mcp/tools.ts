@@ -502,6 +502,12 @@ const queryShape = {
       'With the BIN price, minimum offer and floor bounds: only match asking prices in this currency code, e.g. "USD". Amounts are never converted; without it, each name’s amount is compared in its own currency.',
     ),
   autoRenew: z.boolean().optional().describe('Filter by auto-renew on/off.'),
+  pastReportedExpiry: z
+    .boolean()
+    .optional()
+    .describe(
+      'Filter registrar-held names whose reported expiry day has passed. Verification needed; not proof of loss, deletion or renewal eligibility.',
+    ),
   locked: z.boolean().optional().describe('Filter by transfer lock on/off.'),
   privacy: z.boolean().optional().describe('Filter by WHOIS privacy on/off.'),
   status: z

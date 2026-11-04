@@ -143,6 +143,39 @@ describe('date filters', () => {
       'soon.com',
     ]));
 
+  it('separates five held past-expiry observations from thirteen upcoming expiries', () => {
+    const past = Array.from({ length: 5 }, (_, i) =>
+      domain({
+        domainName: `past${i}.example`,
+        expirationDate: new Date(NOW - 3 * 86400000),
+        autoRenew: i % 2 === 0,
+      }),
+    );
+    const soon = Array.from({ length: 13 }, (_, i) =>
+      domain({
+        domainName: `soon${i}.example`,
+        expirationDate: new Date(NOW + 3 * 86400000),
+      }),
+    );
+    const imported = domain({
+      domainName: 'imported.example',
+      source: 'imported',
+      expirationDate: new Date(NOW - 86400000),
+    });
+    const copy = structuredClone([...past, ...soon, imported]);
+    const res = run([...past, ...soon, imported], { pastReportedExpiry: true });
+    expect(res.total).toBe(5);
+    expect(
+      res.rows.every(
+        (r) => r.ownership === 'owned' && r.pastReportedExpiry && !r.expiring,
+      ),
+    ).toBe(true);
+    expect(
+      run([...past, ...soon], {}).rows.filter((r) => r.expiring),
+    ).toHaveLength(13);
+    expect([...past, ...soon, imported]).toEqual(copy);
+  });
+
   it('expiresAfter excludes nulls', () =>
     expect(names(domains, { expiresAfter: '2026-06-01' }).sort()).toEqual([
       'far.com',

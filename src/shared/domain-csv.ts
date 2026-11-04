@@ -11,7 +11,7 @@ import {
   type RenewalPriceInput,
   type RenewalPricing,
 } from './ipc';
-import type { ArchiveLabel } from './ownership';
+import { hasPastReportedExpiry, type ArchiveLabel } from './ownership';
 
 // The DomBot CSV (docs/domain-import-export.md, "The DomBot CSV format"): one
 // row per name, every column DomBot has about it. Export writes one spelling
@@ -110,6 +110,14 @@ const manualPrice = (r: NameRow) => r.ctx.manualPrices[r.key];
 /** The columns, in file order (see the plan's "Columns" table). */
 export const DOMAIN_CSV_COLUMNS: DomainCsvColumn[] = [
   { header: 'Domain', importable: true, value: (r) => r.key },
+  {
+    header: 'Expiry attention',
+    importable: false,
+    value: (r) =>
+      hasPastReportedExpiry(r.domain, r.ctx.now)
+        ? 'Verify past reported expiry'
+        : '',
+  },
   {
     header: 'IDN',
     importable: true,
