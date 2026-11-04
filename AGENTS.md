@@ -21,6 +21,8 @@
 
 ## Hosted authentication
 
+- Future production import tests must use `scripts/production-import-qualification.mjs` and its trusted QA-run leases, with cleanup in `finally`/`always`. Browser tests use `--mode prepare` and `--mode cleanup`; the provisioner expiry reaper covers killed/abandoned runners. Never seed ad hoc QA users or select cleanup targets by name prefix. Unexpected identities/data are holds, and failed cleanup blocks further tests. See `docs/production-import-qa.md`.
+
 - On-demand provisioning is implemented behind `ON_DEMAND_ENABLED`; it is not enabled by source changes alone. Signup creates only control metadata. Allocate on the first credential submission or a valid import submission (opening Import and local preview allocate nothing), qualify runtime identity/idle state before admission, and retain stable setup identities/keys across retries. Existing customers are never migrated or reclaimed by this path. See `docs/on-demand-provisioning.md`.
 - Conference reserve retirement is a separate, exact-manifest operation. Unowned rows and initialization records do not by themselves prove deletion eligibility. The planner is read-only, checkpoints completed reads and stops on actual provider rate limits; preserve unknown/data-bearing resources.
 

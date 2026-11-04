@@ -53,6 +53,7 @@
     "web:rotate-password": "node scripts/web-secrets.mjs --password",
     "engine:pack": "node scripts/dombot-engine.mjs pack",
     "engine:verify": "node scripts/dombot-engine.mjs verify",
+    "test:production-import": "node scripts/production-import-qualification.mjs",
     "pretest": "npm run engine:verify"
   },
   "keywords": [],
