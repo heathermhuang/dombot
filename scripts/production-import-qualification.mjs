@@ -260,7 +260,23 @@ async function api(r, name, args = []) {
 async function cleanup(current) {
   const id = current.run.run_id;
   let status = await service.qaStatus(id);
-  if (!status) return;
+  if (!status) {
+    // A rolled-back enrollment is harmless; an unknown committed outcome is not
+    // evidence of cleanup. Confirm that neither identity nor marker exists.
+    const marker = await db
+      .prepare('SELECT 1 FROM production_import_qa_runs WHERE run_id=?')
+      .bind(id)
+      .first();
+    const identity = await db
+      .prepare('SELECT 1 FROM workspaces WHERE id=?')
+      .bind(current.run.workspace_id)
+      .first();
+    assert(
+      !marker && !identity,
+      'QA creation outcome unresolved; inspect the server lease',
+    );
+    return;
+  }
   for (let attempt = 0; status.state !== 'complete' && attempt < 4; attempt++) {
     if (status.state === 'blocked')
       throw Error('QA cleanup held: ' + status.lastError);

@@ -766,7 +766,7 @@ export async function cleanupProductionImportQa(
       setupKeys: 0,
     };
   } catch (error) {
-    const blocked = error instanceof QaHold;
+    const blocked = error instanceof QaHold || error instanceof z.ZodError;
     await env.CONTROL_DB.prepare(
       "UPDATE production_import_qa_runs SET state=?,last_error=?,next_cleanup_at=? WHERE run_id=? AND state<>'complete'",
     )
@@ -791,7 +791,15 @@ export async function cleanupExpiredProductionImportQa(
   )
     .bind(now, now)
     .all<{ run_id: string; workspace_id: string }>();
-  for (const r of rows.results)
+  for (const r of rows.results) {
+    if (!uuid.safeParse(r.run_id).success) {
+      await env.CONTROL_DB.prepare(
+        "UPDATE production_import_qa_runs SET state='blocked',last_error='invalid_run_marker' WHERE run_id=?",
+      )
+        .bind(r.run_id)
+        .run();
+      continue;
+    }
     try {
       await env.SETUPS.get(env.SETUPS.idFromName(r.workspace_id)).cleanupQa(
         r.run_id,
@@ -802,4 +810,5 @@ export async function cleanupExpiredProductionImportQa(
         runId: r.run_id,
       });
     }
+  }
 }
