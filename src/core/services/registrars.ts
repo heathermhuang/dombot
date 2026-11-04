@@ -30,6 +30,7 @@ import {
 import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
 import { qualifyRenewalDate } from '../../shared/renewal-date';
+import { observedPricing } from '../../shared/renewal-price-age';
 import { currencyInfo } from '../../shared/money';
 import { expiryDay, type AccountHoldings } from '../../shared/sync-diff';
 import { recordSync } from './domain-history';
@@ -169,16 +170,20 @@ function registrarErrorMessage(error: unknown): string {
 }
 
 /** Dates round-trip through JSON as ISO strings; revive them back to `Date`. */
-function reviveDomainDates<T extends Partial<Domain>>(
-  d: T,
-  registrar = d.registrar,
-): T {
-  const out = { ...qualifyRenewalDate(d, registrar) } as Partial<Domain>;
+function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
+  const out = { ...d } as Partial<Domain>;
   if (out.createdDate != null) out.createdDate = new Date(out.createdDate);
   if (out.expirationDate != null)
     out.expirationDate = new Date(out.expirationDate);
   if (out.renewalDate != null) out.renewalDate = new Date(out.renewalDate);
   return out as T;
+}
+
+function qualifiedDomainDates<T extends Partial<Domain>>(
+  d: T,
+  registrar = d.registrar,
+): T {
+  return reviveDomainDates(qualifyRenewalDate(d, registrar));
 }
 
 // Cache one client per account so we don't rebuild it on every call.
@@ -730,9 +735,9 @@ function readRegistrarEntry(name: string): RegistrarPortfolioEntry | null {
           accountSecrets(name),
         )
       : null,
-    domains: cached.data.domains
-      .filter(hasDomainName)
-      .map((domain) => reviveDomainDates(domain, accountById(name).registrar)),
+    // Internal sync/error paths must retain the raw cached renewal field.
+    // Qualification belongs only in the public read projection below.
+    domains: cached.data.domains.filter(hasDomainName).map(reviveDomainDates),
   };
 }
 
@@ -762,7 +767,7 @@ function assemblePortfolio(): Portfolio {
     if (!entry) continue;
     domains.push(
       ...entry.domains.map((d): Domain => ({
-        ...d,
+        ...qualifyRenewalDate(d, name),
         registrar: name,
         accountId: account.id,
         accountLabel: account.label,
@@ -1468,7 +1473,7 @@ export function getCachedDetail(): Record<string, Partial<Domain>> {
   const accounts = new Map(listAccounts().map((a) => [a.id, a.registrar]));
   const out: Record<string, Partial<Domain>> = {};
   for (const [key, entry] of Object.entries(all)) {
-    out[key] = reviveDomainDates(
+    out[key] = qualifiedDomainDates(
       withoutQuote(entry.data),
       accounts.get(key.slice(0, key.indexOf(':'))),
     );
@@ -1486,7 +1491,7 @@ export function getCachedDomainDetail(
     detailKey(accountId, domainName),
   );
   return entry
-    ? reviveDomainDates(
+    ? qualifiedDomainDates(
         withoutQuote(entry.data),
         accountById(accountId).registrar,
       )
@@ -1518,15 +1523,22 @@ export function getPortfolioPricing(): Record<string, RenewalPricing> {
   for (const d of portfolio.domains) {
     const registrar = d.registrar as RegistrarName;
     const key = domainKey(d);
-    out[key] = {
-      ...resolvePricing(
-        registrar,
-        d.domainName,
-        quotes[key]?.data.renewalQuote,
-        d.accountId,
-      ),
-      accountId: d.accountId,
-    };
+    out[key] = observedPricing(
+      {
+        ...resolvePricing(
+          registrar,
+          d.domainName,
+          quotes[key]?.data.renewalQuote,
+          d.accountId,
+        ),
+        accountId: d.accountId,
+      },
+      quotes[key]?.data.renewalQuoteFetchedAt,
+      readEntry<RegistrarPortfolioEntry>(
+        'portfolio',
+        d.accountId ?? d.registrar,
+      )?.data.lastSyncedAt,
+    );
   }
   return out;
 }
@@ -1547,11 +1559,18 @@ export async function getRenewalPriceLive(
       ? await fetchRenewalQuote(name, domain, accountId)
       : null;
   // Without a live quote, use the one Sync stored (a Namecheap premium, say).
-  const quote =
-    live ??
-    readEntry<DetailRecord>('detail', detailKey(accountId, domain))?.data
-      .renewalQuote;
-  return { ...resolvePricing(name, domain, quote, accountId), accountId };
+  const cached = readEntry<DetailRecord>(
+    'detail',
+    detailKey(accountId, domain),
+  )?.data;
+  const validLive = live?.renewal != null ? live : null;
+  const quote = validLive ?? cached?.renewalQuote;
+  return observedPricing(
+    { ...resolvePricing(name, domain, quote, accountId), accountId },
+    validLive ? Date.now() : cached?.renewalQuoteFetchedAt,
+    readEntry<RegistrarPortfolioEntry>('portfolio', accountId)?.data
+      .lastSyncedAt,
+  );
 }
 
 // The registrar-client library lists its config fields in an order that puts a
@@ -1818,7 +1837,7 @@ export async function getDomainDetail(
     // Serve a fresh-enough cached partial without any network calls.
     if (cached && !isStale(cached)) {
       return {
-        ...reviveDomainDates(withoutQuote(cached.data), name),
+        ...qualifiedDomainDates(withoutQuote(cached.data), name),
         registrar: name,
         accountId,
         accountLabel: accountById(accountId).label,

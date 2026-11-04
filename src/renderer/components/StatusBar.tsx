@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { getPricingRetryAt, subscribePricingRetry } from '../api/http';
+import { renewalProgressText } from '../../shared/renewal-price-age';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -212,22 +213,21 @@ function SessionStatus() {
   );
 }
 
-function PricingStatus() {
+export function PricingStatus() {
   const p = useAppStore((s) => s.renewalPricing);
-  const retry = useSyncExternalStore(subscribePricingRetry, getPricingRetryAt);
-  if (!p || (!p.remaining && !p.failed && !p.blocked)) return null;
+  const retry = useSyncExternalStore(
+    subscribePricingRetry,
+    getPricingRetryAt,
+    getPricingRetryAt,
+  );
+  const message = renewalProgressText(p, retry);
+  if (!message) return null;
   return (
     <span
       role="status"
       title="Last saved renewal prices remain visible while quotes update."
     >
-      {p.remaining
-        ? retry
-          ? `Renewal prices paused · retry at ${new Date(retry).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-          : `Updating renewal prices · ${p.remaining} left`
-        : p.blocked
-          ? `${p.blocked} renewal prices waiting for inventory recovery`
-          : `${p.failed} renewal prices could not update`}
+      {message}
     </span>
   );
 }

@@ -59,6 +59,11 @@ import {
 } from '../components/RegistrarLogo';
 import { DomainLink } from '../components/domains/DomainLink';
 import { ExpiryAttention } from '../components/domains/ExpiryAttention';
+import {
+  renewalPriceAge,
+  RENEWAL_AGE_LABEL,
+  observationLabel,
+} from '../../shared/renewal-price-age';
 import { NotesButton } from '../components/domains/NotesButton';
 import { BulkNotesDialog } from '../components/domains/BulkNotesDialog';
 import {
@@ -311,9 +316,14 @@ function RenewalCell({
   return (
     <span
       className="font-medium tabular-nums"
-      title={`Renewal source: ${SOURCE_LABEL[info.source]}`}
+      title={`Renewal source: ${SOURCE_LABEL[info.source]}. ${RENEWAL_AGE_LABEL[renewalPriceAge(info)]}. Quote observed: ${observationLabel(info.observedAt)}. Inventory observed: ${observationLabel(info.inventoryAt)}.`}
     >
       {priceMoney(info.renewal, info.currency)}
+      {renewalPriceAge(info) !== 'current' && (
+        <span className="block text-[11px] font-normal text-muted-foreground">
+          {RENEWAL_AGE_LABEL[renewalPriceAge(info)]}
+        </span>
+      )}
     </span>
   );
 }
@@ -2649,7 +2659,7 @@ export default function Domains() {
       )}
       {supportsSales() && <PresenceInspector />}
       <DataTable
-        className="mt-[13px]"
+        className="mt-[13px] min-h-64"
         rows={filtered}
         columns={dataColumns}
         layout={columnLayout}

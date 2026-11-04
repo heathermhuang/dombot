@@ -486,6 +486,44 @@ describe('imported names', () => {
 });
 
 describe('money, notes and prices on rows', () => {
+  it('filters quote age independently of inventory freshness and keeps future times unknown', () => {
+    const rows = ['current', 'stale', 'unknown', 'future', 'estimate'].map(
+      (domainName) => domain({ domainName, accountId: 'one' }),
+    );
+    const pricing = Object.fromEntries(
+      rows.map((row) => [
+        `one:${row.domainName}`,
+        {
+          domain: row.domainName,
+          registrar: 'dynadot',
+          renewal: 12,
+          currency: 'USD',
+          source:
+            row.domainName === 'estimate' ? ('tld' as const) : ('api' as const),
+          observedAt:
+            row.domainName === 'unknown'
+              ? undefined
+              : row.domainName === 'future'
+                ? NOW + 1
+                : row.domainName === 'stale'
+                  ? NOW - STALE_AFTER_MS
+                  : NOW,
+          inventoryAt: NOW,
+        },
+      ]),
+    );
+    const query = (age: QueryArgs['renewalPriceAge']) =>
+      queryPortfolio(rows, [], {}, META, { renewalPriceAge: age }, new Map(), {
+        pricing,
+      });
+    expect(query('stale').rows.map((r) => r.domainName)).toEqual(['stale']);
+    expect(query('unknown').rows.map((r) => r.domainName)).toEqual([
+      'unknown',
+      'future',
+    ]);
+    expect(query('estimate').rows[0].renewalPrice?.priceAge).toBe('estimate');
+    expect(query('stale').stale).toBe(false);
+  });
   const a = domain({ domainName: 'a.com', accountId: 'acct' });
   const b = domain({ domainName: 'b.com', accountId: 'acct' });
   const c = domain({ domainName: 'c.com', accountId: 'acct' });
