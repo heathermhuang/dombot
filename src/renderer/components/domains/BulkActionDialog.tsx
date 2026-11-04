@@ -1,6 +1,6 @@
 import { domainKey } from '../../../shared/account-key';
 import { useMemo, useState } from 'react';
-import { ChevronRight, Copy, TriangleAlert } from 'lucide-react';
+import { ChevronRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
   BulkJob,
@@ -12,6 +12,7 @@ import type {
 } from '../../../shared/ipc';
 import { friendlyError } from '../../../shared/domain-ops';
 import { useAppStore } from '../../store/app';
+import { InlineWarning } from '../InlineWarning';
 import {
   authCodesToTsv,
   bucketSelection,
@@ -65,7 +66,11 @@ import { NameserversEditor } from './NameserversEditor';
 import { UrlForwardingEditor } from './UrlForwardingEditor';
 import { EmailForwardingEditor } from './EmailForwardingEditor';
 import { useNameserverPresets } from './useNameserverPresets';
-import { priceMoney } from '../../lib/renewals';
+import {
+  DEFAULT_CURRENCY,
+  DEFAULT_NUMBER_FORMAT,
+  formatMoneyNumber,
+} from '../../../shared/money';
 
 /**
  * The three-stage bulk dialog every bulk op uses:
@@ -312,11 +317,10 @@ export function BulkActionDialog({
           />
         )}
         {op.kind === 'authCode' && (
-          <p className="inline-flex items-start gap-1.5 text-xs text-muted-foreground">
-            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <InlineWarning>
             Auth codes are transfer secrets. They’re shown once here and never
             stored by DomBot; export them only if you need a file.
-          </p>
+          </InlineWarning>
         )}
         <Buckets buckets={buckets} held={held} />
       </ConfirmDialog>
@@ -453,6 +457,10 @@ function configureDescription(
     return 'Another bulk action is running — wait for it to finish.';
   if (retrying) return 'Retrying the domains that failed last time.';
   switch (op.kind) {
+    case 'privacy':
+      return op.enabled
+        ? 'Applied one domain at a time, paced per registrar. You can cancel while it runs.'
+        : 'Exposes the registrant name, address, email, and phone in public WHOIS on every domain below. Some registrars, like GoDaddy, record your agreement and IP address. Paced per registrar; you can cancel while it runs.';
     case 'nameservers':
       return 'Replaces the full nameserver set on every domain below. Paced per registrar; you can cancel while it runs.';
     case 'urlForwarding':
@@ -600,6 +608,7 @@ function BulkRenew({
   domains: Domain[];
   pricing: ReturnType<typeof useAppStore.getState>['pricing'];
 }) {
+  const settings = useAppStore((s) => s.settings);
   // Summed per currency: prices aren't converted.
   let known = 0;
   const totals = new Map<string, number>();
@@ -611,7 +620,14 @@ function BulkRenew({
     }
   }
   const total = [...totals]
-    .map(([currency, n]) => priceMoney(n, currency))
+    .map(([currency, n]) =>
+      formatMoneyNumber(
+        n,
+        currency,
+        settings?.preferredCurrency ?? DEFAULT_CURRENCY,
+        settings?.numberFormat ?? DEFAULT_NUMBER_FORMAT,
+      ),
+    )
     .join(' + ');
   const hasPorkbun = domains.some((d) => d.registrar === 'porkbun');
   return (
@@ -654,12 +670,11 @@ function BulkRenew({
           )}
         </dd>
       </dl>
-      <p className="inline-flex items-start gap-1.5 text-xs text-muted-foreground">
-        <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <InlineWarning>
         Estimates only — each registrar charges its own price, which can differ
         for premium names. Renewals run one at a time and are never retried
         automatically.
-      </p>
+      </InlineWarning>
     </div>
   );
 }

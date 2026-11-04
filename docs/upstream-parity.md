@@ -1,7 +1,7 @@
 # Full upstream DomBot integration
 
 This integration merges all upstream main history through
-`1cc33720aef42074f5c0a77a680d87661a54b560` (1 November 2026).
+`ccb918deed20f8d01009970064027fcb021bac97` (4 November 2026, DomBot 2.0.0).
 It supersedes the selective 1.5.2-hosted.34 sync. The hosted engine records that
 exact upstream revision; its additional code supplies hosted account, tenancy,
 operations and compatibility capabilities.
@@ -15,10 +15,16 @@ upstream and appears when a marketplace is connected. Owners supply their own
 marketplace credentials; this release does not create provider accounts or
 publish/list domains automatically.
 
-`upstream-parity-20261101.json` pins the upstream inventory. Regression checks
-require every one of its 88 core API methods and 71 named MCP tools, stock routes
+`upstream-parity-20261104.json` pins the upstream inventory. Regression checks
+require every one of its 91 core API methods and 73 named MCP tools, stock routes
 and settings sections. All normal upstream and hosted behavioral suites remain
 in scope. The merge ancestry must contain the pinned upstream head.
+
+The 2.0.0 sync includes ownership-verification TXT tools and marketplace identifiers,
+GoDaddy optional API settings and privacy-consent context, normalized nameservers,
+cent-level currency formatting and upstream responsive action menus. New verification
+writes retain hosted scopes and fresh authentication. Existing accounts, credentials
+and public pages are preserved; integration itself does not perform registrar writes.
 
 ## Hosted adaptations
 
@@ -35,8 +41,8 @@ in scope. The merge ancestry must contain the pinned upstream head.
   as read-only. Control migration 0021 persists the granted scopes; token parameters
   cannot upgrade them. `SHARED_MCP_MANAGEMENT_ENABLED` remains off during reader
   rollout and is enabled only after every serving tenant understands scoped proofs.
-- The first connection can be a registrar or marketplace. Credential validation
-  precedes on-demand allocation. Migration 0020 preserves pending identities and
+- The first connection can be a registrar or marketplace. Structural credential validation
+  precedes on-demand allocation; provider acceptance is checked in the private tenant. Migration 0020 preserves pending identities and
   extends the connection reason to `market`. Credentials never enter the control
   database or provisioner metadata. Market-only accounts retain background work.
 - Managed egress, Dynadot recovery/quote continuation and pinned registrar patches
@@ -45,9 +51,9 @@ in scope. The merge ancestry must contain the pinned upstream head.
   historical events and folder intent are retained in encrypted, exportable
   `hosted-legacy-events` and `hosted-legacy-folders`; they do not override current
   upstream ownership or expose domains publicly. Migration copies before deletion.
-- Backup envelope 10 includes the complete upstream data plus hosted extensions
+- Backup envelope 12 includes the complete upstream data plus hosted extensions
   and retained history. It imports upstream v9 and older supported bundles. Older
-  hosted binaries must reject v10 before mutation instead of dropping data.
+  hosted binaries must reject v12 before mutation instead of dropping data.
 - Upstream's sale-record model owns `src/shared/sales.ts`. Existing hosted public
   selling terms/inquiries use `hosted-sales.ts`, without changing their persisted
   schema or existing anonymous URLs. Root `/sales` is upstream Sales. Old owner
@@ -70,6 +76,6 @@ other tenants, the future template and registry. Restore the allocation policy
 and verify actual serving coordinator provenance. Local/CI checks are not evidence
 of customer marketplace credentials, live provider acceptance, sales or adoption.
 
-After a schema-5/backup-10 write the rollback floor must understand that storage;
+After a schema-5/backup-12 write the rollback floor must understand that storage;
 use the compatible source and a reviewed recovery/revert rather than installing
 an older binary over migrated data.

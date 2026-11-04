@@ -1,4 +1,5 @@
 import type { CurrencyCode } from './currencies';
+import { normalizeNameserver } from './domain-name';
 import type { RegistrarConfigField } from './ipc';
 
 // The shared market model (docs/markets.md). Each market's client speaks its
@@ -356,7 +357,7 @@ export function marketNameserversFor(
   host: string,
   markets: readonly Pick<MarketInfo, 'id' | 'nameservers'>[],
 ): { market: MarketId; set: MarketNameservers } | null {
-  const h = host.trim().toLowerCase().replace(/\.$/, '');
+  const h = normalizeNameserver(host);
   if (!h) return null;
   for (const exact of [true, false]) {
     for (const m of markets) {
@@ -389,6 +390,8 @@ export interface MarketAccount {
   enabled: boolean;
   /** A registrar account whose key this market account uses (Atom, later). */
   registrarAccountId?: string | null;
+  /** The account's Ownership Verification ID, as read out of what was pasted. */
+  verificationId?: string | null;
   createdAt: number;
 }
 

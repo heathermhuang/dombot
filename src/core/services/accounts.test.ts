@@ -11,6 +11,7 @@ import { EncryptedDocStore, aesGcmCipher } from '../storage/encrypted';
 import { createAccount, listAccounts, renameAccount } from './accounts';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import {
+  getRegistrarCatalog,
   getRegistrarClient,
   getRegistrarMetadata,
   getPortfolio,
@@ -26,6 +27,7 @@ import {
   syncRegistrar,
 } from './registrars';
 import { writeEntry, readEntry } from './cache';
+import { configureConsentIp } from './consent-ip';
 import { setRegistrarEnabled } from './registrar-state';
 import { setManualPrice } from './pricing';
 import { createFolder, assignFolder, getFolders } from './folders';
@@ -39,8 +41,12 @@ import {
   stepBulk,
 } from './bulk-jobs';
 import { domainKey } from '../../shared/account-key';
-import type { Domain as ProviderDomain } from '@aoxborrow/registrar-client';
-import type { DomainTarget } from '../../shared/ipc';
+import {
+  Feature,
+  createRegistrar,
+  type Domain as ProviderDomain,
+} from '@aoxborrow/registrar-client';
+import type { DomainTarget, RegistrarAccount } from '../../shared/ipc';
 
 const fakes = vi.hoisted(() => ({
   providers: new Map<string, Record<string, ReturnType<typeof vi.fn>>>(),
@@ -65,11 +71,17 @@ vi.mock('@aoxborrow/registrar-client', async (original) => {
             'registerDomain',
             'transferIn',
             'getPricing',
+            'getTransferOut',
+            'getDomainForwarding',
+            'resolveCustomerId',
+            'setPrivacy',
           ].map((name) => [name, vi.fn()]),
         );
+        provider.resolveCustomerId.mockResolvedValue('customer-uuid');
         provider.listDomains.mockResolvedValue([]);
         provider.getDomain.mockResolvedValue(null);
         provider.getNameservers.mockResolvedValue([]);
+        provider.getDomainForwarding.mockResolvedValue([]);
         provider.testConnection.mockResolvedValue(
           process.env.DOMBOT_ACCOUNT_QA && creds.apiKey === 'invalid'
             ? {
@@ -86,6 +98,7 @@ vi.mock('@aoxborrow/registrar-client', async (original) => {
           'setDnsRecords',
           'registerDomain',
           'transferIn',
+          'setPrivacy',
         ])
           provider[name].mockResolvedValue({ success: true, message: 'ok' });
         fakes.providers.set(creds.apiKey, provider);
@@ -162,6 +175,19 @@ async function mcp(name: string, args: unknown) {
   return JSON.parse(
     (await tool.handler(z.object(tool.schema).parse(args))).content[0].text,
   );
+}
+
+/** Connects through the API and returns the new account. A turned-down
+ *  connection test resolves with the registrar's answer; these tests expect
+ *  an account, so it fails them. */
+async function connectAccount(args: unknown[]): Promise<RegistrarAccount> {
+  const result = await invoke(
+    'connectRegistrarAccount',
+    coreMethods.connectRegistrarAccount,
+    args,
+  );
+  if (!result.success) throw new Error(result.message);
+  return result.account;
 }
 
 beforeEach(async () => {
@@ -689,16 +715,14 @@ describe('multi-account storage, routing and portable migration', () => {
   });
 
   it('connects in one submission and numbers unnamed accounts', async () => {
-    const first = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'first', apiSecret: 'secret' }],
-    );
-    const second = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'second', apiSecret: 'secret' }],
-    );
+    const first = await connectAccount([
+      'dynadot',
+      { apiKey: 'first', apiSecret: 'secret' },
+    ]);
+    const second = await connectAccount([
+      'dynadot',
+      { apiKey: 'second', apiSecret: 'secret' },
+    ]);
     expect(first.label).toBe('Account 1');
     expect(second.label).toBe('Account 2');
     expect(getRegistrarMetadata().filter((a) => a.saved)).toHaveLength(2);
@@ -707,21 +731,14 @@ describe('multi-account storage, routing and portable migration', () => {
     await hydrateStores();
     expect(getStoredCredentials(second.id).apiKey).toBe('second');
     await expect(
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
-        'dynadot',
-        { apiKey: 'first', apiSecret: 'secret' },
-      ]),
+      connectAccount(['dynadot', { apiKey: 'first', apiSecret: 'secret' }]),
     ).rejects.toThrow(/already connected/);
     expect(getRegistrarMetadata().filter((a) => a.saved)).toHaveLength(2);
   });
 
   it('numbers past the highest in use, never handing a live number to another account', async () => {
     const connect = (apiKey: string, label?: string) =>
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
-        'dynadot',
-        { apiKey, apiSecret: 'secret' },
-        label,
-      ]);
+      connectAccount(['dynadot', { apiKey, apiSecret: 'secret' }, label]);
     const one = await connect('k1');
     const two = await connect('k2');
     const three = await connect('k3');
@@ -748,10 +765,7 @@ describe('multi-account storage, routing and portable migration', () => {
 
   it('removes a nickname when it is cleared, returning the account to the lowest free number', async () => {
     const connect = (apiKey: string) =>
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
-        'dynadot',
-        { apiKey, apiSecret: 'secret' },
-      ]);
+      connectAccount(['dynadot', { apiKey, apiSecret: 'secret' }]);
     const one = await connect('k1');
     const two = await connect('k2');
     await invoke('renameRegistrarAccount', coreMethods.renameRegistrarAccount, [
@@ -775,11 +789,10 @@ describe('multi-account storage, routing and portable migration', () => {
       apiKey: 'legacy',
       apiSecret: 'secret',
     });
-    const second = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'second', apiSecret: 'secret' }],
-    );
+    const second = await connectAccount([
+      'dynadot',
+      { apiKey: 'second', apiSecret: 'secret' },
+    ]);
     expect(second.label).toBe('Account 2');
     for (const clash of ['Main', 'account 1', '#1'])
       await expect(renameAccount(second.id, clash)).rejects.toThrow(
@@ -789,13 +802,13 @@ describe('multi-account storage, routing and portable migration', () => {
   });
 
   it('keeps nicknames unique per registrar, ignoring case, without a network test or a second account', async () => {
-    const first = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'first', apiSecret: 'secret' }, 'Personal'],
-    );
+    const first = await connectAccount([
+      'dynadot',
+      { apiKey: 'first', apiSecret: 'secret' },
+      'Personal',
+    ]);
     await expect(
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
+      connectAccount([
         'dynadot',
         { apiKey: 'second', apiSecret: 'secret' },
         ' personal ',
@@ -805,11 +818,11 @@ describe('multi-account storage, routing and portable migration', () => {
     expect(fakes.providers.get('second')).toBeUndefined();
     expect(getRegistrarMetadata().filter((a) => a.saved)).toHaveLength(1);
 
-    const second = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'second', apiSecret: 'secret' }, 'Agency'],
-    );
+    const second = await connectAccount([
+      'dynadot',
+      { apiKey: 'second', apiSecret: 'secret' },
+      'Agency',
+    ]);
     await expect(renameAccount(second.id, 'PERSONAL')).rejects.toThrow(
       /already named/,
     );
@@ -817,27 +830,27 @@ describe('multi-account storage, routing and portable migration', () => {
     // registrar are both fine.
     await renameAccount(second.id, 'agency');
     await renameAccount(first.id, 'Personal');
-    const elsewhere = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['porkbun', { apiKey: 'pb', secretApiKey: 'secret' }, 'Personal'],
-    );
+    const elsewhere = await connectAccount([
+      'porkbun',
+      { apiKey: 'pb', secretApiKey: 'secret' },
+      'Personal',
+    ]);
     expect(elsewhere.label).toBe('Personal');
   });
 
   it('frees a nickname when its account is removed, and never collides with an unused placeholder', async () => {
     // No Dynadot account is saved, so the placeholder's "Default" is not taken.
-    const first = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'first', apiSecret: 'secret' }, 'Default'],
-    );
+    const first = await connectAccount([
+      'dynadot',
+      { apiKey: 'first', apiSecret: 'secret' },
+      'Default',
+    ]);
     await removeRegistrarAccount(first.id);
-    const again = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'again', apiSecret: 'secret' }, 'default'],
-    );
+    const again = await connectAccount([
+      'dynadot',
+      { apiKey: 'again', apiSecret: 'secret' },
+      'default',
+    ]);
     expect(again.label).toBe('default');
   });
 
@@ -847,25 +860,32 @@ describe('multi-account storage, routing and portable migration', () => {
     fakes.providers.get('bad')!.testConnection.mockResolvedValue({
       success: false,
       message: 'Invalid API key',
+      status: 401,
     });
+    // The registrar's answer comes back as a value, so its status crosses
+    // IPC and HTTP too.
     await expect(
       invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
         'dynadot',
         { apiKey: 'bad', apiSecret: 'secret' },
         'Company',
       ]),
-    ).rejects.toThrow(/Invalid API key/);
+    ).resolves.toEqual({
+      success: false,
+      message: 'Invalid API key',
+      status: 401,
+    });
     expect(getRegistrarMetadata().filter((a) => a.saved)).toEqual([]);
     expect(await disk.list('registrar-credentials')).toEqual({});
     expect(await disk.list('registrar-accounts')).toEqual({});
     fakes.providers
       .get('bad')!
       .testConnection.mockResolvedValue({ success: true });
-    await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'bad', apiSecret: 'secret' }, 'Company'],
-    );
+    await connectAccount([
+      'dynadot',
+      { apiKey: 'bad', apiSecret: 'secret' },
+      'Company',
+    ]);
     expect(getRegistrarMetadata().filter((a) => a.saved)).toHaveLength(1);
   });
 
@@ -881,20 +901,16 @@ describe('multi-account storage, routing and portable migration', () => {
         .find((p) => p.name === 'dynadot')!
         .configFields.map((f) => f.name),
     ).toContain('apiKey');
-    const account = await invoke(
-      'connectRegistrarAccount',
-      coreMethods.connectRegistrarAccount,
-      ['dynadot', { apiKey: 'new', apiSecret: 'secret' }],
-    );
+    const account = await connectAccount([
+      'dynadot',
+      { apiKey: 'new', apiSecret: 'secret' },
+    ]);
     expect(account.id).not.toBe('dynadot');
   });
 
   it('connection form validation and storage failure leave no incomplete accounts', async () => {
     await expect(
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
-        'dynadot',
-        { apiKey: 'incomplete' },
-      ]),
+      connectAccount(['dynadot', { apiKey: 'incomplete' }]),
     ).rejects.toThrow(/API Secret is required/);
     expect(fakes.providers.size).toBe(0);
     configureStore(
@@ -912,10 +928,7 @@ describe('multi-account storage, routing and portable migration', () => {
     );
     await hydrateStores();
     await expect(
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
-        'dynadot',
-        { apiKey: 'unsaved', apiSecret: 'secret' },
-      ]),
+      connectAccount(['dynadot', { apiKey: 'unsaved', apiSecret: 'secret' }]),
     ).rejects.toThrow(/keyring unavailable/);
     expect(getRegistrarMetadata().filter((a) => a.saved)).toEqual([]);
     await expect(flushWrites()).rejects.toThrow(/keyring unavailable/);
@@ -929,10 +942,7 @@ describe('multi-account storage, routing and portable migration', () => {
       return put(namespace, key, value);
     });
     await expect(
-      invoke('connectRegistrarAccount', coreMethods.connectRegistrarAccount, [
-        'dynadot',
-        { apiKey: 'first', apiSecret: 'secret' },
-      ]),
+      connectAccount(['dynadot', { apiKey: 'first', apiSecret: 'secret' }]),
     ).rejects.toThrow(/metadata write failed/);
     expect(getRegistrarMetadata().filter((a) => a.saved)).toEqual([]);
     expect(await disk.list('registrar-credentials')).toEqual({});
@@ -1001,6 +1011,272 @@ describe('multi-account storage, routing and portable migration', () => {
     });
     await hydrateStores();
     expect(getRegistrarClient('dynadot')).not.toBe(old);
+  });
+});
+
+describe('GoDaddy Optional settings', () => {
+  const OPTIONAL = {
+    customerId: '123456789',
+    apiKey: 'gd-key',
+    apiSecret: 'gd-secret',
+  };
+  const connect = (credentials: Record<string, string>, label?: string) =>
+    connectAccount(['godaddy', credentials, label]);
+  const featuresOf = (id: string) =>
+    getRegistrarMetadata().find((a) => a.accountId === id)!.features;
+  const transferOut = (target: DomainTarget) =>
+    invoke('getTransferOut', coreMethods.getTransferOut, [target]);
+
+  it('follows the PAT in the form, in the Optional section', () => {
+    const godaddy = getRegistrarCatalog().find((r) => r.name === 'godaddy')!;
+    expect(
+      godaddy.configFields.map((f) => [f.name, f.required, f.section]),
+    ).toEqual([
+      ['apiToken', true, undefined],
+      ['customerId', false, 'optional'],
+      ['apiKey', false, 'optional'],
+      ['apiSecret', false, 'optional'],
+    ]);
+  });
+
+  it('offers URL forwarding and transfers out only on an account with all three', async () => {
+    const plain = await connect({ apiToken: 'pat' }, 'Plain');
+    const full = await connect({ apiToken: 'pat-2', ...OPTIONAL }, 'Full');
+    const unlocked = [
+      Feature.GetDomainForwarding,
+      Feature.SetDomainForwarding,
+      Feature.GetTransferOut,
+      Feature.ApproveTransferOut,
+      Feature.RejectTransferOut,
+    ];
+    expect(featuresOf(plain.id)).toContain(Feature.GetAuthCode);
+    for (const feature of unlocked)
+      expect(featuresOf(plain.id)).not.toContain(feature);
+    expect(featuresOf(full.id)).toEqual(expect.arrayContaining(unlocked));
+    const sold = (accountId: string): DomainTarget => ({
+      registrar: 'godaddy',
+      domainName: 'sold.com',
+      accountId,
+    });
+    await expect(transferOut(sold(plain.id))).rejects.toThrow(
+      'Add this account’s Optional settings in Settings › Registrars to use transfer-out reports.',
+    );
+    await expect(transferOut(sold(full.id))).resolves.toBeNull();
+    expect(fakes.providers.get('gd-key')!.getTransferOut).toHaveBeenCalledWith(
+      'sold.com',
+      {},
+    );
+    // URL forwarding: the app's read, the MCP read and the write.
+    const forwarding = (target: DomainTarget) =>
+      invoke('getUrlForwarding', coreMethods.getUrlForwarding, [target]);
+    await expect(forwarding(sold(plain.id))).rejects.toThrow(
+      /Optional settings .* to use URL forwarding/,
+    );
+    await expect(forwarding(sold(full.id))).resolves.toEqual([]);
+    await expect(
+      mcp('domain_url_forwarding_get', {
+        domain: 'sold.com',
+        registrar: 'godaddy',
+        accountId: plain.id,
+      }),
+    ).rejects.toThrow(/Optional settings/);
+    await expect(
+      mcp('domain_url_forwarding_get', {
+        domain: 'sold.com',
+        registrar: 'godaddy',
+        accountId: full.id,
+      }),
+    ).resolves.toEqual([]);
+    expect(
+      await invoke('applyDomainOp', coreMethods.applyDomainOp, [
+        sold(plain.id),
+        { kind: 'urlForwarding', forwards: [] },
+      ]),
+    ).toMatchObject({
+      status: 'unsupported',
+      message: expect.stringMatching(/Optional settings/),
+    });
+  });
+
+  it('resolves the account for a target that names none', async () => {
+    await connect({ apiToken: 'pat', ...OPTIONAL });
+    await expect(
+      transferOut({ registrar: 'godaddy', domainName: 'sold.com' }),
+    ).resolves.toBeNull();
+  });
+
+  it('passes them to the library alongside the PAT', async () => {
+    const account = await connect({ apiToken: 'pat', ...OPTIONAL });
+    expect(getStoredCredentials(account.id)).toEqual({
+      apiToken: 'pat',
+      ...OPTIONAL,
+    });
+    vi.mocked(createRegistrar).mockClear();
+    getRegistrarClient('godaddy', account.id);
+    expect(createRegistrar).toHaveBeenCalledWith(
+      'godaddy',
+      {
+        apiToken: 'pat',
+        ...OPTIONAL,
+      },
+      undefined,
+    );
+    // Clearing them takes transfers out away again.
+    await saveRegistrarCredentials('godaddy', { apiToken: 'pat' }, account.id);
+    expect(featuresOf(account.id)).not.toContain(Feature.GetTransferOut);
+  });
+
+  it('requires all three once any is filled in, before a network call or save', async () => {
+    await expect(
+      connect({ apiToken: 'pat', customerId: '123456789' }),
+    ).rejects.toThrow(
+      'API Key (Legacy) is required when any Optional setting is filled in.',
+    );
+    expect(fakes.providers.size).toBe(0);
+    const account = await connect({ apiToken: 'pat' });
+    await expect(
+      saveRegistrarCredentials(
+        'godaddy',
+        { apiToken: 'pat', apiKey: 'gd-key', apiSecret: 'gd-secret' },
+        account.id,
+      ),
+    ).rejects.toThrow(/Customer Number is required/);
+    expect(getStoredCredentials(account.id)).toEqual({ apiToken: 'pat' });
+  });
+
+  it('tries new or changed Optional settings before keeping them', async () => {
+    const failure =
+      'GoDaddy couldn’t look up the Customer Number with this API Key and API Secret. Check the Optional settings.';
+    createRegistrar('godaddy', OPTIONAL);
+    const lookup = fakes.providers.get('gd-key')!.resolveCustomerId;
+    // Connecting: a failed lookup keeps the account out.
+    lookup.mockRejectedValueOnce(new Error('401 Unauthorized'));
+    await expect(connect({ apiToken: 'pat', ...OPTIONAL })).rejects.toThrow(
+      failure,
+    );
+    const account = await connect({ apiToken: 'pat', ...OPTIONAL });
+    expect(lookup).toHaveBeenCalledTimes(2);
+    // Saving: a failed lookup keeps what was stored.
+    lookup.mockClear().mockRejectedValueOnce(new Error('401 Unauthorized'));
+    const changed = { apiToken: 'pat', ...OPTIONAL, apiSecret: 'new-secret' };
+    await expect(
+      saveRegistrarCredentials('godaddy', changed, account.id),
+    ).rejects.toThrow(failure);
+    expect(getStoredCredentials(account.id)).toEqual({
+      apiToken: 'pat',
+      ...OPTIONAL,
+    });
+    await saveRegistrarCredentials('godaddy', changed, account.id);
+    expect(getStoredCredentials(account.id)).toEqual(changed);
+    expect(lookup).toHaveBeenCalledTimes(2);
+    // The lookup tries the values as they'll be stored: trimmed.
+    lookup.mockClear();
+    vi.mocked(createRegistrar).mockClear();
+    const trimmed = {
+      apiToken: 'pat',
+      ...OPTIONAL,
+      apiSecret: 'padded-secret',
+    };
+    await saveRegistrarCredentials(
+      'godaddy',
+      { ...trimmed, apiSecret: ' padded-secret ' },
+      account.id,
+    );
+    expect(createRegistrar).toHaveBeenCalledWith('godaddy', trimmed, undefined);
+    expect(getStoredCredentials(account.id)).toEqual(trimmed);
+    expect(lookup).toHaveBeenCalledTimes(1);
+    // A new PAT alone, or clearing them, tries nothing.
+    lookup.mockClear();
+    await saveRegistrarCredentials(
+      'godaddy',
+      { ...trimmed, apiToken: 'pat-2' },
+      account.id,
+    );
+    await saveRegistrarCredentials(
+      'godaddy',
+      { apiToken: 'pat-2' },
+      account.id,
+    );
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('reports why a target with no single account fails, not the Optional settings', async () => {
+    await connect({ apiToken: 'pat' }, 'Plain');
+    await connect({ apiToken: 'pat-2', ...OPTIONAL }, 'Full');
+    const target: DomainTarget = {
+      registrar: 'godaddy',
+      domainName: 'sold.com',
+    };
+    await expect(transferOut(target)).rejects.toThrow(
+      /Multiple accounts match/,
+    );
+    expect(
+      await invoke('applyDomainOp', coreMethods.applyDomainOp, [
+        target,
+        { kind: 'approveTransfer' },
+      ]),
+    ).toMatchObject({
+      message: expect.stringMatching(/Multiple accounts match/),
+    });
+  });
+
+  it('turns privacy off with the user’s IP address as consent', async () => {
+    const account = await connect({ apiToken: 'pat', ...OPTIONAL });
+    const setPrivacy = fakes.providers.get('gd-key')!.setPrivacy;
+    const op = (
+      registrar: 'godaddy' | 'dynadot',
+      accountId: string,
+      enabled: boolean,
+    ) =>
+      invoke('applyDomainOp', coreMethods.applyDomainOp, [
+        { registrar, domainName: 'sold.com', accountId },
+        { kind: 'privacy', enabled },
+      ]);
+    // With no way to find the IP, GoDaddy is never asked.
+    expect(await op('godaddy', account.id, false)).toMatchObject({
+      status: 'failed',
+      message: expect.stringMatching(
+        /public IP address, which GoDaddy records/,
+      ),
+    });
+    expect(setPrivacy).not.toHaveBeenCalled();
+    const lookup = vi.fn(async () => '203.0.113.7');
+    configureConsentIp(lookup);
+    try {
+      expect(await op('godaddy', account.id, false)).toMatchObject({
+        status: 'ok',
+      });
+      expect(setPrivacy).toHaveBeenLastCalledWith(
+        'sold.com',
+        false,
+        expect.objectContaining({ consent: { agreedBy: '203.0.113.7' } }),
+      );
+      // Turning it on, or off at a registrar that records nothing, sends no IP.
+      expect(await op('godaddy', account.id, true)).toMatchObject({
+        status: 'ok',
+      });
+      expect(setPrivacy.mock.lastCall![2]).not.toHaveProperty('consent');
+      const dynadot = await connectAccount([
+        'dynadot',
+        { apiKey: 'dy-key', apiSecret: 'dy-secret' },
+      ]);
+      expect(await op('dynadot', dynadot.id, false)).toMatchObject({
+        status: 'ok',
+      });
+      expect(
+        fakes.providers.get('dy-key')!.setPrivacy.mock.lastCall![2],
+      ).not.toHaveProperty('consent');
+      expect(lookup).toHaveBeenCalledTimes(1);
+    } finally {
+      configureConsentIp();
+    }
+  });
+
+  it('treats the same PAT with Optional settings as the account already connected', async () => {
+    await connect({ apiToken: 'pat' });
+    await expect(connect({ apiToken: 'pat', ...OPTIONAL })).rejects.toThrow(
+      /already connected/,
+    );
   });
 });
 

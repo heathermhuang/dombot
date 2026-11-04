@@ -1,0 +1,31 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "0.15.1-hosted.1",
+  "upstreamVersion": "0.15.1",
+  "upstreamRevision": "4bbc193bf5ff1773e6c6418f26ca38bf72848d70",
+  "upstreamTarball": "https://registry.npmjs.org/@aoxborrow/registrar-client/-/registrar-client-0.15.1.tgz",
+  "upstreamIntegrity": "sha512-NqwVBKm8y6eFCpHKd+KsO95cEWtHkHtU6gYz3fx0PjKpB897uxHIF5/1v+Is2chOfZI9gGSeIcTgkNmeTqYdqA==",
+  "archive": "vendor/aoxborrow-registrar-client-0.15.1-hosted.1.tgz",
+  "sha256": "9dfd1d9eefb1175a1a94e39363c2ff9b0753b41d284533188f3b30894ce77e06",
+  "integrity": "sha512-1WWQwx0IpNYqp2JDgj5nRHWlKv8VCnkFV/7Y0YffJF/nlWo/zq37c4quDlT1F63vNS8SIhE6Z3OV+vWKbJ+yVg==",
+  "license": "MIT",
+  "build": "Upstream npm run build (tsup): ESM/CJS, source maps and matching TypeScript declarations. npm pack --ignore-scripts.",
+  "checks": "586 non-live SDK tests pass (maxWorkers=1); deadline tests assert one total timeout budget and no retry beyond Retry-After budget.",
+  "changes": [
+    "Full upstream 0.15.1; upstream includes prior Dynadot annualized REST quotes and Name.com owned .in fallback.",
+    "Retain bounded overall retry deadline, equal-jitter backoff, unknown-write safety and Retry-After floor.",
+    "Retain Gandi IDNA/path guards and Cloudflare literal expression serialization.",
+    "Gandi updated_at is not a renewal deadline; preserve registry expiry.",
+    "Parse Porkbun unzoned date-times as provider UTC, preserving explicit offsets."
+  ],
+  "patches": [
+    {
+      "path": "vendor/registrar-client-0.15.1-hosted.1.patch",
+      "sha256": "11e52bea0f73821779689cd2f9136392affa43204852e1e7a4ab296b84ee24b7"
+    },
+    {
+      "path": "vendor/registrar-client-0.15.1-hosted.1.tests.patch",
+      "sha256": "b7d524f9c7033890d837649a1ff3427d6c850d8e27c887c07938bf48a079d33e"
+    }
+  ]
+}

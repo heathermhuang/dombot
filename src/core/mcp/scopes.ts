@@ -27,6 +27,8 @@ const tools: Record<string, (typeof HOSTED_SCOPES)[number]> = {
   market_job_get: 'domains:write',
   domain_listing_discount_set: 'domains:write',
   domain_listing_verify: 'domains:write',
+  domain_verification_apply: 'domains:write',
+  market_verification_set: 'domains:write',
   market_grading_submit: 'domains:write',
   market_grading_get: 'portfolio:read',
   domain_appraisal_get: 'portfolio:read',

@@ -317,12 +317,15 @@ describe('account persistence and routing', () => {
   it('validates proxy settings in named-account imports before replacement', async () => {
     transport.mockImplementation(async () => new Response(xml));
     await saveProxyProfile({ url: proxy.url, egressIp: proxy.ip });
-    const account = await connectRegistrarAccount(
+    const connection = await connectRegistrarAccount(
       'namecheap',
       credentials,
       'Named',
       true,
     );
+    expect(connection.success).toBe(true);
+    if (!connection.success) throw new Error(connection.message);
+    const account = connection.account;
     const bundle = JSON.parse(
       exportBundle({ version: 'test', platform: 'web' }),
     );
@@ -339,12 +342,15 @@ describe('account persistence and routing', () => {
   it('retains cached domains for transport-only edits and refreshes cached clients after hydration', async () => {
     transport.mockImplementation(async () => new Response(xml));
     await saveProxyProfile({ url: proxy.url, egressIp: proxy.ip });
-    const account = await connectRegistrarAccount(
+    const connection = await connectRegistrarAccount(
       'namecheap',
       credentials,
       'Named',
       true,
     );
+    expect(connection.success).toBe(true);
+    if (!connection.success) throw new Error(connection.message);
+    const account = connection.account;
     writeEntry('portfolio', account.id, {
       domains: [],
       lastSyncedAt: 100,

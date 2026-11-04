@@ -8,11 +8,11 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const root = process.cwd();
 const name = '@domains-domains/dombot-engine';
-const version = '1.5.2-hosted.44';
+const version = '2.0.0-hosted.1';
 const upstream = {
   repository: 'https://github.com/aoxborrow/dombot',
-  revision: '1cc33720aef42074f5c0a77a680d87661a54b560',
-  version: '1.5.0',
+  revision: 'ccb918deed20f8d01009970064027fcb021bac97',
+  version: '2.0.0',
 };
 const sourceRoots = [
   'src/core',
@@ -28,9 +28,10 @@ const sourceFiles = [
   'index.html',
   'vite.web.config.mts',
   'scripts/dombot-engine.mjs',
-  'vendor/aoxborrow-registrar-client-0.12.0-hosted.2.tgz',
-  'vendor/registrar-client-0.12.0-hosted.2.patch',
-  'vendor/registrar-client-0.12.0-hosted.2.json',
+  'vendor/aoxborrow-registrar-client-0.15.1-hosted.1.tgz',
+  'vendor/registrar-client-0.15.1-hosted.1.patch',
+  'vendor/registrar-client-0.15.1-hosted.1.json',
+  'vendor/registrar-client-0.15.1-hosted.1.tests.patch',
 ];
 async function walk(directory) {
   const result = [];

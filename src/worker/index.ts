@@ -47,6 +47,7 @@ import { withRequestLock } from './lock';
 import { D1DocStore } from './storage/d1-doc-store';
 import { runMigrations } from '../core/storage/migrations';
 import { configureProxyTransport } from '../core/services/proxy-transport';
+import { configureConsentIp } from '../core/services/consent-ip';
 import { migrateLegacyProxies } from '../core/services/proxies';
 import { createWorkerProxyFetch, workerProxyPolicy } from './proxy-transport';
 import { configureManagedProxy } from '../core/services/managed-proxy';
@@ -168,6 +169,10 @@ async function bootOnce(env: Env): Promise<Boot> {
     );
     configureIncrementalRenewalPricing(true);
     configureSyncDiagnostics(env.DOMBOT_AUTH === 'gateway');
+    configureConsentIp(async () => {
+      if (!requestIp) throw new Error('This request has no client IP address.');
+      return requestIp;
+    });
     return { auth: await buildAuthConfig(env, root) };
   })();
   bootFor = fp;
@@ -208,6 +213,11 @@ function retainRequestWork(c: Context, work: Promise<unknown>): void {
 app.route('/', createPublicPortfolioRoutes());
 app.route('/', createPublicSalesRoutes());
 app.route('/sales-internal', createSalesInternalRoutes());
+// The user's IP address for the stateful request being handled, which
+// Cloudflare sets as CF-Connecting-IP at the edge. Registrar agreements that
+// record it read it through configureConsentIp (see bootOnce). Stateful
+// requests run one at a time (withRequestLock), so one variable is enough.
+let requestIp: string | null = null;
 
 // ── boot on every request ───────────────────────────────────────────────────
 app.use('*', async (c, next) => {
@@ -243,37 +253,42 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
   next,
 ) => {
   const work = withRequestLock(async () => {
-    const oauthOnly =
-      c.req.path !== '/mcp' &&
-      MCP_PUBLIC_PATHS.some((path) =>
-        path.endsWith('*')
-          ? c.req.path.startsWith(path.slice(0, -1))
-          : path === c.req.path,
-      );
-    await hydrate(oauthOnly);
-    const salesReady = !oauthOnly && (await hasSales(c.env.DB));
-    const beforeSales = salesReady
-      ? salesControlState(c.env)
-      : new Map<string, string>();
-    await next();
+    requestIp = c.req.header('cf-connecting-ip') ?? null;
     try {
-      if (salesReady)
-        await reconcileSalesOutcomes(await SalesStore.from(c.env));
-      await flushWrites();
-      if (!oauthOnly) capturePublicationInputs();
-      if (c.req.method !== 'GET' && salesReady)
-        await (
-          await SalesStore.from(c.env)
-        ).reconcile(
-          createVerifiedSaleObserver(c.env),
-          changedSalesDomains(beforeSales, salesControlState(c.env)),
+      const oauthOnly =
+        c.req.path !== '/mcp' &&
+        MCP_PUBLIC_PATHS.some((path) =>
+          path.endsWith('*')
+            ? c.req.path.startsWith(path.slice(0, -1))
+            : path === c.req.path,
         );
-    } catch (err) {
-      // The handler already answered, but its data didn't land; the next
-      // hydrate will show the pre-request state. Say so instead of 200.
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('[worker] persist failed:', message);
-      c.res = c.json({ error: `Could not save changes: ${message}` }, 500);
+      await hydrate(oauthOnly);
+      const salesReady = !oauthOnly && (await hasSales(c.env.DB));
+      const beforeSales = salesReady
+        ? salesControlState(c.env)
+        : new Map<string, string>();
+      await next();
+      try {
+        if (salesReady)
+          await reconcileSalesOutcomes(await SalesStore.from(c.env));
+        await flushWrites();
+        if (!oauthOnly) capturePublicationInputs();
+        if (c.req.method !== 'GET' && salesReady)
+          await (
+            await SalesStore.from(c.env)
+          ).reconcile(
+            createVerifiedSaleObserver(c.env),
+            changedSalesDomains(beforeSales, salesControlState(c.env)),
+          );
+      } catch (err) {
+        // The handler already answered, but its data didn't land; the next
+        // hydrate will show the pre-request state. Say so instead of 200.
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[worker] persist failed:', message);
+        c.res = c.json({ error: `Could not save changes: ${message}` }, 500);
+      }
+    } finally {
+      requestIp = null;
     }
   });
   // Finish the already-authorized work and release the queue even when the

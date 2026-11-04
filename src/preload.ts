@@ -171,6 +171,8 @@ const api: DombotApi = {
     ipcRenderer.invoke(IpcChannels.connectMarketAccount, ...args),
   renameMarketAccount: (...args) =>
     ipcRenderer.invoke(IpcChannels.renameMarketAccount, ...args),
+  setMarketVerification: (...args) =>
+    ipcRenderer.invoke(IpcChannels.setMarketVerification, ...args),
   setMarketAccountEnabled: (...args) =>
     ipcRenderer.invoke(IpcChannels.setMarketAccountEnabled, ...args),
   getMarketCredentials: (accountId) =>
@@ -197,6 +199,10 @@ const api: DombotApi = {
     ipcRenderer.invoke(IpcChannels.deleteMarketListings, ...args),
   relistMarketListings: (...args) =>
     ipcRenderer.invoke(IpcChannels.relistMarketListings, ...args),
+  refreshMarketListings: (names) =>
+    ipcRenderer.invoke(IpcChannels.refreshMarketListings, names),
+  requestMarketVerification: (...args) =>
+    ipcRenderer.invoke(IpcChannels.requestMarketVerification, ...args),
   setMarketSaleAuthCode: (...args) =>
     ipcRenderer.invoke(IpcChannels.setMarketSaleAuthCode, ...args),
   sendMarketSaleMessage: (...args) =>

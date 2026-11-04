@@ -15,7 +15,7 @@ import type { ConfirmedRenewal } from './domain-history';
 // the network out of the test entirely. The error classes above are the real
 // ones so classify() sees the types it checks with instanceof.
 
-const getRegistrarFeatures = vi.fn<(name: string) => readonly string[]>();
+const getDomainFeatures = vi.fn<(target: DomainTarget) => readonly string[]>();
 const setAutoRenewCached = vi.fn();
 const setPrivacyCached = vi.fn();
 const setLockCached = vi.fn();
@@ -28,6 +28,9 @@ const getDomainForwarding = vi.fn();
 const setDomainForwarding = vi.fn();
 const getEmailForwarding = vi.fn();
 const setEmailForwarding = vi.fn();
+const getNameservers = vi.fn();
+const getDnsRecords = vi.fn();
+const setDnsRecords = vi.fn();
 const getCachedPortfolio = vi.fn<() => { domains: unknown[] } | null>();
 const getCachedDomainDetail = vi.fn<() => Record<string, unknown> | null>(
   () => null,
@@ -42,6 +45,9 @@ const getRegistrarClient = vi.fn((name: string) => {
     setDomainForwarding,
     getEmailForwarding,
     setEmailForwarding,
+    getNameservers,
+    getDnsRecords,
+    setDnsRecords,
   };
 });
 
@@ -51,7 +57,7 @@ vi.mock('./registrars', () => ({
     id: id ?? registrar,
     label: 'Default',
   }),
-  getRegistrarFeatures: (name: string) => getRegistrarFeatures(name),
+  getDomainFeatures: (target: DomainTarget) => getDomainFeatures(target),
   getRegistrarClient: (name: string) => getRegistrarClient(name),
   setAutoRenewCached: (...a: unknown[]) => setAutoRenewCached(...a),
   setPrivacyCached: (...a: unknown[]) => setPrivacyCached(...a),
@@ -109,7 +115,7 @@ const fail = (message = ''): OperationResult => ({ success: false, message });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getRegistrarFeatures.mockReturnValue(ALL_FEATURES);
+  getDomainFeatures.mockReturnValue(ALL_FEATURES);
   // Re-establish the client shape after clearAllMocks reset the factory.
   getRegistrarClient.mockReturnValue({
     provider: { getAuthCode, getTransferOut, approveTransferOut },
@@ -117,6 +123,9 @@ beforeEach(() => {
     setDomainForwarding,
     getEmailForwarding,
     setEmailForwarding,
+    getNameservers,
+    getDnsRecords,
+    setDnsRecords,
   });
 });
 
@@ -144,7 +153,7 @@ describe('applyDomainOp — up-front capability gate', () => {
     expect(r.patch).toBeUndefined();
   });
   it('returns unsupported and makes no network call when the registrar lacks the feature', async () => {
-    getRegistrarFeatures.mockReturnValue([]); // no getAuthCode
+    getDomainFeatures.mockReturnValue([]); // no getAuthCode
     const r = await applyDomainOp(target, { kind: 'authCode' });
 
     expect(r.status).toBe('unsupported');
@@ -204,6 +213,25 @@ describe('applyDomainOp — happy paths and patches', () => {
     });
     expect(r.status).toBe('ok');
     expect(r.patch).toEqual({ nameservers: ns });
+  });
+
+  it('nameservers: writes and patches them lowercase, whoever typed them', async () => {
+    setNameserversCached.mockResolvedValue(ok());
+    const r = await applyDomainOp(target, {
+      kind: 'nameservers',
+      nameservers: [
+        'NS1.Afternic.com',
+        ' ns2.afternic.com ',
+        'Verification-AbC1.ns101.verify.test.',
+      ],
+    });
+    const lower = [
+      'ns1.afternic.com',
+      'ns2.afternic.com',
+      'verification-abc1.ns101.verify.test',
+    ];
+    expect(setNameserversCached.mock.calls[0][2]).toEqual(lower);
+    expect(r.patch).toEqual({ nameservers: lower });
   });
 
   it('falls back to opSummary when the provider message is empty', async () => {
@@ -803,7 +831,7 @@ describe('applyDomainOp — approveTransfer', () => {
   });
 
   it('is unsupported, with no call, where the registrar can’t approve', async () => {
-    getRegistrarFeatures.mockReturnValue(['getAuthCode']);
+    getDomainFeatures.mockReturnValue(['getAuthCode']);
     const r = await applyDomainOp(target, { kind: 'approveTransfer' });
     expect(r.status).toBe('unsupported');
     expect(r.message).toMatch(/doesn.t offer transfer approval/i);
@@ -849,10 +877,119 @@ describe('getTransferOut', () => {
   });
 
   it('throws, with no call, where the registrar can’t report one', async () => {
-    getRegistrarFeatures.mockReturnValue(['getAuthCode']);
+    getDomainFeatures.mockReturnValue(['getAuthCode']);
     await expect(readTransferOut(target)).rejects.toThrow(
-      /doesn.t report transfers out/,
+      'This registrar doesn’t offer transfer-out reports through its API.',
     );
+    // A GoDaddy account is missing its Optional settings instead.
+    await expect(
+      readTransferOut({ ...target, registrar: 'godaddy' }),
+    ).rejects.toThrow(/Add this account’s Optional settings/);
     expect(getTransferOut).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyDomainOp — txtRecords (Ownership verification TXT…)', () => {
+  const op: DomainOp = {
+    kind: 'txtRecords',
+    values: ['afternic-verification-Abc123'],
+  };
+  const records = [
+    { type: 'A', name: '@', value: '203.0.113.7', ttl: 600 },
+    { type: 'TXT', name: '@', value: 'v=spf1 -all', ttl: 600 },
+  ];
+
+  it('adds the record at the root, keeps the rest, and logs the change', async () => {
+    getNameservers.mockResolvedValue(['ns1.dynadot.com', 'ns2.dynadot.com']);
+    getDnsRecords.mockResolvedValue(records);
+    setDnsRecords.mockResolvedValue(ok());
+    const r = await applyDomainOp(target, op);
+    expect(r.status).toBe('ok');
+    expect(setDnsRecords).toHaveBeenCalledWith(
+      'example.com',
+      [
+        ...records,
+        {
+          type: 'TXT',
+          name: '@',
+          value: 'afternic-verification-Abc123',
+          ttl: 3600,
+        },
+      ],
+      expect.anything(),
+    );
+    const [event] = putEvents.mock.calls[0][0];
+    expect(event).toMatchObject({ setting: 'dns' });
+    expect(event.before).toHaveLength(2);
+    expect(event.after).toHaveLength(3);
+  });
+
+  it('skips a name whose DNS isn’t at its registrar', async () => {
+    getNameservers.mockResolvedValue([
+      'ada.ns.cloudflare.com',
+      'bob.ns.cloudflare.com',
+    ]);
+    const r = await applyDomainOp(target, op);
+    expect(r.status).toBe('skipped');
+    expect(r.message).toMatch(/DNS isn’t at the registrar/);
+    expect(getDnsRecords).not.toHaveBeenCalled();
+    expect(setDnsRecords).not.toHaveBeenCalled();
+  });
+
+  it('skips a name that already has the record, quoted or not', async () => {
+    getNameservers.mockResolvedValue([]);
+    getDnsRecords.mockResolvedValue([
+      ...records,
+      {
+        type: 'txt',
+        name: 'example.com.',
+        value: '"afternic-verification-Abc123"',
+      },
+    ]);
+    const r = await applyDomainOp(target, op);
+    expect(r).toMatchObject({
+      status: 'skipped',
+      message: 'Already has the TXT record',
+    });
+    expect(setDnsRecords).not.toHaveBeenCalled();
+  });
+
+  it('adds only the records that are missing, in one write', async () => {
+    getNameservers.mockResolvedValue(['ns1.dynadot.com']);
+    getDnsRecords.mockResolvedValue([
+      ...records,
+      { type: 'TXT', name: '@', value: 'afternic-verification-Abc123' },
+    ]);
+    setDnsRecords.mockResolvedValue(ok());
+    const r = await applyDomainOp(target, {
+      kind: 'txtRecords',
+      values: ['afternic-verification-Abc123', 'sedo-id-0123'],
+    });
+    expect(r).toMatchObject({
+      status: 'ok',
+      message: 'Added a TXT record (1 already there)',
+    });
+    expect(setDnsRecords).toHaveBeenCalledTimes(1);
+    const written = setDnsRecords.mock.calls[0][1] as { value: string }[];
+    expect(written.map((w) => w.value)).toEqual([
+      '203.0.113.7',
+      'v=spf1 -all',
+      'afternic-verification-Abc123',
+      'sedo-id-0123',
+    ]);
+  });
+
+  it('settles a lost response by re-reading the records', async () => {
+    getNameservers.mockResolvedValue(['ns1.dynadot.com']);
+    getDnsRecords
+      .mockResolvedValueOnce(records)
+      .mockResolvedValueOnce([
+        ...records,
+        { type: 'TXT', name: '@', value: 'afternic-verification-Abc123' },
+      ]);
+    setDnsRecords.mockRejectedValue(new OutcomeUnknownError('timed out'));
+    const r = await applyDomainOp(target, op);
+    expect(r.status).toBe('ok');
+    expect(r.message).toMatch(/confirmed by re-reading the records/);
   });
 });

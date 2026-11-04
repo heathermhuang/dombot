@@ -91,7 +91,7 @@ export default function GeneralSettings() {
         <SettingsField
           label="Density"
           htmlFor="pref-density"
-          description="Row spacing and text size. Phones always use the compact layout."
+          description="Row spacing and text size. Phones, tablets and narrow windows always use the compact layout."
         >
           <div>
             <Select
@@ -115,7 +115,7 @@ export default function GeneralSettings() {
         </SettingsField>
 
         <SettingsField
-          label="Rows per page"
+          label="Rows per Page"
           htmlFor="pref-page-size"
           description="The number of domains shown per page by default."
           className="border-t pt-5"
@@ -140,7 +140,7 @@ export default function GeneralSettings() {
         </SettingsField>
 
         <SettingsField
-          label="Sort by"
+          label="Sort By"
           htmlFor="pref-sort-key"
           description="The column and order domains are sorted by default."
           className="border-t pt-5"
@@ -191,13 +191,13 @@ export default function GeneralSettings() {
         {settings && (
           <>
             <SettingsField
-              label="Preferred currency"
+              label="Preferred Currency"
               description="Totals and reports are shown in this currency, and new amounts start in it. Saved amounts keep their own currency."
             >
               <div>
                 <div className="w-full max-w-72">
                   <CurrencyPicker
-                    label="Preferred currency"
+                    label="Preferred Currency"
                     value={settings.preferredCurrency}
                     onChange={(preferredCurrency) =>
                       void saveMoneySettings({
@@ -210,7 +210,7 @@ export default function GeneralSettings() {
               </div>
             </SettingsField>
             <SettingsField
-              label="Number format"
+              label="Number Format"
               htmlFor="pref-number-format"
               description="How amounts are written. This does not change the currency."
               className="border-t pt-5"

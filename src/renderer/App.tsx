@@ -43,6 +43,7 @@ import SalesShop from './pages/sales/Shop';
 import SalesChannels from './pages/sales/Channels';
 import SalesDomainSetup from './pages/sales/DomainSetup';
 import YourSite from './pages/YourSite';
+import { isDevVersion } from '../shared/releases';
 import { useTabMetrics, type TabMetrics } from './lib/tab-metrics';
 import {
   TabLink,
@@ -60,18 +61,23 @@ import './hosted-shell.css';
  * How each page shows as a header tab, by route: which metric its pill shows
  * (a key of useTabMetrics) and how it compacts in narrower windows. Pages
  * themselves are listed in NAV_ITEMS.
+ *
+ * As the window narrows the pills go first, then icons, so the bell always
+ * stays on screen: under 1024px the Renewals, Sales and Activity pills, under
+ * 800px the Domains pill, under 768px every icon (labels alone), and under
+ * 640px the hamburger takes over. Each step is sized for large counts
+ * ("12,345" domains, "CA$12.3k" a year).
  */
 const TAB_OPTIONS: Record<
   string,
   { metric?: keyof TabMetrics } & Omit<TabProps, 'icon' | 'label' | 'metric'>
 > = {
-  '/': { metric: 'domains', pillFrom: 'md' },
+  '/': { metric: 'domains', pillFrom: '800px' },
   '/public-page': { iconOnlyBelow: 'xl' },
   '/renewals': { metric: 'renewals', pillFrom: 'lg' },
   '/activity': { metric: 'activity', pillFrom: 'lg' },
   '/sales': { metric: 'sales', pillFrom: 'lg' },
   '/settings': {
-    pillFrom: 'lg',
     // The gear is drawn smaller than the other icons, so it's bumped up.
     iconClassName: 'size-[17px]',
   },
@@ -266,6 +272,7 @@ export default function App() {
                 }
                 icon={icon}
                 metric={metric ? metrics[metric] : null}
+                labelOnlyBelow="md"
                 {...options}
               />
             );
@@ -318,9 +325,7 @@ export default function App() {
               {/* A serif italic "v", dimmer than the monospace digits (like
                   the domain names) and set a little apart from them. */}
               <span className="block">
-                <span className="mr-px font-serif text-[12px] italic opacity-60">
-                  v
-                </span>
+                {!isDevVersion(displayedVersion) && <span className="mr-px font-serif text-[12px] italic opacity-60">v</span>}
                 <span className="font-mono text-[10px]">
                   {displayedVersion}
                 </span>
@@ -338,10 +343,11 @@ export default function App() {
       {/* The window never scrolls: header and status bar stay put and this
           area between them scrolls when a page is taller. Its scrollbar gutter
           is always reserved so pages of different heights line up. The top 8px
-          fades out, so scrolled content doesn't cut off hard at the tabs. */}
+          fades out, so scrolled content doesn't cut off hard at the tabs.
+          Tighter top and bottom in a short window. */}
       <main
         id="portfolio-content"
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [mask-image:linear-gradient(to_bottom,transparent,black_8px)] px-4 pt-[22px] pb-4 sm:px-6 sm:pt-[31px]"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] [mask-image:linear-gradient(to_bottom,transparent,black_8px)] px-4 pt-[18px] pb-4 sm:px-6 sm:pt-[27px] short:pt-4 short:pb-2.5"
       >
         <Routes>
           <Route path="/" element={<Domains />} />

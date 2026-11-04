@@ -110,6 +110,9 @@ function refusal(
   return null;
 }
 
+/** When each demo account last asked Atom for a DNS check. */
+const dnsChecks = new Map<string, number>();
+
 /** One demo market account, behaving like its market. */
 export class DemoMarketAdapter {
   readonly capabilities: MarketCapabilities;
@@ -296,6 +299,25 @@ export class DemoMarketAdapter {
     });
   }
 
+  // Atom's: one DNS check per account every 12 hours, which goes through
+  // straight away here and lists a pending name.
+
+  async verifyDns(name: string): Promise<MarketWriteResult> {
+    const key = name.toLowerCase();
+    const last = dnsChecks.get(this.accountId);
+    if (last !== undefined && Date.now() - last < 12 * 60 * 60 * 1000) {
+      return refused(
+        key,
+        'DNS check Request in progress, please try again after 12 hrs',
+      );
+    }
+    dnsChecks.set(this.accountId, Date.now());
+    const l = this.mine.get(key);
+    if (l?.status === 'pending')
+      this.mine.set(l.name, { ...l, status: 'active', statusRaw: 'Active' });
+    return ok(this.mine.get(key) ?? null, key);
+  }
+
   async getListingDefaults(): Promise<AfternicAccountSettings> {
     return this.world.settings.get(this.accountId) ?? DEFAULT_SETTINGS;
   }
@@ -425,13 +447,15 @@ export const DEMO_MARKET_ACCOUNTS = [
     market: 'afternic',
     label: 'Afternic',
     credentials: { apiKey: 'demo-key', apiSecret: 'demo-secret' },
+    // Obviously fake, in each market's format; Sedo's is left for you.
+    verification: 'afternic-verification-d3m0Af7rn1cV3r1fy',
   },
   {
     id: 'demo-sedo',
     market: 'sedo',
     label: 'Sedo',
     credentials: {
-      partnerId: '00000',
+      partnerId: '12345',
       signKey: 'demo-sign-key',
       username: 'demo',
       password: 'demo',
@@ -441,7 +465,8 @@ export const DEMO_MARKET_ACCOUNTS = [
     id: 'demo-atom',
     market: 'atom',
     label: 'Atom',
-    credentials: { apiToken: 'demo-token', userId: '00000' },
+    credentials: { apiToken: 'demo-token', userId: '1234567' },
+    verification: 'de30de30de30de30de30de30de30de30de30de30',
   },
 ] as const;
 
@@ -639,7 +664,9 @@ export function seedDemoMarkets(
   // Sales under way on names you hold, one at each step, and one that fell
   // through. The auth code one is on a name whose registrar can produce
   // one, so Send auth code goes through; the transfer one, where it can, on
-  // a name whose registrar can approve the buyer's transfer.
+  // a name whose registrar can approve the buyer's transfer. A second waits
+  // on the auth code where the registrar can't produce one, so its row takes
+  // the code pasted in.
   const onAfternic = [...world.account('demo-afternic').values()].filter(
     (l) => l.price && l.status === 'active',
   );
@@ -694,6 +721,14 @@ export function seedDemoMarkets(
     'transfer',
   );
   underWay(take(), 140, 'cancelled', 'CANCELLED', null);
+  // Last, so the sales above keep their names.
+  underWay(
+    take((name) => !givesAuthCode(name)),
+    3,
+    'in_progress',
+    'AWAITING_AUTH_CODE',
+    'auth_code',
+  );
 }
 
 /** A factory for registry.configureMarketFactory over one world. */
