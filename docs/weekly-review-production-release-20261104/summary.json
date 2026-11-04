@@ -1,0 +1,48 @@
+{
+  "at": "2026-11-04T12:39:16.427Z",
+  "engine": "2.0.0-hosted.2",
+  "source": "b215bfea5b20ede35176a3b3a25b17b53c6a9ddc135e357a0b98b079db068d12",
+  "releaseCommit": "01001a7489abe5df51d1eb0b10399fae114921a4",
+  "servingTenants": 44,
+  "usersPreserved": 55,
+  "originalWorkspaceIdentitiesPreserved": 536,
+  "platformMappingsPreserved": 39,
+  "credentialNamespacesPreserved": 44,
+  "publishedSalesPreserved": 2,
+  "publishedProfilesPreserved": 2,
+  "canonicalAndLegacyRoutesVerified": 2,
+  "existingActiveHostsVerified": 2,
+  "directoryConflicts": 0,
+  "existingBackfillCompleted": 43,
+  "activeQaRuns": 0,
+  "unfinishedAllocations": 0,
+  "templateHashAgreement": true,
+  "cronPreserved": true,
+  "originalAllocationRestored": true,
+  "sourceOfferCorrect": true,
+  "registrarMutations": 0,
+  "ci": {
+    "run": 41824647126,
+    "security": 41824647400,
+    "testFiles": 251,
+    "testsPassed": 2698,
+    "existingSkips": 1,
+    "securityRegressions": 4,
+    "relayChecks": 4,
+    "sdkNonLiveTests": 586
+  },
+  "managedProductionQa": {
+    "success": true,
+    "cleanupComplete": true,
+    "preservationPassed": true
+  },
+  "ownerBrowser": {
+    "verified": true
+  },
+  "upstream": {
+    "repository": "aoxborrow/dombot",
+    "revision": "ccb918deed20f8d01009970064027fcb021bac97",
+    "version": "2.0.0"
+  },
+  "registrarChanges": 0
+}
