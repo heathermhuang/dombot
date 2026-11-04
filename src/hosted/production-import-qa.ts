@@ -357,6 +357,14 @@ export async function cleanupProductionImportQa(
     await validateRun(r);
     if (r.state === 'complete')
       return { complete: true, runId: id, alreadyComplete: true };
+    if (r.state === 'blocked') throw new QaHold('qa_cleanup_blocked');
+    if (r.state === 'retry' && r.next_cleanup_at > Date.now())
+      return {
+        complete: false,
+        runId: id,
+        pending: true,
+        nextCleanupAt: r.next_cleanup_at,
+      };
     hold(
       r.account_id === env.CF_ACCOUNT_ID &&
         r.dispatch_namespace === env.CF_DISPATCH_NAMESPACE,
@@ -787,7 +795,7 @@ export async function cleanupExpiredProductionImportQa(
   now = Date.now(),
 ) {
   const rows = await env.CONTROL_DB.prepare(
-    "SELECT run_id,workspace_id FROM production_import_qa_runs WHERE state IN ('active','cleaning','retry') AND expires_at<=? AND next_cleanup_at<=? AND attempts<3 ORDER BY expires_at LIMIT 1",
+    "SELECT run_id,workspace_id FROM production_import_qa_runs WHERE state IN ('active','cleaning','retry') AND (expires_at<=? OR cleanup_started_at IS NOT NULL) AND next_cleanup_at<=? AND attempts<3 ORDER BY expires_at LIMIT 1",
   )
     .bind(now, now)
     .all<{ run_id: string; workspace_id: string }>();

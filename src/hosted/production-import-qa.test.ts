@@ -444,6 +444,17 @@ describe('managed production import QA', () => {
       cleanupProductionImportQa(env, journal, run.run_id, transport),
     ).rejects.toThrow();
     expect((await readQaRun(db, run.run_id))?.state).toBe('retry');
+    expect(
+      (await cleanupProductionImportQa(env, journal, run.run_id, transport))
+        .complete,
+    ).toBe(false);
+    expect(deletes).toHaveLength(1);
+    await db
+      .prepare(
+        'UPDATE production_import_qa_runs SET next_cleanup_at=0 WHERE run_id=?',
+      )
+      .bind(run.run_id)
+      .run();
     await cleanupProductionImportQa(env, journal, run.run_id, transport);
     expect(deletes.filter((x) => x.includes('/scripts/'))).toHaveLength(1);
     expect(deletes).toHaveLength(2);
@@ -496,6 +507,21 @@ describe('managed production import QA', () => {
     } as unknown as ProvisioningEnv['SETUPS'];
     await cleanupExpiredProductionImportQa(env);
     expect(dispatch).not.toHaveBeenCalled();
+    await db
+      .prepare(
+        "UPDATE production_import_qa_runs SET cleanup_started_at=1,state='retry' WHERE run_id=?",
+      )
+      .bind(run.run_id)
+      .run();
+    await cleanupExpiredProductionImportQa(env);
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith(run.run_id, 'expiry');
+    dispatch.mockClear();
+    await db
+      .prepare(
+        "UPDATE production_import_qa_runs SET cleanup_started_at=NULL,state='active' WHERE run_id=?",
+      )
+      .bind(run.run_id)
+      .run();
     await cleanupExpiredProductionImportQa(env, run.expires_at + 1);
     expect(dispatch).toHaveBeenCalledExactlyOnceWith(run.run_id, 'expiry');
     expect(deletes).toEqual([]);
@@ -503,10 +529,18 @@ describe('managed production import QA', () => {
   });
   it('limits unavailable-provider retries and records an explicit hold', async () => {
     unavailable = true;
-    for (let n = 0; n < 3; n++)
+    for (let n = 0; n < 3; n++) {
       await expect(
         cleanupProductionImportQa(env, journal, run.run_id, transport),
       ).rejects.toThrow();
+      if (n < 2)
+        await db
+          .prepare(
+            'UPDATE production_import_qa_runs SET next_cleanup_at=0 WHERE run_id=?',
+          )
+          .bind(run.run_id)
+          .run();
+    }
     const r = await readQaRun(db, run.run_id);
     expect(r?.attempts).toBe(3);
     expect(r?.state).toBe('blocked');

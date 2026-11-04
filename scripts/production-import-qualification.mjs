@@ -158,7 +158,8 @@ const proxy = await getPlatformProxy({
 let runDir,
   lease,
   cookie = '',
-  interrupted = false;
+  interrupted = false,
+  cleanupVerified = false;
 const abort = new AbortController();
 const interrupt = () => {
   interrupted = true;
@@ -275,6 +276,7 @@ async function cleanup(current) {
       !marker && !identity,
       'QA creation outcome unresolved; inspect the server lease',
     );
+    cleanupVerified = true;
     return;
   }
   for (let attempt = 0; status.state !== 'complete' && attempt < 4; attempt++) {
@@ -317,6 +319,7 @@ async function cleanup(current) {
     0,
   );
   assert.equal(status.setupKeys, 0);
+  cleanupVerified = true;
   if (runDir)
     await write(path.join(runDir, 'cleanup.json'), {
       complete: true,
@@ -350,6 +353,7 @@ try {
       .bind(values['run-id'])
       .first();
     assert(r, 'Unregistered QA run');
+    lease = { run: r };
     runDir = path.join(receipts, r.run_id);
     await fs.mkdir(runDir, { recursive: true, mode: 0o700 });
     {
@@ -571,7 +575,9 @@ try {
     }
     await write(path.join(runDir, 'failure.json'), {
       failed: true,
-      cleanupComplete: status?.state === 'complete',
+      cleanupComplete: status?.state === 'complete' && cleanupVerified,
+      serverCleanupComplete: status?.state === 'complete',
+      cleanupIndependentlyVerified: cleanupVerified,
       cleanupState: status?.state ?? 'unknown',
       kind: error.name,
       reasons: (error.errors ?? [error]).map((e) => ({

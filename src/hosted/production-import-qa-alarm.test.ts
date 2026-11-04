@@ -9,12 +9,13 @@ import {
   type QaRun,
 } from './production-import-qa';
 let mf: Miniflare, db: D1Database, worker: Fetcher, run: QaRun;
+let unavailableOnce = true;
 const other = '44444444-4444-4444-8444-444444444444';
 beforeAll(async () => {
   const script = (
     await build({
       stdin: {
-        contents: `import {PortfolioSetup} from './src/hosted/provisioner';export class TestSetup extends PortfolioSetup {async seed(){await this.ctx.storage.put('setup',{workspace:'real-fixture',root:'real-private-fixture'});return true;}async inspect(){return{setup:await this.ctx.storage.get('setup'),keys:(await this.ctx.storage.list()).size,alarm:await this.ctx.storage.getAlarm()};}}export default {async fetch(request,env){const body=await request.json(),stub=env.SETUPS.get(env.SETUPS.idFromName(body.workspace));try{return Response.json(await stub[body.method](...(body.args??[])));}catch(e){return Response.json({error:e.message},{status:400});}}};`,
+        contents: `import {PortfolioSetup} from './src/hosted/provisioner';export class TestSetup extends PortfolioSetup {async fireAlarm(){await super.alarm();return true;}async seed(){await this.ctx.storage.put('setup',{workspace:'real-fixture',root:'real-private-fixture'});return true;}async inspect(){return{setup:await this.ctx.storage.get('setup'),keys:(await this.ctx.storage.list()).size,alarm:await this.ctx.storage.getAlarm()};}}export default {async fetch(request,env){const body=await request.json(),stub=env.SETUPS.get(env.SETUPS.idFromName(body.workspace));try{return Response.json(await stub[body.method](...(body.args??[])));}catch(e){return Response.json({error:e.message},{status:400});}}};`,
         resolveDir: process.cwd(),
       },
       bundle: true,
@@ -39,10 +40,15 @@ beforeAll(async () => {
         CF_PROVISIONING_TOKEN: 'fake-token',
         TEMPLATE_SHA256: 'a'.repeat(64),
       },
-      outboundService: (request) =>
-        new URL(request.url).pathname.endsWith('/d1/database')
+      outboundService: (request) => {
+        if (unavailableOnce) {
+          unavailableOnce = false;
+          return new Response('unavailable', { status: 503 });
+        }
+        return new URL(request.url).pathname.endsWith('/d1/database')
           ? Response.json({ success: true, result: [] })
-          : new Response('', { status: 404 }),
+          : new Response('', { status: 404 });
+      },
     }),
   );
   db = (await mf.getD1Database('CONTROL_DB')) as unknown as D1Database;
@@ -103,6 +109,24 @@ it('native lease alarm cleans an abandoned account and its journal without touch
   expect((await call(run.workspace_id, 'armQa', [run.run_id])).body.armed).toBe(
     true,
   );
+  await vi.waitFor(
+    async () => expect((await readQaRun(db, run.run_id))?.state).toBe('retry'),
+    { timeout: 5000, interval: 50 },
+  );
+  await vi.waitFor(
+    async () =>
+      expect(
+        Number((await call(run.workspace_id, 'inspect')).body.alarm),
+      ).toBeGreaterThan(Date.now()),
+    { timeout: 5000, interval: 50 },
+  );
+  await db
+    .prepare(
+      'UPDATE production_import_qa_runs SET next_cleanup_at=0 WHERE run_id=?',
+    )
+    .bind(run.run_id)
+    .run();
+  await call(run.workspace_id, 'fireAlarm');
   await vi.waitFor(
     async () =>
       expect((await readQaRun(db, run.run_id))?.state).toBe('complete'),

@@ -20,6 +20,25 @@ import {
 const safeId = (id: string) => z.string().uuid().parse(id);
 export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   private queue: Promise<unknown> = Promise.resolve();
+  async #retryQa(id: string) {
+    try {
+      const run = await qaLease(this.env.CONTROL_DB, id);
+      if (
+        this.ctx.id.toString() !==
+          this.env.SETUPS.idFromName(run.workspace_id).toString() ||
+        run.state !== 'retry' ||
+        run.attempts >= 3
+      )
+        return false;
+      await this.ctx.storage.put('qa-run', id);
+      await this.ctx.storage.setAlarm(
+        Math.max(Date.now() + 1000, run.next_cleanup_at),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   armQa(runId: string) {
     const work = this.queue.then(async () => {
       const run = await qaLease(this.env.CONTROL_DB, runId);
@@ -47,18 +66,14 @@ export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
         await this.ctx.storage.deleteAlarm();
         return;
       }
-      if (run.expires_at > Date.now()) {
+      if (run.cleanup_started_at === null && run.expires_at > Date.now()) {
         await this.ctx.storage.setAlarm(run.expires_at);
         return;
       }
-      await this.cleanupQa(id, 'expiry');
+      const result = await this.cleanupQa(id, 'expiry');
+      if (!result.complete) await this.#retryQa(id);
     } catch {
-      const run = await readQaRun(this.env.CONTROL_DB, id);
-      if (run && run.state === 'retry' && run.attempts < 3)
-        await this.ctx.storage.setAlarm(
-          Math.max(Date.now() + 1000, run.next_cleanup_at),
-        );
-      else await this.ctx.storage.deleteAlarm();
+      if (!(await this.#retryQa(id))) await this.ctx.storage.deleteAlarm();
       console.error('Production import QA alarm needs attention', {
         runId: id,
       });
@@ -73,19 +88,24 @@ export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
           this.env.SETUPS.idFromName(run.workspace_id).toString()
       )
         throw Error('QA setup object mismatch');
-      return cleanupProductionImportQa(
-        this.env,
-        {
-          get: () => this.ctx.storage.get<SetupState>('setup'),
-          clear: () => this.ctx.storage.deleteAll(),
-          empty: async () =>
-            (await this.ctx.storage.list({ limit: 1 })).size === 0 &&
-            (await this.ctx.storage.getAlarm()) === null,
-        },
-        runId,
-        fetch,
-        trigger,
-      );
+      try {
+        return await cleanupProductionImportQa(
+          this.env,
+          {
+            get: () => this.ctx.storage.get<SetupState>('setup'),
+            clear: () => this.ctx.storage.deleteAll(),
+            empty: async () =>
+              (await this.ctx.storage.list({ limit: 1 })).size === 0 &&
+              (await this.ctx.storage.getAlarm()) === null,
+          },
+          runId,
+          fetch,
+          trigger,
+        );
+      } catch (error) {
+        await this.#retryQa(runId);
+        throw error;
+      }
     });
     this.queue = work.catch(() => undefined);
     return work;
