@@ -594,11 +594,7 @@ export async function cleanupProductionImportQa(
           ]);
           for (const d of docs) {
             hold(allowed.has(String(d.ns)));
-            if (
-              ['imported-domains', 'domain-notes', 'domain-prices'].includes(
-                String(d.ns),
-              )
-            )
+            if (['imported-domains', 'domain-prices'].includes(String(d.ns)))
               hold(d.key === r.domain);
           }
         }
@@ -613,6 +609,7 @@ export async function cleanupProductionImportQa(
             'getImportedDomains',
             'getDomainEvents',
             'getManualPrices',
+            'exportData',
           ]) {
             const request = new Request(
               'https://workspace.internal/api/' + method,
@@ -637,7 +634,39 @@ export async function cleanupProductionImportQa(
             const response = await env.DISPATCHER.get(name).fetch(request);
             if (!response.ok) throw Error('inspection_unavailable');
             const body = (await response.json()) as { result: unknown };
-            if (method === 'getDomainEvents')
+            if (method === 'exportData') {
+              hold(typeof body.result === 'string');
+              let exported: {
+                namespaces?: Record<string, Record<string, unknown>>;
+              };
+              try {
+                exported = JSON.parse(body.result as string);
+              } catch {
+                throw new QaHold('notes_inspection_unavailable');
+              }
+              const notes = exported.namespaces?.['domain-notes'] ?? {};
+              hold(
+                notes &&
+                  typeof notes === 'object' &&
+                  !Array.isArray(notes) &&
+                  Object.keys(notes).length ===
+                    documents.filter((d) => d.ns === 'domain-notes').length,
+              );
+              for (const [id, value] of Object.entries(notes)) {
+                const note = value as {
+                  id?: unknown;
+                  domain?: unknown;
+                  text?: unknown;
+                };
+                hold(
+                  note &&
+                    typeof note === 'object' &&
+                    note.id === id &&
+                    note.domain === r.domain &&
+                    typeof note.text === 'string',
+                );
+              }
+            } else if (method === 'getDomainEvents')
               hold(
                 Array.isArray(body.result) &&
                   body.result.every((e) => e.domain === r!.domain) &&
