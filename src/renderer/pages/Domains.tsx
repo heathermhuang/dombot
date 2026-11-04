@@ -46,6 +46,7 @@ import {
   ARCHIVE_LABELS,
   archiveRows,
   ownershipByDomain,
+  hasPastReportedExpiry,
   standingOf,
   type ArchiveLabel,
   type Standing,
@@ -57,6 +58,7 @@ import {
   RegistrarLogo,
 } from '../components/RegistrarLogo';
 import { DomainLink } from '../components/domains/DomainLink';
+import { ExpiryAttention } from '../components/domains/ExpiryAttention';
 import { NotesButton } from '../components/domains/NotesButton';
 import { BulkNotesDialog } from '../components/domains/BulkNotesDialog';
 import {
@@ -428,6 +430,10 @@ type LifecycleTone = 'redemption' | 'expired' | 'grace' | 'hold';
 
 /** Expired by the date alone, when the registrar's status doesn't say. */
 const EXPIRED = { label: 'Expired', tone: 'expired' as LifecycleTone };
+const VERIFY_EXPIRY = {
+  label: 'Verify expiry',
+  tone: 'expired' as LifecycleTone,
+};
 
 /**
  * A solid pill per lifecycle state. Expired is red, the past-expiry date's
@@ -779,7 +785,9 @@ const COLUMNS: Column[] = [
         lifecycle && lifecycle.tone !== 'hold'
           ? lifecycle
           : days !== null && days < 0
-            ? EXPIRED
+            ? hasPastReportedExpiry(d)
+              ? VERIFY_EXPIRY
+              : EXPIRED
             : null;
       return (
         <span
@@ -866,7 +874,8 @@ const COLUMNS: Column[] = [
 
 function dueLabel(days: number | null): string {
   if (days === null) return 'No expiry date';
-  if (days < 0) return `Expired ${-days} day${days === -1 ? '' : 's'} ago`;
+  if (days < 0)
+    return `Reported expiry ${-days} day${days === -1 ? '' : 's'} ago; verify current status`;
   if (days === 0) return 'Expires today';
   return `Expires in ${days} day${days === 1 ? '' : 's'}`;
 }
@@ -932,6 +941,8 @@ export default function Domains() {
   // Archive is what you no longer have (Sold, Deleted, Expired, or Removed),
   // worked out in shared/ownership.ts.
   const archiveView = params.get('view') === 'archive';
+  const pastExpiryOnly =
+    !archiveView && params.get('attention') === 'past-expiry';
   const {
     portfolio,
     portfolioErrors,
@@ -1909,6 +1920,7 @@ export default function Domains() {
     if (next === 'archive') setPricingFilter(NO_PRICING_FILTER);
     setPage(0);
     const nextParams = new URLSearchParams(params);
+    if (next !== 'owned') nextParams.delete('attention');
     if (next === 'owned') nextParams.delete('view');
     else nextParams.set('view', next);
     setParams(nextParams, { replace: true });
@@ -1951,6 +1963,7 @@ export default function Domains() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = shown.filter((d) => {
+      if (pastExpiryOnly && !standingOfRow(d).pastReportedExpiry) return false;
       if (q && !d.domainName.toLowerCase().includes(q)) return false;
       if (tld.length > 0 && !tld.includes(tldOf(d.domainName))) return false;
       // The "Registrar" filter picks individual accounts (by account id), or
@@ -2032,6 +2045,8 @@ export default function Domains() {
     return sortRows(rows, valueOf, sortDir);
   }, [
     shown,
+    pastExpiryOnly,
+    standingOfRow,
     columnByKey,
     portfolioRegistrarLabels,
     search,
@@ -2456,6 +2471,9 @@ export default function Domains() {
               // The names the card counts: expiring within 30 days, not
               // renewing on their own.
               onExpiring: () => {
+                const next = new URLSearchParams(params);
+                next.delete('attention');
+                setParams(next, { replace: true });
                 setExpires(presetRange('next30'));
                 setAutoRenewFilter(['off', 'unknown']);
                 setPage(0);
@@ -2477,6 +2495,26 @@ export default function Domains() {
                 setStatus(labels);
                 setPage(0);
               },
+            }}
+          />
+        )}
+
+        {!archiveView && (
+          <ExpiryAttention
+            rows={filtered}
+            now={now}
+            active={pastExpiryOnly}
+            onToggle={() => {
+              const next = new URLSearchParams(params);
+              if (pastExpiryOnly) next.delete('attention');
+              else {
+                next.set('attention', 'past-expiry');
+                next.delete('view');
+                setExpires(NO_DATE_RANGE);
+                setAutoRenewFilter([]);
+              }
+              setParams(next, { replace: true });
+              setPage(0);
             }}
           />
         )}

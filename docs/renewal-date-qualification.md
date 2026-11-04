@@ -19,6 +19,14 @@ Past planning dates are separate verification work, not presumed unpaid bills.
 When no provider renewal date is known, reported expiry supplies a planning date.
 The amounts remain annualized estimates, not confirmed next-charge amounts.
 
+Registrar-held names whose reported UTC expiry day has passed have a separate
+`pastReportedExpiry` attention flag. It applies regardless of auto-renew, without
+changing Owned/Archive or inferring loss, restoration eligibility or a registrar
+status. Domains offers a verification notice and `?attention=past-expiry` view;
+MCP can filter that flag, and CSV exports carry an informational Expiry attention
+column. The original upcoming `expiring` flag retains its meaning. Imported and
+departed records do not become registrar-held verification work.
+
 Release qualification must cover old list/detail overlays, repeated read/hydration,
 backup restoration and another account's preservation. No control migration or
 registrar mutation is required. Retain a protected pre-release recovery snapshot,
