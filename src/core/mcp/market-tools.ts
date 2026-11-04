@@ -1,8 +1,15 @@
+import { applyDomainOp } from '../services/domain-ops';
+import { findRegistrarsForDomain } from '../services/registrars';
+import {
+  verificationHelp,
+  verificationNameservers,
+  verificationTxt,
+} from '../../shared/market-verification';
 import { publicMarketOffer } from '../../shared/market-public-offer';
 import { permitsTool } from './scopes';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { localDay } from '../../shared/domain-events';
+import { DomainEventSource, localDay } from '../../shared/domain-events';
 import { toAscii } from '../../shared/domain-name';
 import {
   convertedTotals,
@@ -16,6 +23,8 @@ import { getSettings } from '../services/settings';
 import { storedTraffic, trafficTotals } from '../services/markets/traffic';
 import {
   activeMarketAccounts,
+  listMarketAccounts,
+  setMarketVerification,
   getMarketSyncState,
   marketAccount,
   marketAccountViews,
@@ -36,7 +45,7 @@ import {
   setMarketDiscount,
   setMarketListingDefaults,
   setSaleAuthCode,
-  verifyMarketDns,
+  requestMarketVerification,
   writeMarketListings,
 } from '../services/markets/writes';
 import {
@@ -129,7 +138,7 @@ export function registerMarketTools(
       {
         title: 'List market accounts',
         description:
-          'List every connected marketplace account (Afternic, Atom, Sedo) with its `accountId`, `market`, `label`, whether it is `configured` and `enabled`, its last `sync` (when, listing and sale counts, any error), and what its market supports (`capabilities`). No secrets. Start here before the other market_* tools.',
+          'List every connected marketplace account (Afternic, Atom, Sedo) with its `accountId`, `market`, `label`, whether it is `configured` and `enabled`, its last `sync` (when, listing and sale counts, any error), its `verificationId` (the saved Ownership Verification ID, null until set) and `verificationNameservers` (the nameservers to point a name at for this market, with Afternic’s NS3 once the ID is saved; set them with domain_nameservers_set), and what its market supports (`capabilities`). No secrets. Start here before the other market_* tools.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
       },
@@ -142,6 +151,11 @@ export function registerMarketTools(
             configured: a.configured,
             enabled: a.enabled,
             sync: a.sync,
+            verificationId: a.verificationId ?? null,
+            verificationNameservers: verificationNameservers(
+              marketInfo(a.market),
+              a.verificationId ?? null,
+            ),
             capabilities: marketInfo(a.market).capabilities,
           })),
         }),
@@ -1054,15 +1068,15 @@ export function registerMarketWriteTools(
     server.registerTool(
       'domain_listing_verify',
       {
-        title: 'Verify a listing’s DNS',
+        title: 'Recheck ownership',
         description:
-          'Ask the market to check now that a name points at it (Atom: nameservers ns1/ns2.atom.com, required for Premium, or Atom’s TXT record), instead of waiting for its own check. Atom allows one check per account every 12 hours; sooner, it fails saying to try later. Returns the listing as read back afterwards; its status may take a while to change. Markets without this say so.',
+          'Recheck ownership: ask the market to check a listed name’s TXT records or nameservers for your ownership verification now, instead of waiting for its own check. Changes no DNS (add the TXT records first with domain_verification_apply). Afternic relists the name, which re-runs its checks; Atom checks DNS, one request per account every 12 hours (sooner, it fails saying a check is in progress). Sedo has no such call and says so. Returns the listing as read back afterwards; its status may take a while to change.',
         inputSchema: { domain: z.string().min(1).max(253), accountId },
         annotations: { idempotentHint: true },
       },
       async ({ domain, accountId: id }) => {
         const account = listingAccount(domain, id);
-        const result = await verifyMarketDns(account, domain);
+        const [result] = await requestMarketVerification(account, [domain]);
         if (!result.ok) throw new Error(result.error?.message ?? 'Failed.');
         return json({ accountId: account, ...result });
       },
@@ -1235,6 +1249,93 @@ export function registerMarketWriteTools(
       async ({ accountId: id, ...settings }) => {
         await setMarketListingDefaults(id, settings);
         return json({ accountId: id, saved: settings });
+      },
+    );
+  if (allow('domain_verification_apply'))
+    server.registerTool(
+      'domain_verification_apply',
+      {
+        title: 'Add ownership verification TXT records',
+        description:
+          'Ownership verification TXT: add market accounts’ ownership verification TXT records at a name’s root, at the registrar that holds it, keeping every other record, in one write. The markets aren’t contacted (ask them to check with domain_listing_verify). `accountIds` defaults to every enabled market account with an Ownership Verification ID saved (market_verification_set). Skipped when the name’s DNS isn’t at its registrar, or the records are already there. For a market’s nameservers instead, use domain_nameservers_set with the account’s `verificationNameservers` from market_list.',
+        inputSchema: {
+          domain: z.string().min(1).max(253),
+          accountIds: z
+            .array(z.string().max(64))
+            .min(1)
+            .max(20)
+            .optional()
+            .describe('Market accounts from market_list.'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+        },
+      },
+      async ({ domain, accountIds }) => {
+        const accounts = accountIds
+          ? accountIds.map((id) => marketAccount(id))
+          : listMarketAccounts().filter((a) => a.enabled && a.verificationId);
+        const missing = accounts.find((a) => !a.verificationId);
+        if (missing) {
+          const info = marketInfo(missing.market);
+          throw new Error(
+            `${info.name} (${missing.label}) has no Ownership Verification ID; save it with market_verification_set: ${info.name} calls it its ${verificationHelp(info.id).term} (${verificationHelp(info.id).url}).`,
+          );
+        }
+        if (accounts.length === 0) {
+          throw new Error(
+            'No market account has an Ownership Verification ID saved; save one with market_verification_set.',
+          );
+        }
+        const values = [
+          ...new Set(
+            accounts.map((a) => verificationTxt(a.market, a.verificationId!)),
+          ),
+        ];
+        const held = findRegistrarsForDomain(domain);
+        if (held.length !== 1) {
+          throw new Error(
+            held.length
+              ? `${domain} appears under more than one registrar (${held.join(', ')}); run portfolio_sync to refresh.`
+              : `${domain} isn’t in a connected registrar account, so there’s no DNS to change. Run portfolio_sync if it was added recently.`,
+          );
+        }
+        const r = await applyDomainOp(
+          { registrar: held[0], domainName: toAscii(domain) },
+          { kind: 'txtRecords', values },
+          { source: DomainEventSource.Agent },
+        );
+        return json({
+          accountIds: accounts.map((a) => a.id),
+          registrar: held[0],
+          success: r.status === 'ok',
+          status: r.status,
+          message: r.message,
+        });
+      },
+    );
+
+  if (allow('market_verification_set'))
+    server.registerTool(
+      'market_verification_set',
+      {
+        title: 'Set a market account’s Ownership Verification ID',
+        description:
+          'Save a market account’s Ownership Verification ID, which domain_verification_apply and the account’s `verificationNameservers` use: paste the value as the market shows it (Afternic’s Domain Ownership Record, TXT or NS3; Sedo’s Domain Ownership Verification ID; Atom’s TXT Code) and DomBot reads the ID out of it. An empty value clears it. Kept in DomBot; the market isn’t contacted.',
+        inputSchema: {
+          accountId: requiredAccount,
+          value: z.string().max(500),
+        },
+        annotations: { idempotentHint: true },
+      },
+      async ({ accountId: id, value }) => {
+        await setMarketVerification(id, value);
+        return json({
+          accountId: id,
+          verificationId: marketAccount(id).verificationId ?? null,
+        });
       },
     );
 }

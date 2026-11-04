@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { coreMethods } from '../src/core/api';
 import { registerTools } from '../src/core/mcp/tools';
 const parity = JSON.parse(
-  fs.readFileSync('docs/upstream-parity-20261101.json', 'utf8'),
+  fs.readFileSync('docs/upstream-parity-20261104.json', 'utf8'),
 );
 function tools(scopes) {
   const names = [];
@@ -43,6 +43,8 @@ describe('pinned upstream feature parity', () => {
       write = tools(['domains:write']);
     for (const name of [
       'domain_listing_set',
+      'domain_verification_apply',
+      'market_verification_set',
       'market_listings_delete',
       'market_sale_auth_code_set',
       'domain_transfer_out_approve',

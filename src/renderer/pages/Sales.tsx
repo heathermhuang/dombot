@@ -6,7 +6,7 @@ import {
   CalendarCheck,
   Clock,
   Coins,
-  Download,
+  FileSpreadsheet,
   CircleCheck,
   Ellipsis,
   Globe,
@@ -25,6 +25,7 @@ import {
   DEFAULT_NUMBER_FORMAT,
   formatMoney,
 } from '../../shared/money';
+import { compactMoney } from '../lib/renewals';
 import { conversionText } from '../../shared/exchange-rates';
 import {
   filterSaleRecords,
@@ -63,8 +64,12 @@ import type { FilterField } from '../components/data-table/FilterBar';
 import { dateRangeField } from '../components/data-table/DateRangeFilter';
 import { SaleDialog } from '../components/domains/SaleDialog';
 import { SaleApproveTransfer } from '../components/sales/SaleApproveTransfer';
-import { SaleAuthCode } from '../components/sales/SaleAuthCode';
-import { SaleUnlock } from '../components/sales/SaleUnlock';
+import {
+  SaleAuthCode,
+  pastedAuthCodeFrom,
+} from '../components/sales/SaleAuthCode';
+import { SaleStepButton } from '../components/sales/SaleStepButton';
+import { SaleUnlock, waitsForUnlock } from '../components/sales/SaleUnlock';
 import { SalesCards, heldFor } from '../components/sales/SalesCards';
 import { EmptyState } from '../components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -119,15 +124,21 @@ export default function Sales() {
   const preferred = settings?.preferredCurrency ?? DEFAULT_CURRENCY;
   const fx = useAppStore((s) => s.exchangeRates);
   // formatMoney takes no sign, so a loss is formatted unsigned and given a
-  // minus sign here.
-  const money = (amount: string | null, currency: string | null) =>
+  // minus sign here. Fees, net, cost and profit keep their cents; a sale's
+  // price is whole, like the listing price it usually was, and so are the
+  // cards' totals.
+  const money = (
+    amount: string | null,
+    currency: string | null,
+    whole = false,
+  ) =>
     amount && currency
       ? `${amount.startsWith('-') ? '−' : ''}${formatMoney(
           amount.replace(/^-/, ''),
           currency,
           preferred,
           numberFormat,
-          true,
+          whole,
         )}`
       : null;
 
@@ -429,14 +440,20 @@ export default function Sales() {
     amount: string | null,
     r: SaleRecord,
     className?: string,
+    whole = false,
   ) => {
-    const text = money(amount, r.currency);
+    const text = money(amount, r.currency, whole);
     if (!text) return dash;
     let title: string | undefined;
     if (r.currency && r.currency !== preferred) {
       const c = fx.convert(amount!, r.currency, preferred, r.soldOn);
       title = c
-        ? conversionText(text, money(String(c.amount), preferred)!, c, r.soldOn)
+        ? conversionText(
+            text,
+            money(String(c.amount), preferred, whole)!,
+            c,
+            r.soldOn,
+          )
         : `DomBot can’t convert ${r.currency}`;
     }
     return (
@@ -513,6 +530,7 @@ export default function Sales() {
             'tabular-nums',
             r.status === 'cancelled' && 'text-muted-foreground line-through',
           ),
+          true,
         ),
     },
     {
@@ -552,8 +570,10 @@ export default function Sales() {
         // behind it: the status says so, without their buttons.
         const moved = r.step === 'payout';
         const held = moved ? undefined : heldDomain(r);
+        // The buttons follow the status, as Activity's answers follow the
+        // details.
         return (
-          <span className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-3">
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 whitespace-nowrap',
@@ -583,7 +603,9 @@ export default function Sales() {
               {saleStatusLabel(r)}
             </span>
             {/* What you can do, in order: unlock the name, send its code,
-                approve the buyer's transfer. */}
+                approve the buyer's transfer. Every step the row can take
+                shows from the start; one waits, disabled, until the step
+                before it is done. */}
             <span className="flex items-start gap-1.5">
               {held && <SaleUnlock domain={held} />}
               {r.step === 'auth_code' &&
@@ -594,6 +616,15 @@ export default function Sales() {
                     accountId={r.marketAccountId}
                     saleId={r.marketSaleId}
                     name={r.name}
+                    pasteFrom={pastedAuthCodeFrom(
+                      heldDomains.get(r.name),
+                      registrars,
+                    )}
+                    waitingOn={
+                      waitsForUnlock(held, registrars)
+                        ? 'Unlock the name first: the buyer’s registrar can’t take it while it’s locked'
+                        : null
+                    }
                   />
                 )}
               {/* The market has the code, through DomBot or not: a step
@@ -602,29 +633,23 @@ export default function Sales() {
                 !moved &&
                 isUnderWay(r) &&
                 r.authCodeSent && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="-my-1 h-6 shrink-0 px-2 text-xs"
+                  <SaleStepButton
                     disabled
                     title="The market has the transfer auth code"
                   >
                     Auth code sent
-                  </Button>
+                  </SaleStepButton>
                 )}
               {held && <SaleApproveTransfer domain={held} />}
               {/* Handed over without leaving the registrar (an account change
                 there), or otherwise done: it stops waiting. */}
               {r.awaitingTransfer && r.eventId && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="-my-1 h-6 shrink-0 px-2 text-xs"
+                <SaleStepButton
                   title="The buyer has the name; stop showing this sale as waiting"
                   onClick={() => void setSaleTransferred(r.eventId!, true)}
                 >
                   Mark complete
-                </Button>
+                </SaleStepButton>
               )}
             </span>
           </span>
@@ -735,7 +760,7 @@ export default function Sales() {
         onClick={() => void exportCsv()}
         disabled={sorted.length === 0}
       >
-        <Download />
+        <FileSpreadsheet />
         Export CSV
       </Button>
     </div>
@@ -743,8 +768,8 @@ export default function Sales() {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1">
-        <div className="mb-1 flex min-h-9 items-start justify-between gap-4">
+      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1 short:gap-[9px]">
+        <div className="mb-1 flex min-h-9 items-start justify-between gap-4 short:mb-[7px]">
           <h1 className="mt-1.5 flex min-w-0 items-baseline gap-2.5 text-2xl font-bold leading-none sm:mt-0.5 sm:text-[32px]">
             Sales
             {/* The view, as on Domains. */}
@@ -761,6 +786,9 @@ export default function Sales() {
           currency={totalsCurrency}
           fx={fx}
           money={money}
+          compact={(n, currency) =>
+            compactMoney(n, currency, preferred, numberFormat)
+          }
         />
 
         <FilterToolbar

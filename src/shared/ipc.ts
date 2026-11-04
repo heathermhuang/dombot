@@ -48,6 +48,16 @@ export interface RegistrarAccount {
   trackedSince?: number;
 }
 
+/**
+ * What `connectRegistrarAccount` answers: the new account, or why the
+ * registrar turned the credentials down, with its HTTP status when it gave one
+ * (Dynadot's 401 for a key that isn't active yet). A value rather than a
+ * thrown error, so the status survives IPC and HTTP. Bad input still rejects.
+ */
+export type ConnectRegistrarResult =
+  | { success: true; account: RegistrarAccount }
+  | { success: false; message: string; status?: number };
+
 /** Where a Domain row comes from (see `Domain.source`). */
 export type DomainSource = 'registrar' | 'imported';
 
@@ -214,6 +224,7 @@ export const IpcChannels = {
   listMarketAccounts: 'markets:listAccounts',
   connectMarketAccount: 'markets:connectAccount',
   renameMarketAccount: 'markets:renameAccount',
+  setMarketVerification: 'markets:setVerification',
   setMarketAccountEnabled: 'markets:setEnabled',
   getMarketCredentials: 'markets:getCredentials',
   saveMarketCredentials: 'markets:saveCredentials',
@@ -226,6 +237,8 @@ export const IpcChannels = {
   pushMarketPrices: 'markets:pushPrices',
   deleteMarketListings: 'markets:deleteListings',
   relistMarketListings: 'markets:relist',
+  refreshMarketListings: 'markets:refreshListings',
+  requestMarketVerification: 'markets:requestVerification',
   startMarketBulk: 'markets:bulkStart',
   advanceMarketBulk: 'markets:bulkAdvance',
   cancelMarketBulk: 'markets:bulkCancel',
@@ -586,6 +599,9 @@ export interface RegistrarConfigField {
   type: 'text' | 'password' | 'select';
   required: boolean;
   options?: string[];
+  /** Shown in the form's collapsed Optional section. Those settings only work
+   *  together, so filling in one makes them all required. */
+  section?: 'optional';
 }
 
 /**
@@ -764,7 +780,14 @@ export type DomainOp =
   | { kind: 'authCode' }
   | { kind: 'renew'; years: number }
   /** Release a pending transfer-out (see `DomainTransferOut`) now. */
-  | { kind: 'approveTransfer' };
+  | { kind: 'approveTransfer' }
+  /**
+   * Add TXT records at the name's root (TTL 3600), keeping every other
+   * record, in one write: Ownership verification TXT…, one value per market
+   * account. Skipped when the name's DNS isn't at its registrar, or every
+   * record is already there.
+   */
+  | { kind: 'txtRecords'; values: string[] };
 
 export type DomainOpKind = DomainOp['kind'];
 
@@ -1123,7 +1146,7 @@ export interface DombotApi {
     label?: string,
     /** Route the new account through the fixed IP proxy (and test it that way). */
     useProxy?: boolean,
-  ) => Promise<RegistrarAccount>;
+  ) => Promise<ConnectRegistrarResult>;
   createRegistrarAccount: (
     name: RegistrarName,
     label: string,
@@ -1263,6 +1286,15 @@ export interface DombotApi {
     accountId: string,
     label: string,
   ) => Promise<MarketAccountView[]>;
+  /**
+   * Save an account's Ownership Verification ID, read out of the value
+   * pasted (blank clears it). Rejects a value that isn't the market's,
+   * saying what to copy.
+   */
+  setMarketVerification: (
+    accountId: string,
+    pasted: string,
+  ) => Promise<MarketAccountView[]>;
   /** Turning an account on syncs it. */
   setMarketAccountEnabled: (
     accountId: string,
@@ -1301,6 +1333,19 @@ export interface DombotApi {
     accountId: string,
     names: string[],
     mode?: 'RESYNC' | 'REACTIVATE',
+  ) => Promise<MarketWriteResult[]>;
+  /**
+   * Re-read these names' listings on every enabled market account (Refresh
+   * on Domains). `failed` names the accounts that couldn't be read.
+   */
+  refreshMarketListings: (names: string[]) => Promise<{ failed: string[] }>;
+  /**
+   * Recheck ownership: ask the market to check these listed names now
+   * (Afternic's relist, Atom's verify DNS). Changes no DNS.
+   */
+  requestMarketVerification: (
+    accountId: string,
+    names: string[],
   ) => Promise<MarketWriteResult[]>;
   /**
    * Start a market bulk job, for writes too large to wait on (markets that

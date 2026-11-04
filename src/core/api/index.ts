@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { DombotApi, DomainTarget } from '../../shared/ipc';
 import { clearAll, clearRegistrarCaches } from '../services/cache';
 import { applyDomainOp, getTransferOut } from '../services/domain-ops';
+import { missingFeatureReason } from '../../shared/domain-ops';
 import {
   advanceMarketBulk,
   cancelBulk,
@@ -66,7 +67,7 @@ import {
   getRegistrationQuote,
   getRegistrarClient,
   getRegistrarCredentialValues,
-  getRegistrarFeatures,
+  getDomainFeatures,
   getRegistrarMetadata,
   testRegistrarAccount,
   saveRegistrarCredentials,
@@ -97,6 +98,7 @@ import {
   deleteMarketListings,
   pushAskingPrices,
   relistMarketListings,
+  requestMarketVerification,
   sendSaleMessage,
   setMarketListingDefaults,
   setSaleAuthCode,
@@ -114,6 +116,7 @@ import {
   marketAccountViews,
   removeMarketAccount,
   renameMarketAccount,
+  setMarketVerification,
   saveMarketCredentials,
   setMarketAccountEnabled,
 } from '../services/markets/accounts';
@@ -123,6 +126,7 @@ import {
   marketAccountStats,
   marketListings,
   marketSales,
+  refreshMarketListings,
   syncMarketAccount,
   syncMarkets,
 } from '../services/markets/sync';
@@ -213,10 +217,10 @@ export async function invoke<K extends ApiMethodName>(
   return entry.handler(...(parsed.data as Args<K>));
 }
 
-/** Throws a plain message when the registrar lacks an extended read feature. */
+/** Throws a plain message when the account lacks an extended read feature. */
 function requireFeature(target: DomainTarget, feature: string, what: string) {
-  if (!getRegistrarFeatures(target.registrar).includes(feature)) {
-    throw new Error(`This registrar doesn’t offer ${what} through its API.`);
+  if (!getDomainFeatures(target).includes(feature)) {
+    throw new Error(missingFeatureReason(target.registrar, feature, what));
   }
 }
 
@@ -319,6 +323,8 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
       getDomainDetail(name, domainName, refresh, accountId),
   ),
   getRegistrarCatalog: method(none, getRegistrarCatalog),
+  // Resolves, not rejects, when the registrar turns the credentials down, so
+  // its HTTP status reaches the renderer (`ConnectRegistrarResult`).
   connectRegistrarAccount: method(
     z.tuple([
       s.registrarName,
@@ -500,6 +506,13 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
       return marketAccountViews();
     },
   ),
+  setMarketVerification: method(
+    z.tuple([s.marketAccountId, s.verificationValue]),
+    async (id, pasted) => {
+      await setMarketVerification(id, pasted);
+      return marketAccountViews();
+    },
+  ),
   setMarketAccountEnabled: method(
     z.tuple([s.marketAccountId, z.boolean()]),
     async (id, enabled) => {
@@ -568,6 +581,13 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
   relistMarketListings: method(
     z.tuple([s.marketAccountId, s.marketNames, s.relistMode.optional()]),
     async (id, names, mode) => relistMarketListings(id, names, mode),
+  ),
+  refreshMarketListings: method(z.tuple([s.marketNames]), async (names) =>
+    refreshMarketListings(names),
+  ),
+  requestMarketVerification: method(
+    z.tuple([s.marketAccountId, s.marketNames]),
+    async (id, names) => requestMarketVerification(id, names),
   ),
   setMarketSaleAuthCode: method(
     z.tuple([

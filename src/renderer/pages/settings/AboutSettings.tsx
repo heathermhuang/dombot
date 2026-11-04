@@ -24,10 +24,10 @@ import { Switch } from '@/components/ui/switch';
 import { isDemo, isWeb, webAuthMode } from '@/lib/platform';
 import { releaseNotesUrl, updateUrl, useUpdates } from '@/lib/updates';
 import { timeAgo } from '@/lib/time';
-import { releasesNewerThan, REPOSITORY_URL } from '../../../shared/releases';
+import { isDevVersion, releasesNewerThan, REPOSITORY_URL } from '../../../shared/releases';
 import type { UpdaterState } from '../../../shared/ipc';
 import { useAppStore } from '../../store/app';
-import { SettingsCard } from './SettingsCard';
+import { SETTINGS_LINK, SettingsCard } from './SettingsCard';
 
 const REPO = REPOSITORY_URL;
 const SPONSOR = 'https://github.com/sponsors/aoxborrow';
@@ -247,6 +247,8 @@ function ProjectAboutSettings() {
     status = `DomBot ${newer[0].version} is available.`;
   else if (newer.length > 1)
     status = `${newer.length} newer releases are available; the latest is ${newer[0].version}.`;
+  else if (current && isDevVersion(current))
+    status = `A development build, newer than the latest release (${releases[0]?.version ?? 'none yet'}).`;
   else status = 'You’re on the latest version.';
 
   return (
@@ -263,7 +265,15 @@ function ProjectAboutSettings() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-lg font-semibold">
-              DomBot {current ?? '…'}
+              DomBot{' '}
+              {/* A dev build's commit reads as code, set apart from the name. */}
+              {current && isDevVersion(current) ? (
+                <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[15px] font-medium">
+                  {current}
+                </span>
+              ) : (
+                (current ?? '…')
+              )}
               {appInfo && (
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
                   {isDemo()
@@ -283,10 +293,7 @@ function ProjectAboutSettings() {
             {newer.length > 0 && updater?.status === 'error' && (
               <p className="text-xs text-destructive">
                 The update didn’t download: {updater.error}{' '}
-                <ExtLink
-                  href={newer[0].url}
-                  className="underline underline-offset-2"
-                >
+                <ExtLink href={newer[0].url} className={SETTINGS_LINK}>
                   Download it from GitHub
                 </ExtLink>{' '}
                 instead.
@@ -362,10 +369,7 @@ function ProjectAboutSettings() {
       <SettingsCard title="About DomBot" contentClassName="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
           DomBot is free and open-source software, released under the{' '}
-          <ExtLink
-            href={`${REPO}/blob/main/LICENSE`}
-            className="text-foreground underline-offset-2 hover:underline"
-          >
+          <ExtLink href={`${REPO}/blob/main/LICENSE`} className={SETTINGS_LINK}>
             GNU AGPL v3.0
           </ExtLink>
           .
@@ -414,10 +418,7 @@ function ProjectAboutSettings() {
             the muted text in dark mode, where that grey still reads loud. */}
         <p className="-mx-6 -mb-[19px] border-t bg-muted/40 px-6 py-3 text-xs text-muted-foreground dark:text-muted-foreground/70">
           © 2026{' '}
-          <ExtLink
-            href="https://x.com/aoxborrow"
-            className="hover:text-foreground"
-          >
+          <ExtLink href="https://x.com/aoxborrow" className={SETTINGS_LINK}>
             Aaron Oxborrow
           </ExtLink>{' '}
           and contributors

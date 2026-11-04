@@ -14,8 +14,8 @@ if(form){
  select.addEventListener('change',update);update();button.disabled=false;
  form.addEventListener('submit',async event=>{event.preventDefault();if(!form.reportValidity())return;button.disabled=true;status.textContent='Preparing your private portfolio and connecting your registrar…';
   const fields=new FormData(form),creds={};for(const [name,value]of fields){if(name.startsWith(select.value+'.'))creds[name.slice(select.value.length+1)]=value;}
-  try{const response=await fetch(form.action,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({args:[select.value,creds]})});const result=await response.json();if(!response.ok)throw Error(result.error||'Connection could not complete. Please retry.');location.assign(form.dataset.base+'/');}
-  catch(error){status.textContent=select.value==='dynadot'&&/401.*Unauthorized/i.test(error.message)?'Dynadot has not accepted this key yet. New keys may take a few minutes to activate. Wait a little, then retry. Your entries are still here.':error.message;button.disabled=false;}
+  try{const response=await fetch(form.action,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({args:[select.value,creds]})});const result=await response.json();if(!response.ok)throw Error(result.error||'Connection could not complete. Please retry.');if(result.result?.success!==true){const failure=result.result;throw Object.assign(Error(failure?.message||'Connection could not complete. Please retry.'),{status:failure?.status});}location.assign(form.dataset.base+'/');}
+  catch(error){status.textContent=select.value==='dynadot'&&(error.status===401||/401.*Unauthorized/i.test(error.message))?'Dynadot has not accepted this key yet. New keys may take a few minutes to activate. Wait a little, then retry. Your entries are still here.':error.message;button.disabled=false;}
  });
 }`;
 

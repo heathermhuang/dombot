@@ -1470,6 +1470,8 @@ app.all('/w/:workspace/*', async (c) => {
     'setMarketSaleAuthCode',
     'sendMarketSaleMessage',
     'setMarketListingDefaults',
+    'setMarketVerification',
+    'requestMarketVerification',
     'getMarketCredentials',
     'saveMarketCredentials',
     'removeMarketAccount',
@@ -1540,6 +1542,7 @@ app.all('/w/:workspace/*', async (c) => {
     [
       'listPortfolio',
       'syncMarketAccount',
+      'refreshMarketListings',
       'getMarketListingDefaults',
       'getPortfolio',
       'syncRegistrar',

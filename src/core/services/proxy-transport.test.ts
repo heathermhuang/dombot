@@ -81,6 +81,16 @@ it('returns only proxy connection metadata for registrar setup', async () => {
 const porkbunCreds = { apiKey: 'pk-secret', secretApiKey: 'sk-secret' };
 const ok = () => Promise.resolve(new Response(xml));
 
+/** Connects and returns the new account, failing the test if the registrar
+ *  turned the credentials down. */
+async function connectAccount(
+  ...args: Parameters<typeof connectRegistrarAccount>
+) {
+  const result = await connectRegistrarAccount(...args);
+  if (!result.success) throw new Error(result.message);
+  return result.account;
+}
+
 describe('proxied registrar transport', () => {
   it('allows a queued proxy connection test to wait beyond its ordinary probe deadline', async () => {
     vi.useFakeTimers();
@@ -400,10 +410,13 @@ describe('host-managed registrar defaults', () => {
   });
 
   it('connects without a client IP or customer proxy and keeps host credentials out of exports', async () => {
-    const account = await connectRegistrarAccount('namecheap', {
+    const connection = await connectRegistrarAccount('namecheap', {
       username: credentials.username,
       apiKey: credentials.apiKey,
     });
+    expect(connection.success).toBe(true);
+    if (!connection.success) throw new Error(connection.message);
+    const account = connection.account;
     expect(account.proxyId).toBeUndefined();
     expect(transport).toHaveBeenCalled();
     expect(transport.mock.calls[0][0]).toEqual(proxy);
@@ -826,7 +839,7 @@ describe('account persistence and routing', () => {
   it('connects a new account through the proxy and records the toggle', async () => {
     await saveProxyProfile(profile);
     transport.mockImplementation(() => Promise.resolve(new Response(xml)));
-    const account = await connectRegistrarAccount(
+    const account = await connectAccount(
       'namecheap',
       proxyOnly,
       'Agency',
@@ -838,6 +851,38 @@ describe('account persistence and routing', () => {
     await expect(
       connectRegistrarAccount('namecheap', proxyOnly, 'Direct', false),
     ).rejects.toThrow(/Client IP is required/);
+  });
+
+  it("answers a Dynadot key it doesn't accept yet with the 401, saving nothing", async () => {
+    const native = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          code: 401,
+          message: 'Unauthorized',
+          error: {
+            description:
+              'The provided API key is invalid, expired, or missing. Please verify your key is correct and active.',
+          },
+        },
+        { status: 401, statusText: 'Unauthorized' },
+      ),
+    );
+    vi.stubGlobal('fetch', native);
+    await expect(
+      connectRegistrarAccount('dynadot', {
+        apiKey: 'new-key',
+        apiSecret: 'new-secret',
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message:
+        'The provided API key is invalid, expired, or missing. Please verify your key is correct and active.',
+      status: 401,
+    });
+    expect(native).toHaveBeenCalledOnce();
+    expect(
+      getRegistrarMetadata().filter((a) => a.name === 'dynadot' && a.saved),
+    ).toEqual([]);
   });
 
   it('keeps the proxy password out of sync errors', async () => {
@@ -883,12 +928,12 @@ describe('migration from per-account proxy fields', () => {
       vi.fn(() => Promise.resolve(new Response(xml))),
     );
     await migrateLegacyProxies();
-    const same = await connectRegistrarAccount(
+    const same = await connectAccount(
       'namecheap',
       { ...credentials, username: 'second' },
       'Second',
     );
-    const other = await connectRegistrarAccount(
+    const other = await connectAccount(
       'namecheap',
       { ...credentials, username: 'third' },
       'Third',

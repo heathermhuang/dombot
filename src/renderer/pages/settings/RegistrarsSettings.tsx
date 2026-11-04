@@ -13,11 +13,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   CircleX,
   Clock,
   Copy,
   Ellipsis,
-  ExternalLink,
   Pencil,
   Plus,
   Power,
@@ -32,10 +32,11 @@ import type {
   RegistrarDefinition,
   RegistrarMeta,
 } from '../../../shared/ipc';
+import { REGISTRAR_HELP } from '../../../shared/registrar-help';
 import {
-  REGISTRAR_HELP,
-  type HelpLink as HelpLinkData,
-} from '../../../shared/registrar-help';
+  isFieldRequired,
+  missingOptionalField,
+} from '../../../shared/registrar-fields';
 import { cn } from '@/lib/utils';
 import { RegistrarLogo } from '../../components/RegistrarLogo';
 import { useAppStore } from '../../store/app';
@@ -71,7 +72,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { SettingsField } from './SettingsCard';
+import { SETTINGS_LINK, SettingsField, SettingsHelp } from './SettingsCard';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 /** Until when a card's expand toggle is ignored. A click outside an open
@@ -522,7 +523,7 @@ function AccountCard({
     hasCredentials &&
     provider.configFields.some(
       (f) =>
-        f.required &&
+        isFieldRequired(f, provider.configFields, values) &&
         !values[f.name]?.trim() &&
         !(proxySuppliesIp && f.name === 'clientIp'),
     );
@@ -734,6 +735,16 @@ function AccountCard({
                 }
                 hideFields={proxySuppliesIp ? new Set(['clientIp']) : undefined}
               />
+              <OptionalCredentialFields
+                accountName={title}
+                provider={provider}
+                idPrefix={id}
+                values={values}
+                disabled={busy}
+                onChange={(name, value) =>
+                  setValues((current) => ({ ...current, [name]: value }))
+                }
+              />
             </FieldGroup>
 
             <ProxyToggle
@@ -816,7 +827,7 @@ function AccountCard({
           }}
         >
           <Field>
-            <FieldLabel htmlFor={`${id}-account-name`}>Account name</FieldLabel>
+            <FieldLabel htmlFor={`${id}-account-name`}>Account Name</FieldLabel>
             <Input
               id={`${id}-account-name`}
               autoFocus
@@ -889,7 +900,7 @@ function DraftAccountCard({
     Object.values(values).some((value) => value.trim()) &&
     provider.configFields.every(
       (field) =>
-        !field.required ||
+        !isFieldRequired(field, provider.configFields, values) ||
         values[field.name]?.trim() ||
         (proxySuppliesIp && field.name === 'clientIp'),
     );
@@ -993,7 +1004,7 @@ function DraftAccountCard({
           />
           <SettingsField
             htmlFor={`${idPrefix}-account-name`}
-            label="Account name"
+            label="Account Name"
             description="Optional. Tells accounts at the same registrar apart."
           >
             <Input
@@ -1006,6 +1017,17 @@ function DraftAccountCard({
               onChange={(e) => setNickname(e.target.value)}
             />
           </SettingsField>
+          <OptionalCredentialFields
+            accountName={`New ${provider.displayName} account`}
+            provider={provider}
+            idPrefix={idPrefix}
+            values={values}
+            disabled={saving}
+            onChange={(name, value) => {
+              setValues((current) => ({ ...current, [name]: value }));
+              clearFeedback();
+            }}
+          />
         </FieldGroup>
         <ProxyToggle
           id={`${idPrefix}-proxy`}
@@ -1057,23 +1079,17 @@ function DraftAccountCard({
 function RegistrarHelp({ provider }: { provider: RegistrarDefinition }) {
   const help = REGISTRAR_HELP[provider.name];
   return (
-    <div className="mb-4 flex flex-col gap-2">
-      <p className="text-[13px] leading-relaxed text-muted-foreground">
-        <HelpText text={help.summary} />
-      </p>
-      {isWeb() && help.hostedNotice && !provider.managedProxyEgressIp && (
-        <p className="text-[13px] leading-relaxed text-muted-foreground">
-          {help.hostedNotice}
-        </p>
-      )}
-      {help.links.length > 0 && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {help.links.map((link) => (
-            <HelpLink key={link.url} link={link} />
-          ))}
-        </div>
-      )}
-    </div>
+    <SettingsHelp
+      summary={
+        <>
+          <HelpText text={help.summary} />
+          {isWeb() && help.hostedNotice && !provider.managedProxyEgressIp && (
+            <p className="mt-2">{help.hostedNotice}</p>
+          )}
+        </>
+      }
+      links={help.links}
+    />
   );
 }
 
@@ -1098,7 +1114,7 @@ function ProxyToggle({
   const managedIp = !enabled ? provider.managedProxyEgressIp : undefined;
   const displayedIp = managedIp ?? (enabled ? proxy?.egressIp : undefined);
   const proxyLink = (
-    <Link to="/settings?tab=proxy" className="underline underline-offset-4">
+    <Link to="/settings?tab=proxy" className={SETTINGS_LINK}>
       configured proxy
     </Link>
   );
@@ -1177,10 +1193,7 @@ function ProxyToggle({
         ) : !proxy ? (
           <>
             Set up a{' '}
-            <Link
-              to="/settings?tab=proxy"
-              className="underline underline-offset-4"
-            >
+            <Link to="/settings?tab=proxy" className={SETTINGS_LINK}>
               proxy
             </Link>{' '}
             to use this.
@@ -1200,6 +1213,18 @@ function ProxyToggle({
   );
 }
 
+interface CredentialFieldsProps {
+  accountName: string;
+  provider: RegistrarDefinition;
+  idPrefix: string;
+  values: CredentialValues;
+  disabled: boolean;
+  onChange: (name: string, value: string) => void;
+  hideFields?: ReadonlySet<string>;
+}
+
+/** The account's credential fields, or with `section`, the fields of that
+ *  section of the form. */
 function CredentialFields({
   accountName,
   provider,
@@ -1208,20 +1233,14 @@ function CredentialFields({
   disabled,
   onChange,
   hideFields,
-}: {
-  accountName: string;
-  provider: RegistrarDefinition;
-  idPrefix: string;
-  values: CredentialValues;
-  disabled: boolean;
-  onChange: (name: string, value: string) => void;
-  hideFields?: ReadonlySet<string>;
-}) {
+  section,
+}: CredentialFieldsProps & { section?: 'optional' }) {
   const help = REGISTRAR_HELP[provider.name];
   return (
     <>
       {provider.configFields.map((field) => {
-        if (hideFields?.has(field.name)) return null;
+        if (field.section !== section || hideFields?.has(field.name))
+          return null;
         const id = `${idPrefix}-${field.name}`;
         const fieldHelp = help.fields[field.name];
         return (
@@ -1231,7 +1250,9 @@ function CredentialFields({
             label={
               <>
                 {field.label}
-                {field.required && <span className="text-destructive"> *</span>}
+                {isFieldRequired(field, provider.configFields, values) && (
+                  <span className="text-destructive"> *</span>
+                )}
               </>
             }
             // Only fields that need disambiguating carry a description; it
@@ -1287,38 +1308,63 @@ function CredentialFields({
   );
 }
 
+/** The Optional section: settings that only work together, collapsed until
+ * wanted. Once one has a value the rest are required, so it stays open while
+ * part filled in (Save waits on it), as when an account was saved with some. */
+function OptionalCredentialFields(props: CredentialFieldsProps) {
+  const { provider, values, onChange } = props;
+  const [open, setOpen] = useState(false);
+  if (!provider.configFields.some((f) => f.section === 'optional')) return null;
+  const incomplete = Boolean(
+    missingOptionalField(provider.configFields, values),
+  );
+  const about = REGISTRAR_HELP[provider.name].optional;
+  return (
+    // A panel of its own, so it reads as a section even while collapsed.
+    <Collapsible
+      open={open || incomplete}
+      onOpenChange={setOpen}
+      className="rounded-md border bg-muted/30"
+    >
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md px-3 py-2.5 text-left text-sm font-medium outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:rounded-b-none">
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+        {about?.title ?? 'Optional'}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <FieldGroup className="gap-4 border-t px-3 pt-3 pb-4">
+          {about && (
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              <HelpText text={about.summary} />
+            </p>
+          )}
+          <CredentialFields
+            {...props}
+            section="optional"
+            // Typing here keeps it open, even once the section is complete.
+            onChange={(name, value) => {
+              setOpen(true);
+              onChange(name, value);
+            }}
+          />
+        </FieldGroup>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 /** Help copy with its `backticked` keywords set as code. */
 function HelpText({ text }: { text: string }) {
   return text.split('`').map((part, i) =>
     i % 2 === 1 ? (
       <code
         key={i}
-        className="rounded bg-muted px-1 py-px font-mono text-[0.92em] text-foreground"
+        className="rounded bg-muted px-1 py-px font-mono text-[0.92em] text-foreground/75"
       >
         {part}
       </code>
     ) : (
       part
     ),
-  );
-}
-
-/**
- * A real external link in the help copy. `target="_blank"` hands the URL to the
- * main process's window-open handler, which opens it in the system browser and
- * denies the in-app window.
- */
-function HelpLink({ link }: { link: HelpLinkData }) {
-  return (
-    <a
-      href={link.url}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-1 text-[13px] font-medium text-brand underline-offset-4 hover:underline"
-    >
-      {link.label}
-      <ExternalLink className="size-3 shrink-0" aria-hidden />
-    </a>
   );
 }
 
@@ -1458,7 +1504,7 @@ function DomainCountLink({
       ·{' '}
       <Link
         to={`/?${new URLSearchParams({ account: idOf(meta) })}`}
-        className="underline-offset-4 hover:text-foreground hover:underline"
+        className={SETTINGS_LINK}
       >
         {plural(domainCount)}
       </Link>

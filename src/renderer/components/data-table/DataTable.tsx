@@ -100,6 +100,7 @@ export function DataTable<T>({
   layout,
   onLayoutChange,
   forceVisible,
+  floatingBar,
 }: {
   rows: T[];
   /** Every column, in default order. With a `layout`, it picks and orders them. */
@@ -126,6 +127,12 @@ export function DataTable<T>({
   onLayoutChange?: (next: ColumnLayout) => void;
   /** Columns shown even while the layout hides them, e.g. one being filtered. */
   forceVisible?: readonly string[];
+  /**
+   * Floats centred over the bottom of the table while set (the bulk actions
+   * bar), with room after the last row to scroll it out from under. Its
+   * width can follow the table's through the `float` container.
+   */
+  floatingBar?: ReactNode;
 }) {
   const columns = layout
     ? applyColumnLayout(allColumns, layout, forceVisible)
@@ -174,13 +181,20 @@ export function DataTable<T>({
       className={cn(
         // A container, so the empty-state row can size itself to the
         // visible width (cqw) rather than the table's.
-        '@container flex min-h-36 min-w-0 flex-1 flex-col gap-[13px]',
+        '@container flex min-h-36 min-w-0 flex-1 flex-col gap-[13px] short:gap-[9px]',
         className,
       )}
     >
       {/* This region scrolls; the column names stick to its top and move
           sideways with the columns. Overlay bars sit on the host. */}
       <DomainTableScroll
+        overlay={
+          floatingBar && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-8 z-20 flex flex-col items-center gap-2 px-3 @container/float">
+              {floatingBar}
+            </div>
+          )
+        }
         className={cn(
           // Row height is set by the cells' vertical padding around one line of
           // text (icon buttons overlap into it with negative margins, so they
@@ -345,17 +359,20 @@ export function DataTable<T>({
             )}
           </TableBody>
         </Table>
+        {floatingBar && <div aria-hidden className="h-[88px]" />}
       </DomainTableScroll>
 
       {/* Pagination stays under the table, outside the scroll, so the row
-          count and page buttons stay on screen. On phones the controls stack
-          above the rows-per-page select (flex-col-reverse). */}
-      <div className="flex shrink-0 flex-col-reverse gap-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          {/* Columns, then density, then rows per page; on phones only rows
-              per page (their table is compact and its columns fixed). */}
+          count and page buttons stay on screen. Always one row: as the table
+          narrows, pieces drop out at the widths they stop fitting (container
+          queries on the footer, with room for counts in the thousands):
+          Density, then Columns, then the range ("51–100 of 251"), then First
+          and Last, then the "Rows per page" label, then the select. */}
+      <div className="@container/footer flex shrink-0 items-center justify-between gap-4 text-sm text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Columns, then density, then rows per page. */}
           {layout && onLayoutChange && (
-            <div className="mr-3 max-sm:hidden">
+            <div className="mr-3 @max-[680px]/footer:hidden">
               <ColumnPicker
                 columns={allColumns}
                 layout={layout}
@@ -371,7 +388,9 @@ export function DataTable<T>({
               onChange={(next) => setPreferences({ density: next })}
             />
           )}
-          <span>Rows per page</span>
+          <span className="whitespace-nowrap @max-[330px]/footer:hidden">
+            Rows per page
+          </span>
           <Select
             value={String(pageSize)}
             onValueChange={(v) => {
@@ -379,7 +398,11 @@ export function DataTable<T>({
               onPageChange(0);
             }}
           >
-            <SelectTrigger size="sm" className="w-[80px]">
+            <SelectTrigger
+              size="sm"
+              aria-label="Rows per page"
+              className="w-[80px] @max-[230px]/footer:hidden"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -394,19 +417,21 @@ export function DataTable<T>({
           </Select>
         </div>
 
-        <div className="flex items-center justify-between gap-3 sm:justify-start">
-          <span>
+        {/* The range gives way first if a count runs long. */}
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="truncate @max-[560px]/footer:hidden">
             {rows.length === 0
               ? '0 of 0'
               : `${start + 1}–${end} of ${rows.length}`}
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <Button
               variant="outline"
               size="icon-sm"
               disabled={current === 0}
               onClick={() => onPageChange(0)}
               aria-label="First page"
+              className="@max-[410px]/footer:hidden"
             >
               <ChevronsLeft />
             </Button>
@@ -419,7 +444,7 @@ export function DataTable<T>({
             >
               <ChevronLeft />
             </Button>
-            <span className="px-2">
+            <span className="px-2 whitespace-nowrap">
               {current + 1} / {pageCount}
             </span>
             <Button
@@ -437,6 +462,7 @@ export function DataTable<T>({
               disabled={current >= pageCount - 1}
               onClick={() => onPageChange(pageCount - 1)}
               aria-label="Last page"
+              className="@max-[410px]/footer:hidden"
             >
               <ChevronsRight />
             </Button>
@@ -454,8 +480,8 @@ const DENSITIES: SegmentedOption<Preferences['density']>[] = [
 
 /**
  * Row density, before Rows per page: a labelled icon pair for the same setting
- * as Settings → General (it's remembered). Hidden on phones, which are always
- * compact.
+ * as Settings → General (it's remembered). Hidden under lg, where rows are
+ * always compact, and in a footer too narrow for it.
  */
 function DensitySwitch({
   value,
@@ -465,7 +491,7 @@ function DensitySwitch({
   onChange: (value: Preferences['density']) => void;
 }) {
   return (
-    <div className="mr-3 flex items-center gap-2 max-sm:hidden">
+    <div className="mr-3 flex items-center gap-2 max-lg:hidden @max-[820px]/footer:hidden">
       <span id="density-label">Density</span>
       <SegmentedControl
         size="sm"

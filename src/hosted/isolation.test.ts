@@ -261,6 +261,14 @@ describe('owner site routing and isolation', () => {
       for (let n = 0; n < 5; n++)
         expect((await api(1, 'lookupRegistrations', [[]])).status).toBe(200);
       expect((await api(1, 'lookupRegistrations', [[]])).status).toBe(429);
+      for (const method of [
+        'refreshMarketListings',
+        '%72efreshMarketListings',
+      ]) {
+        const rejected = await api(1, method, [['held.example']]);
+        expect(rejected.status).toBe(429);
+        expect(rejected.headers.get('X-DomBot-Engine')).toBeNull();
+      }
       // A different portfolio has an independent bounded allowance.
       expect((await api(0, 'stepRenewalPricing')).status).toBe(200);
     } finally {
@@ -486,7 +494,7 @@ describe('real gateway and isolated Worker instances', () => {
     const body = (await response.json()) as {
       result: { version: string; hosted: unknown };
     };
-    expect(body.result.version).toBe('1.5.2');
+    expect(body.result.version).toBe('2.0.0');
     expect(body.result.hosted).toEqual({
       engineVersion: response.headers.get('X-DomBot-Engine'),
       engineSource: response.headers.get('X-DomBot-Engine-Source'),
@@ -821,6 +829,11 @@ describe('real gateway and isolated Worker instances', () => {
     try {
       for (const [name, args] of [
         ['stepBulk', ['absent-job']],
+        ['setMarketVerification', ['absent-account', 'verification']],
+        [
+          'requestMarketVerification',
+          ['absent-account', ['freshness.example']],
+        ],
         ['getBulkJob', []],
         ['deleteDomains', [['freshness.example']]],
       ] as const) {

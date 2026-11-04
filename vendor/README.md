@@ -1,26 +1,20 @@
 # Current hosted registrar dependency
 
-The engine pins `@aoxborrow/registrar-client@0.12.0-hosted.2`, based on the
-published MIT-licensed 0.12.0 package. The adjacent JSON provenance records the
-upstream integrity, cumulative source patch, and built archive hashes.
+The engine pins `@aoxborrow/registrar-client@0.15.1-hosted.1`, based on upstream
+0.15.1 at `4bbc193bf5ff1773e6c6418f26ca38bf72848d70`. The adjacent JSON records
+the exact source, archive integrity and cumulative source/test patch hashes.
+Upstream now contains the prior hosted Dynadot annualized REST quotes and Name.com
+owned-domain fallback. Retained hosted changes cover the overall retry deadline,
+jitter, Gandi path validation and renewal-date correction, and Cloudflare literal
+serialization. Porkbun unzoned provider date-times are interpreted as UTC.
 
-This rebase includes upstream's Dynadot manual-renewal setting when auto-renew
-is disabled, Gandi forwarding updates that preserve HTTPS, and transfer-out
-support in the dependency. It corrects Gandi’s last-update timestamp mapping: renewal deadlines remain unknown,
-with registry expiry retained for planning. It retains our annualized Dynadot price-only quotes,
-owned-domain REST and Name.com renewal fallbacks, bounded retry deadlines,
-Gandi path validation, and Cloudflare expression serialization. New Gandi
-transfer-out and forwarding paths use the same path guards. The app does not
-register new transfer-approval tools as part of this dependency update.
-
-To reproduce, extract the upstream 0.12.0 archive, apply
-`registrar-client-0.12.0-hosted.2.patch` with `git apply --unidiff-zero`, set the version to
-`0.12.0-hosted.2`, then bundle `src/index.ts` with esbuild for ESM (`dist/index.js`)
-and CommonJS (`dist/index.cjs`), using `bundle`, `packages: external`,
-`platform: neutral`, `target: es2022`, and source maps. Keep upstream's unchanged
-declarations and license; pack with `npm pack --ignore-scripts`.
-The archive ships patched source and both rebuilt module formats. Synthetic
-transport tests cover renewal settings, pricing, retry budgets and path guards.
+To reproduce, check out the pinned upstream registrar-client revision, apply
+`registrar-client-0.15.1-hosted.1.patch` and the adjacent `tests.patch`, set the root
+package and lockfile root version to `0.15.1-hosted.1`, run `npm ci --ignore-scripts`,
+`npx vitest run --maxWorkers=1`, then `npm run build` and `npm pack --ignore-scripts`.
+The upstream tsup build generates ESM, CommonJS, source maps and matching declarations.
+All 586 non-live SDK tests pass. Tests preserve the hosted single-operation budget:
+a 60-second provider delay cannot fit inside a 30-second operation deadline.
 
 ## Historical 0.5.0 artifact
 

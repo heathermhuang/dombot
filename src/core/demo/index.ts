@@ -1,19 +1,22 @@
-import { registrars, type RegistrarName } from '@aoxborrow/registrar-client';
+import type { RegistrarName } from '@aoxborrow/registrar-client';
 import { createAccount } from '../services/accounts';
 import { setStoredCredentials } from '../services/credentials';
 import { assignFolder, createFolder, getFolders } from '../services/folders';
 import { setManualPrice } from '../services/pricing';
 import {
   configureRegistrarFactory,
+  getRegistrarFeatures,
   resetRegistrarClients,
 } from '../services/registrars';
 import { flushWrites } from '../storage/namespace';
 import { setListPrices } from '../services/list-prices';
 import {
   connectMarketAccount,
+  setMarketVerification,
   marketAccountViews,
 } from '../services/markets/accounts';
 import { configureMarketFactory } from '../services/markets/registry';
+import { configureConsentIp } from '../services/consent-ip';
 import {
   DEMO_MARKET_ACCOUNTS,
   DemoMarketWorld,
@@ -84,6 +87,8 @@ export async function installDemo(
     });
   });
   resetRegistrarClients();
+  // The fake registrars record nothing, so a documentation address will do.
+  configureConsentIp(async () => '192.0.2.1');
 
   for (const account of seed.accounts) {
     // An account name needs an account record; an unnamed default account is
@@ -136,14 +141,14 @@ export async function installDemo(
   );
   const authCodeNames = new Set(
     seed.records
-      .filter((r) => registrars[r.registrar].features.includes('getAuthCode'))
+      .filter((r) => getRegistrarFeatures(r.registrar).includes('getAuthCode'))
       .map((r) => r.domainName),
   );
   const approvesTransfer = (name: string) => {
     const record = world.get(name);
     return (
       !!record &&
-      registrars[record.registrar].features.includes('approveTransferOut')
+      getRegistrarFeatures(record.registrar).includes('approveTransferOut')
     );
   };
   seedDemoMarkets(
@@ -176,8 +181,9 @@ export async function installDemo(
   configureMarketFactory(demoMarketFactory(markets));
   const connected = new Set(marketAccountViews().map((a) => a.id));
   for (const a of DEMO_MARKET_ACCOUNTS) {
-    if (!connected.has(a.id))
-      await connectMarketAccount(a.market, { ...a.credentials }, a.label, a.id);
+    if (connected.has(a.id)) continue;
+    await connectMarketAccount(a.market, { ...a.credentials }, a.label, a.id);
+    if ('verification' in a) await setMarketVerification(a.id, a.verification);
   }
 
   await flushWrites();
@@ -195,5 +201,6 @@ export async function installDemo(
 export function uninstallDemo(): void {
   configureRegistrarFactory(null);
   configureMarketFactory(null);
+  configureConsentIp();
   resetRegistrarClients();
 }

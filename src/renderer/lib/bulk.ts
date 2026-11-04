@@ -12,6 +12,7 @@ import type {
 } from '../../shared/ipc';
 import { OP_LABEL, unsupportedReason } from '../../shared/domain-ops';
 import { toCsv, toTsv } from '../../shared/csv';
+import { accountMetaOf } from './registrar-accounts';
 
 export interface Bucketed {
   /** Will be sent to the registrar. */
@@ -37,7 +38,7 @@ export function bucketSelection(
 ): Bucketed {
   const out: Bucketed = { eligible: [], skipped: [], unsupported: [] };
   for (const d of domains) {
-    const meta = registrars?.find((r) => r.name === d.registrar);
+    const meta = accountMetaOf(registrars, d);
     const reason = meta
       ? unsupportedReason(meta.name, meta.features, op)
       : null;
@@ -78,6 +79,62 @@ function alreadyInState(
   }
 }
 
+// One op per direction for the kinds whose support can depend on it (GoDaddy
+// can turn privacy off but not on).
+/** The registrar changes the bulk menu offers, each opening its dialog. */
+export type BulkRegistrarKind = Exclude<
+  DomainOpKind,
+  'approveTransfer' | 'txtRecords'
+>;
+
+const PROBES: Record<BulkRegistrarKind, DomainOp[]> = {
+  autoRenew: [
+    { kind: 'autoRenew', enabled: true },
+    { kind: 'autoRenew', enabled: false },
+  ],
+  privacy: [
+    { kind: 'privacy', enabled: true },
+    { kind: 'privacy', enabled: false },
+  ],
+  lock: [
+    { kind: 'lock', locked: true },
+    { kind: 'lock', locked: false },
+  ],
+  nameservers: [{ kind: 'nameservers', nameservers: [] }],
+  urlForwarding: [{ kind: 'urlForwarding', forwards: [] }],
+  emailForwarding: [{ kind: 'emailForwarding', forwards: [] }],
+  authCode: [{ kind: 'authCode' }],
+  renew: [{ kind: 'renew', years: 1 }],
+};
+
+/**
+ * Why none of `held` (the selected names at a connected account) can take a
+ * bulk `kind`, or null when at least one can, so the menu item greys out only
+ * when the dialog would have nothing to send. One registrar's own reason when
+ * they share it.
+ */
+export function bulkKindReason(
+  held: readonly Domain[],
+  kind: BulkRegistrarKind,
+  registrars: RegistrarMeta[] | null,
+): string | null {
+  if (held.length === 0) return 'None of these are at a connected account.';
+  const reasons = new Set<string>();
+  for (const d of held) {
+    // Per account: GoDaddy's Optional settings add features to one account.
+    const meta = accountMetaOf(registrars, d);
+    if (!meta) return null;
+    const why = PROBES[kind].map((op) =>
+      unsupportedReason(meta.name, meta.features, op),
+    );
+    if (why.some((r) => r === null)) return null;
+    reasons.add(why[0]!);
+  }
+  return reasons.size === 1
+    ? [...reasons][0]
+    : `None of these names’ registrars offer ${OP_LABEL[kind]} through their API.`;
+}
+
 /** Imperative title for an op, e.g. "Enable auto-renew", "Unlock". */
 export function bulkOpTitle(op: DomainOp): string {
   switch (op.kind) {
@@ -97,6 +154,8 @@ export function bulkOpTitle(op: DomainOp): string {
       return 'Get auth codes';
     case 'approveTransfer':
       return 'Approve transfers';
+    case 'txtRecords':
+      return 'Add ownership verification TXT records';
     case 'renew':
       return `Renew for ${op.years} year${op.years === 1 ? '' : 's'}`;
   }
@@ -107,6 +166,7 @@ export function isRiskyOp(op: DomainOp): boolean {
   return (
     (op.kind === 'lock' && !op.locked) ||
     (op.kind === 'privacy' && !op.enabled) ||
+    op.kind === 'nameservers' ||
     op.kind === 'renew'
   );
 }
@@ -223,6 +283,8 @@ export function defaultBulkOp(
     case 'authCode':
     case 'approveTransfer':
       return { kind };
+    case 'txtRecords':
+      return { kind, values: [] };
     case 'renew':
       return { kind, years: 1 };
   }

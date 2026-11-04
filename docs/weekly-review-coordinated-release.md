@@ -1,21 +1,22 @@
 # Coordinated weekly-review release
 
-Status: implemented release candidate, not deployed. Merge/deployment approval is
-separate from this preparation. This stack changes read qualification and owner
+Status: coordinated release authorized; candidate qualification in progress. This stack changes read qualification and owner
 views; it never changes registrar settings or automatically renews/archives a name.
 
 ## Merge and artifact order
 
 1. #153: Gandi deadline interpretation and upcoming forecast (`hosted.42`).
 2. #154: past-reported-expiry verification (`hosted.43`), stacked on #153.
-3. Quote-observation/combined release PR (`hosted.44`), stacked on #154. This also
+3. #155: quote-observation/combined release PR (`hosted.44`), stacked on #154. This also
    hardens the Gandi read/write boundary for failed inventory syncs.
+
+4. Full upstream DomBot 2.0.0 sync (`2.0.0-hosted.1`), stacked on #155.
 
 Merge in that dependency order, retargeting/rechecking each head against the
 updated main. Do not deploy intermediate engines. Only the final checked
-`hosted.44` source/artifact/UI pair is the coordinated production candidate.
+`2.0.0-hosted.1` source/artifact/UI pair is the coordinated production candidate.
 `hosted/dombot-engine.lock.json` binds its source/archive/Worker/asset hashes.
-The registrar dependency is `0.12.0-hosted.2`, with cumulative patch/integrity
+The registrar dependency is `0.15.1-hosted.1`, with cumulative patch/integrity
 provenance under `vendor/`. Private customer review inputs stay outside Git.
 
 ## Prepared verification and release gates
@@ -34,7 +35,7 @@ provenance under `vendor/`. Private customer review inputs stay outside Git.
   export fleet root keys. No schema migration, SQL customer-data repair, new
   secret, namespace, ingress or persistent schedule is required by this stack.
 
-## Coordinated execution after approval
+## Authorized coordinated execution
 
 1. Verify the checked PR heads/merged source against the built candidate. Prepare
    the template with the existing `scripts/prepare-on-demand.mjs`; verify the

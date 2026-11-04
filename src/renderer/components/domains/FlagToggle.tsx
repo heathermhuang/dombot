@@ -7,9 +7,58 @@ import {
   targetOf,
   useOpUnsupportedReason,
 } from '../../lib/domain-ops';
-import { reportsPrivacy } from '../../../shared/domain-ops';
+import {
+  recordsPrivacyConsent,
+  reportsPrivacy,
+} from '../../../shared/domain-ops';
 import { cn } from '@/lib/utils';
 import { ConfirmPopover } from '../ConfirmPopover';
+
+/**
+ * What to ask before flipping a privacy or lock flag to `next`, or null when
+ * it's plain one-click: locking only ever makes the domain safer. Privacy asks
+ * both ways (off exposes the WHOIS contact, on can be a purchase); unlocking
+ * asks because it enables a transfer-out. Turning privacy off also says when
+ * the registrar records your agreement (GoDaddy). Shared by the cells and the
+ * row menu.
+ */
+export function flagConfirm(
+  { domainName, registrar }: Pick<Domain, 'domainName' | 'registrar'>,
+  kind: 'privacy' | 'lock',
+  next: boolean,
+): {
+  title: string;
+  body: string;
+  action: string;
+  destructive: boolean;
+} | null {
+  if (kind === 'lock')
+    return next
+      ? null
+      : {
+          title: `Unlock ${domainName}?`,
+          body: 'An unlocked domain can be transferred to another registrar.',
+          action: 'Unlock',
+          destructive: true,
+        };
+  return next
+    ? {
+        title: `Enable privacy for ${domainName}?`,
+        body: 'Hides the registrant contact from public WHOIS. Some registrars charge for this.',
+        action: 'Enable',
+        destructive: false,
+      }
+    : {
+        title: `Disable privacy for ${domainName}?`,
+        body:
+          'Exposes the registrant name, address, email, and phone in public WHOIS.' +
+          (recordsPrivacyConsent(registrar)
+            ? ' The registrar records your agreement and IP address.'
+            : ''),
+        action: 'Disable',
+        destructive: true,
+      };
+}
 
 /**
  * A clickable on/off cell for the Privacy and Locked columns. Solid glyphs
@@ -55,7 +104,7 @@ export function FlagToggle({
       : { kind: 'lock', locked: next };
   const optimistic: Partial<Domain> =
     kind === 'privacy' ? { privacy: next } : { locked: next };
-  const reason = useOpUnsupportedReason(domain.registrar, op);
+  const reason = useOpUnsupportedReason(domain, op);
 
   const apply = () => {
     void applyDomainOp(targetOf(domain), op, optimistic).then((result) =>
@@ -64,25 +113,8 @@ export function FlagToggle({
   };
 
   // Lock → one click. Everything else confirms in place.
-  const needsConfirm = !(kind === 'lock' && !value);
-  const confirm =
-    kind === 'lock'
-      ? {
-          title: `Unlock ${domain.domainName}?`,
-          body: 'An unlocked domain can be transferred to another registrar.',
-          action: 'Unlock',
-        }
-      : next
-        ? {
-            title: `Enable privacy for ${domain.domainName}?`,
-            body: 'Hides the registrant contact from public WHOIS. Some registrars charge for this.',
-            action: 'Enable',
-          }
-        : {
-            title: `Disable privacy for ${domain.domainName}?`,
-            body: 'Exposes the registrant name, address, email, and phone in public WHOIS.',
-            action: 'Disable',
-          };
+  const confirm = flagConfirm(domain, kind, next);
+  const needsConfirm = confirm !== null;
 
   const Icon = value ? On : Off;
   // The library's false is only a default where the registrar doesn't report
@@ -139,7 +171,7 @@ export function FlagToggle({
       title={confirm.title}
       body={confirm.body}
       actionLabel={confirm.action}
-      destructive={kind === 'lock' || !next}
+      destructive={confirm.destructive}
       disabled={pending || reason !== null}
       onConfirm={apply}
     >
