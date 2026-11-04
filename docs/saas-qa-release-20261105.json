@@ -1,0 +1,64 @@
+{
+  "at": "2026-11-04T23:31:06.090Z",
+  "releaseCommit": "ec5e7ea2c091a8b38a70635a42c0c607f16ed250",
+  "moduleSha256": "7ab030e2bcadcaec612e182610949919c10a7ed74e921e518b159e333e33a171",
+  "unrelatedBindingsPreserved": true,
+  "schedulesPreserved": true,
+  "usersPreserved": 55,
+  "platformMappingsPreserved": 39,
+  "workspaceIdentitiesPreserved": 539,
+  "tenantEngineRollouts": 0,
+  "pr": "https://github.com/heathermhuang/dombot/pull/159",
+  "engine": "2.0.0-hosted.2",
+  "ci": {
+    "run": 41933607017,
+    "securityRun": 41933606953,
+    "testFiles": 251,
+    "testsPassed": 2699,
+    "existingSkips": 1,
+    "securityRegressions": 4,
+    "relayChecks": 4,
+    "allBuildsPassed": true,
+    "bothCodeqlLanguagesPassed": true,
+    "reviewBlockingFindings": 0
+  },
+  "http": {
+    "passed": 38,
+    "sourceOfferMatches": true
+  },
+  "browser": {
+    "method": "native Chrome computer use",
+    "passwordConfirmationNoticeVisible": true,
+    "realPasswordChanged": false
+  },
+  "assetsPreserved": true,
+  "secretsPreserved": true,
+  "managedProductionQa": {
+    "passed": true,
+    "source": "ec5e7ea2c091a8b38a70635a42c0c607f16ed250",
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "idempotentRetries": 2,
+    "readback": true,
+    "cleanupComplete": true,
+    "cleanupAt": "2026-11-04T23:33:04.218Z",
+    "remainingWorkers": 0,
+    "remainingDatabases": 0,
+    "remainingSetupKeys": 0,
+    "temporaryCredentialsScrubbed": true,
+    "realUsersPreserved": 55,
+    "nonQaWorkspaceIdentitiesPreserved": 532
+  },
+  "ongoingMonitoringEnabled": false,
+  "newIntegrations": 0,
+  "registrarMutations": 0,
+  "inquiriesSubmitted": 0,
+  "physicalPasskeyEnrollmentTested": false,
+  "underlyingEarlierHangCauseConfirmed": false
+}
