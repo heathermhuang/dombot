@@ -30,6 +30,7 @@ import {
   dueWithin,
   groupBy,
   leavesOut,
+  pastRenewalDates,
   priceOf,
   summarize,
   tldOf,
@@ -343,6 +344,8 @@ export default function Renewals() {
     () => dueWithin(portfolio, pricing, 90, currency, fx),
     [portfolio, pricing, currency, fx],
   );
+  const pastDates = pastRenewalDates(portfolio);
+  const unverifiedDates = portfolio.filter((d) => d.renewalDateIssue).length;
 
   // Donut slices: registrar and TLD, each by domain count and by yearly spend.
   const regCount = useMemo(
@@ -433,7 +436,7 @@ export default function Renewals() {
           size="sm"
           icon={AlarmClock}
           accentClass="text-rose-400"
-          label="Due, 30 days"
+          label="Upcoming, 30 days"
           value={[
             {
               value: usd(due30.yearly),
@@ -445,7 +448,7 @@ export default function Renewals() {
           size="sm"
           icon={CalendarClock}
           accentClass="text-amber-400"
-          label="Due, 90 days"
+          label="Upcoming, 90 days"
           value={[
             {
               value: usd(due90.yearly),
@@ -454,6 +457,15 @@ export default function Renewals() {
           ]}
         />
       </StatCardRow>
+
+      <p className="text-sm text-muted-foreground">
+        Annual renewal estimates, not confirmed charges. Planning uses a
+        registrar renewal date when known, otherwise reported expiry.
+        {pastDates.length > 0 &&
+          ` ${pastDates.length} past planning date${pastDates.length === 1 ? '' : 's'} need verification and are excluded from upcoming totals.`}
+        {unverifiedDates > 0 &&
+          ` ${unverifiedDates} unverified legacy Gandi date${unverifiedDates === 1 ? '' : 's'} ignored; reported expiry is used for planning.`}
+      </p>
 
       {/* A toolbar over the chart and donuts, as over the other pages'
           tables: the view first, then the registrars, which wrap under it

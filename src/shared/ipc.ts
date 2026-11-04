@@ -52,6 +52,8 @@ export interface RegistrarAccount {
 export type DomainSource = 'registrar' | 'imported';
 
 export type Domain = ProviderDomain & {
+  /** Read-only qualification of a legacy cached date; never a registrar status. */
+  renewalDateIssue?: 'gandi-updated-at-v1';
   /** Ephemeral marketplace-only table projection; not a saved holding or control proof. */
   marketObservation?: boolean;
   accountId?: string;

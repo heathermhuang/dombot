@@ -1,0 +1,29 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "0.12.0-hosted.2",
+  "upstreamVersion": "0.12.0",
+  "upstreamTarball": "https://registry.npmjs.org/@aoxborrow/registrar-client/-/registrar-client-0.12.0.tgz",
+  "upstreamIntegrity": "sha512-WTS+Ir2i6E2XE0vFYkXnSdRWle4HKk1hDFDccn+5ZQzNQ/Nf3n44Y0Ot2+2jXxLgeL9Krcwiwn8K2hGCJejCsA==",
+  "archive": "vendor/aoxborrow-registrar-client-0.12.0-hosted.2.tgz",
+  "sha256": "4a3251eff6139ace33bc68000e0eb1b0585c6ae185d493c756b10ec388f8eb26",
+  "integrity": "sha512-XX364DQuEyELRQf71IyPP3iVwrZvBasqKDgH8kVjf1kE5E3WQ1NzraYrxpL+v6zE/0pP/E8zm2Z8njweuxCeuA==",
+  "license": "MIT",
+  "changes": [
+    "Use two-year .ai price-only quotes and annualize their returned fee",
+    "Preserve retryable classic-quote errors rather than hiding cooldowns",
+    "Validate IDNA/DNS domain names, reject Gandi path separators/dot segments, and encode path components",
+    "Quote Cloudflare forwarding-host values as single expression literals",
+    "Jitter exponential read retries and share one request timeout budget across attempts and backoff; preserve Retry-After and unknown-write safety",
+    "Read the exact authenticated owned .in renewal quote when Core per-name pricing returns 422; preserve all other errors and TLD behavior",
+    "Read exact annual owned-domain prices through REST single search; bound unsupported-TLD and incompatible-classic-key retries; preserve cooldowns and supported annual terms",
+    "Rebase hosted patches on upstream 0.12.0, including manual renewal for Dynadot auto-renew off and in-place Gandi forwarding updates; retain Gandi path validation on new transfer-out and forwarding paths",
+    "Do not map Gandi updated_at or renewal-window opening to a renewal deadline; keep expiry and unknown next-charge semantics separate"
+  ],
+  "build": "ESM/CJS and source maps rebuilt with esbuild --packages=external; unchanged public declaration contract; SDK source typechecked",
+  "patches": [
+    {
+      "path": "vendor/registrar-client-0.12.0-hosted.2.patch",
+      "sha256": "81ba9ff35a012f74c9a951a47ae5f17e38a69b9562432292ac6787d797ee0979"
+    }
+  ]
+}

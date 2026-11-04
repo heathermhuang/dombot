@@ -5,6 +5,7 @@ import {
   dueWithin,
   groupBy,
   leavesOut,
+  pastRenewalDates,
   summarize,
   tldOf,
   upcomingByMonth,
@@ -166,7 +167,7 @@ describe('upcomingByMonth', () => {
     expect(buckets[buckets.length - 1].key).toBe('2027-01');
   });
 
-  it('buckets by renewal month and folds past-due into the current month', () => {
+  it('separates past planning dates from future renewal months', () => {
     const past = domain({
       domainName: 'past.com',
       renewalDate: new Date('2026-01-01'),
@@ -180,8 +181,9 @@ describe('upcomingByMonth', () => {
 
     const jun = buckets.find((b) => b.key === '2026-06')!;
     const jul = buckets.find((b) => b.key === '2026-07')!;
-    expect(jun).toMatchObject({ count: 1, priced: 1, yearly: 10 }); // past folded in
+    expect(jun).toMatchObject({ count: 0, priced: 0, yearly: 0 });
     expect(jul).toMatchObject({ count: 1, priced: 1, yearly: 20 });
+    expect(pastRenewalDates([past, soon])).toEqual([past]);
   });
 
   it('skips renewals beyond the window and invalid/missing dates', () => {
@@ -209,6 +211,26 @@ describe('upcomingByMonth', () => {
 });
 
 describe('dueWithin', () => {
+  it('ignores Gandi update dates and keeps other registrars’ real early deadlines', () => {
+    const gandi = domain({
+      domainName: 'future.example',
+      registrar: 'gandi',
+      renewalDate: new Date('2025-08-22'),
+      expirationDate: new Date('2029-11-24'),
+    });
+    const early = domain({
+      domainName: 'early.example',
+      registrar: 'porkbun',
+      renewalDate: new Date('2026-06-20'),
+      expirationDate: new Date('2027-11-24'),
+    });
+    const past = domain({
+      domainName: 'past.example',
+      renewalDate: new Date('2025-01-01'),
+    });
+    expect(dueWithin([gandi, early, past], {}, 30).count).toBe(1);
+    expect(pastRenewalDates([gandi, early, past])).toEqual([past]);
+  });
   it('counts domains due within the cutoff and sums only priced ones', () => {
     const soon = domain({
       domainName: 'soon.com',

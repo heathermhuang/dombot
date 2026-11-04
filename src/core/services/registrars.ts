@@ -29,6 +29,7 @@ import {
 } from './accounts';
 import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
+import { qualifyRenewalDate } from '../../shared/renewal-date';
 import { currencyInfo } from '../../shared/money';
 import { expiryDay, type AccountHoldings } from '../../shared/sync-diff';
 import { recordSync } from './domain-history';
@@ -168,11 +169,15 @@ function registrarErrorMessage(error: unknown): string {
 }
 
 /** Dates round-trip through JSON as ISO strings; revive them back to `Date`. */
-function reviveDomainDates<T extends Partial<Domain>>(d: T): T {
-  const out = { ...d } as Partial<Domain>;
+function reviveDomainDates<T extends Partial<Domain>>(
+  d: T,
+  registrar = d.registrar,
+): T {
+  const out = { ...qualifyRenewalDate(d, registrar) } as Partial<Domain>;
   if (out.createdDate != null) out.createdDate = new Date(out.createdDate);
   if (out.expirationDate != null)
     out.expirationDate = new Date(out.expirationDate);
+  if (out.renewalDate != null) out.renewalDate = new Date(out.renewalDate);
   return out as T;
 }
 
@@ -725,7 +730,9 @@ function readRegistrarEntry(name: string): RegistrarPortfolioEntry | null {
           accountSecrets(name),
         )
       : null,
-    domains: cached.data.domains.filter(hasDomainName).map(reviveDomainDates),
+    domains: cached.data.domains
+      .filter(hasDomainName)
+      .map((domain) => reviveDomainDates(domain, accountById(name).registrar)),
   };
 }
 
@@ -1458,9 +1465,13 @@ export function findRegistrarsForDomain(domainName: string): RegistrarName[] {
  *  The stored renewal quote is dropped — it feeds pricing, not the detail overlay. */
 export function getCachedDetail(): Record<string, Partial<Domain>> {
   const all = readAll<DetailRecord>('detail');
+  const accounts = new Map(listAccounts().map((a) => [a.id, a.registrar]));
   const out: Record<string, Partial<Domain>> = {};
   for (const [key, entry] of Object.entries(all)) {
-    out[key] = reviveDomainDates(withoutQuote(entry.data));
+    out[key] = reviveDomainDates(
+      withoutQuote(entry.data),
+      accounts.get(key.slice(0, key.indexOf(':'))),
+    );
   }
   return out;
 }
@@ -1474,7 +1485,12 @@ export function getCachedDomainDetail(
     'detail',
     detailKey(accountId, domainName),
   );
-  return entry ? reviveDomainDates(withoutQuote(entry.data)) : null;
+  return entry
+    ? reviveDomainDates(
+        withoutQuote(entry.data),
+        accountById(accountId).registrar,
+      )
+    : null;
 }
 
 /**
@@ -1802,7 +1818,7 @@ export async function getDomainDetail(
     // Serve a fresh-enough cached partial without any network calls.
     if (cached && !isStale(cached)) {
       return {
-        ...reviveDomainDates(withoutQuote(cached.data)),
+        ...reviveDomainDates(withoutQuote(cached.data), name),
         registrar: name,
         accountId,
         accountLabel: accountById(accountId).label,
