@@ -29,6 +29,8 @@ let mf: Miniflare,
   state: SetupState | undefined,
   journal: QaJournal;
 let missingReads = false;
+let wrongNoteDomain = false,
+  missingNotes = false;
 let oldResource: 'database' | 'worker' | null = null;
 let database: boolean,
   worker: boolean,
@@ -118,6 +120,8 @@ beforeEach(async () => {
   wrongBinding = false;
   badData = false;
   missingReads = false;
+  wrongNoteDomain = false;
+  missingNotes = false;
   oldResource = null;
   lostDelete = false;
   unavailable = false;
@@ -155,6 +159,24 @@ beforeEach(async () => {
           );
           expect(proof?.owner).toBe(run.user_id);
           const method = new URL(request.url).pathname.split('/').at(-1);
+          if (method === 'exportData')
+            return Response.json({
+              result: JSON.stringify({
+                namespaces: {
+                  'domain-notes': missingNotes
+                    ? {}
+                    : {
+                        'note-id': {
+                          id: 'note-id',
+                          domain: wrongNoteDomain
+                            ? 'real-domain.com'
+                            : run.domain,
+                          text: 'Synthetic note',
+                        },
+                      },
+                },
+              }),
+            });
           return Response.json({
             result: missingReads
               ? method === 'getDomainEvents'
@@ -226,6 +248,7 @@ const transport: typeof fetch = async (input, init = {}) => {
                 { ns: 'meta', key: 'schemaVersion' },
                 { ns: 'imported-domains', key: run.domain },
                 { ns: 'domain-events', key: 'event-id' },
+                { ns: 'domain-notes', key: 'note-id' },
                 { ns: 'domain-prices', key: run.domain },
               ],
         },
@@ -391,6 +414,19 @@ describe('managed production import QA', () => {
     expect(clearCount).toBe(0);
     await realPreserved();
   });
+  it.each(['other-domain', 'missing-note'])(
+    'refuses unsafe or incomplete native notes: %s',
+    async (mode) => {
+      wrongNoteDomain = mode === 'other-domain';
+      missingNotes = mode === 'missing-note';
+      await expect(
+        cleanupProductionImportQa(env, journal, run.run_id, transport),
+      ).rejects.toThrow();
+      expect(deletes).toEqual([]);
+      expect(clearCount).toBe(0);
+      await realPreserved();
+    },
+  );
   it('holds when public claims or other real-account references appear', async () => {
     await db
       .prepare(
