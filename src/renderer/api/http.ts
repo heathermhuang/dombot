@@ -1,3 +1,7 @@
+import {
+  CONNECTION_RESULT_HEADER,
+  CONNECTION_RESULT_CONTRACT,
+} from '../../shared/connection-contract';
 import { hostPath } from '../lib/platform';
 import type {
   BulkJob,
@@ -51,7 +55,12 @@ async function call<T>(method: string, args: unknown[] = []): Promise<T> {
   while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
   const res = await fetch(hostPath(`/api/${method}`), {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(method === 'connectRegistrarAccount'
+        ? { [CONNECTION_RESULT_HEADER]: CONNECTION_RESULT_CONTRACT }
+        : {}),
+    },
     body: JSON.stringify({ args }),
     credentials: 'same-origin',
   });
