@@ -90,6 +90,10 @@ outcomes are given a settling window before absence can be considered confirmed.
 
 ## Deployment and qualification
 
+Production activation and all three cleanup acceptance scenarios were verified on
+4 November 2026. See the [release receipt](automatic-production-import-qa-release-20261104/README.md)
+for deployed source, preservation checks, the initial safe hold and its correction.
+
 Apply control migration `0023_production_import_qa.sql` before deploying the updated
 provisioner. Retain the live control DB, dispatch namespace, setup namespace,
 secrets, renderer assets, future template and feature flags. Add the provisioner's
