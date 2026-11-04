@@ -1,6 +1,13 @@
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { z } from 'zod';
 import {
+  qaTemplate,
+  readQaRun,
+  cleanupProductionImportQa,
+  cleanupExpiredProductionImportQa,
+  qaLease,
+} from './production-import-qa';
+import {
   recoverPortfolio,
   recoveryPlanSchema,
   type RecoveryPlan,
@@ -13,6 +20,76 @@ import {
 const safeId = (id: string) => z.string().uuid().parse(id);
 export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   private queue: Promise<unknown> = Promise.resolve();
+  armQa(runId: string) {
+    const work = this.queue.then(async () => {
+      const run = await qaLease(this.env.CONTROL_DB, runId);
+      if (
+        this.ctx.id.toString() !==
+        this.env.SETUPS.idFromName(run.workspace_id).toString()
+      )
+        throw Error('QA setup object mismatch');
+      if (['complete', 'blocked'].includes(run.state)) return { armed: false };
+      await this.ctx.storage.put('qa-run', runId);
+      await this.ctx.storage.setAlarm(
+        Math.max(run.expires_at, run.next_cleanup_at),
+      );
+      return { armed: true, expiresAt: run.expires_at };
+    });
+    this.queue = work.catch(() => undefined);
+    return work;
+  }
+  async alarm() {
+    const id = await this.ctx.storage.get<string>('qa-run');
+    if (!id) return;
+    try {
+      const run = await qaLease(this.env.CONTROL_DB, id);
+      if (run.state === 'complete' || run.state === 'blocked') {
+        await this.ctx.storage.deleteAlarm();
+        return;
+      }
+      if (run.expires_at > Date.now()) {
+        await this.ctx.storage.setAlarm(run.expires_at);
+        return;
+      }
+      await this.cleanupQa(id, 'expiry');
+    } catch {
+      const run = await readQaRun(this.env.CONTROL_DB, id);
+      if (run && run.state === 'retry' && run.attempts < 3)
+        await this.ctx.storage.setAlarm(
+          Math.max(Date.now() + 1000, run.next_cleanup_at),
+        );
+      else await this.ctx.storage.deleteAlarm();
+      console.error('Production import QA alarm needs attention', {
+        runId: id,
+      });
+    }
+  }
+  cleanupQa(runId: string, trigger: 'finish' | 'expiry' = 'finish') {
+    const work = this.queue.then(async () => {
+      const run = await readQaRun(this.env.CONTROL_DB, runId);
+      if (
+        !run ||
+        this.ctx.id.toString() !==
+          this.env.SETUPS.idFromName(run.workspace_id).toString()
+      )
+        throw Error('QA setup object mismatch');
+      return cleanupProductionImportQa(
+        this.env,
+        {
+          get: () => this.ctx.storage.get<SetupState>('setup'),
+          clear: () => this.ctx.storage.deleteAll(),
+          empty: async () =>
+            (await this.ctx.storage.list({ limit: 1 })).size === 0 &&
+            (await this.ctx.storage.getAlarm()) === null,
+        },
+        runId,
+        fetch,
+        trigger,
+      );
+    });
+    this.queue = work.catch(() => undefined);
+    return work;
+  }
   recover(plan: RecoveryPlan) {
     const work = this.queue.then(async () =>
       recoverPortfolio(
@@ -41,6 +118,39 @@ export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   }
 }
 export class Provisioner extends WorkerEntrypoint<ProvisioningEnv> {
+  async armQa(runId: string) {
+    const run = await qaLease(this.env.CONTROL_DB, runId);
+    return this.env.SETUPS.get(
+      this.env.SETUPS.idFromName(run.workspace_id),
+    ).armQa(runId);
+  }
+  qaTemplate() {
+    return qaTemplate(this.env);
+  }
+  async cleanupQa(runId: string) {
+    const run = await readQaRun(this.env.CONTROL_DB, runId);
+    if (!run) throw Error('Unregistered production QA run');
+    return this.env.SETUPS.get(
+      this.env.SETUPS.idFromName(run.workspace_id),
+    ).cleanupQa(runId);
+  }
+  async qaStatus(runId: string) {
+    const run = await readQaRun(this.env.CONTROL_DB, runId);
+    if (!run) return null;
+    return {
+      runId: run.run_id,
+      workspace: run.workspace_id,
+      state: run.state,
+      expiresAt: run.expires_at,
+      lastError: run.last_error,
+      cleanupTrigger: run.cleanup_trigger,
+      nextCleanupAt: run.next_cleanup_at,
+      attempts: run.attempts,
+      workers: run.worker_absent ? 0 : null,
+      databases: run.database_absent ? 0 : null,
+      setupKeys: run.setup_erased ? 0 : null,
+    };
+  }
   recover(input: unknown) {
     const plan = recoveryPlanSchema.parse(input);
     return this.env.SETUPS.get(
@@ -58,6 +168,9 @@ export class Provisioner extends WorkerEntrypoint<ProvisioningEnv> {
 }
 /** Only renderer assets are served over HTTP; provisioning is service-binding RPC. */
 export default {
+  scheduled(_event: ScheduledController, env: ProvisioningEnv) {
+    return cleanupExpiredProductionImportQa(env);
+  },
   fetch(request: Request, env: ProvisioningEnv) {
     const path = new URL(request.url).pathname;
     if (
