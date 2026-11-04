@@ -48,7 +48,7 @@ fingerprint. All **531 pre-existing workspace rows**, **39 platform registry row
 and **eight pending records** matched the pre-test snapshots. Existing registry
 key envelopes, database mappings and qualification data were unchanged.
 
-The new QA account, synthetic import and single pair are retained for audit.
+At qualification, the new QA account, synthetic import and single pair were retained for audit.
 Only that new tenant's background maintenance was paused through the existing
 private lifecycle interface; its alarm was null. All QA browser/HTTP sessions
 were signed out/revoked. The account is excluded from public signup capacity.
@@ -62,3 +62,12 @@ primary checkout (directories 0700/files 0600), excluded from public source.
 
 These receipts establish the controlled production import/allocation/retry flow.
 They do not establish independent customer adoption or external mailbox delivery.
+
+## Subsequent authorized cleanup · 4 November 2026
+
+The user then explicitly requested cleanup. The QA account, Worker, database,
+coordinator and stored setup keys were deleted and independently verified absent;
+all real accounts were preserved. The test password was scrubbed and only the
+non-reusable deletion audit identity remains. See the
+[cleanup receipt](../import-production-cleanup-20261104/README.md) for current state.
+The qualification summary above is an immutable historical checkpoint.

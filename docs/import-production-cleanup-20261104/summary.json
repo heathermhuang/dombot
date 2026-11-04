@@ -1,0 +1,29 @@
+{
+  "complete": true,
+  "qaUserRows": 0,
+  "qaSessions": 0,
+  "qaActiveRegistryRows": 0,
+  "qaPendingRows": 0,
+  "qaWorkers": 0,
+  "qaDatabases": 0,
+  "qaCoordinatorNamespaces": 0,
+  "qaSetupJournalKeys": 0,
+  "qaSetupAlarm": null,
+  "qaLoginStatus": 401,
+  "qaWorkspaceStatus": 404,
+  "temporaryCleanupCapabilityRemoved": true,
+  "originalProvisionerRestored": true,
+  "sharedNamespacePreserved": true,
+  "nonReusableAuditTombstone": true,
+  "realUsersPreserved": 55,
+  "realWorkspaceIdentitiesPreserved": 531,
+  "realPlatformRowsPreserved": 39,
+  "existingControlledPageStatus": 200,
+  "at": "2026-11-04T01:19:31.744Z",
+  "followup": {
+    "qaCheckpointRows": 0,
+    "qaSessionRows": 0,
+    "passwordCustodyCopiesScrubbed": 2,
+    "at": "2026-11-04T01:21:12.813Z"
+  }
+}
