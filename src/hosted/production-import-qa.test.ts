@@ -29,6 +29,7 @@ let mf: Miniflare,
   state: SetupState | undefined,
   journal: QaJournal;
 let missingReads = false;
+let oldResource: 'database' | 'worker' | null = null;
 let database: boolean,
   worker: boolean,
   wrongBinding: boolean,
@@ -117,6 +118,7 @@ beforeEach(async () => {
   wrongBinding = false;
   badData = false;
   missingReads = false;
+  oldResource = null;
   lostDelete = false;
   unavailable = false;
   deletes = [];
@@ -194,7 +196,13 @@ const transport: typeof fetch = async (input, init = {}) => {
     );
   if (path.endsWith('/d1/database/' + databaseId))
     return database
-      ? ok({ uuid: databaseId, name: 'dombot-wfp-' + run.workspace_id })
+      ? ok({
+          uuid: databaseId,
+          name: 'dombot-wfp-' + run.workspace_id,
+          created_at: new Date(
+            run.created_at + (oldResource === 'database' ? -60000 : 1000),
+          ).toISOString(),
+        })
       : new Response('', { status: 404 });
   if (path.endsWith('/query')) {
     const sql = JSON.parse(String(init.body)).sql;
@@ -237,6 +245,14 @@ const transport: typeof fetch = async (input, init = {}) => {
     return worker
       ? ok({ id: 'f'.repeat(32) })
       : new Response('', { status: 404 });
+  if (path.endsWith('/scripts/dombot-wfp-' + run.workspace_id))
+    return ok({
+      script: {
+        created_on: new Date(
+          run.created_at + (oldResource === 'worker' ? -60000 : 1000),
+        ).toISOString(),
+      },
+    });
   if (path.endsWith('/content'))
     return worker ? new Response(source) : new Response('', { status: 404 });
   if (path.endsWith('/settings'))
@@ -344,6 +360,18 @@ describe('managed production import QA', () => {
     expect(deletes).toEqual([]);
     await realPreserved();
   });
+  it.each(['database', 'worker'] as const)(
+    'refuses a %s that predates enrollment',
+    async (kind) => {
+      oldResource = kind;
+      await expect(
+        cleanupProductionImportQa(env, journal, run.run_id, transport),
+      ).rejects.toThrow();
+      expect(deletes).toEqual([]);
+      expect(clearCount).toBe(0);
+      await realPreserved();
+    },
+  );
   it('holds when provider credentials or real data appear in the QA database', async () => {
     badData = true;
     await expect(

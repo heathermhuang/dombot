@@ -420,11 +420,19 @@ export async function cleanupProductionImportQa(
       )) ?? []
     ).filter((d) => d.name === name);
     hold(found.length <= 1);
+    let databaseMetadata: {
+      uuid: string;
+      name: string;
+      created_at: string;
+    } | null = null;
     if (r.database_id) {
-      const known = await json<{ uuid: string; name: string }>(
-        '/d1/database/' + r.database_id,
-      );
+      const known = await json<{
+        uuid: string;
+        name: string;
+        created_at: string;
+      }>('/d1/database/' + r.database_id);
       if (known) {
+        databaseMetadata = known;
         hold(known.name === name);
         hold(!found.length || found[0].uuid === known.uuid);
         if (!found.length) found.push(known);
@@ -435,6 +443,11 @@ export async function cleanupProductionImportQa(
       hold(!state?.databaseId || state.databaseId === found[0].uuid);
       hold(!r.database_id || r.database_id === found[0].uuid);
       r.database_id = uuid.parse(found[0].uuid);
+      databaseMetadata ??= await json('/d1/database/' + r.database_id);
+      hold(
+        databaseMetadata?.name === name &&
+          Date.parse(databaseMetadata.created_at) >= r.created_at - 5000,
+      );
       hold(
         !(await env.CONTROL_DB.prepare(
           'SELECT 1 FROM platform_workspaces WHERE database_id=? AND workspace_id<>?',
@@ -454,6 +467,11 @@ export async function cleanupProductionImportQa(
     } | null = null;
     if (content) {
       hold(!!state?.uploadAttempted && !!r.database_id);
+      const descriptor = await json<{ script: { created_on: string } }>(prefix);
+      hold(
+        descriptor?.script &&
+          Date.parse(descriptor.script.created_on) >= r.created_at - 5000,
+      );
       let source: string;
       if (
         content.headers.get('content-type')?.includes('multipart/form-data')

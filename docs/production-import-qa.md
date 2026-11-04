@@ -63,13 +63,15 @@ outcomes are given a settling window before absence can be considered confirmed.
 ## Safety boundaries
 
 - The runner generates fresh account/workspace/run identities. Enrollment and its
-  trusted `production_import_qa_runs` marker commit atomically. A partial unique
+  trusted `production_import_qa_runs` marker commit atomically. Lease time comes
+  from the control database clock, not the operator computer. A partial unique
   index allows only one outstanding run, including failed or held cleanup.
 - Cleanup accepts a registered run ID, never arbitrary account/resource IDs or a
   broad name prefix. It validates the immutable marker digest, original credential
   fingerprint, owner, label, namespace/account, setup journal and template/module.
 - Database names/IDs, Worker bindings and existing registry mappings must agree.
-  Another portfolio's database mapping cannot be adopted. Provider/API failures
+  Provider creation times must fall after QA enrollment, and another portfolio's
+  database mapping cannot be adopted. Provider/API failures
   are unknown, never absence.
 - Unexpected connected credentials, real domain data, public claims, changed
   identities or other references stop cleanup with an explicit hold. A held run
