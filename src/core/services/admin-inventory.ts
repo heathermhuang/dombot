@@ -16,6 +16,7 @@ import {
 import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
 import { currencyInfo } from '../../shared/money';
+import { observationAt, renewalPriceAge } from '../../shared/renewal-price-age';
 import { STALE_AFTER_MS } from '../../shared/ipc';
 import {
   adminInventorySchema,
@@ -95,12 +96,14 @@ export function projectAdminInventory(
       domain.source === 'imported' || domain.departed
         ? time(domain.syncedAt)
         : (account?.sync.lastSyncedAt ?? null);
-    const quoteAt =
+    const quoteAt = observationAt(
       pricing?.source === 'api'
         ? (input.quoteTimes[key] ?? null)
         : pricing?.source === 'portal'
           ? time(pricing.observedAt)
-          : null;
+          : null,
+      at,
+    );
     return {
       domain: name,
       registrar: domain.importedRegistrarLabel || domain.registrar,
@@ -119,17 +122,9 @@ export function projectAdminInventory(
       currency: valid ? currency.code : null,
       priceSource: valid ? pricing.source : 'unavailable',
       quoteAt,
-      priceAge: !valid
-        ? 'unavailable'
-        : pricing.source === 'manual'
-          ? 'manual'
-          : pricing.source === 'api' || pricing.source === 'portal'
-            ? quoteAt === null
-              ? 'unknown'
-              : at - quoteAt > STALE_AFTER_MS
-                ? 'stale'
-                : 'current'
-            : 'estimate',
+      priceAge: valid
+        ? renewalPriceAge({ ...pricing, observedAt: quoteAt ?? undefined }, at)
+        : 'unavailable',
     };
   });
   const owned = rows.filter((row) => !row.archived);

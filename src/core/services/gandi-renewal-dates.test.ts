@@ -15,11 +15,58 @@ import {
   getCachedPortfolio,
   getDomainDetail,
   getMergedPortfolio,
+  configureRegistrarFactory,
+  resetRegistrarClients,
+  syncRegistrar,
 } from './registrars';
 
 beforeEach(async () => {
   configureStore(new MemoryDocStore());
   await hydrateStores();
+});
+
+it('does not persist a read qualification when a subsequent inventory sync fails', async () => {
+  const account = await createAccount('gandi', 'Failure preservation', {
+    apiKey: 'synthetic',
+  });
+  const old = {
+    domainName: 'future.example',
+    registrar: 'gandi',
+    status: 'active',
+    createdDate: null,
+    expirationDate: new Date('2029-11-24'),
+    renewalDate: new Date('2025-08-22'),
+    autoRenew: false,
+    nameservers: [],
+    locked: true,
+    privacy: true,
+  };
+  writeEntry('portfolio', account.id, {
+    domains: [old],
+    lastSyncedAt: 123,
+    lastError: null,
+  });
+  const provider = createRegistrar('gandi', { apiKey: 'synthetic' });
+  vi.spyOn(provider, 'listDomains').mockRejectedValue(
+    new Error('Synthetic inventory failure'),
+  );
+  configureRegistrarFactory(() => provider);
+  resetRegistrarClients();
+  try {
+    expect(getCachedPortfolio()!.domains[0].renewalDate).toBeNull();
+    await syncRegistrar('gandi', account.id);
+    await flushWrites();
+    const raw = readEntry<{ domains: (typeof old)[]; lastSyncedAt: number }>(
+      'portfolio',
+      account.id,
+    )!.data;
+    expect(raw.domains[0].renewalDate).toEqual(old.renewalDate);
+    expect(raw.domains[0]).not.toHaveProperty('renewalDateIssue');
+    expect(raw.lastSyncedAt).toBe(123);
+  } finally {
+    configureRegistrarFactory(null);
+    resetRegistrarClients();
+  }
 });
 
 describe('Gandi provider renewal semantics', () => {

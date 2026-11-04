@@ -705,6 +705,9 @@ export interface McpClient {
 export type PriceSource =
   'api' | 'portal' | 'tld' | 'base' | 'manual' | 'unavailable';
 
+export type RenewalPriceAge =
+  'current' | 'stale' | 'unknown' | 'estimate' | 'manual' | 'unavailable';
+
 /** A domain's annual renewal price (USD), with provenance. */
 export interface RenewalPricing {
   accountId?: string;
@@ -714,8 +717,11 @@ export interface RenewalPricing {
   renewal: number | null;
   currency: string;
   source: PriceSource;
-  /** When a registrar portal snapshot was observed; not an automatic API refresh. */
+  /** Successful API quote or portal observation time; absent means unknown. */
   observedAt?: number;
+  /** Independent last successful inventory observation, not a quote timestamp. */
+  inventoryAt?: number | null;
+  priceAge?: RenewalPriceAge;
 }
 
 // ── Domain operations ───────────────────────────────────────────────────────

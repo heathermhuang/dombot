@@ -6,6 +6,7 @@
 // and prices DomBot keeps per name).
 
 import { domainKey } from '../../shared/account-key';
+import { observationAt, renewalPriceAge } from '../../shared/renewal-price-age';
 import type {
   Domain,
   DomainPurchase,
@@ -14,6 +15,7 @@ import type {
   PriceSource,
   RegistrarMeta,
   RenewalPricing,
+  RenewalPriceAge,
 } from '../../shared/ipc';
 import { toAscii } from '../../shared/domain-name';
 import { reportsPrivacy } from '../../shared/domain-ops';
@@ -86,6 +88,7 @@ export interface QueryArgs {
   expiresAfter?: string;
   expiringWithinDays?: number;
   pastReportedExpiry?: boolean;
+  renewalPriceAge?: RenewalPriceAge;
   sort?: QuerySort;
   order?: 'asc' | 'desc';
   limit?: number;
@@ -124,6 +127,8 @@ export interface RenewalEstimate {
   currency: string;
   source: PriceSource;
   observedAt?: number;
+  inventoryAt?: number | null;
+  priceAge?: RenewalPricing['priceAge'];
 }
 
 /** The per-name data DomBot keeps beside the registrar's, keyed as the
@@ -172,6 +177,7 @@ export interface QueryRow {
    *  reports are empty and the registrar is the last one it was seen at. */
   inAccount: boolean;
   status: string;
+  inventoryAt: number | null;
   createdDate: Date | null;
   expirationDate: Date | null;
   renewalDate: Date | null;
@@ -340,19 +346,29 @@ export function queryPortfolio(
 
   const renewalOf = (d: Domain): RenewalEstimate | null => {
     const p = extras.pricing?.[domainKey(d)];
+    const at =
+      p?.source === 'api' || p?.source === 'portal'
+        ? observationAt(p.observedAt, now)
+        : null;
     return p && p.renewal != null
       ? {
           amount: p.renewal,
           currency: p.currency,
           source: p.source,
-          ...(p.source === 'portal' && p.observedAt
-            ? { observedAt: p.observedAt }
-            : {}),
+          ...(at !== null ? { observedAt: at } : {}),
+          inventoryAt: observationAt(p.inventoryAt, now),
+          priceAge: renewalPriceAge(p, now),
         }
       : null;
   };
 
   const filtered = domains.filter((d) => {
+    if (
+      args.renewalPriceAge != null &&
+      renewalPriceAge(extras.pricing?.[domainKey(d)], now) !==
+        args.renewalPriceAge
+    )
+      return false;
     if (
       args.pastReportedExpiry != null &&
       standingFor(d).pastReportedExpiry !== args.pastReportedExpiry
@@ -493,6 +509,10 @@ export function queryPortfolio(
       salePending: standingFor(d).salePending,
       inAccount,
       status: d.status,
+      inventoryAt: observationAt(
+        extras.pricing?.[domainKey(d)]?.inventoryAt,
+        now,
+      ),
       createdDate: d.createdDate,
       expirationDate: d.expirationDate,
       renewalDate: d.renewalDate,

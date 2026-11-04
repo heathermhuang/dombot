@@ -18,6 +18,7 @@ import { importedRows } from '../../shared/imported-domains';
 import { ownedAndRenewing } from '../../shared/ownership';
 import { useAppStore } from '../store/app';
 import { StatCard, StatCardRow } from '../components/StatCard';
+import { RenewalCoverage } from '../components/RenewalCoverage';
 import { ToolbarSwitch } from '../components/data-table/FilterToolbar';
 import { FilterDropdown } from '../components/data-table/FilterBar';
 import {
@@ -466,6 +467,8 @@ export default function Renewals() {
         {unverifiedDates > 0 &&
           ` ${unverifiedDates} unverified legacy Gandi date${unverifiedDates === 1 ? '' : 's'} ignored; reported expiry is used for planning.`}
       </p>
+
+      <RenewalCoverage rows={portfolio} pricing={pricing} />
 
       {/* A toolbar over the chart and donuts, as over the other pages'
           tables: the view first, then the registrars, which wrap under it
