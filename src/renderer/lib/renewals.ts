@@ -1,4 +1,5 @@
 import { domainKey } from '../../shared/account-key';
+import { qualifyRenewalDate } from '../../shared/renewal-date';
 // Pure aggregation over the portfolio + renewal pricing, for the Renewals
 // dashboard. No React, no IPC — just numbers in, numbers out. A price keeps
 // its own currency; totals are in your preferred currency, with every other
@@ -258,7 +259,8 @@ export interface MonthBucket {
 
 /** The date a domain next comes up for renewal (renewalDate ?? expirationDate). */
 function renewalDate(d: Domain): Date | null {
-  const raw = d.renewalDate ?? d.expirationDate;
+  const qualified = qualifyRenewalDate(d);
+  const raw = qualified.renewalDate ?? qualified.expirationDate;
   if (!raw) return null;
   const date = raw instanceof Date ? raw : new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -281,8 +283,8 @@ const MONTH_NAMES = [
 
 /**
  * Upcoming renewals bucketed by calendar month, from this month forward for
- * `months` months. Domains whose next renewal already passed are folded into the
- * current month (they're due now). Every bucket in the window is present, even
+ * `months` months. Past planning dates are separate verification work, never
+ * assumed unpaid bills. Every bucket in the window is present, even
  * empty ones, so the calendar renders a continuous strip.
  */
 export function upcomingByMonth(
@@ -313,15 +315,12 @@ export function upcomingByMonth(
     buckets.push(bucket);
     index.set(key, bucket);
   }
-  const firstKey = buckets[0].key;
   const lastKey = buckets[buckets.length - 1].key;
 
   for (const d of domains) {
     const date = renewalDate(d);
-    if (!date) continue;
-    let key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    // Past-due renewals count as due now; anything beyond the window is skipped.
-    if (key < firstKey) key = firstKey;
+    if (!date || date.getTime() < now.getTime()) continue;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     if (key > lastKey) continue;
     const bucket = index.get(key);
     if (!bucket) continue;
@@ -347,13 +346,14 @@ export function dueWithin(
   currency = 'USD',
   fx?: ExchangeRates,
 ): { count: number; yearly: number; leftOut: CurrencyTotal[] } {
-  const cutoff = Date.now() + days * 86_400_000;
+  const now = Date.now();
+  const cutoff = now + days * 86_400_000;
   let count = 0;
   let yearly = 0;
   const leftOut: CurrencyTotal[] = [];
   for (const d of domains) {
     const date = renewalDate(d);
-    if (!date || date.getTime() > cutoff) continue;
+    if (!date || date.getTime() < now || date.getTime() > cutoff) continue;
     count += 1;
     const p = priceOf(d, pricing);
     if (p?.renewal == null) continue;
@@ -362,6 +362,17 @@ export function dueWithin(
     else addLeftOut(leftOut, p.currency, p.renewal);
   }
   return { count, yearly, leftOut };
+}
+
+/** Past planning dates are verification work, not presumed unpaid renewals. */
+export function pastRenewalDates(
+  domains: Domain[],
+  now = Date.now(),
+): Domain[] {
+  return domains.filter((domain) => {
+    const date = renewalDate(domain);
+    return date !== null && date.getTime() < now;
+  });
 }
 
 /** "Leaves out 2 renewals in TWD", "… in KES, TWD"; null with none. */
