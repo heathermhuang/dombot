@@ -511,6 +511,30 @@ describe('one email flow for sign-in and signup', () => {
     );
   });
 
+  it('shows password-change confirmation at the sign-in destination after revoking the session', async () => {
+    const { token, accounts } = await owner();
+    const changed = await post(
+      '/account/password',
+      { oldPassword: password, newPassword: 'replacement-strong-password' },
+      token,
+    );
+    expect(changed.status).toBe(303);
+    expect(changed.headers.get('Set-Cookie')).toContain('Max-Age=0');
+    expect(await accounts.session(token)).toBeNull();
+    const destination = changed.headers.get('Location')!;
+    const response = await gateway.fetch(
+      new Request(new URL(destination, 'https://domains.domains')),
+      env,
+    );
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('Your password was updated');
+    expect(html).toContain('every browser session was signed out');
+    expect(html).toContain('Sign in with your new password');
+    expect(html).toContain('autocomplete="current-password"');
+    expect(html).not.toContain('value="replacement-strong-password"');
+  });
+
   it('shows no legal checkbox or password option before email ownership is verified', async () => {
     await owner();
     const returning = await post('/auth/email/request', {

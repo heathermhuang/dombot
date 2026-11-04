@@ -1193,7 +1193,7 @@ app.post('/account/password', bodyLimit({ maxSize: 16384 }), async (c) => {
       401,
     );
   c.header('Set-Cookie', sessionCookie(c.req.url, ''));
-  return c.redirect('/login?notice=password-updated', 303);
+  return c.redirect('/login/password?notice=password-updated', 303);
 });
 
 // RFC 8414 and RFC 9728 issuer-path discovery forms.
