@@ -38,7 +38,7 @@ function feeds(entries = changelogEntries) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     expect(init?.headers).toEqual({ Accept: 'application/json' });
-    expect(init?.redirect).toBe('error');
+    expect(init?.redirect).toBe('manual');
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect([changelogSources.saas, changelogSources.core]).toContain(
       url.origin + url.pathname,

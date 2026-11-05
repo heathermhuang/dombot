@@ -114,7 +114,7 @@ async function source(
     const json = await boundedJson(
       await fetcher(url.toString(), {
         headers: { Accept: 'application/json' },
-        redirect: 'error',
+        redirect: 'manual',
         signal: AbortSignal.timeout(3000),
       }),
     );
