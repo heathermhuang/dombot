@@ -69,3 +69,9 @@
 - domains.domains provides the complete upstream DomBot feature set as a hosted service, plus hosted capabilities upstream lacks. Full upstream integration is the default; a selective patch release must never be described as full upstream sync.
 - Use upstream Domains/Owned/Listings/Archive, Sales, market adapters/settings, reporting and MCP tools as the primary application. Hosted public-page compatibility must not replace upstream's marketplace listing or Sales screens.
 - Preserve tenant isolation, encrypted credentials, existing data/public URLs and explicit publication. Keep a pinned parity inventory and test upstream API/tool/page coverage. Import upstream backups and retain hosted historical records; bump backup format before an older hosted binary could silently discard new namespaces.
+
+## Changelog upkeep
+
+- Every application behavior, security, UI, API, dependency or hosted-runtime change includes a new user-facing SaaS entry in `site/public/changelog.json`. Test-only and documentation-only changes do not need a new entry. CI checks the actual base-to-head diff, validates the feed and preserves existing entry IDs/permalinks. Run `npm run changelog:check` and, before a PR, `CHANGELOG_BASE_SHA=<base-sha> npm run changelog:check`.
+- Entries merged before rollout explicitly say source update; do not infer deployment from merge or CI. After release verification, update the matching entry's status and public evidence link in the release-receipt PR. CI requires changelog changes alongside release receipts. Keep private operational/customer data out of the public feed.
+- `/changelog` refreshes this public main-branch feed and the original project's published release index every five minutes without another gateway deployment. Upstream release discovery never claims a managed SaaS rollout. Preserve bounded reads, escaped output, saved-data recovery and the visible refresh-failure notice. See `docs/changelog.md`.

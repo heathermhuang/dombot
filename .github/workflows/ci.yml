@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
@@ -38,6 +40,10 @@ jobs:
           npm rebuild esbuild
           npm ci --prefix hosted --ignore-scripts
           node hosted/build-auth.mjs
+      - name: Validate changelog coverage
+        env:
+          CHANGELOG_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run changelog:check
       - name: Typecheck
         run: npm run typecheck
       - name: Verify pinned DomBot engine
