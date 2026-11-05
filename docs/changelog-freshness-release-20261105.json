@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-05",
+  "status": "deployed_and_verified",
+  "releaseCommit": "568e45abd0f5689aa0e0370b445e04dec83515e5",
+  "checkedHead": "8efe67b3b8ebad6f4219b733ddb8d0866fdaa293",
+  "implementationPR": "https://github.com/heathermhuang/dombot/pull/170",
+  "runtimeCorrectionPR": "https://github.com/heathermhuang/dombot/pull/171",
+  "ci": "https://github.com/heathermhuang/dombot/actions/runs/42037077630",
+  "securityCi": "https://github.com/heathermhuang/dombot/actions/runs/42037077678",
+  "moduleSha256": "ca18dc879d477a0bc92d080994f186ecd58e453726f638253d4ecdd0fb806a41",
+  "liveFeeds": {
+    "verifiedAt": "2026-11-05T13:49:59.511Z",
+    "bothSourcesFresh": true,
+    "refreshIntervalSeconds": 300,
+    "failureBackoffSeconds": 60
+  },
+  "http": {
+    "verifiedAt": "2026-11-05T13:51:02.030Z",
+    "passed": 42,
+    "total": 42
+  },
+  "preservation": {
+    "gatewayBindings": 72,
+    "unrelatedBindingsPreserved": true,
+    "assetsPreserved": true,
+    "secretsInherited": true,
+    "runtimeSettingsPreserved": true,
+    "schedulesPreserved": true,
+    "tenantEngineRollouts": 0,
+    "databaseWrites": 0
+  },
+  "nativeRegression": {
+    "reproducedBeforeFix": true,
+    "passesAfterFix": true,
+    "realCacheReuse": true,
+    "redirectTargetsNotFollowed": true
+  },
+  "recurringModelTaskCreated": false,
+  "newCronCreated": false,
+  "previewDiagnosticClosed": true,
+  "browserVisualVerified": false
+}
