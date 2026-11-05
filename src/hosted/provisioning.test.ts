@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   provisionPortfolio,
   type ProvisioningEnv,
@@ -180,6 +180,96 @@ const transport: typeof fetch = async (input, init = {}) => {
     ? new Response(module)
     : new Response('missing', { status: 404 });
 };
+it.each(['headers', 'body'] as const)(
+  'bounds a stalled module %s read and cannot upload after cancellation',
+  async (kind) => {
+    const assets = env.ASSETS.fetch;
+    let reached!: () => void, late!: (response: Response) => void;
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let cancellations = 0,
+      outcome: unknown;
+    const started = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    env.ASSETS = {
+      fetch: async (request: Request) => {
+        if (!new URL(request.url).pathname.endsWith('tenant.mjs'))
+          return assets(request);
+        reached();
+        if (kind === 'headers')
+          return new Promise<Response>((resolve) => {
+            late = resolve;
+          });
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              stream = controller;
+            },
+            cancel() {
+              cancellations++;
+            },
+          }),
+        );
+      },
+    } as unknown as Fetcher;
+    vi.useFakeTimers();
+    const attempt = provisionPortfolio(
+      env,
+      journal,
+      workspace,
+      user,
+      transport,
+    ).then(
+      () => {
+        outcome = 'admitted';
+      },
+      (error) => {
+        outcome = error;
+      },
+    );
+    try {
+      await started;
+      const original = structuredClone(saved!);
+      await vi.advanceTimersByTimeAsync(45001);
+      expect(outcome).toBeInstanceOf(Error);
+      expect((outcome as Error).message).toMatch(/artifact read timed out/i);
+      expect(creates).toBe(1);
+      expect(uploads).toBe(0);
+      if (kind === 'headers') {
+        late(
+          new Response(
+            new ReadableStream({
+              cancel() {
+                cancellations++;
+              },
+            }),
+          ),
+        );
+        await vi.runAllTimersAsync();
+      }
+      expect(cancellations).toBe(1);
+      expect(uploads).toBe(0);
+      env.ASSETS = { fetch: assets } as unknown as Fetcher;
+      vi.useRealTimers();
+      await provisionPortfolio(env, journal, workspace, user, transport);
+      expect(creates).toBe(1);
+      expect(uploads).toBe(1);
+      expect(saved!.root).toBe(original.root);
+      expect(saved!.gateway).toBe(original.gateway);
+    } finally {
+      vi.useRealTimers();
+      if (kind === 'headers') late?.(new Response('cancelled fixture'));
+      else {
+        try {
+          stream?.error(Error('Fixture disposed'));
+        } catch {
+          /* Already cancelled. */
+        }
+      }
+      await attempt;
+    }
+  },
+);
 describe('durable portfolio provisioning', () => {
   it('creates and qualifies one isolated tenant without ever receiving customer credentials', async () => {
     const receipt = await provisionPortfolio(

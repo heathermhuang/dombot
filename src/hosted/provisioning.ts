@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { opaqueToken, tokenHash } from './crypto';
 import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
 import type { ProvisionReceipt } from './on-demand';
+import { readProvisioningArtifact } from './provisioning-artifact';
 
 export interface ProvisioningEnv extends ProvisioningBindings {
   CF_PROVISIONING_TOKEN: string;
@@ -106,15 +107,8 @@ export async function provisionPortfolio(
     .first();
   if (!eligible) throw Error('Setup is not admitted');
   await diagnose('admission');
-  const readAsset = async (path: string) => {
-    const response = await env.ASSETS.fetch(
-      new Request('https://assets.internal/_provision/' + path),
-    );
-    if (!response.ok) throw Error('Setup artifact unavailable');
-    const bytes = await response.text();
-    if (bytes.length > 10000000) throw Error('Setup artifact too large');
-    return bytes;
-  };
+  const readAsset = (path: string) =>
+    readProvisioningArtifact(env.ASSETS, '_provision/' + path);
   await diagnose('assets');
   const manifestText = await readAsset('manifest.json');
   if ((await tokenHash(manifestText)) !== env.TEMPLATE_SHA256)

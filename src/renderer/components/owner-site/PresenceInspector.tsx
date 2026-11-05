@@ -8,9 +8,10 @@ import { loadSite, siteEditor } from '../../lib/owner-site-client';
 import { isOwnerSite, type AnyPublished } from '../../../shared/owner-site';
 import type { PresencePage } from '../../../shared/publishing-presence';
 import type { PublicationReceipt } from '../../../shared/publication-change-set';
+import { Button } from '../ui/button';
 
 /** Available to legacy, profile-only and inventory users without a format migration. */
-export function PresenceInspector() {
+export function PresenceInspector({ inline = false }: { inline?: boolean }) {
   const [open, setOpen] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
     [presence, setPresence] = useState<PresencePage | null>(null),
@@ -56,12 +57,17 @@ export function PresenceInspector() {
     await read();
   };
   return (
-    <section className="os-editor os-presence">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <section className={inline ? 'contents' : 'os-editor os-presence'}>
+      <Button
+        type="button"
+        variant="outline"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         Inspect public presence
-      </button>
+      </Button>
       {open && (
-        <section>
+        <section className={inline ? 'os-editor basis-full pt-3' : undefined}>
           <h2>Where is each domain public?</h2>
           <p>
             Read existing draft and published surfaces without converting your

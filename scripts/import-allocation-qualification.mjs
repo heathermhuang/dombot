@@ -10,6 +10,10 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { sqlStatements } from './prepare-on-demand.mjs';
 const root = process.cwd(),
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dombot-import-flow-'));
+const salesEnabled = process.argv.includes('--sales');
+const assetDirectory = process.argv.includes('--source-ui')
+  ? path.join(root, 'dist/web')
+  : path.join(root, 'node_modules/@domains-domains/dombot-engine/web');
 const origin = 'http://127.0.0.1:5196',
   workspace = randomUUID(),
   user = randomUUID(),
@@ -72,6 +76,9 @@ const manifest = JSON.stringify({
       type: 'service',
       service: 'synthetic-directory',
     },
+    ...(salesEnabled
+      ? [{ name: 'DOMBOT_SALES_V1', type: 'plain_text', text: 'true' }]
+      : []),
   ],
 });
 const controlRuntime = new Miniflare(
@@ -170,9 +177,7 @@ const assets = async (request) => {
   let file = new URL(request.url).pathname;
   if (!/^\/(assets|fonts)\//.test(file)) file = '/index.html';
   try {
-    const bytes = await fs.readFile(
-      path.join(root, 'node_modules/@domains-domains/dombot-engine/web', file),
-    );
+    const bytes = await fs.readFile(path.join(assetDirectory, file));
     return new Response(bytes, {
       headers: {
         'Content-Type': file.endsWith('.js')
