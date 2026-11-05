@@ -37,7 +37,10 @@ function memoryCache() {
 function feeds(entries = changelogEntries) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    expect(init?.headers).toEqual({ Accept: 'application/json' });
+    expect(init?.headers).toEqual({
+      Accept: 'application/json',
+      'Cache-Control': 'no-cache',
+    });
     expect(init?.redirect).toBe('manual');
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect([changelogSources.saas, changelogSources.core]).toContain(
@@ -81,6 +84,11 @@ describe('live changelog feeds', () => {
       now: now + changelogRefreshMs,
     });
     expect(next).toHaveBeenCalledTimes(2);
+    expect(
+      new URL(String(next.mock.calls[0][0])).searchParams.get(
+        'changelog-check',
+      ),
+    ).toBe(String(now + changelogRefreshMs));
     expect(updated.entries.some((entry) => entry.id === newer.id)).toBe(true);
     expect(changelogPage('saas', updated)).toContain(newer.title);
     expect(changelogPage('core', updated)).not.toContain(newer.title);

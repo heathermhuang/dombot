@@ -107,13 +107,10 @@ async function source(
     return { entries: saved.entries, stale: false, checkedAt: saved.fetchedAt };
   try {
     const url = new URL(changelogSources[kind]);
-    url.searchParams.set(
-      'changelog-check',
-      String(Math.floor(now / changelogRefreshMs)),
-    );
+    url.searchParams.set('changelog-check', String(now));
     const json = await boundedJson(
       await fetcher(url.toString(), {
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
         redirect: 'manual',
         signal: AbortSignal.timeout(3000),
       }),
