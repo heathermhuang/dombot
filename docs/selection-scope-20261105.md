@@ -1,6 +1,6 @@
 # Selection scope and managed document title
 
-Date: 5 November 2026. Candidate engine: `2.0.0-hosted.5`. Local verification passed; production release verification pending.
+Date: 5 November 2026. Released engine: `2.0.0-hosted.5`, source `b170df17524b9909a90fb6df6ff5ebe1cd08942e`, from [PR #165](https://github.com/heathermhuang/dombot/pull/165). Status: deployed and verified. Exact receipt: [selection-scope-release-20261105.json](selection-scope-release-20261105.json).
 
 The hidden bulk-target behavior is inherited from upstream DomBot, including the integrated `ccb918deed20f8d01009970064027fcb021bac97` revision. Upstream stores Domains selection across navigation and derives its bulk targets from all shown domains rather than the filtered result. Activity independently has the same filter mismatch. This is not evidence that an ordinary first click on an empty selection selects hundreds of domains: prior selections can survive outside the visible result. The owner's exact preceding interaction sequence was not recorded.
 
@@ -19,3 +19,15 @@ The unchanged `.4` browser assets fail the select-all → filter-to-one regressi
 Run ordinary project checks and `DOMBOT_UI_QA_TOOLS=/absolute/temporary/tools node scripts/selection-ui-qualification.mjs` after starting `node scripts/import-allocation-qualification.mjs --sales`. Playwright remains in a disposable tools directory outside the project lock. Screenshots/results stay in private local artifacts.
 
 Production release follows checked-head CI, fresh rollback snapshots, the existing controlled canary, drained tenant promotion, current binding/credential/publication preservation, future-template/provisioner/gateway agreement, live owner UI checks and trusted managed import/retry/readback/cleanup. Local checks and package builds alone do not establish deployment.
+
+## Observed production result
+
+Checked-head CI, both CodeQL languages and merged-main CI/security passed. All 44 admitted portfolios serve the pinned `.5` engine/source. The future template and gateway agree, and the original allocation policy is restored. Fresh rollback custody contains 45 database exports and 46 code/settings snapshots; the reconstructed previous template matches its observed live hash. Two upload connections reset before returning a result. Exact remote module/settings reads proved the original releases remained intact, admission was restored, and only then were those targets retried. The parallel sweep's admission compare-and-set also refused an overlapping writer; the completed main sweep independently checked all 44 targets.
+
+Native Chrome verified the actual owner account: select all 940, filter to one, observe cleared selection, select one, and open Pricing and Notes for exactly that domain. The registrar preview showed one target and was cancelled. Deliberate selections on two pages produced exactly those two names in Pricing. Navigation and reload cleared selection. The document title is `domains.domains`, and the final release badge reports `.5`, source `b170df1`. No price, note, folder, ownership, registrar or marketplace changes were submitted in the real account.
+
+All 38 HTTP checks passed. Existing accounts, original identities, 39 platform mappings, all 44 encrypted credential/account namespaces, two published listings and two published profiles passed preservation. Existing canonical/legacy routes and two active custom hosts passed; eight legacy schedules, gateway schedules and the provisioner cleanup cron are preserved.
+
+Final trusted run `9f4fe48c-4485-4713-8263-671f55d89cd0` passed zero allocation on open/preview, exactly one Worker/database pair on valid import, two unchanged retries and readback. A read-only observer verified the managed HTML title and both served engine assets against the exact browser-tested package. Cleanup independently confirmed zero run-owned Workers, databases and setup keys, with the temporary password scrubbed. All 55 real users and the runner's 532 non-QA identity scope were preserved. This narrower runner scope excludes retained QA audit identities and is distinct from the release's 543 original identity comparison.
+
+No production registrar/marketplace write, inquiry, publication, DNS, payment or physical-device credential acceptance was used as a fixture. These results qualify this selection/title repair, not new external-provider or physical-device behavior. Already-open tabs need a refresh to load the new renderer.
