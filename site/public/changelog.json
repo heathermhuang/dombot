@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "saas-changelog-runtime-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Reliable hosted changelog refresh",
+      "status": "Source update · Deployment verified separately",
+      "changes": [
+        "Restores automatic feed refresh in the hosted changelog while retaining saved updates during source outages."
+      ],
+      "links": [
+        {
+          "label": "SaaS source history",
+          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+        }
+      ]
+    },
+    {
       "id": "saas-changelog-freshness-2026-11-05",
       "date": "2026-11-05",
       "layer": "saas",
