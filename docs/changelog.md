@@ -16,8 +16,8 @@ records. Keep private operational and customer data out of this public history.
 A merged change is not a deployment. Mark source integrations awaiting rollout
 explicitly, then update their status only when the managed release has been
 verified. The initial history starts in November 2026 and links to both full
-source histories for older changes. It records the 2.1.0 integration as awaiting
-hosted rollout and uses the existing deployed release records for SaaS updates.
+source histories for older changes. The 2.1.0 entry was updated after its separately verified fleet and gateway
+cutover; earlier SaaS updates use their existing deployed release records.
 
 This is a gateway-only change. Publishing the page does not require repacking or
 redeploying tenant engines, changing databases or running production import QA.

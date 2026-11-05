@@ -54,11 +54,11 @@ describe('public changelog', () => {
       expect(html).toContain(`id="${entry.id}"`);
   });
 
-  it('does not describe source integration as a managed production rollout', () => {
+  it('keeps upstream releases separate from SaaS availability', () => {
     const html = changelogPage('core');
-    expect(html).toContain('SaaS source merged; hosted rollout pending');
+    expect(html).toContain('Deployed as SaaS 2.1.0-hosted.1');
     expect(html).toContain(
-      'does not activate the new engine for managed portfolios',
+      'Available in managed portfolios as engine 2.1.0-hosted.1',
     );
     expect(html).toContain('Included in the 4 November SaaS release');
   });

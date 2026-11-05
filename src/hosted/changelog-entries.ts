@@ -20,11 +20,11 @@ export const changelogEntries: readonly ChangelogEntry[] = [
     date: '2026-11-05',
     layer: 'core',
     title: 'DomBot 2.1.0',
-    status: 'Upstream released · SaaS source merged; hosted rollout pending',
+    status: 'Upstream released · Deployed as SaaS 2.1.0-hosted.1',
     changes: [
       'Adds Unstoppable Domains registrar support and improves Namecheap domain details and request pacing.',
       'Improves Afternic sales-history synchronization, sync error visibility and scrubbed desktop logs.',
-      'Merged into the SaaS source with hosted compatibility. This source integration does not activate the new engine for managed portfolios.',
+      'Available in managed portfolios as engine 2.1.0-hosted.1, with hosted compatibility and the existing account and publication controls.',
     ],
     links: [
       { label: 'Upstream release', url: `${upstream}/releases/tag/v2.1.0` },
@@ -58,7 +58,7 @@ export const changelogEntries: readonly ChangelogEntry[] = [
     status: 'Deployed · 2.0.0-hosted.3–4',
     changes: [
       'Setup pauses for reconciliation when a provider write has an uncertain outcome, with a safe reference for support.',
-      'Bounds setup artifact downloads so a stalled read cannot leave setup waiting indefinitely.',
+      'Setup downloads now time out safely, so a stalled connection cannot leave setup waiting indefinitely.',
       'Fixes touch targets around the Domains filters and presence inspector, and updates production dependencies.',
     ],
     links: [
@@ -75,7 +75,7 @@ export const changelogEntries: readonly ChangelogEntry[] = [
     date: '2026-11-05',
     layer: 'saas',
     title: 'Password-change confirmation',
-    status: 'Deployed · SaaS gateway',
+    status: 'Deployed · Account access',
     changes: [
       'After changing your password, the password sign-in page shows the confirmation message and explains the next step.',
     ],
