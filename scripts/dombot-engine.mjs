@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const root = process.cwd();
 const name = '@domains-domains/dombot-engine';
-const version = '2.0.0-hosted.4';
+const version = '2.0.0-hosted.5';
 const upstream = {
   repository: 'https://github.com/aoxborrow/dombot',
   revision: 'ccb918deed20f8d01009970064027fcb021bac97',
@@ -150,6 +150,16 @@ if (process.argv[2] === 'verify') {
   await fs.mkdir(path.join(root, 'hosted'), { recursive: true });
   await fs.mkdir(path.join(temp, 'web'), { recursive: true });
   await fs.cp('dist/web', path.join(temp, 'web'), { recursive: true });
+  // This package's web assets serve managed accounts. Preserve the original
+  // title in standalone/desktop builds while branding the hosted document.
+  const index = path.join(temp, 'web/index.html');
+  await fs.writeFile(
+    index,
+    (await fs.readFile(index, 'utf8')).replace(
+      '<title>DomBot</title>',
+      '<title>domains.domains</title>',
+    ),
+  );
   const bundle = await build({
     entryPoints: ['src/worker/engine.ts'],
     define: {
@@ -197,7 +207,7 @@ if (process.argv[2] === 'verify') {
     'index.html',
     ...(await fs.readdir('dist/web/assets')).map((x) => 'assets/' + x),
   ])
-    assetHashes[file] = sha(await fs.readFile(path.join('dist/web', file)));
+    assetHashes[file] = sha(await fs.readFile(path.join(temp, 'web', file)));
   const manifest = {
     name,
     version,

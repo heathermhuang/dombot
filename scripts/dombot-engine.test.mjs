@@ -92,3 +92,15 @@ describe('pinned engine admission', () => {
       );
     }));
 });
+
+it('brands the managed HTML title without changing standalone or desktop titles', async () => {
+  const managed = await fs.readFile(
+    'node_modules/@domains-domains/dombot-engine/web/index.html',
+    'utf8',
+  );
+  expect(managed).toContain('<title>domains.domains</title>');
+  expect(managed).not.toContain('<title>DomBot</title>');
+  expect(await fs.readFile('index.html', 'utf8')).toContain(
+    '<title>DomBot</title>',
+  );
+});
