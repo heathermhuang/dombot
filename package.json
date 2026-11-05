@@ -97,7 +97,7 @@
   },
   "dependencies": {
     "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-0.15.1-hosted.1.tgz",
-    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.0.0-hosted.2.tgz",
+    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.0.0-hosted.3.tgz",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.2",

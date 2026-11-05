@@ -48,6 +48,21 @@ and Worker-upload outcomes are reconciled by deterministic names, source digests
 and bindings. Existing resources with conflicting identities are never overwritten.
 Template changes during an incomplete setup stop for operator reconciliation.
 
+If a previous create/upload was attempted and the resource is absent on a later
+read, setup holds its original identity for reconciliation. One absence read does
+not authorize replaying an uncertain write. This conservative hold can also need
+operator reconciliation after a rejected write. Retries never replace the pair or
+rotate its keys.
+
+The private setup object retains one bounded diagnostic record: operation UUID,
+phase, start/update times, stable outcome code, HTTP status and a validated upstream
+request reference when available. It contains no account email, setup key, token,
+import row or provider body. Existing setup journals remain readable; no migration
+is needed. The gateway returns a safe 503 with `supportReference`,
+`X-Setup-Reference` and `Retry-After: 30`, preserving the active session and the
+browser's input. This header is advice, not an automatic write retry. The trusted
+QA runner captures its failure classification before cleanup removes private state.
+
 The new tenant applies all schema statements and the bootstrap receipt in one D1
 batch. The receipt uses the existing migration metadata table so strict empty
 classification still works. An existing non-bootstrap database is refused.

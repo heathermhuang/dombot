@@ -48,6 +48,7 @@ export async function activateWorkspace(
   env: HostedEnv,
   user: SessionUser,
   reason: 'registrar' | 'market' | 'import',
+  operationId?: string,
 ) {
   if (!onDemandReady(env))
     throw Error(
@@ -60,7 +61,9 @@ export async function activateWorkspace(
     .first();
   if (!requested) throw Error('Portfolio setup is unavailable. Sign in again.');
   const receipt = provisionReceipt.parse(
-    await env.PROVISIONER!.provision(user.workspace_id, user.id),
+    await (operationId
+      ? env.PROVISIONER!.provision(user.workspace_id, user.id, operationId)
+      : env.PROVISIONER!.provision(user.workspace_id, user.id)),
   );
   if (
     receipt.workspace !== user.workspace_id ||
