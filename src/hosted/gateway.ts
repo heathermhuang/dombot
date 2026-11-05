@@ -68,6 +68,7 @@ import {
 } from './product-images';
 import { registrarLogos } from './registrar-logos';
 import { sourcePage } from './source';
+import { changelogPage } from './changelog';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
 import {
@@ -194,6 +195,7 @@ app.use('*', async (c, next) => {
   if (
     c.req.path !== '/' &&
     c.req.path !== '/domains' &&
+    c.req.path !== '/changelog' &&
     !/^\/w\/[a-f0-9-]+\/p\//.test(c.req.path)
   )
     c.header('X-Robots-Tag', 'noindex, nofollow');
@@ -270,6 +272,7 @@ app.get('/', (c) =>
   ),
 );
 app.get('/source', (c) => c.html(sourcePage(c.env.SOURCE_COMMIT)));
+app.get('/changelog', (c) => c.html(changelogPage(c.req.query('layer'))));
 app.get('/domains', (c) => {
   const path =
     c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains'
