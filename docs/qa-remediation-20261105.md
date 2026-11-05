@@ -161,3 +161,5 @@ X target also passed. Raw touch injection is unavailable in the in-app browser.
 The reported case is not yet reproduced; the exact chip/value and whether the
 chip remains visible or only the rows stay unchanged are requested. No speculative
 filter code change or additional engine rollout was made.
+
+Follow-up: the feature-enabled, full-table Chrome touch fixture subsequently reproduced an inspector overlap at the visible Pricing X. The repair, native provisioning artifact-read fault tests and verified engine `.4` rollout are recorded in [home-provisioning-completion-20261105.md](home-provisioning-completion-20261105.md) and its release receipt. The earlier unreproduced result above describes the initial limited fixture, not the current outcome.
