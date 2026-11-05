@@ -69,6 +69,7 @@ import {
 import { registrarLogos } from './registrar-logos';
 import { sourcePage } from './source';
 import { changelogPage } from './changelog';
+import { loadChangelog } from './changelog-feed';
 import { requestAccess, closeWorkspace } from './lifecycle';
 import { legalPage, legalReady, legalVersion } from './legal';
 import {
@@ -272,7 +273,9 @@ app.get('/', (c) =>
   ),
 );
 app.get('/source', (c) => c.html(sourcePage(c.env.SOURCE_COMMIT)));
-app.get('/changelog', (c) => c.html(changelogPage(c.req.query('layer'))));
+app.get('/changelog', async (c) =>
+  c.html(changelogPage(c.req.query('layer'), await loadChangelog({ cache: typeof caches === 'undefined' ? undefined : caches.default }))),
+);
 app.get('/domains', (c) => {
   const path =
     c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains'

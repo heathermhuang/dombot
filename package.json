@@ -28,6 +28,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json && tsc -p tsconfig.hosted.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "changelog:check": "node --experimental-strip-types scripts/check-changelog.mjs",
     "test:live": "vitest run -c vitest.live.config.ts",
     "pricing:build": "node scripts/build-base-pricing.mjs",
     "rates:build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-exchange-rates.mjs",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import gateway from './gateway';
 import { changelogEntries } from './changelog-entries';
 import { changelogPage } from './changelog';
@@ -11,6 +11,13 @@ const request = (suffix = '') =>
   );
 
 describe('public changelog', () => {
+  beforeEach(() =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 503 })),
+    ),
+  );
+  afterEach(() => vi.unstubAllGlobals());
   it('serves both layers without sign-in, database bindings or scripts', async () => {
     const response = await request();
     expect(response.status).toBe(200);
