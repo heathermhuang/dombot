@@ -7,6 +7,7 @@ import {
 } from './provisioning';
 import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
 import type { ProvisionReceipt } from './on-demand';
+import { readProvisioningArtifact } from './provisioning-artifact';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const recoveryPlanSchema = z
@@ -55,15 +56,8 @@ export async function recoverPortfolio(
     .bind(plan.workspace, plan.user)
     .first();
   if (!eligible) throw Error('Recovery is not admitted');
-  const asset = async (path: string) => {
-    const response = await env.ASSETS.fetch(
-      new Request('https://assets.internal/' + path),
-    );
-    if (!response.ok) throw Error('Recovery artifact unavailable');
-    const text = await response.text();
-    if (text.length > 10000000) throw Error('Recovery artifact too large');
-    return text;
-  };
+  const asset = (path: string) =>
+    readProvisioningArtifact(env.ASSETS, path, 'Recovery');
   const manifest = await asset('_provision/manifest.json');
   if ((await tokenHash(manifest)) !== plan.currentTemplate)
     throw Error('Recovery artifact changed');

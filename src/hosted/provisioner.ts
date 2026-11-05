@@ -1,5 +1,6 @@
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { z } from 'zod';
+import { ArtifactReadTimeout } from './provisioning-artifact';
 import {
   qaTemplate,
   readQaRun,
@@ -24,7 +25,12 @@ interface SetupDiagnostic extends SetupEvent {
   operationId: string;
   startedAt: number;
   updatedAt: number;
-  code: 'in_progress' | 'qualified' | 'outcome_pending' | 'setup_failed';
+  code:
+    | 'in_progress'
+    | 'qualified'
+    | 'outcome_pending'
+    | 'artifact_timeout'
+    | 'setup_failed';
 }
 export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   private queue: Promise<unknown> = Promise.resolve();
@@ -174,9 +180,11 @@ export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
             ...diagnostic,
             updatedAt: Date.now(),
             code:
-              error instanceof SetupPending
-                ? 'outcome_pending'
-                : 'setup_failed',
+              error instanceof ArtifactReadTimeout
+                ? 'artifact_timeout'
+                : error instanceof SetupPending
+                  ? 'outcome_pending'
+                  : 'setup_failed',
           };
           try {
             await this.ctx.storage.put('diagnostic', diagnostic);

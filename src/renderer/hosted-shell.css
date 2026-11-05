@@ -233,6 +233,13 @@
     border-radius: 8px;
   }
 }
+/* Preserve the app's short-window spacing so the table keeps useful height. */
+@media (width >= 40rem) and (height < 850px) {
+  .hosted-app > main {
+    padding-top: 16px;
+    padding-bottom: 10px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .hosted-app .hosted-nav a {
     transition: none;

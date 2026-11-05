@@ -26,9 +26,13 @@ export function setupFailureReceipt(method, status, reference, diagnostic) {
     if (uuid.test(diagnostic.operationId ?? ''))
       result.operationId = diagnostic.operationId;
     if (
-      ['in_progress', 'qualified', 'outcome_pending', 'setup_failed'].includes(
-        diagnostic.code,
-      )
+      [
+        'in_progress',
+        'qualified',
+        'outcome_pending',
+        'artifact_timeout',
+        'setup_failed',
+      ].includes(diagnostic.code)
     )
       result.code = diagnostic.code;
     if (

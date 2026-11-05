@@ -2660,6 +2660,7 @@ export default function Domains() {
           presets={VIEW_FILTERS[view].presets}
           presetsIfRoom={VIEW_FILTERS[view].ifRoom}
         >
+          {supportsSales() && <PresenceInspector inline />}
           {exportNote && (
             <span
               className={cn(
@@ -2730,7 +2731,6 @@ export default function Domains() {
           )}
         </div>
       )}
-      {supportsSales() && <PresenceInspector />}
       <DataTable
         className="mt-[13px] min-h-64"
         // The bulk actions float over the table once rows are selected (or

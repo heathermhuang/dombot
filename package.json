@@ -97,7 +97,7 @@
   },
   "dependencies": {
     "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-0.15.1-hosted.1.tgz",
-    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.0.0-hosted.3.tgz",
+    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.0.0-hosted.4.tgz",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -127,6 +127,9 @@
     "tar": "^7.5.22",
     "tmp": "^0.2.7",
     "extract-zip": "npm:@electron-internal/extract-zip@1.0.1",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "miniflare@5.20261001.0-alpha": {
+      "undici": "7.30.1"
+    }
   }
 }
