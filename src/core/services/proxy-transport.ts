@@ -8,6 +8,7 @@ import {
   type RegistrarOptions,
 } from '@aoxborrow/registrar-client';
 import { parseProxy, type ProxyRoute } from '../../shared/proxy';
+import { API_TIMEOUT_MS } from '../api-timeout';
 
 // Routing a registrar account through the fixed IP proxy.
 //
@@ -243,6 +244,7 @@ export function createProxiedRegistrar(
     // Through the proxy, its outgoing address is the Client IP Namecheap sees.
     name === 'namecheap' ? { ...credentials, clientIp: proxy.ip } : credentials,
     {
+      timeout: API_TIMEOUT_MS,
       ...requestPolicy?.(proxy, name),
       fetch: wrapFetch ? wrapFetch(fetch) : fetch,
     } satisfies RegistrarOptions,

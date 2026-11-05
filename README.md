@@ -177,6 +177,18 @@ macOS in-place updates require Developer ID signing. Configure the existing
 notarization steps. Signed builds carry a compile-time update-support flag;
 ad-hoc builds keep manual updates. No verification or signature check is disabled.
 
+## Reporting a problem
+
+The desktop app keeps an error log: its warnings and errors, such as a failed
+sync and what the registrar or marketplace said. Open it with **Help → Show
+Error Log** (macOS) or **Settings → About → Show in Finder / Explorer**.
+It lives at `~/Library/Logs/DomBot/main.log` on macOS and
+`%APPDATA%\DomBot\logs\main.log` on Windows, and rolls over to `main.old.log`
+at 2 MB. Every line is scrubbed before it's written: saved keys, passwords and
+proxy credentials become `[redacted]`, and URLs lose their query strings. Domain
+names can appear. Paste the last 100 or so lines into your bug report. Nothing
+is sent anywhere unless you send it.
+
 ## Self-hosting in the browser
 
 The same app runs as a private web app on your own Cloudflare account — a
