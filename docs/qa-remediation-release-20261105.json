@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-05",
+  "implementationPr": "https://github.com/heathermhuang/dombot/pull/161",
+  "checkedHead": "009646a8f89071675a4e54840e5ea8a0a62ce1ba",
+  "releaseCommit": "403a4e976a47db9fed4d78062037545071e37cc6",
+  "ci": "https://github.com/heathermhuang/dombot/actions/runs/41943296107",
+  "engine": "2.0.0-hosted.3",
+  "engineSourceSha256": "a6b2368a88b62f92e724e384ad59ad371ed9165a5cac0f6e512c89bae467e258",
+  "templateSha256": "ac723974b13aad1034e4a82de7c841456611e1d76f6b864d91bb17575023c655",
+  "moduleSha256": {
+    "gateway": "83569cce256e78c85e458790b0372522e38210e0b2785aed5c460dfe6aa5e8d4",
+    "provisioner": "1a3ff1694b99e1d4c03c0ba3b3e6d3cfcad7dd9912c7baf6e1bb46629b8eb386",
+    "tenant": "6d8cf91bbf422150ae2c8777b529f914ec9698282928dacf9ac96201b62788af"
+  },
+  "deploymentIds": {
+    "gateway": "ab421fb4056a4dee81ee2e44a6064ef4",
+    "provisioner": "e054e90e3d114d348e401e4740033608"
+  },
+  "verification": {
+    "at": "2026-11-05T01:11:37.207Z",
+    "engine": "2.0.0-hosted.3",
+    "source": "a6b2368a88b62f92e724e384ad59ad371ed9165a5cac0f6e512c89bae467e258",
+    "releaseCommit": "403a4e976a47db9fed4d78062037545071e37cc6",
+    "servingTenants": 44,
+    "usersPreserved": 55,
+    "originalWorkspaceIdentitiesPreserved": 540,
+    "platformMappingsPreserved": 39,
+    "credentialNamespacesPreserved": 44,
+    "publishedSalesPreserved": 2,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 2,
+    "existingActiveHostsVerified": 2,
+    "directoryConflicts": 0,
+    "existingBackfillCompleted": 43,
+    "activeQaRuns": 0,
+    "unfinishedAllocations": 0,
+    "templateHashAgreement": true,
+    "cronPreserved": true,
+    "originalAllocationRestored": true,
+    "sourceOfferCorrect": true,
+    "registrarMutations": 0
+  },
+  "checks": {
+    "ciTestFiles": 255,
+    "ciTestsPassed": 2710,
+    "manualTestsSkipped": 1,
+    "securityRegressions": 4,
+    "relayChecks": 4,
+    "httpPassed": 38,
+    "httpTotal": 38,
+    "productionAudit": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "developmentAudit": {
+      "moderate": 28,
+      "high": 1,
+      "total": 29
+    }
+  },
+  "managedImport": {
+    "runId": "f4a7c5fa-d0f0-4d01-bf0e-35d543778009",
+    "passed": true,
+    "source": "403a4e976a47db9fed4d78062037545071e37cc6",
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "cleanupComplete": true,
+    "workers": 0,
+    "databases": 0,
+    "setupKeys": 0,
+    "diagnostic": null,
+    "realUsersPreserved": 55,
+    "platformRowsPreserved": 39,
+    "nonQaWorkspaceIdentitiesPreserved": 532,
+    "temporaryPasswordScrubbed": true
+  },
+  "analytics": {
+    "host": "domains.domains",
+    "setting": "Disabled",
+    "previous": "Enabled excluding EU visitors",
+    "persistedAfterReload": true,
+    "publicAndAuthHtml": [
+      {
+        "path": "/",
+        "status": 200,
+        "beacon": false
+      },
+      {
+        "path": "/login",
+        "status": 200,
+        "beacon": false
+      },
+      {
+        "path": "/login/password",
+        "status": 200,
+        "beacon": false
+      },
+      {
+        "path": "/signup",
+        "status": 200,
+        "beacon": false
+      },
+      {
+        "path": "/working.io",
+        "status": 200,
+        "beacon": false
+      }
+    ],
+    "managedPrivateHtml": [
+      {
+        "path": "/w/controlled-qa/",
+        "status": 200,
+        "beacon": false
+      },
+      {
+        "path": "/w/controlled-qa/import",
+        "status": 200,
+        "beacon": false
+      },
+      {
+        "path": "/account",
+        "status": 200,
+        "beacon": false
+      }
+    ],
+    "nativeChrome": {
+      "authAndPrivateDomMatches": 0,
+      "analyticsConsoleMessages": 0,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    "cspRelaxed": false,
+    "botProtectionChanges": 0,
+    "historicalDataDeleted": false
+  },
+  "recovery": {
+    "databaseExports": 45,
+    "codeSettingsSnapshots": 46,
+    "legacySchedulesPreserved": 8,
+    "gatewaySchedulePreserved": true,
+    "provisionerCronPreserved": true
+  },
+  "providerIncidents": [
+    {
+      "phase": "asset-upload-session",
+      "outcome": "timeout before Worker PUT; exact original module/settings rechecked and original admission restored before retry"
+    },
+    {
+      "phase": "worker-upload",
+      "status": 500,
+      "code": 10013,
+      "outcome": "exact original module/settings observed on two reads; original admission restored before successful reconciled retry"
+    }
+  ],
+  "holds": {
+    "historicalProvisioningHang": "Cause remains unexplained; distinct uncertain-write replay repair and diagnostics are deployed",
+    "passkeys": "Local RP/real WebAuthn options/ES256 protocol/fresh-auth/replay verified; actual browser enrollment/login/removal pending user handoff and computer-use availability; production RP and physical device unqualified",
+    "inquiry": "Disposable captured-mail local route journey passed; production CAPTCHA/external delivery not executed",
+    "otherProviders": "Controlled QQ/163/126, mainland connectivity and registrar/marketplace write fixtures remain required"
+  }
+}

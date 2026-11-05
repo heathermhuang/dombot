@@ -126,11 +126,26 @@ await db
   .run();
 const accounts = new Accounts(db, env.AUTH_PEPPER);
 const owner = await accounts.login('passkey@fixture.invalid', password);
-const session = await accounts.newSession(owner);
+let session = await accounts.newSession(owner);
 const server = createServer(async (incoming, outgoing) => {
   try {
     const url = new URL(incoming.url, origin);
     if (url.pathname === '/__qualification/session') {
+      // Start the handoff clock when the user opens the fixture, not when the
+      // server started. Never let this helper bypass an enrolled passkey.
+      if (
+        Number(await db.prepare('SELECT count(*) n FROM passkeys').first('n'))
+      ) {
+        outgoing.writeHead(409);
+        outgoing.end(
+          'A local passkey is enrolled. Use its normal sign-in flow.',
+        );
+        return;
+      }
+      const next = await accounts.newSession(owner);
+      assert(next);
+      await accounts.logout(session);
+      session = next;
       outgoing.writeHead(303, {
         'Set-Cookie': `dd_session=${session}; Path=/; HttpOnly; SameSite=Lax`,
         Location: '/account',
@@ -190,15 +205,23 @@ async function stop() {
 await new Promise((resolve) => server.listen(5197, '127.0.0.1', resolve));
 if (process.argv.includes('--check')) {
   try {
+    await db.prepare('UPDATE sessions SET authenticated_at=0').run();
+    const seed = await fetch(origin + '/__qualification/session', {
+      redirect: 'manual',
+    });
+    assert.equal(seed.status, 303);
+    const cookie = seed.headers.get('Set-Cookie').split(';')[0];
+    await seed.body?.cancel();
+    assert(await accounts.session(session));
     const page = await fetch(origin + '/account', {
-      headers: { Cookie: 'dd_session=' + session },
+      headers: { Cookie: cookie },
     });
     assert.equal(page.status, 200);
     assert((await page.text()).includes('Add a passkey'));
     const options = await fetch(origin + '/auth/passkeys/options', {
       method: 'POST',
       headers: {
-        Cookie: 'dd_session=' + session,
+        Cookie: cookie,
         Origin: origin,
         'Content-Type': 'application/json',
       },
@@ -211,6 +234,25 @@ if (process.argv.includes('--check')) {
       value.options.authenticatorSelection.userVerification,
       'required',
     );
+    await db
+      .prepare(
+        'INSERT INTO passkeys(id,user_id,public_key,counter,transports,created_at,revision) VALUES(?,?,?,?,?,?,?)',
+      )
+      .bind(
+        'synthetic-not-a-credential',
+        user,
+        'not-a-public-key',
+        0,
+        '[]',
+        Date.now(),
+        'synthetic',
+      )
+      .run();
+    const refused = await fetch(origin + '/__qualification/session', {
+      redirect: 'manual',
+    });
+    assert.equal(refused.status, 409);
+    await refused.body?.cancel();
     console.log(
       JSON.stringify({
         fixtureReady: true,
@@ -218,6 +260,8 @@ if (process.argv.includes('--check')) {
         localRelyingParty: 'localhost',
         accountPage: true,
         registrationOptions: true,
+        staleSessionRefreshed: true,
+        enrolledKeyBypassBlocked: true,
         browserEnrollment: 'not_run',
         physicalDevice: 'not_run',
       }),
