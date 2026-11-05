@@ -1,8 +1,12 @@
 # SaaS QA remediation · 5 November 2026
 
-Release status: implementation verified locally; CI, merge and production
-qualification are pending. This report distinguishes the named recovery repair
-from the earlier runtime incident.
+Released implementation: [PR #161](https://github.com/heathermhuang/dombot/pull/161),
+source `403a4e976a47db9fed4d78062037545071e37cc6`, engine `2.0.0-hosted.3`.
+[CI](https://github.com/heathermhuang/dombot/actions/runs/41943296107), merge,
+staged deployment and production qualification passed. The
+[sanitized release receipt](qa-remediation-release-20261105.json) records exact
+module/deployment identities and preservation evidence. This report distinguishes
+the named recovery repair from the earlier runtime incident.
 
 ## Provisioning
 
@@ -70,36 +74,90 @@ local account page and real WebAuthn registration options. Running without
 bundle translates the RP/origin constants and permits that exact loopback origin;
 production source, RP and HTTPS guards stay unchanged. Only local fixture sessions
 and credentials are affected. A virtual test authenticator can enroll, sign out,
-log in, test stale authentication with same-origin `POST
-/__qualification/stale-auth`, reauthenticate and remove the key. Status is available
+log in at `/login?next=%2Faccount`, test stale authentication with same-origin
+`POST /__qualification/stale-auth`, reauthenticate and remove the key. The fixture
+does not provision a portfolio, so `/account` is its sign-in destination. Status is available
 at `/__qualification/status`; Ctrl-C disposes the runtime. The real ES256 protocol,
 fresh-auth and replay regressions also pass in `passwordless.test.ts`.
 
-Actual browser completion is pending access to the locked Mac. Physical-device
-credential creation requires user takeover. Browser/virtual-device success would
-still not qualify the production RP or a physical device. Passkeys and inquiries
-never use an import QA lease or relax its cleanup allowlist.
+The browser handoff exposed the five-minute fresh-auth guard before enrollment;
+no credential was created. The local setup link now starts a fresh initial session
+when opened and refuses to reseed after a passkey exists. Its `--check` exercise
+verifies expired-session refresh and this enrolled-key guard. Initial browser
+attempts also reported generic noncompletion; those attempts are not claimed as
+passed or as a demonstrated production defect. After the fixture handoff and
+correct `/account` destination were established, native Chrome with a virtual
+authenticator completed enrollment, login, forced fresh-auth enforcement,
+reauthentication and explicit removal with user credential takeover. The local
+server recorded successful verification and confirmed zero remaining keys; the
+fixture was disposed. No production passkey code was changed. This qualifies the
+local browser/protocol flow, not the production RP or a physical device. Passkeys
+and inquiries never use an import QA lease or relax its cleanup allowlist.
 
-The analytics API returned HTTP 403 for the existing operator token. The exact
-service control must be inspected/applied through an authorized existing browser
-session or appropriately scoped access. No CSP, WAF, Turnstile, JavaScript
-Detections or cache policy was relaxed. Analytics/CSP acceptance remains pending.
+A separate disposable localhost HTTP qualification reused the existing ES256
+authenticator fixture through the real gateway routes. Enrollment, login,
+challenge-replay rejection, stale removal rejection, reauthentication and removal
+passed, leaving zero keys. This validates the local RP adapter and server wire
+flow; it is separate synthetic protocol evidence, not another browser test.
+
+The analytics and scoped-configuration APIs returned HTTP 403 for the existing
+operator token. After the Mac was unlocked, native Chrome changed only the
+configured `domains.domains` Web Analytics site from “Enabled excluding EU
+visitors” to “Disabled”; reload confirmed persistence. The site and historical data
+were retained. No manual snippet was installed. Analytics measurement is
+intentionally disabled; the observed injected scripts had already been blocked by
+CSP. Native Chrome found zero beacon DOM matches and zero analytics-related console
+messages on auth/private pages at 390 × 844. Five public/auth HTML checks and three
+managed account/onboarding/import HTML checks also found no beacon injection.
+Strict CSP, cache/session policy, WAF, Turnstile and JavaScript Detections were not
+relaxed or disabled.
 QQ/163/126 delivery, mainland connectivity and real registrar/marketplace writes
 remain the exact controlled-fixture/provider holds from the reviewed plan.
 
 ## Verification and rollout
 
-Local verification passed typecheck, lint, engine integrity, 2,709 tests with one
-deliberate manual skip, four security regressions, four relay checks, all six Worker
-dry runs, web/demo/site builds and the existing local import allocation/readback
-qualification. The later inquiry fixture adds one test; final CI must include it.
-Focused reruns are not added to the unique test count.
+Final implementation CI passed 255 test files and 2,710 tests, with one deliberate
+manual skip, four separate security regressions, four relay checks, both CodeQL
+languages and all required builds. Local verification also passed typecheck, lint,
+engine integrity, all six Worker dry runs, web/demo/site builds, dependency
+contracts and the existing local import allocation/readback qualification. Focused
+reruns are not added to the unique test count. The local handoff helper correction
+does not change a deployed module, dependency or engine artifact.
 
-Read-only production preflight found 55 accounts, 44 admitted tenants, zero active
-QA leases and zero unfinished requested allocations. Protected custody retains
-current code/settings, D1 recovery exports and credential/publication fingerprints.
-Rollout uses that refreshed roster and exact live bindings, preserving tenant
-keys, identities, coordinator namespaces, publication revisions, quotas, flags
-and schedules. The final managed import canary and independent cleanup must use
-the final deployed candidate. Append deployment and CI receipts only after they
-are observed.
+Production preflight captured all 55 accounts and the exact 44-tenant admitted
+roster. Protected custody retains 45 D1 recovery exports, 46 code/settings
+snapshots, prior template assets and credential/publication fingerprints. An
+asset-session timeout and an HTTP 500/code 10013 upload each stopped rollout;
+readback proved the original module/settings, original admission was restored,
+and only then did a reconciled retry proceed. These are separately observed
+provider incidents, not evidence explaining the historical hung RPC.
+
+The controlled canary and all 44 tenants now serve the pinned engine/source pair.
+Gateway/provisioner code and future-template agreement were verified, and original
+allocation policy was restored. All 55 accounts, 540 pre-existing control workspace
+identities, 39 platform mappings, 44 credential namespaces, two published listings
+and two published portfolios were preserved, including publication revisions.
+Existing canonical/legacy public routes and two active custom hosts passed. Eight
+legacy Worker schedules, gateway schedules and the provisioner's cleanup cron were
+preserved; unrelated bindings, secrets, flags and quotas were retained.
+
+All 38 post-deploy HTTP checks passed. Final managed import run
+`f4a7c5fa-d0f0-4d01-bf0e-35d543778009` proved zero allocation on open/preview, one
+pair on Save, two unchanged retries and readback on the final candidate. Cleanup
+independently confirmed zero run-owned Workers/databases/setup keys, no QA account
+or session, scrubbed temporary credentials and preserved real accounts. No active
+QA lease or unfinished allocation remains. Registrar/marketplace/payment writes
+and external inquiry delivery were not used as fixtures.
+
+## Reported filter-chip removal follow-up
+
+The user subsequently reported that a chip's X had no effect. A disposable real
+renderer with three reserved synthetic domains was exercised at desktop and
+390 × 844 sizes: a TLD filter reduced three rows to one, and Pricing reduced them
+to zero; one click on each X removed the chip and restored all three rows, including
+while its dropdown was open. The menu wrapper already defaults to non-modal, so
+the initial modal-click hypothesis was disproved. Coordinate clicks at the mobile
+X target also passed. Raw touch injection is unavailable in the in-app browser.
+The reported case is not yet reproduced; the exact chip/value and whether the
+chip remains visible or only the rows stay unchanged are requested. No speculative
+filter code change or additional engine rollout was made.
