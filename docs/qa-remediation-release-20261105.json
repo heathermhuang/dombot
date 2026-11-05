@@ -171,5 +171,16 @@
     "passkeys": "Local RP/real WebAuthn options/ES256 protocol/fresh-auth/replay verified. User browser attempts reported generic noncompletion and no key was enrolled. Cause is unclassified; bounded local diagnostic reproduction and browser enrollment/login/removal remain pending user handoff and computer-use availability. Production RP and physical device are unqualified.",
     "inquiry": "Disposable captured-mail local route journey passed; production CAPTCHA/external delivery not executed",
     "otherProviders": "Controlled QQ/163/126, mainland connectivity and registrar/marketplace write fixtures remain required"
+  },
+  "localPasskeyWire": {
+    "plane": "synthetic ES256 over actual localhost gateway HTTP routes; no browser",
+    "registration": true,
+    "login": true,
+    "replayRejected": true,
+    "staleRemovalRejected": true,
+    "reauth": true,
+    "removal": true,
+    "setupHelperCannotBypassKey": true,
+    "remainingKeys": 0
   }
 }

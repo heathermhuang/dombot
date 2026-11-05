@@ -94,6 +94,12 @@ takeover. Virtual-device success would still not qualify the production RP or a
 physical device. Passkeys and inquiries never use an import QA lease or relax its
 cleanup allowlist.
 
+A separate disposable localhost HTTP qualification reused the existing ES256
+authenticator fixture through the real gateway routes. Enrollment, login,
+challenge-replay rejection, stale removal rejection, reauthentication and removal
+passed, leaving zero keys. This validates the local RP adapter and server wire
+flow; it is synthetic protocol evidence and does not close the Chrome failure.
+
 The analytics and scoped-configuration APIs returned HTTP 403 for the existing
 operator token. After the Mac was unlocked, native Chrome changed only the
 configured `domains.domains` Web Analytics site from “Enabled excluding EU
