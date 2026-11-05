@@ -274,7 +274,7 @@ if (process.argv.includes('--check')) {
     'Disposable local passkey fixture: ' + origin + '/__qualification/session',
   );
   console.log(
-    'Use a virtual test authenticator. Enroll, sign out, sign in by passkey, expire freshness using POST /__qualification/stale-auth, confirm again, then remove the key. Production RP and physical-device acceptance remain separate.',
+    'Use a virtual test authenticator. Enroll, sign out, sign in by passkey at /login?next=%2Faccount, expire freshness using POST /__qualification/stale-auth, confirm again, then remove the key. This fixture has no portfolio at /app. Production RP and physical-device acceptance remain separate.',
   );
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);

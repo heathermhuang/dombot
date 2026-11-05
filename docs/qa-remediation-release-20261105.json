@@ -168,9 +168,10 @@
   ],
   "holds": {
     "historicalProvisioningHang": "Cause remains unexplained; distinct uncertain-write replay repair and diagnostics are deployed",
-    "passkeys": "Local RP/real WebAuthn options/ES256 protocol/fresh-auth/replay verified. User browser attempts reported generic noncompletion and no key was enrolled. Cause is unclassified; bounded local diagnostic reproduction and browser enrollment/login/removal remain pending user handoff and computer-use availability. Production RP and physical device are unqualified.",
+    "passkeys": "Local native-Chrome virtual-authenticator enrollment/login/fresh-auth/reauth/removal passed with user credential takeover and zero keys remaining. Production RP and physical-device acceptance remain unqualified. Earlier generic noncompletion attempts are not claimed as a production defect or a passing test.",
     "inquiry": "Disposable captured-mail local route journey passed; production CAPTCHA/external delivery not executed",
-    "otherProviders": "Controlled QQ/163/126, mainland connectivity and registrar/marketplace write fixtures remain required"
+    "otherProviders": "Controlled QQ/163/126, mainland connectivity and registrar/marketplace write fixtures remain required",
+    "filterChipRemoval": "User-reported chip X failure has not been reproduced. Desktop/mobile-size list and custom-filter coordinate/click tests restored all three synthetic rows. Exact chip/value and chip-versus-row behavior requested; raw touch injection unavailable. No speculative code change made."
   },
   "localPasskeyWire": {
     "plane": "synthetic ES256 over actual localhost gateway HTTP routes; no browser",
@@ -182,5 +183,18 @@
     "removal": true,
     "setupHelperCannotBypassKey": true,
     "remainingKeys": 0
+  },
+  "localPasskeyBrowser": {
+    "plane": "Native Chrome with virtual authenticator and user credential handoff; local RP only",
+    "enrollment": true,
+    "login": true,
+    "freshnessExpiredByFixture": true,
+    "reauth": true,
+    "removal": true,
+    "remainingKeys": 0,
+    "fixtureDisposed": true,
+    "productionCredentialsChanged": 0,
+    "physicalDeviceQualified": false,
+    "productionRpQualified": false
   }
 }

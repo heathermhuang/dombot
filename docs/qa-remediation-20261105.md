@@ -74,31 +74,31 @@ local account page and real WebAuthn registration options. Running without
 bundle translates the RP/origin constants and permits that exact loopback origin;
 production source, RP and HTTPS guards stay unchanged. Only local fixture sessions
 and credentials are affected. A virtual test authenticator can enroll, sign out,
-log in, test stale authentication with same-origin `POST
-/__qualification/stale-auth`, reauthenticate and remove the key. Status is available
+log in at `/login?next=%2Faccount`, test stale authentication with same-origin
+`POST /__qualification/stale-auth`, reauthenticate and remove the key. The fixture
+does not provision a portfolio, so `/account` is its sign-in destination. Status is available
 at `/__qualification/status`; Ctrl-C disposes the runtime. The real ES256 protocol,
 fresh-auth and replay regressions also pass in `passwordless.test.ts`.
 
 The browser handoff exposed the five-minute fresh-auth guard before enrollment;
 no credential was created. The local setup link now starts a fresh initial session
 when opened and refuses to reseed after a passkey exists. Its `--check` exercise
-verifies expired-session refresh and this enrolled-key guard. Actual browser
-enrollment/login/removal remains pending user takeover and computer-use availability
-after native-tool timeouts. Subsequent user browser attempts reported the generic
-“Passkey confirmation was not completed” message; no key was enrolled. The cause
-is unclassified, so this is an unresolved browser acceptance failure, not a passed
-journey or a demonstrated production defect. A private local diagnostic fixture
-records only bounded browser error codes, response stages and origin/RP/UV checks;
-the diagnostic reproduction still requires the browser handoff. Physical-device credential creation requires user
-takeover. Virtual-device success would still not qualify the production RP or a
-physical device. Passkeys and inquiries never use an import QA lease or relax its
-cleanup allowlist.
+verifies expired-session refresh and this enrolled-key guard. Initial browser
+attempts also reported generic noncompletion; those attempts are not claimed as
+passed or as a demonstrated production defect. After the fixture handoff and
+correct `/account` destination were established, native Chrome with a virtual
+authenticator completed enrollment, login, forced fresh-auth enforcement,
+reauthentication and explicit removal with user credential takeover. The local
+server recorded successful verification and confirmed zero remaining keys; the
+fixture was disposed. No production passkey code was changed. This qualifies the
+local browser/protocol flow, not the production RP or a physical device. Passkeys
+and inquiries never use an import QA lease or relax its cleanup allowlist.
 
 A separate disposable localhost HTTP qualification reused the existing ES256
 authenticator fixture through the real gateway routes. Enrollment, login,
 challenge-replay rejection, stale removal rejection, reauthentication and removal
 passed, leaving zero keys. This validates the local RP adapter and server wire
-flow; it is synthetic protocol evidence and does not close the Chrome failure.
+flow; it is separate synthetic protocol evidence, not another browser test.
 
 The analytics and scoped-configuration APIs returned HTTP 403 for the existing
 operator token. After the Mac was unlocked, native Chrome changed only the
@@ -148,3 +148,16 @@ independently confirmed zero run-owned Workers/databases/setup keys, no QA accou
 or session, scrubbed temporary credentials and preserved real accounts. No active
 QA lease or unfinished allocation remains. Registrar/marketplace/payment writes
 and external inquiry delivery were not used as fixtures.
+
+## Reported filter-chip removal follow-up
+
+The user subsequently reported that a chip's X had no effect. A disposable real
+renderer with three reserved synthetic domains was exercised at desktop and
+390 × 844 sizes: a TLD filter reduced three rows to one, and Pricing reduced them
+to zero; one click on each X removed the chip and restored all three rows, including
+while its dropdown was open. The menu wrapper already defaults to non-modal, so
+the initial modal-click hypothesis was disproved. Coordinate clicks at the mobile
+X target also passed. Raw touch injection is unavailable in the in-app browser.
+The reported case is not yet reproduced; the exact chip/value and whether the
+chip remains visible or only the rows stay unchanged are requested. No speculative
+filter code change or additional engine rollout was made.
