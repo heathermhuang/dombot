@@ -308,7 +308,11 @@ describe('on-demand account lifecycle', () => {
               env,
             );
       expect(r.status).toBe(reason === 'import' ? 303 : 200);
-      expect(provision).toHaveBeenCalledWith(s.user.workspace_id, s.user.id);
+      expect(provision).toHaveBeenCalledWith(
+        s.user.workspace_id,
+        s.user.id,
+        expect.stringMatching(/^[a-f0-9-]{36}$/),
+      );
       expect(
         await db
           .prepare('SELECT reason FROM pending_workspaces WHERE workspace_id=?')
@@ -456,6 +460,32 @@ describe('on-demand account lifecycle', () => {
     await expect(activateWorkspace(env, s.user, 'registrar')).rejects.toThrow(
       'operator attention',
     );
+    expect(
+      await db.prepare('SELECT count(*) n FROM platform_workspaces').first('n'),
+    ).toBe(0);
+  });
+  it('returns only a safe support reference when activation fails, preserving the session and original input', async () => {
+    const s = await signup();
+    env.PROVISIONER = {
+      provision: async () => {
+        throw Error('secret-token import-body upstream-private-error');
+      },
+    };
+    const response = await submitImport(s.user.workspace_id, s.token);
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { supportReference: string };
+    expect(body.supportReference).toMatch(/^[a-f0-9-]{36}$/);
+    expect(response.headers.get('X-Setup-Reference')).toBe(
+      body.supportReference,
+    );
+    expect(response.headers.get('Retry-After')).toBe('30');
+    expect(JSON.stringify(body)).not.toMatch(
+      /secret-token|import-body|upstream-private-error/,
+    );
+    expect(
+      await new Accounts(db, env.AUTH_PEPPER).session(s.token),
+    ).not.toBeNull();
+    expect(validImportBody.args[1]).toEqual({ importId: 'test-import' });
     expect(
       await db.prepare('SELECT count(*) n FROM platform_workspaces').first('n'),
     ).toBe(0);

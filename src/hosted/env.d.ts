@@ -9,6 +9,7 @@ interface HostedEnv {
     provision(
       workspace: string,
       user: string,
+      operationId?: string,
     ): Promise<import('./on-demand').ProvisionReceipt>;
   };
   PORTFOLIO_CUSTOM_HOSTS_ENABLED?: string;

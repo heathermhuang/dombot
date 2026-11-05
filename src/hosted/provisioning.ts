@@ -48,7 +48,26 @@ export interface SetupState {
 export interface SetupJournal {
   get(): Promise<SetupState | undefined>;
   put(state: SetupState): Promise<void>;
+  diagnose?(event: SetupEvent): Promise<void>;
 }
+export type SetupPhase =
+  | 'admission'
+  | 'assets'
+  | 'database-inspection'
+  | 'database-create'
+  | 'module-read'
+  | 'worker-inspection'
+  | 'worker-upload'
+  | 'bootstrap'
+  | 'provenance'
+  | 'idle-qualification'
+  | 'complete';
+export interface SetupEvent {
+  phase: SetupPhase;
+  status?: number;
+  upstreamReference?: string;
+}
+export class SetupPending extends Error {}
 const reserved = new Set([
   'DB',
   'ASSETS',
@@ -75,12 +94,18 @@ export async function provisionPortfolio(
 ): Promise<ProvisionReceipt> {
   safeId(workspace);
   safeId(user);
+  let phase: SetupPhase = 'admission';
+  const diagnose = async (next: SetupPhase) => {
+    phase = next;
+    await journal.diagnose?.({ phase });
+  };
   const eligible = await env.CONTROL_DB.prepare(
     'SELECT 1 FROM pending_workspaces q JOIN workspaces w ON w.id=q.workspace_id JOIN users u ON u.workspace_id=w.id WHERE q.workspace_id=? AND u.id=? AND w.enabled=1 AND q.requested_at IS NOT NULL AND q.activated_at IS NULL AND NOT EXISTS(SELECT 1 FROM platform_workspaces p WHERE p.workspace_id=w.id)',
   )
     .bind(workspace, user)
     .first();
   if (!eligible) throw Error('Setup is not admitted');
+  await diagnose('admission');
   const readAsset = async (path: string) => {
     const response = await env.ASSETS.fetch(
       new Request('https://assets.internal/_provision/' + path),
@@ -90,6 +115,7 @@ export async function provisionPortfolio(
     if (bytes.length > 10000000) throw Error('Setup artifact too large');
     return bytes;
   };
+  await diagnose('assets');
   const manifestText = await readAsset('manifest.json');
   if ((await tokenHash(manifestText)) !== env.TEMPLATE_SHA256)
     throw Error('Setup artifact changed');
@@ -166,6 +192,14 @@ export async function provisionPortfolio(
         signal: AbortSignal.timeout(45000),
       },
     );
+    const reference = response.headers.get('cf-ray');
+    await journal.diagnose?.({
+      phase,
+      status: response.status,
+      ...(reference && /^[a-f0-9]{16}-[A-Z0-9]{3}$/.test(reference)
+        ? { upstreamReference: reference }
+        : {}),
+    });
     if (response.status === 404 && (!init.method || init.method === 'GET')) {
       await response.body?.cancel();
       return null;
@@ -184,6 +218,7 @@ export async function provisionPortfolio(
     return data.result;
   };
   const name = 'dombot-wfp-' + workspace;
+  await diagnose('database-inspection');
   if (!state.databaseId) {
     const existing = await json<{ uuid: string; name: string }[]>(
       '/d1/database?name=' + encodeURIComponent(name),
@@ -193,6 +228,11 @@ export async function provisionPortfolio(
       throw Error('Database identity conflict');
     if (matches.length) state.databaseId = safeId(matches[0].uuid);
     else {
+      // Absence on one read cannot disprove a previous unknown create outcome.
+      // Retain the identity and keys; never race an in-flight provider write.
+      if (state.createAttempted)
+        throw new SetupPending('Database outcome pending');
+      await diagnose('database-create');
       state.createAttempted = true;
       await journal.put(state);
       const created = await json<{ uuid: string }>('/d1/database', {
@@ -210,9 +250,11 @@ export async function provisionPortfolio(
     encodeURIComponent(env.CF_DISPATCH_NAMESPACE) +
     '/scripts/' +
     name;
+  await diagnose('module-read');
   const module = await readAsset('tenant.mjs');
   if ((await tokenHash(module)) !== template.moduleSha256)
     throw Error('Tenant artifact changed');
+  await diagnose('worker-inspection');
   const previous = await api(scriptPath + '/content');
   if (previous) {
     if (!state.uploadAttempted) throw Error('Worker identity conflict');
@@ -237,6 +279,8 @@ export async function provisionPortfolio(
     )
       throw Error('Worker identity conflict');
   } else {
+    if (state.uploadAttempted) throw new SetupPending('Worker outcome pending');
+    await diagnose('worker-upload');
     state.uploadAttempted = true;
     await journal.put(state);
     const bindings = [
@@ -330,6 +374,7 @@ export async function provisionPortfolio(
     if (!response.ok) throw Error('Tenant qualification failed');
     return response;
   };
+  await diagnose('bootstrap');
   const schema = await readAsset('schema.json');
   if ((await tokenHash(schema)) !== template.bootstrapSha256)
     throw Error('Schema artifact changed');
@@ -337,6 +382,7 @@ export async function provisionPortfolio(
     await send('/platform-internal/bootstrap', schema)
   ).json()) as { ready: boolean };
   if (!bootstrap.ready) throw Error('Tenant schema is not ready');
+  await diagnose('provenance');
   const info = await send(
     '/api/getAppInfo',
     JSON.stringify({ args: [] }),
@@ -348,6 +394,7 @@ export async function provisionPortfolio(
   )
     throw Error('Tenant provenance mismatch');
   await info.body?.cancel();
+  await diagnose('idle-qualification');
   const health = (await (
     await send('/platform-internal/reconcile')
   ).json()) as {
@@ -369,6 +416,7 @@ export async function provisionPortfolio(
     health.maintenance.inspection.state !== 'empty'
   )
     throw Error('Tenant idle qualification failed');
+  await diagnose('complete');
   return {
     workspace,
     databaseId: state.databaseId,

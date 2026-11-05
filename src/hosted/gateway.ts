@@ -1302,21 +1302,30 @@ app.all('/w/:workspace/*', async (c) => {
           400,
         );
     }
+    const setupReference = crypto.randomUUID();
     try {
       await activateWorkspace(
         c.env,
         user,
         marketConnection ? 'market' : connecting ? 'registrar' : 'import',
+        setupReference,
       );
       configured = await workspaceFor(c.env, id);
       if (!configured) throw Error('Portfolio not admitted');
       // Continue through the usual owner/API checks and tenant mutation path.
       // Credentials/import rows stay in this request, never in setup metadata.
     } catch {
+      console.error('Portfolio activation failed', {
+        operationId: setupReference,
+        code: 'setup_unavailable',
+      });
+      c.header('X-Setup-Reference', setupReference);
+      c.header('Retry-After', '30');
       return c.json(
         {
           error:
             'Your portfolio could not be prepared yet. Retry in a moment, or contact support if setup keeps failing. Your sign-in is unchanged.',
+          supportReference: setupReference,
         },
         503,
       );

@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { getPlatformProxy } from 'wrangler';
 import { withProductionQa } from './production-import-qa-lifecycle.mjs';
+import { setupFailureReceipt } from './setup-failure-receipt.mjs';
 const { values } = parseArgs({
   options: {
     production: { type: 'boolean' },
@@ -255,7 +256,23 @@ async function api(r, name, args = []) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ args }),
   });
-  assert.equal(response.status, 200, 'QA API status ' + response.status);
+  if (response.status !== 200) {
+    let diagnostic;
+    try {
+      diagnostic = (await service.qaStatus(r.run_id))?.diagnostic;
+    } catch {
+      /* Retain HTTP failure even if private diagnostics are unavailable. */
+    }
+    const receipt = setupFailureReceipt(
+      name,
+      response.status,
+      response.headers.get('X-Setup-Reference'),
+      diagnostic,
+    );
+    await response.body?.cancel();
+    await write(path.join(runDir, 'api-failure.json'), receipt);
+    throw Error('QA API failed: ' + receipt.stage + ' HTTP ' + receipt.status);
+  }
   return (await response.json()).result;
 }
 async function cleanup(current) {

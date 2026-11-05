@@ -325,3 +325,63 @@ it('rejects an unsafe future sales origin before allocating resources', async ()
   expect(creates).toBe(0);
   expect(uploads).toBe(0);
 });
+it('reports the last stage and only a validated upstream request reference', async () => {
+  const events: unknown[] = [];
+  journal.diagnose = async (event) => {
+    events.push(event);
+  };
+  await expect(
+    provisionPortfolio(
+      env,
+      journal,
+      workspace,
+      user,
+      async () =>
+        new Response('private-token imported-body', {
+          status: 503,
+          headers: { 'cf-ray': '0123456789abcdef-SIN' },
+        }),
+    ),
+  ).rejects.toThrow('(503)');
+  expect(events.at(-1)).toEqual({
+    phase: 'database-inspection',
+    status: 503,
+    upstreamReference: '0123456789abcdef-SIN',
+  });
+  expect(JSON.stringify(events)).not.toMatch(
+    /private-token|imported-body|root|gateway|fixture-token/,
+  );
+  events.length = 0;
+  await expect(
+    provisionPortfolio(
+      env,
+      journal,
+      workspace,
+      user,
+      async () =>
+        new Response('private', {
+          status: 503,
+          headers: { 'cf-ray': 'private-token' },
+        }),
+    ),
+  ).rejects.toThrow();
+  expect(events.at(-1)).toEqual({ phase: 'database-inspection', status: 503 });
+});
+
+it.each(['database', 'worker'])(
+  'holds an uncertain %s write when the provider read has not converged',
+  async (kind) => {
+    lostCreate = kind === 'database';
+    lostUpload = kind === 'worker';
+    await expect(
+      provisionPortfolio(env, journal, workspace, user, transport),
+    ).rejects.toThrow('connection lost');
+    if (kind === 'database') database = false;
+    else worker = false;
+    await expect(
+      provisionPortfolio(env, journal, workspace, user, transport),
+    ).rejects.toThrow('outcome pending');
+    expect(creates).toBe(1);
+    expect(uploads).toBe(kind === 'database' ? 0 : 1);
+  },
+);

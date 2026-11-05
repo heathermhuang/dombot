@@ -14,10 +14,18 @@ import {
 } from './provisioning-recovery';
 import {
   provisionPortfolio,
+  SetupPending,
+  type SetupEvent,
   type SetupState,
   type ProvisioningEnv,
 } from './provisioning';
 const safeId = (id: string) => z.string().uuid().parse(id);
+interface SetupDiagnostic extends SetupEvent {
+  operationId: string;
+  startedAt: number;
+  updatedAt: number;
+  code: 'in_progress' | 'qualified' | 'outcome_pending' | 'setup_failed';
+}
 export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
   private queue: Promise<unknown> = Promise.resolve();
   async #retryQa(id: string) {
@@ -121,18 +129,78 @@ export class PortfolioSetup extends DurableObject<ProvisioningEnv> {
     this.queue = work.catch(() => undefined);
     return work;
   }
-  provision(workspace: string, user: string) {
-    const work = this.queue.then(() =>
-      provisionPortfolio(
-        this.env,
-        {
-          get: () => this.ctx.storage.get<SetupState>('setup'),
-          put: (state) => this.ctx.storage.put('setup', state),
-        },
-        workspace,
-        user,
-      ),
-    );
+  diagnostics() {
+    return this.ctx.storage.get<SetupDiagnostic>('diagnostic');
+  }
+  provision(
+    workspace: string,
+    user: string,
+    operationId = crypto.randomUUID(),
+  ) {
+    safeId(operationId);
+    const startedAt = Date.now();
+    console.info('Portfolio setup queued', {
+      operationId,
+      phase: 'admission',
+      startedAt,
+    });
+    const work = this.queue.then(async () => {
+      let diagnostic: SetupDiagnostic | undefined;
+      try {
+        return await provisionPortfolio(
+          this.env,
+          {
+            get: () => this.ctx.storage.get<SetupState>('setup'),
+            put: (state) => this.ctx.storage.put('setup', state),
+            diagnose: async (event) => {
+              diagnostic = {
+                ...event,
+                operationId,
+                startedAt,
+                updatedAt: Date.now(),
+                code: event.phase === 'complete' ? 'qualified' : 'in_progress',
+              };
+              await this.ctx.storage.put('diagnostic', diagnostic);
+            },
+          },
+          workspace,
+          user,
+        );
+      } catch (error) {
+        // Never serialize exception messages, setup keys or arbitrary upstream data.
+        // A stale call rejected before eligibility must not recreate cleared storage.
+        if (diagnostic) {
+          diagnostic = {
+            ...diagnostic,
+            updatedAt: Date.now(),
+            code:
+              error instanceof SetupPending
+                ? 'outcome_pending'
+                : 'setup_failed',
+          };
+          try {
+            await this.ctx.storage.put('diagnostic', diagnostic);
+          } catch {
+            // A storage reset must still return a safe failure, never success.
+            console.error('Portfolio setup diagnostic unavailable', {
+              operationId,
+              code: 'diagnostic_unavailable',
+            });
+          }
+        }
+        console.error(
+          'Portfolio setup failed',
+          diagnostic ?? {
+            operationId,
+            phase: 'admission',
+            startedAt,
+            updatedAt: Date.now(),
+            code: 'setup_failed',
+          },
+        );
+        throw Error('Portfolio setup unavailable. Reference: ' + operationId);
+      }
+    });
     this.queue = work.catch(() => undefined);
     return work;
   }
@@ -169,6 +237,11 @@ export class Provisioner extends WorkerEntrypoint<ProvisioningEnv> {
       workers: run.worker_absent ? 0 : null,
       databases: run.database_absent ? 0 : null,
       setupKeys: run.setup_erased ? 0 : null,
+      diagnostic: run.setup_erased
+        ? null
+        : await this.env.SETUPS.get(
+            this.env.SETUPS.idFromName(run.workspace_id),
+          ).diagnostics(),
     };
   }
   recover(input: unknown) {
@@ -177,12 +250,13 @@ export class Provisioner extends WorkerEntrypoint<ProvisioningEnv> {
       this.env.SETUPS.idFromName(plan.workspace),
     ).recover(plan);
   }
-  provision(workspace: string, user: string) {
+  provision(workspace: string, user: string, operationId?: string) {
     safeId(workspace);
     safeId(user);
     return this.env.SETUPS.get(this.env.SETUPS.idFromName(workspace)).provision(
       workspace,
       user,
+      operationId,
     );
   }
 }
