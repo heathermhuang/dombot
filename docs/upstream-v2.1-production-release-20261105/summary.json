@@ -160,9 +160,30 @@
     }
   },
   "acceptanceHolds": [
-    "Signed-in owner desktop/mobile production browser inspection: Mac locked; no bypass attempted.",
+    "Remaining signed-in owner registrar and mobile production browser checks require stable Chrome control; desktop selection and target previews passed after unlock.",
     "Real Unstoppable provider acceptance: no controlled credential available."
   ],
   "schemaMigrationsApplied": 0,
-  "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0
+  "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0,
+  "nativeOwnerBrowserFollowup": {
+    "at": "2026-11-05T13:11:12.391917+00:00",
+    "method": "Native owner Chrome via CUA after user unlock",
+    "engine": "2.1.0-hosted.1",
+    "observedGatewaySource": "a18d81712c173a98127b654aa40c09c419762ab4",
+    "gatewayFollowup": "Public changelog PR #168; no tenant engine rollouts in its operator receipt",
+    "documentTitle": "domains.domains",
+    "selectAllBeforeFilter": 940,
+    "selectionAfterFilter": 0,
+    "singleRowSelected": 1,
+    "pricingTargets": 1,
+    "notesTargets": 1,
+    "paginationExplicitTargets": 2,
+    "paginationPricingNamesMatched": true,
+    "productionDataChangesSubmitted": 0,
+    "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0,
+    "registrarPageAcceptance": "pending stable browser control; loading view alone is not a defect",
+    "mobileProductionBrowserAcceptance": "pending stable browser control",
+    "browserInterferenceObserved": true,
+    "complete": false
+  }
 }

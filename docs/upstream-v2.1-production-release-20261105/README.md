@@ -53,12 +53,23 @@ the 12-registrar catalog, Unstoppable’s blank-key form/cancel behavior and syn
 settings. These browser checks use synthetic local data. [Desktop](selection-verified.png)
 and [mobile](mobile-selection.png) screenshots show the packaged regression fixture.
 
-The Mac was locked, so fresh signed-in owner desktop/mobile production browser
-inspection remains held; no lock or authentication bypass was attempted. No
-controlled Unstoppable credential was available, so real Unstoppable provider
-acceptance remains held. Connection tests do not establish every provider operation,
-physical-device or mailbox acceptance. Already-open owner tabs need a refresh to
-load the new renderer.
+After the owner unlocked the Mac, native Chrome verified the actual signed-in
+portfolio on engine `2.1.0-hosted.1`: select all, filter to one and observe cleared
+selection, then preview Pricing and Notes for exactly one selected domain.
+Deliberate selections across two pages produced exactly those two pricing targets.
+All dialogs were cancelled without saving. The tab title is `domains.domains`.
+The refreshed badge reports gateway source `a18d81712c173a98127b654aa40c09c419762ab4`,
+the separate public-changelog release from PR #168; that follow-up did not roll
+new tenant engines. The original deployment source above remains the source of
+this fleet rollout.
+
+Another active workflow subsequently switched Chrome focus. Remaining registrar
+and mobile production browser checks await stable browser control. An initially
+loading registrar view is not classified as a product defect. No controlled
+Unstoppable credential was available, so real Unstoppable provider acceptance
+remains held. Connection tests do not establish every provider operation,
+physical-device or mailbox acceptance. No lock or authentication bypass was
+attempted. Already-open owner tabs need a refresh to load the new renderer.
 
 No registrar, marketplace, DNS, publication, payment or messaging write was used
 as a production fixture. Customer data, keys, passwords and raw provider receipts
