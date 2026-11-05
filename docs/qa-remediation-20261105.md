@@ -84,7 +84,12 @@ no credential was created. The local setup link now starts a fresh initial sessi
 when opened and refuses to reseed after a passkey exists. Its `--check` exercise
 verifies expired-session refresh and this enrolled-key guard. Actual browser
 enrollment/login/removal remains pending user takeover and computer-use availability
-after two native-tool timeouts. Physical-device credential creation requires user
+after native-tool timeouts. Subsequent user browser attempts reported the generic
+“Passkey confirmation was not completed” message; no key was enrolled. The cause
+is unclassified, so this is an unresolved browser acceptance failure, not a passed
+journey or a demonstrated production defect. A private local diagnostic fixture
+records only bounded browser error codes, response stages and origin/RP/UV checks;
+the diagnostic reproduction still requires the browser handoff. Physical-device credential creation requires user
 takeover. Virtual-device success would still not qualify the production RP or a
 physical device. Passkeys and inquiries never use an import QA lease or relax its
 cleanup allowlist.
