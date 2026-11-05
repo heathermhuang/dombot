@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { coreMethods } from '../src/core/api';
 import { registerTools } from '../src/core/mcp/tools';
+import { getRegistrarCatalog } from '../src/core/services/registrars';
 const parity = JSON.parse(
-  fs.readFileSync('docs/upstream-parity-20261104.json', 'utf8'),
+  fs.readFileSync('docs/upstream-parity-20261105.json', 'utf8'),
 );
 function tools(scopes) {
   const names = [];
@@ -18,6 +19,16 @@ function tools(scopes) {
   return names;
 }
 describe('pinned upstream feature parity', () => {
+  it('pins the qualified engine to the parity revision and includes Unstoppable Domains', () => {
+    const lock = JSON.parse(
+      fs.readFileSync('hosted/dombot-engine.lock.json', 'utf8'),
+    );
+    expect(lock.upstream).toMatchObject({
+      version: parity.version,
+      revision: parity.revision,
+    });
+    expect(getRegistrarCatalog().map((r) => r.name)).toContain('unstoppable');
+  });
   it('retains every upstream core method and MCP tool with full granted scopes', () => {
     expect(Object.keys(coreMethods)).toEqual(
       expect.arrayContaining(parity.coreApiMethods),

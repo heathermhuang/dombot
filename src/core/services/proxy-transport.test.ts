@@ -92,6 +92,35 @@ async function connectAccount(
 }
 
 describe('proxied registrar transport', () => {
+  it('preserves the hosted queue budget over the upstream 90-second default', async () => {
+    vi.useFakeTimers();
+    configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));
+    transport.mockImplementation(
+      (_route, _url, init) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve(new Response(xml)), 95000);
+          init.signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(new DOMException('Aborted', 'AbortError'));
+            },
+            { once: true },
+          );
+        }),
+    );
+    const pending = createProxiedRegistrar(
+      'namecheap',
+      credentials,
+      proxy,
+    ).listDomains();
+    await vi.advanceTimersByTimeAsync(95001);
+    await expect(pending).resolves.toMatchObject([
+      { domainName: 'example.test' },
+    ]);
+    expect(transport).toHaveBeenCalledOnce();
+  });
+
   it('allows a queued proxy connection test to wait beyond its ordinary probe deadline', async () => {
     vi.useFakeTimers();
     configureProxyTransport(transport, () => ({ timeout: 155000, retries: 0 }));

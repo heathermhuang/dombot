@@ -1,7 +1,7 @@
 # Current hosted registrar dependency
 
-The engine pins `@aoxborrow/registrar-client@0.15.1-hosted.1`, based on upstream
-0.15.1 at `4bbc193bf5ff1773e6c6418f26ca38bf72848d70`. The adjacent JSON records
+The engine pins `@aoxborrow/registrar-client@1.1.0-hosted.1`, based on upstream
+1.1.0 at `a6235ca054a35029e0c017abf48b6f97dbe247a4`. The adjacent JSON records
 the exact source, archive integrity and cumulative source/test patch hashes.
 Upstream now contains the prior hosted Dynadot annualized REST quotes and Name.com
 owned-domain fallback. Retained hosted changes cover the overall retry deadline,
@@ -9,11 +9,11 @@ jitter, Gandi path validation and renewal-date correction, and Cloudflare litera
 serialization. Porkbun unzoned provider date-times are interpreted as UTC.
 
 To reproduce, check out the pinned upstream registrar-client revision, apply
-`registrar-client-0.15.1-hosted.1.patch` and the adjacent `tests.patch`, set the root
-package and lockfile root version to `0.15.1-hosted.1`, run `npm ci --ignore-scripts`,
+`registrar-client-1.1.0-hosted.1.patch` and the adjacent `tests.patch`, set the root
+package and lockfile root version to `1.1.0-hosted.1`, run `npm ci --ignore-scripts`,
 `npx vitest run --maxWorkers=1`, then `npm run build` and `npm pack --ignore-scripts`.
 The upstream tsup build generates ESM, CommonJS, source maps and matching declarations.
-All 586 non-live SDK tests pass. Tests preserve the hosted single-operation budget:
+All 652 non-live SDK tests pass. Typecheck and the ESM/CommonJS build pass. Tests preserve the hosted single-operation budget:
 a 60-second provider delay cannot fit inside a 30-second operation deadline.
 
 ## Historical 0.5.0 artifact

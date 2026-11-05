@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { API_TIMEOUT_MS } from '../api-timeout';
 import { MemoryDocStore } from '../storage/doc-store';
 import {
   configureStore,
@@ -1115,11 +1116,8 @@ describe('GoDaddy Optional settings', () => {
     getRegistrarClient('godaddy', account.id);
     expect(createRegistrar).toHaveBeenCalledWith(
       'godaddy',
-      {
-        apiToken: 'pat',
-        ...OPTIONAL,
-      },
-      undefined,
+      { apiToken: 'pat', ...OPTIONAL },
+      { timeout: API_TIMEOUT_MS },
     );
     // Clearing them takes transfers out away again.
     await saveRegistrarCredentials('godaddy', { apiToken: 'pat' }, account.id);
@@ -1182,7 +1180,10 @@ describe('GoDaddy Optional settings', () => {
       { ...trimmed, apiSecret: ' padded-secret ' },
       account.id,
     );
-    expect(createRegistrar).toHaveBeenCalledWith('godaddy', trimmed, undefined);
+    expect(createRegistrar).toHaveBeenCalledWith('godaddy', trimmed, {
+      timeout: API_TIMEOUT_MS,
+    });
+
     expect(getStoredCredentials(account.id)).toEqual(trimmed);
     expect(lookup).toHaveBeenCalledTimes(1);
     // A new PAT alone, or clearing them, tries nothing.

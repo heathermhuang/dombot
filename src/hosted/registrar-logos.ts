@@ -66,4 +66,10 @@ export const registrarLogos = [
     path: '/registrars/101domain-94bf6d8de77b.svg',
     file: '/registrar-101domain.svg',
   },
+  {
+    id: 'unstoppable',
+    label: 'Unstoppable Domains',
+    path: '/registrars/unstoppable-973a63601d49.svg',
+    file: '/registrar-unstoppable.svg',
+  },
 ] as const;

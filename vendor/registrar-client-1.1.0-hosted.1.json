@@ -1,0 +1,29 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "1.1.0-hosted.1",
+  "upstreamVersion": "1.1.0",
+  "upstreamRevision": "a6235ca054a35029e0c017abf48b6f97dbe247a4",
+  "archive": "vendor/aoxborrow-registrar-client-1.1.0-hosted.1.tgz",
+  "sha256": "4e44ffa422f48ba971dbc4c2ca7a3b1808bd0b0781bd94acd0079eaaed9d48f6",
+  "integrity": "sha512-RLwLBobClQ+/J1P+G0+ZYUEcLPbI88f7X50wgBHs5liMV39OABIzNAouUpVbyNEok3FGrei/CM06nSG7es7ghw==",
+  "license": "MIT",
+  "build": "Upstream npm run build (tsup): ESM/CJS, source maps and matching TypeScript declarations. npm pack --ignore-scripts.",
+  "checks": "652 non-live SDK tests pass (maxWorkers=1); typecheck and ESM/CJS/declarations build pass. Overall deadline and Retry-After regressions retained.",
+  "changes": [
+    "Full upstream 1.1.0, including Unstoppable Domains, Namecheap detail and shared secret redaction.",
+    "Retain bounded overall retry deadline, equal-jitter backoff, unknown-write safety and Retry-After floor.",
+    "Retain Gandi IDNA/path guards and Cloudflare literal expression serialization.",
+    "Gandi updated_at is not a renewal deadline; preserve registry expiry.",
+    "Parse Porkbun unzoned date-times as provider UTC, preserving explicit offsets."
+  ],
+  "patches": [
+    {
+      "path": "vendor/registrar-client-1.1.0-hosted.1.patch",
+      "sha256": "5d5d6b093038a5a3dfb89b7377019eaa4826fc0c2d46b2edf6a85a90ceac1454"
+    },
+    {
+      "path": "vendor/registrar-client-1.1.0-hosted.1.tests.patch",
+      "sha256": "b7d524f9c7033890d837649a1ff3427d6c850d8e27c887c07938bf48a079d33e"
+    }
+  ]
+}

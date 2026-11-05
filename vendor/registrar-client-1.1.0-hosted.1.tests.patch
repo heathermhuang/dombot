@@ -1,0 +1,78 @@
+diff --git a/test/porkbun.test.ts b/test/porkbun.test.ts
+index 98a9038..7b89b7e 100644
+--- a/test/porkbun.test.ts
++++ b/test/porkbun.test.ts
+@@ -63,6 +63,7 @@ describe('Porkbun provider', () => {
+       privacy: true,
+     });
+     expect(d.expirationDate?.getUTCFullYear()).toBe(2027);
++    expect(d.expirationDate?.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+     // getDomain funnels through listDomains (/domain/listAll)
+     expect(calls[0]).toMatchObject({ method: 'POST', path: '/domain/listAll' });
+     expect(calls[0].body).toMatchObject({ apikey: 'pk', secretapikey: 'sk' });
+diff --git a/test/retry-after.test.ts b/test/retry-after.test.ts
+index e893f5e..93e1fed 100644
+--- a/test/retry-after.test.ts
++++ b/test/retry-after.test.ts
+@@ -53,19 +53,21 @@ describe('HTTP 429 Retry-After', () => {
+     expect((error as RateLimitError).retryAfter).toBe(expected);
+   });
+ 
+-  it('uses configured backoff when the provider supplies no usable delay', async () => {
++  it('uses bounded equal jitter when the provider supplies no usable delay', async () => {
++    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+     const fetch = vi
+       .fn<typeof globalThis.fetch>()
+       .mockResolvedValueOnce(new Response(null, { status: 429 }))
+       .mockResolvedValueOnce(Response.json({ ok: true }));
+     const result = client(fetch, 1).request({ path: '/domains' });
+-    await vi.advanceTimersByTimeAsync(999);
++    await vi.advanceTimersByTimeAsync(749);
+     expect(fetch).toHaveBeenCalledTimes(1);
+     await vi.advanceTimersByTimeAsync(1);
+     expect(await result).toEqual({ ok: true });
++    random.mockRestore();
+   });
+ 
+-  it("uses Dynadot's conservative 60-second fallback without Retry-After", async () => {
++  it("does not outwait the operation deadline for Dynadot's 60-second fallback", async () => {
+     const startedAt: number[] = [];
+     const fetch = vi
+       .fn<typeof globalThis.fetch>()
+@@ -91,8 +93,7 @@ describe('HTTP 429 Retry-After', () => {
+     await vi.advanceTimersByTimeAsync(Math.max(0, startedAt[0] + 59_999 - Date.now()));
+     expect(fetch).toHaveBeenCalledTimes(1);
+     await vi.advanceTimersByTimeAsync(1000);
+-    expect(await result).toMatchObject({ success: true });
+-    expect(fetch).toHaveBeenCalledTimes(2);
+-    expect(startedAt[1] - startedAt[0]).toBeGreaterThanOrEqual(60_000);
++    expect(await result).toMatchObject({ success: false });
++    expect(fetch).toHaveBeenCalledTimes(1);
+   });
+ });
+diff --git a/test/retry.test.ts b/test/retry.test.ts
+index bdd4414..ba09323 100644
+--- a/test/retry.test.ts
++++ b/test/retry.test.ts
+@@ -103,10 +103,17 @@ describe.each([
+     expect(fetch).toHaveBeenCalledTimes(3);
+   });
+ 
+-  it('re-sends a read after a timeout', async () => {
+-    const fetch = never();
+-    await expect(make(fetch).getDomain('example.com')).rejects.toThrow(/timed out/);
+-    expect(fetch).toHaveBeenCalledTimes(3);
++  it('does not restart a spent operation timeout for another read attempt', async () => {
++    vi.useFakeTimers();
++    try {
++      const fetch = never(), started = Date.now();
++      const pending = make(fetch).getDomain('example.com');
++      const check = expect(pending).rejects.toThrow(/timed out|deadline/i);
++      await vi.advanceTimersByTimeAsync(fast.timeout + 1);
++      await check;
++      expect(fetch).toHaveBeenCalledTimes(1);
++      expect(Date.now() - started).toBeLessThanOrEqual(fast.timeout + 1);
++    } finally { vi.useRealTimers(); }
+   });
+ 
+   it('re-sends a write the registrar never saw', async () => {
