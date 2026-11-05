@@ -1,0 +1,183 @@
+{
+  "date": "2026-11-05",
+  "status": "deployed_and_verified",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/163",
+  "releaseCommit": "e481d78ba4ad42598d6a722605de06b55e9b1289",
+  "checkedHead": "acb5a9809bf65901fb100180efa4785413dec31f",
+  "ciRun": "https://github.com/heathermhuang/dombot/actions/runs/41960719307",
+  "securityRun": "https://github.com/heathermhuang/dombot/actions/runs/41960719371",
+  "ciPassed": true,
+  "securityPassed": true,
+  "merged": true,
+  "engine": "2.0.0-hosted.4",
+  "sourceSha256": "dfce98ca379110b249d21a861ebd6e67af1edbf7187fcf5ce2f73b81b4bafa13",
+  "templateSha256": "a621837ec1062ff4f6e356e49c1e185e8803d3727d8274e3db8bcbfe236d1d8d",
+  "modules": {
+    "gateway": "83569cce256e78c85e458790b0372522e38210e0b2785aed5c460dfe6aa5e8d4",
+    "provisioner": "c4f90c0a3a770458796f978fed0a00a2d3d90ad3ad0b11ee7dbd8bcde1da479c",
+    "tenant": "8530e1475b8cf48ca6d4c26710a8bba2c5d5bf7a5864854bea669f4564d2db68"
+  },
+  "at": "2026-11-05T03:23:53.681Z",
+  "verification": {
+    "at": "2026-11-05T03:40:44.282Z",
+    "engine": "2.0.0-hosted.4",
+    "source": "dfce98ca379110b249d21a861ebd6e67af1edbf7187fcf5ce2f73b81b4bafa13",
+    "releaseCommit": "e481d78ba4ad42598d6a722605de06b55e9b1289",
+    "servingTenants": 44,
+    "usersPreserved": 55,
+    "originalWorkspaceIdentitiesPreserved": 541,
+    "platformMappingsPreserved": 39,
+    "credentialNamespacesPreserved": 44,
+    "publishedSalesPreserved": 2,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 2,
+    "existingActiveHostsVerified": 2,
+    "directoryConflicts": 0,
+    "existingBackfillCompleted": 43,
+    "activeQaRuns": 0,
+    "unfinishedAllocations": 0,
+    "templateHashAgreement": true,
+    "cronPreserved": true,
+    "originalAllocationRestored": true,
+    "sourceOfferCorrect": true,
+    "registrarMutations": 0
+  },
+  "extraPreservation": {
+    "at": "2026-11-05T03:40:30.869Z",
+    "legacySchedulesPreserved": 8,
+    "gatewaySchedulesPreserved": true,
+    "uploadInterruptionsReconciled": 2,
+    "allQualified": 44
+  },
+  "postCleanup": {
+    "at": "2026-11-05T03:46:36.151Z",
+    "activeQaRuns": 0,
+    "unfinishedAllocations": 0,
+    "usersPreserved": 55,
+    "source": "e481d78ba4ad42598d6a722605de06b55e9b1289",
+    "templateHashAgreement": true,
+    "originalAllocationRestored": true
+  },
+  "tests": {
+    "files": 257,
+    "passed": 2716,
+    "manualSkipped": 1,
+    "security": 4,
+    "relay": 4,
+    "workerDryBuilds": 6,
+    "webDemoSiteBuilds": true,
+    "typecheck": true,
+    "lint": true,
+    "engineIntegrity": true,
+    "codeql": [
+      "actions",
+      "javascript-typescript"
+    ]
+  },
+  "browser": {
+    "synthetic": true,
+    "personalProfileUsed": false,
+    "browser": "official Chrome, temporary profile",
+    "filterClearCases": 8,
+    "desktopViewport": {
+      "width": 1512,
+      "height": 762
+    },
+    "touchViewport": {
+      "width": 390,
+      "height": 844
+    },
+    "baselineTableHeight": 298,
+    "repairedTableHeight": 407,
+    "inspectorOpenCloseBothViewports": true
+  },
+  "servedAssets": [
+    {
+      "filename": "browser.js",
+      "sha256": "9a9979f432739249092ef489802857261a7d7e06b7222929109cef1160bee8d9",
+      "bytes": 11356,
+      "exactPinnedAsset": false,
+      "exactGatewayAuthAsset": true
+    },
+    {
+      "filename": "index-DhZn-cDO.js",
+      "sha256": "9a932e2ba816d294ffdeaaf8d1b2e163fb69072ad76892afe8c88d982b726cd3",
+      "bytes": 1635812,
+      "exactPinnedAsset": true,
+      "exactGatewayAuthAsset": false
+    },
+    {
+      "filename": "index-BraoVRSn.css",
+      "sha256": "943b723ff8d097c82e11485d17337d06b7990638c1f15bc7cf9c6fa76ab7014d",
+      "bytes": 187693,
+      "exactPinnedAsset": true,
+      "exactGatewayAuthAsset": false
+    }
+  ],
+  "analytics": {
+    "managedHtmlChecks": 4,
+    "beaconMatches": 0,
+    "strictCspRetained": true
+  },
+  "http": {
+    "passed": 38,
+    "total": 38
+  },
+  "productionImport": {
+    "runId": "bb7e397d-861e-40e3-9665-808dee04029e",
+    "passed": true,
+    "production": true,
+    "source": "e481d78ba4ad42598d6a722605de06b55e9b1289",
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "at": "2026-11-05T03:44:41.976Z",
+    "cleanup": {
+      "complete": true,
+      "independentlyVerified": true,
+      "workers": 0,
+      "databases": 0,
+      "setupKeys": 0,
+      "temporaryCredentialsScrubbed": true,
+      "realAccountsPreserved": 55
+    }
+  },
+  "audit": {
+    "production": {
+      "total": 0
+    },
+    "development": {
+      "moderate": 27,
+      "high": 0,
+      "critical": 0
+    }
+  },
+  "provisioning": {
+    "readDeadlineMs": 45000,
+    "maxArtifactBytes": 10000000,
+    "headerAndBodyStallsReproduced": true,
+    "nativeRpcCleanupAndLateWritePrevention": true,
+    "providerWritesAndSerializedQueueUnchanged": true,
+    "historicalExactCause": "unproven"
+  },
+  "operatorIncidents": {
+    "reconciledUploadInterruptions": 2,
+    "originalRuntimeAndSettingsConfirmedBeforeRetry": true,
+    "originalAdmissionRestored": true,
+    "initialAssetObserverAssumptionCorrected": true,
+    "initialQaLeaseIndependentlyCleaned": true
+  },
+  "acceptanceHolds": [
+    "physical passkey with production RP/device prompt",
+    "real inquiry CAPTCHA and external delivery using controlled domain/inboxes",
+    "QQ/163/126 delivery and mainland connectivity",
+    "controlled real registrar/marketplace write acceptance"
+  ]
+}
