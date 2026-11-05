@@ -6,14 +6,14 @@
       "date": "2026-11-05",
       "layer": "saas",
       "title": "Reliable hosted changelog refresh",
-      "status": "Source update · Deployment verified separately",
+      "status": "Deployed · Hosted refresh verified",
       "changes": [
         "Restores automatic feed refresh in the hosted changelog while retaining saved updates during source outages."
       ],
       "links": [
         {
-          "label": "SaaS source history",
-          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+          "label": "Runtime correction #171",
+          "url": "https://github.com/heathermhuang/dombot/pull/171"
         }
       ]
     },
@@ -22,15 +22,19 @@
       "date": "2026-11-05",
       "layer": "saas",
       "title": "Automatic changelog updates",
-      "status": "Source update · Deployment verified separately",
+      "status": "Deployed · Automatic updates verified",
       "changes": [
         "The changelog refreshes upstream releases and SaaS notes without a separate page deployment.",
         "SaaS code changes require a changelog entry in CI. Saved updates remain readable if a source is temporarily unavailable."
       ],
       "links": [
         {
-          "label": "SaaS source history",
-          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+          "label": "Automatic upkeep #170",
+          "url": "https://github.com/heathermhuang/dombot/pull/170"
+        },
+        {
+          "label": "Hosted refresh verification #171",
+          "url": "https://github.com/heathermhuang/dombot/pull/171"
         }
       ]
     },
