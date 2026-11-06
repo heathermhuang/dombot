@@ -146,6 +146,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-180",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Fix Namefi connection in Cloudflare Workers",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #180 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #180",
+          "url": "https://github.com/heathermhuang/dombot/pull/180"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
