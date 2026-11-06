@@ -130,6 +130,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-179",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Record Namefi deployment and upstream contribution evidence",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #179 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #179",
+          "url": "https://github.com/heathermhuang/dombot/pull/179"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
