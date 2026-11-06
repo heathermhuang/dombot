@@ -1,6 +1,16 @@
+# Worker-compatible Namefi requests
+
+The current dependency is `@aoxborrow/registrar-client@1.1.0-hosted.3`.
+Start from hosted.2 below, apply `registrar-client-1.1.0-hosted.3.worker-redirect.patch`,
+set the version to `1.1.0-hosted.3`, then build and pack. The adjacent JSON pins
+archive and patch integrity. Workers rejects Fetch redirect mode `error` before
+sending; `manual` is supported and all non-success responses still fail without
+forwarding the key to a redirect destination. `src/worker/namefi-runtime.test.ts`
+constructs real Worker Requests and tests both authentication and redirect refusal.
+
 # Namefi registrar extension
 
-The current dependency is `@aoxborrow/registrar-client@1.1.0-hosted.2`.
+The previous dependency is `@aoxborrow/registrar-client@1.1.0-hosted.2`.
 Start from the hosted.1 source below, apply
 `registrar-client-1.1.0-hosted.2.namefi.patch`, set the package version to
 `1.1.0-hosted.2`, then use the upstream tsup build and `npm pack --ignore-scripts`.
