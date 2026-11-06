@@ -23,6 +23,40 @@ async function post(path: string, body: unknown) {
   }
   return data;
 }
+
+// A second native navigation can cancel the successful response before its
+// session cookie arrives, leaving a consumed proof and a misleading code error.
+// Do not fetch/replay authentication here: keep the first native POST intact.
+for (const form of document.querySelectorAll<HTMLFormElement>(
+  'form[action="/auth/email/request"], form[action="/auth/email/confirm"]',
+)) {
+  const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (!button) continue;
+  const label = button.textContent;
+  const originallyDisabled = button.disabled;
+  form.addEventListener('submit', (event) => {
+    if (event.defaultPrevented) return;
+    if (form.dataset.authSubmitting === 'true') {
+      event.preventDefault();
+      return;
+    }
+    form.dataset.authSubmitting = 'true';
+    form.setAttribute('aria-busy', 'true');
+    button.disabled = true;
+    button.textContent =
+      form.getAttribute('action') === '/auth/email/request'
+        ? 'Sending email…'
+        : 'Confirming…';
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    delete form.dataset.authSubmitting;
+    form.removeAttribute('aria-busy');
+    button.disabled = originallyDisabled;
+    button.textContent = label;
+  });
+}
+
 for (const form of document.querySelectorAll<HTMLFormElement>(
   'form[data-rename-passkey]',
 ))
