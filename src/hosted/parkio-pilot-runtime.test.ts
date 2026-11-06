@@ -141,6 +141,51 @@ describe('owner-only Park.io pilot runtime', () => {
     await action('normal', 'start');
     expect((await state('normal')).attemptId).toBe(before.attemptId);
   });
+  it('keeps the native keyboard page and connection grant behind owner admission', async () => {
+    expect((await request('normal', '/mobile')).status).toBe(303);
+    expect(
+      (await request('normal', '/mobile', { identity: 'other-user' })).status,
+    ).toBe(403);
+    const page = await request('normal', '/mobile', { identity: owner });
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(html).toContain('id="parkio-keyboard"');
+    expect(html).toContain('type="password"');
+    expect(html).toContain('readonly disabled');
+    expect(html).toContain('autocomplete="off"');
+    expect(html).toContain('referrerpolicy="no-referrer"');
+    expect(html).not.toContain('synthetic-only');
+    expect(page.headers.get('content-security-policy')).toContain(
+      'wss://live.browser.run',
+    );
+    expect(
+      (
+        await request('normal', '/mobile-connection', {
+          identity: 'other-user',
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request('normal', '/mobile-connection', {
+          identity: owner,
+          method: 'POST',
+          origin: 'https://other.test',
+        })
+      ).status,
+    ).toBe(403);
+    const grant = await action('normal', 'mobile-connection');
+    expect(grant.status).toBe(200);
+    expect(grant.headers.get('cache-control')).toBe('no-store');
+    const data = await grant.json();
+    expect(data.socketUrl).toMatch(
+      /^wss:\/\/live\.browser\.run\/api\/devtools\/browser\//,
+    );
+    expect(JSON.stringify(await state('normal'))).not.toContain(
+      'synthetic-only',
+    );
+  });
   it('continues to reject null-origin submissions instead of weakening CSRF', async () => {
     expect(
       (
