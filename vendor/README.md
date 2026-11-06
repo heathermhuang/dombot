@@ -1,3 +1,15 @@
+# Namefi registrar extension
+
+The current dependency is `@aoxborrow/registrar-client@1.1.0-hosted.2`.
+Start from the hosted.1 source below, apply
+`registrar-client-1.1.0-hosted.2.namefi.patch`, set the package version to
+`1.1.0-hosted.2`, then use the upstream tsup build and `npm pack --ignore-scripts`.
+The adjacent JSON pins archive and patch integrity. Namefi contract regressions
+live in `src/core/services/namefi.test.ts` and run against the packaged dependency.
+The official square logo comes from
+https://namefi.io/assets/brand-kit/namefi-compact-square.svg (normalized viewBox
+and equivalent clip path for the existing monochrome icon renderer).
+
 # Current hosted registrar dependency
 
 The engine pins `@aoxborrow/registrar-client@1.1.0-hosted.1`, based on upstream

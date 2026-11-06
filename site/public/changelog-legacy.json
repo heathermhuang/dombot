@@ -40,6 +40,23 @@
       ]
     },
     {
+      "id": "saas-namefi-support-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Connect your Namefi domains",
+      "status": "Source update · Rollout pending",
+      "changes": [
+        "Adds Namefi account connection, portfolio sync, expiry dates, nameservers, auto-renew, DNS records and domain pricing for email-held and NFT-held names.",
+        "Shows unreported privacy and transfer-lock state accurately and directs unsupported registrar operations to Namefi."
+      ],
+      "links": [
+        {
+          "label": "Namefi integration details",
+          "url": "https://github.com/heathermhuang/dombot/blob/main/docs/namefi-support.md"
+        }
+      ]
+    },
+    {
       "id": "saas-changelog-runtime-2026-11-05",
       "date": "2026-11-05",
       "layer": "saas",
@@ -3454,6 +3471,7 @@
   "locations": {
     "saas-automatic-release-archive-2026-11-06": "2026-000002",
     "saas-changelog-full-history-2026-11-06": "2026-000002",
+    "saas-namefi-support-2026-11-06": "2026-000002",
     "core-2-1-0": "2026-000002",
     "saas-changelog-freshness-2026-11-05": "2026-000002",
     "saas-changelog-runtime-2026-11-05": "2026-000002",

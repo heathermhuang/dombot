@@ -55,8 +55,8 @@ import { RENEWAL_PRICES_NAMESPACE } from '../storage/names';
 const SPECIFIC_CAPABLE = new Set<RegistrarName>(['gandi', 'dynadot']);
 
 // Dynadot's account-specific renewal quote is authoritative even for uniform
-// TLDs. Name.com has no bundled base-rate table. Quote every owned name on both.
-const ALWAYS_QUOTE = new Set<string>(['namecom', 'dynadot']);
+// TLDs. Name.com and Namefi have no bundled base-rate table; quote every owned name.
+const ALWAYS_QUOTE = new Set<string>(['namecom', 'dynadot', 'namefi']);
 
 /**
  * Whether a per-name API quote is worth fetching for this registrar + TLD: the

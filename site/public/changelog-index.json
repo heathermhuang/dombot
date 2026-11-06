@@ -1,14 +1,14 @@
 {
   "version": 3,
-  "totalEntries": 105,
+  "totalEntries": 106,
   "core": 55,
-  "saas": 50,
+  "saas": 51,
   "years": [
     {
       "year": "2026",
-      "count": 105,
+      "count": 106,
       "core": 55,
-      "saas": 50,
+      "saas": 51,
       "lastPart": 2,
       "oldest": "2026-08-30",
       "newest": "2026-11-06",
@@ -23,7 +23,7 @@
     {
       "id": "2026-000000",
       "path": "changelog-archive-index/2026-000000.json",
-      "sha256": "cf83f7645fd56d2740201afd3c97bd857876814db55ccb536367e75cb8119c72",
+      "sha256": "fb4d3f6a0857e8b7f98bc51c3120db20b76fba5d87853dae634ca566fd6eb51f",
       "year": "2026",
       "firstPart": 1,
       "lastPart": 2
