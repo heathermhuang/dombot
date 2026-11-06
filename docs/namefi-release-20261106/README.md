@@ -1,82 +1,87 @@
 # Namefi release — 6 November 2026
 
 Namefi support is deployed to all 44 previously admitted portfolios as engine
-`2.1.0-hosted.2` and registrar SDK `1.1.0-hosted.2`. A fresh managed production
-import, repeated submission, readback, served UI assets/catalog and independent
-cleanup passed after the final private provisioner update.
+`2.1.0-hosted.3` and registrar SDK `1.1.0-hosted.3`. The owner connection passed
+in native Chrome: seven personal domains synced, the filtered table and connection
+persisted after refresh, and the API credential, account and inventory were
+independently confirmed as AES-GCM envelopes in the database. No private key,
+account identifier or domain holding is included in this report.
 
-The owner's Namefi connection is **pending**. Live read-only provider checks passed. The credential has not yet been saved into
-the owner's encrypted DomBot store because the existing signed-in browser session
-is unavailable. Source, CI, fleet rollout
-and synthetic acceptance must not be reported as completed owner connection.
+The final fresh managed production import, two retries, readback, exact served
+UI assets/catalog and independent cleanup passed. The original allocation policy
+and cleanup cron are restored. See [release-receipt.json](release-receipt.json)
+for machine-readable scope.
 
 ## Released components
 
-- [PR #175](https://github.com/heathermhuang/dombot/pull/175) supplied the Namefi
-  adapter, official logo, settings/help, annual domain pricing and honest unknown
-  privacy/transfer-lock states. Merge: `8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb`.
-- Engine source digest:
-  `746b5b5a24a96b74c0c63a625d92fb3bbb00b092103cb62bef3c3c6fd9e5143d`.
-- The concurrent changelog/archive gateway release
-  `c4b48bac855a83de883e7943e16375bf970a3a3a` was preserved, including code,
-  assets and its public source pointer.
+- [PR #175](https://github.com/heathermhuang/dombot/pull/175) introduced Namefi
+  inventory, details, nameserver reads, annual domain pricing, DNS and auto-renew,
+  the official logo, Settings/help and honest unknown privacy/transfer-lock states.
+  Its initial engine was `2.1.0-hosted.2`, source merge
+  `8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb`.
+- [PR #180](https://github.com/heathermhuang/dombot/pull/180) corrected a runtime
+  compatibility bug found during owner acceptance. Workers rejects Fetch redirect
+  mode `error` before sending. The SDK now uses `manual`; all non-2xx responses,
+  including redirects, still fail without forwarding the key. A real Worker
+  regression fails with the old SDK and passes with the correction.
+- The final engine/gateway release is `bc035a7b294268ac30750db2e7ed719b4b01a254`, engine source digest
+  `9a35dfaf72cf94028183ab6ca2ed4d13da4457390371f55615e8051d95780f45`. It includes the concurrent changelog/archive release
+  `c4b48bac855a83de883e7943e16375bf970a3a3a`; existing gateway assets were preserved.
 - [PR #177](https://github.com/heathermhuang/dombot/pull/177) added private,
-  allowlisted qualification outcomes without response bodies or arbitrary values.
-- [PR #178](https://github.com/heathermhuang/dombot/pull/178), merge
-  `ab8b70652203303afdc9b42e3d68cd31c84c0fb9`, deployed the final private provisioner.
-  Only thrown engine-provenance read requests can retry, with a fresh body/proof
-  and bounded attempts. Returned HTTP failures and provenance mismatches fail
-  immediately. Worker/database writes and bootstrap are never replayed.
-- The final future-portfolio template preserves the existing 14 managed non-secret
-  bindings. Gateway and provisioner agree on template digest
-  `d70e7c3937fa89c60674d97a1c85c82e17f1c7e0bc7f33e8348117b058aa17fe`.
+  allowlisted qualification outcomes. [PR #178](https://github.com/heathermhuang/dombot/pull/178)
+  bounded retries of thrown engine-provenance reads with fresh bodies and proofs.
+  Returned HTTP failures and wrong provenance still fail immediately. Database,
+  Worker creation and bootstrap writes are not replayed. The private provisioner
+  remains at `ab8b70652203303afdc9b42e3d68cd31c84c0fb9`.
+- Gateway and provisioner agree on the final future-template digest
+  `becb6066a2da37729923633e2613e9884fd6eac2937d6a2ee69b6d78eaa7e612`, preserving all 14 managed non-secret bindings.
 
 ## Evidence and correction history
 
-Initial template preparation omitted managed non-secret bindings. This produced a
-boot failure in the controlled disposable portfolio. The exact existing profile
-was restored in the future template; the held QA lease was reconciled through
-its unchanged eligibility guards and then cleaned. Later diagnostics isolated a
-thrown first qualification dispatch; the bounded read retry recovered it. No
-admission/provenance checks were relaxed. An intervening management API 503 was
-observed separately and is not asserted to be a global provider incident.
+The initial template preparation omitted managed bindings and produced a boot
+failure in a disposable QA portfolio. The exact profile was restored; the held
+lease was reconciled through its unchanged guards and cleaned. Later diagnostics
+isolated a thrown first dispatch and the bounded read retry recovered it. The
+first actual owner connection then exposed the unsupported redirect mode, fixed
+in PR #180. Node-only mocks had not exercised that runtime restriction. No
+admission or provenance checks were relaxed. Observed management API transport
+failures were reconciled against exact code/settings before any upload retry;
+each temporary admission hold was restored.
 
-The final fresh trial passed at 09:57 UTC; independent cleanup and preservation
-checks completed at 09:58 UTC. They established absence of its Worker, database,
-account, sessions and mappings, zero setup keys, no active QA leases or unfinished
-allocations, and destruction of its temporary password. All 56 original accounts
-and 546 original workspace identities were preserved; one real account added
-during the release was retained. The original allocation policy and cleanup cron
-remain active.
+The final trial passed at `2026-11-06T10:50:58.680Z`; independent cleanup completed at
+`2026-11-06T10:51:50.641Z`. Its Worker, database, account, sessions and mappings are absent,
+setup keys are zero, and its temporary password was destroyed. All 56 original
+accounts and 546 original workspace identities were preserved. One real account
+added during the task was retained. All 44 original portfolios serve the exact
+final engine/source with preserved bindings; the owner's eight prior registrar
+account counts remained intact when the new account was added.
 
-Earlier fleet checks verified all 44 exact engine/source responses, original
-credential namespaces, manual/cached holdings and publications. The private
-provisioner changes did not change those tenant modules. The final synthetic
-portfolio served the exact packaged JS, CSS and SVG bytes and all 13 registrar
-entries, including Namefi. This is API/asset evidence; it is not a production
-browser screenshot of the owner's completed connection.
+The final synthetic portfolio served the exact packaged JS, CSS and SVG bytes
+and all 13 registrar entries. The owner browser verified seven rows, actual
+expiry dates, annual quotes and nameservers, with privacy and lock correctly
+shown as not reported. Private browser evidence and encrypted-store checks remain
+in protected operator custody. Screenshots containing real holdings are not
+published. No domain purchase, renewal, payment, DNS, auto-renew, publication or
+messaging mutation was performed for acceptance.
 
-[Namefi CI](https://github.com/heathermhuang/dombot/actions/runs/42173807020)
-passed 2,852 tests. The final
-[provisioner CI](https://github.com/heathermhuang/dombot/actions/runs/42198169056)
-passed 269 test files / 2,871 tests, with one intentional skip, plus build,
-typecheck, lint, engine integrity, four security regression tests and relay checks.
-[CodeQL](https://github.com/heathermhuang/dombot/actions/runs/42198169016) passed.
-Earlier 38 HTTP checks passed. Local qualification screenshots and adapter
-coverage are in [source qualification](../namefi-qualification/README.md).
-
-No domain purchase, renewal, payment, DNS, auto-renew, publication or messaging
-mutation was performed for acceptance. Credentials, private holdings, recovery
-exports and raw provider responses remain outside tracked source.
+[Final CI](https://github.com/heathermhuang/dombot/actions/runs/42202139578)
+passed all required checks; the local suite passed 270 files / 2,872 tests with
+one intentional skip. [CodeQL](https://github.com/heathermhuang/dombot/actions/runs/42202139628)
+passed. The runtime regression and the 26 adapter contracts passed. Earlier
+38 HTTP checks passed; final health and gateway-source observations were healthy.
+The [initial report](https://github.com/heathermhuang/dombot/blob/36d5438319e42e4c9fb2b0d3d00a5f058431401c/docs/namefi-release-20261106/README.md)
+retains the earlier rollout/qualification scope. See also
+[source qualification](../namefi-qualification/README.md) and the
+[redirect investigation](../namefi-worker-redirect.md).
 
 ## Upstream contributions
 
-- [registrar-client #106](https://github.com/aoxborrow/registrar-client/pull/106):
-  ready for maintainer review; CI passed on Node 20/22/24. Its additional asynchronous
-  registration and DNS-update behavior has unit coverage but is not part of the
-  hosted SDK deployed here and was not exercised with paid writes.
-- [DomBot #268](https://github.com/aoxborrow/dombot/pull/268): companion UI/help/pricing
-  integration, CI passed; draft until the SDK is published and its dependency and
-  lockfile can be updated. The upstream maintainer owns publication and merging.
-
-See [release-receipt.json](release-receipt.json) for machine-readable scope.
+- [registrar-client #106](https://github.com/aoxborrow/registrar-client/pull/106)
+  is ready for maintainer review, including the Worker redirect correction;
+  CI passed on Node 20/22/24. Additional asynchronous registration and DNS-update
+  behavior in that PR has unit coverage but is not in the hosted SDK deployed
+  here and was not exercised with paid writes.
+- [DomBot #268](https://github.com/aoxborrow/dombot/pull/268) supplies the companion
+  UI/help/pricing integration. CI passed; it remains draft until the upstream SDK
+  is published and its dependency/lockfile can be updated. The maintainer owns
+  publication and merging.

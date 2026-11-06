@@ -1,23 +1,27 @@
 {
   "date": "2026-11-06",
-  "status": "deployed_owner_connection_pending",
-  "engine": "2.1.0-hosted.2",
-  "registrarSdk": "1.1.0-hosted.2",
-  "engineReleaseCommit": "8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb",
-  "engineSourceSha256": "746b5b5a24a96b74c0c63a625d92fb3bbb00b092103cb62bef3c3c6fd9e5143d",
-  "preservedGatewaySource": "c4b48bac855a83de883e7943e16375bf970a3a3a",
+  "status": "deployed_and_verified",
+  "releaseCommit": "bc035a7b294268ac30750db2e7ed719b4b01a254",
+  "verifiedAt": "2026-11-06T10:51:50.641Z",
+  "engine": "2.1.0-hosted.3",
+  "registrarSdk": "1.1.0-hosted.3",
+  "engineSourceSha256": "9a35dfaf72cf94028183ab6ca2ed4d13da4457390371f55615e8051d95780f45",
+  "engineArchiveSha256": "8b9a3d5cc57d35edebc23cf19f6aa710a30505e67af271d9eb37cb08a12bc0f5",
+  "gatewaySource": "bc035a7b294268ac30750db2e7ed719b4b01a254",
+  "concurrentArchiveReleaseIncluded": "c4b48bac855a83de883e7943e16375bf970a3a3a",
   "privateProvisionerSource": "ab8b70652203303afdc9b42e3d68cd31c84c0fb9",
   "privateProvisionerSha256": "6371f1d5d58128524582f6e24fb4c724b44220e5649c162a80837d3ba13cd67d",
-  "futureTemplateSha256": "d70e7c3937fa89c60674d97a1c85c82e17f1c7e0bc7f33e8348117b058aa17fe",
+  "futureTemplateSha256": "becb6066a2da37729923633e2613e9884fd6eac2937d6a2ee69b6d78eaa7e612",
   "servingExistingPortfolios": 44,
+  "accountsPreserved": true,
   "originalAccountsPreserved": 56,
   "additionalRealAccountsRetained": 1,
   "originalWorkspaceIdentitiesPreserved": 546,
-  "credentialNamespacesAndHoldingsPreserved": true,
+  "managedBindingsAndCredentialsPreserved": true,
   "managedTemplateBindingsPreserved": 14,
   "freshProductionImportRetryReadback": true,
   "exactServedAssetsAndRegistrarCatalog": true,
-  "independentCleanupVerifiedAt": "2026-11-06T09:58:04.128Z",
+  "independentCleanupVerifiedAt": "2026-11-06T10:51:50.641Z",
   "activeQaRuns": 0,
   "unfinishedAllocations": 0,
   "temporaryQaPasswordScrubbed": true,
@@ -27,9 +31,12 @@
   "providerDomainsObserved": 7,
   "registrarMutationsForAcceptance": 0,
   "ownerConnection": {
-    "encryptedCredentialStoreSaved": false,
-    "productionBrowserAcceptance": false,
-    "blocker": "Existing signed-in browser session unavailable"
+    "encryptedCredentialStoreSaved": true,
+    "productionBrowserAcceptance": true,
+    "refreshPersistenceVerified": true,
+    "algorithm": "aes-gcm",
+    "encryptedAccountAndInventory": true,
+    "observedAt": "2026-11-06T10:39:06.024Z"
   },
   "upstream": [
     {
@@ -42,5 +49,14 @@
       "state": "draft_pending_sdk_release",
       "ci": "passed"
     }
-  ]
+  ],
+  "initialRelease": {
+    "engine": "2.1.0-hosted.2",
+    "registrarSdk": "1.1.0-hosted.2",
+    "releaseCommit": "8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb",
+    "sourceSha256": "746b5b5a24a96b74c0c63a625d92fb3bbb00b092103cb62bef3c3c6fd9e5143d",
+    "templateSha256": "d70e7c3937fa89c60674d97a1c85c82e17f1c7e0bc7f33e8348117b058aa17fe",
+    "cleanupVerifiedAt": "2026-11-06T09:58:04.128Z",
+    "ownerConnectionAtThatStage": "pending"
+  }
 }
