@@ -27,10 +27,9 @@
   "providerDomainsObserved": 7,
   "registrarMutationsForAcceptance": 0,
   "ownerConnection": {
-    "nonExpiringKeyCreated": true,
     "encryptedCredentialStoreSaved": false,
     "productionBrowserAcceptance": false,
-    "blocker": "Mac locked; native signed-in Chrome requires manual unlock"
+    "blocker": "Existing signed-in browser session unavailable"
   },
   "upstream": [
     {

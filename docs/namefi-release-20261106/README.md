@@ -5,10 +5,9 @@ Namefi support is deployed to all 44 previously admitted portfolios as engine
 import, repeated submission, readback, served UI assets/catalog and independent
 cleanup passed after the final private provisioner update.
 
-The owner's Namefi connection is **pending**. An owner-authorized non-expiring API
-key was created and live read-only provider checks returned seven personal domains.
-The key has not yet been saved into the owner's encrypted DomBot credential store:
-native Chrome is unavailable while the Mac is locked. Source, CI, fleet rollout
+The owner's Namefi connection is **pending**. Live read-only provider checks passed. The credential has not yet been saved into
+the owner's encrypted DomBot store because the existing signed-in browser session
+is unavailable. Source, CI, fleet rollout
 and synthetic acceptance must not be reported as completed owner connection.
 
 ## Released components
