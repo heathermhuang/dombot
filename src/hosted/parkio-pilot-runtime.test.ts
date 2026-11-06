@@ -127,8 +127,12 @@ describe('owner-only Park.io pilot runtime', () => {
     ).toBe(403);
   });
   it('opens a scoped sign-in view and returns safe, idempotent status', async () => {
+    const document = await request('normal', '/', { identity: owner });
+    expect(document.headers.get('referrer-policy')).toBe('same-origin');
+    expect(await document.text()).not.toContain('rel="noreferrer"');
     const first = await action('normal', 'start');
     expect(first.status).toBe(303);
+    expect(first.headers.get('referrer-policy')).toBe('no-referrer');
     expect(first.headers.get('location')).toMatch(
       /^https:\/\/live\.browser\.run\//,
     );
@@ -136,6 +140,17 @@ describe('owner-only Park.io pilot runtime', () => {
     expect(before.phase).toBe('login');
     await action('normal', 'start');
     expect((await state('normal')).attemptId).toBe(before.attemptId);
+  });
+  it('continues to reject null-origin submissions instead of weakening CSRF', async () => {
+    expect(
+      (
+        await request('normal', '/start', {
+          identity: owner,
+          method: 'POST',
+          origin: 'null',
+        })
+      ).status,
+    ).toBe(403);
   });
   it('requires export inspection, captures encrypted state, verifies closure, then compares Worker holdings', async () => {
     expect((await action('normal', 'capture')).status).toBe(409);

@@ -155,3 +155,14 @@ building the full scheduled customer integration.
   chained HTML decode. Browser URL/limit values now use CDP arguments to a static
   function; diagnostics tests use the protected JSON status route. Dedicated
   regressions cover argument separation and remote-object cleanup on exceptions.
+
+## Native form verification, 7 November 2026
+
+Before deployment, a real local Chrome submission reproduced `Origin: null` and
+HTTP 403 with the original no-referrer document/form policy. The document now
+uses same-origin referrers and the popup form uses only `noopener`. The external
+Live View redirect response alone suppresses the referrer. This preserves native
+POST Origin headers without allowing null-origin requests through CSRF admission.
+The browser reproduction then reaches the synthetic sign-in view with HTTP 303;
+the runtime regression checks both policies and rejects an explicit null Origin.
+This check uses synthetic data and no real Park.io login.
