@@ -184,9 +184,11 @@ const assets = async (request) => {
           ? 'text/javascript'
           : file.endsWith('.css')
             ? 'text/css'
-            : file.endsWith('.woff2')
-              ? 'font/woff2'
-              : 'text/html',
+            : file.endsWith('.svg')
+              ? 'image/svg+xml'
+              : file.endsWith('.woff2')
+                ? 'font/woff2'
+                : 'text/html',
       },
     });
   } catch {
