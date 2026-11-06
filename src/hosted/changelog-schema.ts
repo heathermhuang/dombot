@@ -94,7 +94,6 @@ export function upstreamReleaseEntries(value: unknown): ChangelogEntry[] {
     const published = Date.parse(row.publishedAt);
     if (!Number.isFinite(published))
       throw new Error('Invalid upstream release date');
-    if (published < Date.parse('2026-11-01')) return [];
     const url = `https://github.com/aoxborrow/dombot/releases/tag/v${row.version}`;
     if (row.url !== url) throw new Error('Invalid upstream release URL');
     return [

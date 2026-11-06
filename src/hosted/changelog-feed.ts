@@ -51,6 +51,17 @@ async function boundedJson(response: Response): Promise<unknown> {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+function completeSaasFeed(
+  value: unknown,
+  previous: ChangelogEntry[] = [],
+): ChangelogEntry[] {
+  const entries = parseChangelogFeed(value);
+  const ids = new Set(entries.map((entry) => entry.id));
+  if ([...changelogEntries, ...previous].some((entry) => !ids.has(entry.id)))
+    throw new Error('SaaS changelog history is incomplete');
+  return entries;
+}
+
 async function source(
   kind: 'saas' | 'core',
   cache: FeedCache | undefined,
@@ -87,7 +98,9 @@ async function source(
             Array.isArray(raw.entries) &&
             raw.entries.length === 0
               ? []
-              : parseChangelogFeed({ version: 1, entries: raw.entries }),
+              : kind === 'saas'
+                ? completeSaasFeed({ version: 1, entries: raw.entries })
+                : parseChangelogFeed({ version: 1, entries: raw.entries }),
         };
     }
   } catch {
@@ -116,7 +129,9 @@ async function source(
       }),
     );
     const entries =
-      kind === 'saas' ? parseChangelogFeed(json) : upstreamReleaseEntries(json);
+      kind === 'saas'
+        ? completeSaasFeed(json, saved?.entries)
+        : upstreamReleaseEntries(json);
     // Store the normalized public data for recovery, while enforcing our shorter refresh interval.
     try {
       await cache?.put(

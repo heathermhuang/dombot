@@ -1,0 +1,2941 @@
+{
+  "checkedAt": "2026-11-06T02:15:14.060293+00:00",
+  "scope": "Published releases and complete primary-source / merged-SaaS change history through these source snapshots; not a reconstructed deployment ledger.",
+  "upstreamSnapshot": "b48e803b966dc7a30654065dbeed25a7710a9797",
+  "saasSnapshot": "eab8abb50681a1e08ed0ae5beb25bb34a79f1ad6",
+  "upstreamPublishedReleases": [
+    {
+      "tag": "v2.1.0",
+      "publishedAt": "2026-11-05T00:32:49Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v2.1.0",
+      "entryId": "core-2-1-0"
+    },
+    {
+      "tag": "v2.0.0",
+      "publishedAt": "2026-11-03T15:58:01Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v2.0.0",
+      "entryId": "core-2-0-0"
+    },
+    {
+      "tag": "v1.5.0",
+      "publishedAt": "2026-10-09T22:17:28Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.5.0",
+      "entryId": "core-1-5-0"
+    },
+    {
+      "tag": "v1.4.0",
+      "publishedAt": "2026-09-18T05:24:00Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.4.0",
+      "entryId": "core-1-4-0"
+    },
+    {
+      "tag": "v1.3.0",
+      "publishedAt": "2026-09-17T22:13:30Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.3.0",
+      "entryId": "core-1-3-0"
+    },
+    {
+      "tag": "v1.2.0",
+      "publishedAt": "2026-09-15T18:05:45Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.2.0",
+      "entryId": "core-1-2-0"
+    },
+    {
+      "tag": "v1.1.0",
+      "publishedAt": "2026-09-03T09:49:29Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.1.0",
+      "entryId": "core-1-1-0"
+    },
+    {
+      "tag": "v1.0.0",
+      "publishedAt": "2026-09-02T20:28:40Z",
+      "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.0.0",
+      "entryId": "core-1-0-0"
+    }
+  ],
+  "forkDesktopReleases": [
+    {
+      "tag": "v1.5.2",
+      "publishedAt": "2026-10-23T23:29:11Z",
+      "url": "https://github.com/heathermhuang/dombot/releases/tag/v1.5.2",
+      "entryId": "saas-desktop-1-5-2"
+    },
+    {
+      "tag": "v1.5.1",
+      "publishedAt": "2026-10-23T23:07:27Z",
+      "url": "https://github.com/heathermhuang/dombot/releases/tag/v1.5.1",
+      "entryId": "saas-desktop-1-5-1"
+    }
+  ],
+  "upstreamPrimaryCommits": [
+    {
+      "sha": "b48e803b966dc7a30654065dbeed25a7710a9797",
+      "timestamp": "2026-11-05T00:32:51Z",
+      "entryId": "core-history-2026-11-05-b48e803b966d"
+    },
+    {
+      "sha": "e93d5210707f706451310e0a85c147a44c3177c1",
+      "timestamp": "2026-11-04T16:27:27-08:00",
+      "entryId": "core-history-2026-11-05-b48e803b966d"
+    },
+    {
+      "sha": "d80f81fa2dde15e4a90cef559aa7a21613a02b3a",
+      "timestamp": "2026-11-04T13:51:19-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "9453ea54dbf7f8c36b521c31233859d7bb3e8407",
+      "timestamp": "2026-11-04T13:46:26-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "331ceeceadeb59bdc0f7bbea5ea8db9fd857f4dd",
+      "timestamp": "2026-11-04T13:46:12-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "e544f87af205bfa0d86cea0e3d2d34fd17e514df",
+      "timestamp": "2026-11-04T13:44:38-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "4df377fc28acb118febf2b04da716afe8b146af8",
+      "timestamp": "2026-11-04T13:33:47-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "1ccb0951149871ff5d9b59547db813b51db84a43",
+      "timestamp": "2026-11-04T12:19:14-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "ac0bce1c130747baddfcd80505bd94cbd030b6bf",
+      "timestamp": "2026-11-04T12:01:49-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "39c57961072e6c74a046cb7ea6e3ebf41e1ef414",
+      "timestamp": "2026-11-04T11:43:42-08:00",
+      "entryId": "core-history-2026-11-04-d80f81fa2dde"
+    },
+    {
+      "sha": "ccb918deed20f8d01009970064027fcb021bac97",
+      "timestamp": "2026-11-03T09:33:38-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "b1de248b84affa1836ba144ce1ba98f50f54a7a4",
+      "timestamp": "2026-11-03T15:58:05Z",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "28c188f6fbdeded068cf9ceb9f5d9305c2f91277",
+      "timestamp": "2026-11-03T07:52:17-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "695388c1fe53674782c2d949f75bc5bf7f42d7ef",
+      "timestamp": "2026-11-02T23:40:03-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "4888d8a4ece28fc9dad7a1b75c67007def0695cf",
+      "timestamp": "2026-11-02T23:35:37-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "69aee706dbe43d24248bd78aeb5fe1615023b3dd",
+      "timestamp": "2026-11-02T23:11:41-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "c3dbfb7e0ad7b71aed7059ea842086233178097d",
+      "timestamp": "2026-11-02T22:39:32-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "d9e5e9aced7c0542630bc9ebdc6ec154acd30ab0",
+      "timestamp": "2026-11-02T21:00:11-08:00",
+      "entryId": "core-history-2026-11-03-ccb918deed20"
+    },
+    {
+      "sha": "a1b16055f791cade9496d6005199c6e1ba22f998",
+      "timestamp": "2026-11-02T16:13:40-08:00",
+      "entryId": "core-history-2026-11-03-a1b16055f791"
+    },
+    {
+      "sha": "952e211581d07693c1947c67b33131c64b6b9b41",
+      "timestamp": "2026-11-02T16:10:24-08:00",
+      "entryId": "core-history-2026-11-03-a1b16055f791"
+    },
+    {
+      "sha": "24e70dc2c9fcd7d18b9ebd5fe2d1eac56d96a694",
+      "timestamp": "2026-11-02T13:49:07-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "fd46e4dca2d7599f032acb36fdef15b50b26362b",
+      "timestamp": "2026-11-02T12:54:05-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "1bf4164912f3cfedd390e5904525a38e90893041",
+      "timestamp": "2026-11-02T11:21:13-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "c07297c3c78dce4e7cc5c6db653895b258046863",
+      "timestamp": "2026-11-02T11:21:08-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "2b69766c9cf754e1274f6e9a4b99f28495054eb5",
+      "timestamp": "2026-11-02T11:09:56-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "8118402a8d1210f1b2b1b7a646484ee2ca445ef5",
+      "timestamp": "2026-11-02T11:01:48-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "9235b4e6f4aa6c2143db328c9c2bc154ccb48085",
+      "timestamp": "2026-11-02T10:52:49-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "50fef35a4ab5c1308d0406ed95d9709ade45a6c8",
+      "timestamp": "2026-11-02T10:15:04-08:00",
+      "entryId": "core-history-2026-11-02-24e70dc2c9fc"
+    },
+    {
+      "sha": "1cc33720aef42074f5c0a77a680d87661a54b560",
+      "timestamp": "2026-10-31T16:41:56-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "450e37ec508acc7d73629e66d038b2c23f256aa5",
+      "timestamp": "2026-10-31T15:14:30-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "0b5cf08b5717fa9bd4b49b4a34ccb1edb9e42768",
+      "timestamp": "2026-10-31T14:58:09-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "d3681c05c254cfe37cb353332a5ec963396c659e",
+      "timestamp": "2026-10-31T14:02:21-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "d02f0bbe6870862c8f7cd36fb3bb0894f1862488",
+      "timestamp": "2026-10-31T12:17:45-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "1dc81f2a9e83900dd0332104feb7ef7815366928",
+      "timestamp": "2026-10-31T12:13:27-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "e948909bf3beedd0148a63d57ec18d8a6306f719",
+      "timestamp": "2026-10-31T12:10:53-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "b818d77afde9a2405e462eca475d79b3dd74c62a",
+      "timestamp": "2026-10-31T12:01:36-07:00",
+      "entryId": "core-history-2026-10-31-1cc33720aef4"
+    },
+    {
+      "sha": "9280c6bdb02d03b2ecc88031e9eebe6f621c7ff3",
+      "timestamp": "2026-10-31T00:55:20-07:00",
+      "entryId": "core-history-2026-10-31-9280c6bdb02d"
+    },
+    {
+      "sha": "2a642aefa05252ffb497412110ed353c55a349ce",
+      "timestamp": "2026-10-31T00:19:47-07:00",
+      "entryId": "core-history-2026-10-31-9280c6bdb02d"
+    },
+    {
+      "sha": "715eef6f5890cb073b2d3626776f49d5a723ad84",
+      "timestamp": "2026-10-31T00:00:54-07:00",
+      "entryId": "core-history-2026-10-31-9280c6bdb02d"
+    },
+    {
+      "sha": "288d9df95d561728781d7cce861ce13b1e63f707",
+      "timestamp": "2026-10-30T19:16:47-07:00",
+      "entryId": "core-history-2026-10-31-9280c6bdb02d"
+    },
+    {
+      "sha": "750674d93755cb82ec563cf3a683b59baf608aa0",
+      "timestamp": "2026-10-29T20:44:09-07:00",
+      "entryId": "core-history-2026-10-30-750674d93755"
+    },
+    {
+      "sha": "9e1235f4f8b640e495ebbabf5c35ad3b96f19416",
+      "timestamp": "2026-10-29T20:39:38-07:00",
+      "entryId": "core-history-2026-10-30-750674d93755"
+    },
+    {
+      "sha": "3e3dd64b4ad25ea81f89d64f3f01b7f9fa3ce65c",
+      "timestamp": "2026-10-29T17:30:32-07:00",
+      "entryId": "core-history-2026-10-30-750674d93755"
+    },
+    {
+      "sha": "b1eac33f2fb8d114ce2c822aca6708bfd9982ccd",
+      "timestamp": "2026-10-29T17:07:30-07:00",
+      "entryId": "core-history-2026-10-30-750674d93755"
+    },
+    {
+      "sha": "8eb6590ab5a1fd0d8f5ffaaa571f55d6f3111fdc",
+      "timestamp": "2026-10-29T16:37:39-07:00",
+      "entryId": "core-history-2026-10-29-8eb6590ab5a1"
+    },
+    {
+      "sha": "407ed6933d4bc85459bdb9d92cdbc3c9538b7524",
+      "timestamp": "2026-10-29T16:37:26-07:00",
+      "entryId": "core-history-2026-10-29-8eb6590ab5a1"
+    },
+    {
+      "sha": "a44dd56d25ea867ee87a33b98f2e1de172576cf6",
+      "timestamp": "2026-10-29T16:17:57-07:00",
+      "entryId": "core-history-2026-10-29-8eb6590ab5a1"
+    },
+    {
+      "sha": "98b5cdcc7b252d803e09a82ad60e083d4f918b61",
+      "timestamp": "2026-10-29T14:47:39-07:00",
+      "entryId": "core-history-2026-10-29-8eb6590ab5a1"
+    },
+    {
+      "sha": "4fb951544a2dad4099c5e30454841ab2b686b208",
+      "timestamp": "2026-10-29T14:18:45-07:00",
+      "entryId": "core-history-2026-10-29-8eb6590ab5a1"
+    },
+    {
+      "sha": "0950630c6f5fce26e9a27c656cc9fb03de929d8a",
+      "timestamp": "2026-10-29T13:15:48-07:00",
+      "entryId": "core-history-2026-10-29-8eb6590ab5a1"
+    },
+    {
+      "sha": "3059a08155bc24f1d550939a2e65b7b93778827a",
+      "timestamp": "2026-10-27T19:50:43-07:00",
+      "entryId": "core-history-2026-10-28-3059a08155bc"
+    },
+    {
+      "sha": "5b8e19c62d936e67a585153370310f7f508ef45e",
+      "timestamp": "2026-10-27T19:50:37-07:00",
+      "entryId": "core-history-2026-10-28-3059a08155bc"
+    },
+    {
+      "sha": "523818279dccbc3eacc606ba696fe590086b80c8",
+      "timestamp": "2026-10-27T16:26:35-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "8007d39400bf9520ced4a23f49694459bfc91f9c",
+      "timestamp": "2026-10-27T13:51:55-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "58fa7774f06a8a25fd9edaafbeaccf2071863c8d",
+      "timestamp": "2026-10-27T13:17:28-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "d0c21a26599d165ee4a1c991fba4507ffed6ff11",
+      "timestamp": "2026-10-27T13:14:58-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "cf3ee3b87bc0577124fbcbf0b7441d5e94aabe4c",
+      "timestamp": "2026-10-27T13:12:33-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "82da26ce533a69cab0087307f4cb23a5c2ea1595",
+      "timestamp": "2026-10-27T13:12:28-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "056e981629afe9e9327182dae021781ee9ab31a8",
+      "timestamp": "2026-10-27T13:09:03-07:00",
+      "entryId": "core-history-2026-10-27-523818279dcc"
+    },
+    {
+      "sha": "3c3831cefae70e750bc566bcecb52c2d12ce37ad",
+      "timestamp": "2026-10-12T00:57:32-07:00",
+      "entryId": "core-history-2026-10-12-3c3831cefae7"
+    },
+    {
+      "sha": "c232f2415ad135dcc7e524f7c281de0e29c6b5c1",
+      "timestamp": "2026-10-11T20:38:36-07:00",
+      "entryId": "core-history-2026-10-12-3c3831cefae7"
+    },
+    {
+      "sha": "08ce3e061805245f0dd9dcee4ee82f04ea1abaf2",
+      "timestamp": "2026-10-11T20:38:00-07:00",
+      "entryId": "core-history-2026-10-12-3c3831cefae7"
+    },
+    {
+      "sha": "feef729a1758c1ff667ce3b78d03a13ec3d6573b",
+      "timestamp": "2026-10-09T15:28:41-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "21d7ff162afed7e405ca331e61628c9f0703b219",
+      "timestamp": "2026-10-09T22:17:30Z",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "bc206bf82f83918a1405e786395d131471cc7690",
+      "timestamp": "2026-10-09T15:12:52-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "96af1b8ca725e435378974eb77cab587b93790f9",
+      "timestamp": "2026-10-09T15:12:36-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "9d6368a5c6d01fa066941e0250196b27faa43220",
+      "timestamp": "2026-10-09T14:34:08-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "4a34e511b1c1f1f9a5d9c670d2394a87f817e0f4",
+      "timestamp": "2026-10-09T13:39:51-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "ec42f75630791a8faa141cc52af237efb8b20ebc",
+      "timestamp": "2026-10-09T13:26:41-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "f98cda03da0454021b1424c097bf6cbd78a07390",
+      "timestamp": "2026-10-09T10:43:50-07:00",
+      "entryId": "core-history-2026-10-09-feef729a1758"
+    },
+    {
+      "sha": "acffe4278747c1cf01c3f29b7d16ed308f21bfdb",
+      "timestamp": "2026-10-07T14:11:11-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "79909a269df64f759e68ed5d3842830ef7bdaf8b",
+      "timestamp": "2026-10-07T13:43:29-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "5a0e3149ea6b9b08cf8c19d89f2e96fde18c119d",
+      "timestamp": "2026-10-07T13:39:42-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "db26a98c8f9a1bd576949cb14aea346330e75fca",
+      "timestamp": "2026-10-07T13:39:08-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "76372ad4d974ab2f066d7508fe9af30c1324118b",
+      "timestamp": "2026-10-07T02:00:15-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "03232c705783710080d1de9efb3c584aeedf3e0e",
+      "timestamp": "2026-10-07T01:53:33-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "c9e105b261e266af176ad747052a63aef639379b",
+      "timestamp": "2026-10-07T01:43:27-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "dcd53454b66ff4f865ee85351dc5b6c1c3f823e7",
+      "timestamp": "2026-10-07T01:32:39-07:00",
+      "entryId": "core-history-2026-10-07-acffe4278747"
+    },
+    {
+      "sha": "90b6af59e605faa1a67272deca1f638e51f02352",
+      "timestamp": "2026-10-06T01:22:31-07:00",
+      "entryId": "core-history-2026-10-06-90b6af59e605"
+    },
+    {
+      "sha": "da5c4e93ae57291e130e7efdf89031ed527cc0f2",
+      "timestamp": "2026-10-05T20:54:39-07:00",
+      "entryId": "core-history-2026-10-06-90b6af59e605"
+    },
+    {
+      "sha": "ba25106509e55a6e5faebc1bcc98ae53fafc5d66",
+      "timestamp": "2026-10-05T16:54:47-07:00",
+      "entryId": "core-history-2026-10-05-ba25106509e5"
+    },
+    {
+      "sha": "a704c1f0f119e4c81a955b06dd1b2b607951d3ef",
+      "timestamp": "2026-10-05T16:04:58-07:00",
+      "entryId": "core-history-2026-10-05-ba25106509e5"
+    },
+    {
+      "sha": "6574202b076046091e625581a821c8ee19d2c7e9",
+      "timestamp": "2026-10-04T22:49:20-07:00",
+      "entryId": "core-history-2026-10-05-ba25106509e5"
+    },
+    {
+      "sha": "b262d9147f0755401440147604f0bc46e2f66878",
+      "timestamp": "2026-10-04T22:27:10-07:00",
+      "entryId": "core-history-2026-10-05-ba25106509e5"
+    },
+    {
+      "sha": "b89784d174c63a9a46f9cddbcffa0d46a7c0f90b",
+      "timestamp": "2026-10-02T22:24:49-07:00",
+      "entryId": "core-history-2026-10-03-b89784d174c6"
+    },
+    {
+      "sha": "717414597252ecedd18943494d28a486fdc26903",
+      "timestamp": "2026-10-02T21:53:38-07:00",
+      "entryId": "core-history-2026-10-03-b89784d174c6"
+    },
+    {
+      "sha": "2865298df7033a1af77c525e0ceb19b74bb8e4dd",
+      "timestamp": "2026-10-02T21:53:11-07:00",
+      "entryId": "core-history-2026-10-03-b89784d174c6"
+    },
+    {
+      "sha": "3bf0a67e05d012c897831495c348044004ecba59",
+      "timestamp": "2026-10-02T11:32:59-07:00",
+      "entryId": "core-history-2026-10-02-3bf0a67e05d0"
+    },
+    {
+      "sha": "f92b7da5628c3126a2b0598fb1c79140ffa9b5d0",
+      "timestamp": "2026-10-02T11:01:25-07:00",
+      "entryId": "core-history-2026-10-02-3bf0a67e05d0"
+    },
+    {
+      "sha": "d026c0e11f837219d867381a1b7e2e9c48da236f",
+      "timestamp": "2026-10-02T02:41:43-07:00",
+      "entryId": "core-history-2026-10-02-3bf0a67e05d0"
+    },
+    {
+      "sha": "3992728f0380c56c520befcf05c9808ee7c5bab7",
+      "timestamp": "2026-10-02T02:32:08-07:00",
+      "entryId": "core-history-2026-10-02-3bf0a67e05d0"
+    },
+    {
+      "sha": "a51532ddaea7dc8dc703f8753e5a46eda51eb9a0",
+      "timestamp": "2026-10-02T02:24:25-07:00",
+      "entryId": "core-history-2026-10-02-3bf0a67e05d0"
+    },
+    {
+      "sha": "3f279bf8ca11a1ac895acc4e4fc8f83d4a4790e7",
+      "timestamp": "2026-09-26T19:02:12-07:00",
+      "entryId": "core-history-2026-09-27-3f279bf8ca11"
+    },
+    {
+      "sha": "a5fe218869d6cc423162eba401e30fb4c364a827",
+      "timestamp": "2026-09-26T18:13:31-07:00",
+      "entryId": "core-history-2026-09-27-3f279bf8ca11"
+    },
+    {
+      "sha": "1b7f392f56b2d20d93088ddd4bf8eaa914b195cd",
+      "timestamp": "2026-09-26T18:07:30-07:00",
+      "entryId": "core-history-2026-09-27-3f279bf8ca11"
+    },
+    {
+      "sha": "e7d427077c858a8eac843b9d2b47c2701a86ce7f",
+      "timestamp": "2026-09-25T19:21:19-07:00",
+      "entryId": "core-history-2026-09-26-e7d427077c85"
+    },
+    {
+      "sha": "45dfa7d2fff6fc920994ac58525efbca30707756",
+      "timestamp": "2026-09-25T19:02:38-07:00",
+      "entryId": "core-history-2026-09-26-e7d427077c85"
+    },
+    {
+      "sha": "4195e5806eedc482a77d7a8cfd0b5c9e3ee46da5",
+      "timestamp": "2026-09-25T17:37:53-07:00",
+      "entryId": "core-history-2026-09-26-e7d427077c85"
+    },
+    {
+      "sha": "b691a33eeb69efc8c3a43d4e7f50add17073b754",
+      "timestamp": "2026-09-25T17:37:43-07:00",
+      "entryId": "core-history-2026-09-26-e7d427077c85"
+    },
+    {
+      "sha": "ac941cd5b03fd70b80d07b7f8e3aa55d039f3cb0",
+      "timestamp": "2026-09-25T14:27:03-07:00",
+      "entryId": "core-history-2026-09-25-ac941cd5b03f"
+    },
+    {
+      "sha": "c177cbccf77f72b8ef62ff7654e9db9ea7a2c3d1",
+      "timestamp": "2026-09-18T01:59:18-07:00",
+      "entryId": "core-history-2026-09-18-c177cbccf77f"
+    },
+    {
+      "sha": "e3e94c4be3448baf173d16d2c9b6284e4ee5873f",
+      "timestamp": "2026-09-17T22:25:46-07:00",
+      "entryId": "core-history-2026-09-18-c177cbccf77f"
+    },
+    {
+      "sha": "04c1d67bf7a1baa18c835ea8d4b5b8e101a8496a",
+      "timestamp": "2026-09-18T05:24:02Z",
+      "entryId": "core-history-2026-09-18-c177cbccf77f"
+    },
+    {
+      "sha": "1b59fcf0b6a1a094f7a9bc2f78224773780931d4",
+      "timestamp": "2026-09-17T22:19:23-07:00",
+      "entryId": "core-history-2026-09-18-c177cbccf77f"
+    },
+    {
+      "sha": "809a9c15fbe9c1c2eb92c9bc1c0f47ae2ab0a05e",
+      "timestamp": "2026-09-17T20:39:21-07:00",
+      "entryId": "core-history-2026-09-18-c177cbccf77f"
+    },
+    {
+      "sha": "5e6ed6ad91da5a2cff11191a3bd79fb3b0f0617d",
+      "timestamp": "2026-09-17T20:26:24-07:00",
+      "entryId": "core-history-2026-09-18-c177cbccf77f"
+    },
+    {
+      "sha": "c48e090558c1a362c2533fce74dd533e15995377",
+      "timestamp": "2026-09-17T22:13:32Z",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "390adcd896f09d984eedb02355cc86850fa4884c",
+      "timestamp": "2026-09-17T14:59:04-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "afcc76ef1a17d360fd9c67fb95a705bb778dd1fb",
+      "timestamp": "2026-09-17T13:59:37-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "0951349af3a194d40743c5f08420ee92932f4f2c",
+      "timestamp": "2026-09-17T12:32:44-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "479a991f1524187695a6699002c6b2da5d5d4119",
+      "timestamp": "2026-09-17T11:51:00-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "0a3ddd7b8629fb17e43f5fe197eedcc98be36379",
+      "timestamp": "2026-09-17T09:50:59-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "a4445c1417c58261414208c71ae0ad85213d81ca",
+      "timestamp": "2026-09-17T03:25:24-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "b34725c2e980c78214f06896a2769b27ac1fbd42",
+      "timestamp": "2026-09-17T01:08:24-07:00",
+      "entryId": "core-history-2026-09-17-c48e090558c1"
+    },
+    {
+      "sha": "eaa4f40ff78e96a5659f66bf654f7e11a4c33d3c",
+      "timestamp": "2026-09-16T22:58:46-07:00",
+      "entryId": "core-history-2026-09-17-eaa4f40ff78e"
+    },
+    {
+      "sha": "8fbc486240d3473d9e2a4ca21cc0df9d21eea225",
+      "timestamp": "2026-09-16T22:56:57-07:00",
+      "entryId": "core-history-2026-09-17-eaa4f40ff78e"
+    },
+    {
+      "sha": "48923a817ee8e5cce7fdc84dc2796bbe6cf6842b",
+      "timestamp": "2026-09-16T22:33:12-07:00",
+      "entryId": "core-history-2026-09-17-eaa4f40ff78e"
+    },
+    {
+      "sha": "fff839e5d8540a5fecfd290d3ae3d81006f32988",
+      "timestamp": "2026-09-16T22:23:08-07:00",
+      "entryId": "core-history-2026-09-17-eaa4f40ff78e"
+    },
+    {
+      "sha": "c5e0cc0af31b958392c7d4e954ef8d3baa1f0790",
+      "timestamp": "2026-09-16T22:22:39-07:00",
+      "entryId": "core-history-2026-09-17-eaa4f40ff78e"
+    },
+    {
+      "sha": "ffcd3269bc512aeb6aebc2cf32d19208919c9c46",
+      "timestamp": "2026-09-16T22:19:44-07:00",
+      "entryId": "core-history-2026-09-17-eaa4f40ff78e"
+    },
+    {
+      "sha": "5d6d6b0695d372e18635b2d64907b400ba8444f6",
+      "timestamp": "2026-09-16T15:10:51-07:00",
+      "entryId": "core-history-2026-09-16-5d6d6b0695d3"
+    },
+    {
+      "sha": "01442d41672994ba1fa572880889c9149bc691b3",
+      "timestamp": "2026-09-16T14:32:42-07:00",
+      "entryId": "core-history-2026-09-16-5d6d6b0695d3"
+    },
+    {
+      "sha": "08a7c6b7ac7e408cdf5e7ee4d14569436ab907b3",
+      "timestamp": "2026-09-16T14:23:43-07:00",
+      "entryId": "core-history-2026-09-16-5d6d6b0695d3"
+    },
+    {
+      "sha": "d8832cf4bdda03ea0f22ab0e56ca7db20a32981f",
+      "timestamp": "2026-09-10T17:40:11-07:00",
+      "entryId": "core-history-2026-09-11-d8832cf4bdda"
+    },
+    {
+      "sha": "a1dc8212b5b12aead6ea36ea88e7e1a13b793699",
+      "timestamp": "2026-09-09T19:56:50-07:00",
+      "entryId": "core-history-2026-09-10-a1dc8212b5b1"
+    },
+    {
+      "sha": "45bed6ddefa5a1792de729d0061c548b9a5bc9ae",
+      "timestamp": "2026-09-09T18:53:45-07:00",
+      "entryId": "core-history-2026-09-10-a1dc8212b5b1"
+    },
+    {
+      "sha": "af52dcb2c9e0342621adb770c727a4ca06371835",
+      "timestamp": "2026-09-06T18:13:31-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "0dfe848455cbf12d39e2c6694aa10b4ab2cd10b1",
+      "timestamp": "2026-09-06T17:40:36-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "1c1ca8a2e848f8939f55b8fa7bb8784240310e1f",
+      "timestamp": "2026-09-06T17:40:16-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "c4b64c5af579eaa33622cec3fd413fba72971918",
+      "timestamp": "2026-09-06T17:37:47-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "04d4ee538d9d25b4bf317752676e5771bde5abf5",
+      "timestamp": "2026-09-06T17:37:41-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "6a5f3993bfb27c3f10efff6b6ffafb0bb02296f0",
+      "timestamp": "2026-09-06T17:37:35-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "93901ad8a0126a37066a8fd6da1d39b6ab02a51e",
+      "timestamp": "2026-09-06T17:37:29-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "7992402555adf7b73c5c388d945d60c62765fde5",
+      "timestamp": "2026-09-06T17:37:11-07:00",
+      "entryId": "core-history-2026-09-07-af52dcb2c9e0"
+    },
+    {
+      "sha": "389222fa3be71d89204a53e48ed6c26d0be1cc54",
+      "timestamp": "2026-09-06T15:47:29-07:00",
+      "entryId": "core-history-2026-09-06-389222fa3be7"
+    },
+    {
+      "sha": "55b212c34f258f25ec9d3ae51cea185301368694",
+      "timestamp": "2026-09-06T13:54:38-07:00",
+      "entryId": "core-history-2026-09-06-389222fa3be7"
+    },
+    {
+      "sha": "1c3d2d1de59d4d7ee7eb5c786da9fcbd70aa7019",
+      "timestamp": "2026-09-06T13:54:21-07:00",
+      "entryId": "core-history-2026-09-06-389222fa3be7"
+    },
+    {
+      "sha": "58d1119e5500787666d9644509cd1b4fd9ebd0ad",
+      "timestamp": "2026-09-06T13:53:56-07:00",
+      "entryId": "core-history-2026-09-06-389222fa3be7"
+    },
+    {
+      "sha": "737f1b4aecd6df3d43efca49f3db869c671a18bd",
+      "timestamp": "2026-09-06T13:53:26-07:00",
+      "entryId": "core-history-2026-09-06-389222fa3be7"
+    },
+    {
+      "sha": "931186150e3235bd98916143b50f387486b45d43",
+      "timestamp": "2026-09-06T12:27:24-07:00",
+      "entryId": "core-history-2026-09-06-389222fa3be7"
+    },
+    {
+      "sha": "4bed7d549f5486a488223545b3a1b00ca1855040",
+      "timestamp": "2026-09-03T10:22:46-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "e8276974c08245098730d9875bd5e0f9ad0b7618",
+      "timestamp": "2026-09-03T09:12:28-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "eb42b78204d1931041d19005e00c1f183c6ef2f0",
+      "timestamp": "2026-09-03T05:57:11-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "1fcc4673a6cc498ce87d91530f898806421995fa",
+      "timestamp": "2026-09-03T02:44:52-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "251663008d1086a43eeb5e18c2b57538eea8b814",
+      "timestamp": "2026-09-03T02:35:38-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "b0fed2fc38111140eb99b900ae9a1dd43fe2d4a5",
+      "timestamp": "2026-09-03T01:46:18-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "2bd7fa55ce026e1e479c49f9f8171352d0f59565",
+      "timestamp": "2026-09-03T00:37:15-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "509e119c1f9c587c37c28d7933654d6bd1666830",
+      "timestamp": "2026-09-02T23:24:42-07:00",
+      "entryId": "core-history-2026-09-03-4bed7d549f54"
+    },
+    {
+      "sha": "9191f2a64e11342a6cdcf66e60f6da3ecf07b169",
+      "timestamp": "2026-09-02T22:28:34-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "8feff683cca6b69596ffdb2e0427f76b2996d0db",
+      "timestamp": "2026-09-02T22:07:42-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "eb84f32a2ae376f8dd85c4541b948baa083b78b8",
+      "timestamp": "2026-09-02T22:02:10-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "1fcf76a5007e7abafa65869f7ad5674b12e70109",
+      "timestamp": "2026-09-02T22:00:51-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "7479ff6ee7dd586851d79b49a2e682dc90cc5688",
+      "timestamp": "2026-09-02T21:57:10-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "8bd69e203f4ae0877ec5a77522b3cc917f7db7a5",
+      "timestamp": "2026-09-02T21:49:34-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "1463ba28bfcedceacfa222b3a71d3c37d48cac3a",
+      "timestamp": "2026-09-02T21:36:04-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "9ef17ff6cd2f5675729c397e6d5145b754d66d78",
+      "timestamp": "2026-09-02T21:25:59-07:00",
+      "entryId": "core-history-2026-09-03-9191f2a64e11"
+    },
+    {
+      "sha": "30937f67a3f72797d80fcb06a3becc8c003ddb86",
+      "timestamp": "2026-09-02T21:13:15-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "2572672c4a1ebd7f809a5cb580dd24d8c86ef00e",
+      "timestamp": "2026-09-02T20:40:47-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "2ce360957c0b98bc358f936e0b5f068179131d3f",
+      "timestamp": "2026-09-02T20:34:41-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "f2ab398cd5a93428569ac9df5ead06d4d9dc9306",
+      "timestamp": "2026-09-02T19:58:31-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "df433a9194e446c8aea0ae49ef89c4549fa95d8e",
+      "timestamp": "2026-09-02T19:51:03-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "3afba9e11926681fe7a7a2569a56513b7a8e97ed",
+      "timestamp": "2026-09-02T19:49:35-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "03773aa116f65b8510b45fcabf9dab2541b92391",
+      "timestamp": "2026-09-02T18:58:50-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "7d3b1b229ccaacf3e76f10346ce084e30d11a036",
+      "timestamp": "2026-09-02T18:44:21-07:00",
+      "entryId": "core-history-2026-09-03-30937f67a3f7"
+    },
+    {
+      "sha": "e219c099710ed0a1f83a21b7313a4f0467f992f4",
+      "timestamp": "2026-09-02T17:48:07-07:00",
+      "entryId": "core-history-2026-09-03-e219c099710e"
+    },
+    {
+      "sha": "74d46725334d3a6a122150f8d5bfd337c76d40c5",
+      "timestamp": "2026-09-02T17:11:24-07:00",
+      "entryId": "core-history-2026-09-03-e219c099710e"
+    },
+    {
+      "sha": "55a97b0939bb43202fa15c6aaef125622fab46a2",
+      "timestamp": "2026-09-02T17:11:20-07:00",
+      "entryId": "core-history-2026-09-03-e219c099710e"
+    },
+    {
+      "sha": "6d992e9a5bd8511d2f86938a7cd52b0c5513506b",
+      "timestamp": "2026-09-02T16:58:47-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "d6a92e6225840f7da7f1fc6d41a310bde0430c08",
+      "timestamp": "2026-09-02T16:26:30-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "be99ce7321142a53c27b3392fc0aeeec792c93b6",
+      "timestamp": "2026-09-02T15:43:40-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "8766f0afa541735508a186b7ca37fde514ab3c86",
+      "timestamp": "2026-09-02T14:39:10-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "cd0819a07d937ea36d4e66ba28756dba99c6aec0",
+      "timestamp": "2026-09-02T14:20:52-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "13c846c2f1e5d7dcf615b5ec3913f8222ba2aa1d",
+      "timestamp": "2026-09-02T14:17:05-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "d7072ffff0493bafe38fa8fbf3ec6dbafb6ebd86",
+      "timestamp": "2026-09-02T14:08:38-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "fc5c4937048b9459a337fd18bbedf3a7752c01ab",
+      "timestamp": "2026-09-02T14:06:27-07:00",
+      "entryId": "core-history-2026-09-02-6d992e9a5bd8"
+    },
+    {
+      "sha": "3fd2d973e76893426dcfb7d51273123d20dac1f5",
+      "timestamp": "2026-09-02T13:56:44-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "703c9f17be403d40a1468bf00e71a4711c37fa19",
+      "timestamp": "2026-09-02T13:53:39-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "a0d515fba739937e5aeb9f25b5b691cb8995d4d9",
+      "timestamp": "2026-09-02T13:51:58-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "d6852c4e877f8f63dba4043e12bb5f061688ae95",
+      "timestamp": "2026-09-02T13:51:30-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "253c132bc8a5a1db7a9abf216cd095eef026495a",
+      "timestamp": "2026-09-02T13:51:00-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "2a5614442d625a95666928c52d765df7807f1df6",
+      "timestamp": "2026-09-02T13:47:07-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "fc9ca294b765342db1370f7d31ed1acb82d8c09f",
+      "timestamp": "2026-09-02T13:35:30-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "2a011ccc97023124341dbfdf8cae88e2df994183",
+      "timestamp": "2026-09-02T13:31:18-07:00",
+      "entryId": "core-history-2026-09-02-3fd2d973e768"
+    },
+    {
+      "sha": "029b5bc0f5547b989d074ce965391c996e5c1483",
+      "timestamp": "2026-09-02T13:02:48-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "25cb0c04c9a2f5380f025e7340bf83fff2175065",
+      "timestamp": "2026-09-02T12:57:55-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "267e0c42d93d3477ed70f8d3e08e3c5a68bdfdf2",
+      "timestamp": "2026-09-02T12:46:00-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "2117ec6f6339f670b0c71d6bec31f37bf124104e",
+      "timestamp": "2026-09-02T11:07:45-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "0d6db957401913a10300e05aa6c9bf3db28a8204",
+      "timestamp": "2026-09-02T10:44:11-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "d9be558d43c76e28aa181f1392c33cb27fc5a0ea",
+      "timestamp": "2026-09-02T10:44:05-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "67eb30e14f1efb740e0501d3f287ec7425cdea7a",
+      "timestamp": "2026-09-02T10:00:33-07:00",
+      "entryId": "core-history-2026-09-02-029b5bc0f554"
+    },
+    {
+      "sha": "d1a436aba14403990500b4a195788097de3526a5",
+      "timestamp": "2026-08-31T21:21:37-07:00",
+      "entryId": "core-history-2026-09-01-d1a436aba144"
+    },
+    {
+      "sha": "92ad44b97bf9ee68f65066a21d5a3ebad036fdcc",
+      "timestamp": "2026-08-31T20:49:01-07:00",
+      "entryId": "core-history-2026-09-01-d1a436aba144"
+    },
+    {
+      "sha": "c753acb7afa2c9acd3b35dfc647be4cfc05b09fe",
+      "timestamp": "2026-08-31T20:48:10-07:00",
+      "entryId": "core-history-2026-09-01-d1a436aba144"
+    },
+    {
+      "sha": "a122376b575e2d172a5eb9ce289aa5aff8ab63d7",
+      "timestamp": "2026-08-31T16:54:38-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "327f74d55bf5bcede1c8438e0a62fdd973cdaeb6",
+      "timestamp": "2026-08-31T16:42:35-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "8cebc66d5f5c3562bb8edc8d54ee0b13ddf21a62",
+      "timestamp": "2026-08-31T16:18:18-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "d9ec19a7597a943f396b53c3bc02a5780c060da1",
+      "timestamp": "2026-08-31T16:07:14-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "1886e75431e6bd80bd37bc6129196ffa2e2b44ae",
+      "timestamp": "2026-08-31T15:59:38-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "001ce8d9ca4b4587aa61e75cc439f6e5f815bf0c",
+      "timestamp": "2026-08-31T15:57:09-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "716a8b9e19ea287cb8083c46fe05dd3d730f97cc",
+      "timestamp": "2026-08-31T12:27:31-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "da24c3519f6c5a7ba8d37594c8ed7081336cc3c9",
+      "timestamp": "2026-08-31T12:26:47-07:00",
+      "entryId": "core-history-2026-08-31-a122376b575e"
+    },
+    {
+      "sha": "af653a517ed21ddcd0f0dd563bf13b1236a6f35c",
+      "timestamp": "2026-08-31T12:25:36-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "4134bcbf72ef857f346fbd1b50d57a0a99b67518",
+      "timestamp": "2026-08-31T12:02:20-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "e931b29378a749ce19ab8f818b9d357f9ac3556e",
+      "timestamp": "2026-08-31T10:30:56-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "1e699a13199ee10231956a1d5a6ebb3e3c4d07d6",
+      "timestamp": "2026-08-31T09:50:48-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "10511b2143beb4153b12dc5175a3276404ca1bd1",
+      "timestamp": "2026-08-31T09:33:02-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "775ed729d5029464fa12e0a0b46a99d564a9adfc",
+      "timestamp": "2026-08-31T08:05:08-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "822e6c1f9eabafba644ccfbd1fa0a47030990e54",
+      "timestamp": "2026-08-31T07:08:03-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "2c81111128ff65d7d573ced18967e36003db03bd",
+      "timestamp": "2026-08-31T06:59:35-07:00",
+      "entryId": "core-history-2026-08-31-af653a517ed2"
+    },
+    {
+      "sha": "1a296705b1754d8cc5964abc78f87534f2d3e674",
+      "timestamp": "2026-08-31T06:54:19-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "60b2372cdb18dac813f25b5a874b5fd561c2e16c",
+      "timestamp": "2026-08-31T06:10:31-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "77cfd1fbbde5382d192533978e1509a139e25f34",
+      "timestamp": "2026-08-31T06:06:53-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "db82e4e8460dc1d2e66d95f49afcf9a09b3da99f",
+      "timestamp": "2026-08-31T04:51:19-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "8766d73c4555905183058857d141d2d80dad8c4f",
+      "timestamp": "2026-08-31T04:50:41-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "92d84f4172e2f06c4fdc52303b555d7c58b55dc6",
+      "timestamp": "2026-08-31T03:37:12-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "258ef0a25e352e29304b13def0859fb9d0519f08",
+      "timestamp": "2026-08-31T03:36:01-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "be6d62981e9a879d761ec6415576e32ef82926de",
+      "timestamp": "2026-08-30T22:55:55-07:00",
+      "entryId": "core-history-2026-08-31-1a296705b175"
+    },
+    {
+      "sha": "a8eb66ebfb88249f30a5cf9e815c5ce69db9c6ad",
+      "timestamp": "2026-08-30T22:49:38-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "072315c2ad38f5819d9399f42b1d035cfad9b3a7",
+      "timestamp": "2026-08-30T22:44:59-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "ce6e3ccd37f39245b290bc46cf5ad742a72794dc",
+      "timestamp": "2026-08-30T22:15:53-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "26669e3bfd86931900879295596db255dc63d063",
+      "timestamp": "2026-08-30T21:21:20-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "ea4b9f9916d2542819914351560c73e8bf5a4fc2",
+      "timestamp": "2026-08-30T21:09:31-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "9b578746db04455c7ab0d1c3d3eb135e24c885ee",
+      "timestamp": "2026-08-30T20:33:52-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "eefbc9b77fee875ed375fd63cb441b247cb9f7fb",
+      "timestamp": "2026-08-30T20:29:18-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "34c46b809482655ac7d7a524dc35130779b37f49",
+      "timestamp": "2026-08-30T20:28:26-07:00",
+      "entryId": "core-history-2026-08-31-a8eb66ebfb88"
+    },
+    {
+      "sha": "cb0fbb791398000fc20c48fd6b6b32f4468ad8be",
+      "timestamp": "2026-08-30T20:24:36-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "19d9b0c9a8f19713162984bc22fdfbe4dbf3b51d",
+      "timestamp": "2026-08-30T20:22:37-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "8dc6be6bcb55b4084b066b83cbfe03bc967168a4",
+      "timestamp": "2026-08-30T20:20:10-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "b700f2d2164bc1bda6434c32de82d54b3e8ed1ea",
+      "timestamp": "2026-08-30T20:16:35-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "780696fadaaf541b7cf9ce1fb48caf585545a1f1",
+      "timestamp": "2026-08-30T20:12:28-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "41a3b547d5f255ea16c3bdb4c3c800527f4fd694",
+      "timestamp": "2026-08-30T19:54:03-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "8a61f270deb912bb0d4a07e1656a32dc110a6162",
+      "timestamp": "2026-08-30T19:10:38-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "14d152793004ecdbbb358965f59334b68caacac9",
+      "timestamp": "2026-08-30T19:10:20-07:00",
+      "entryId": "core-history-2026-08-31-cb0fbb791398"
+    },
+    {
+      "sha": "9244614fc6afcff020ed1877eb6001894616a461",
+      "timestamp": "2026-08-30T18:38:42-07:00",
+      "entryId": "core-history-2026-08-31-9244614fc6af"
+    },
+    {
+      "sha": "77b5052e67ad7fa4ef849cddd386ec08097180cc",
+      "timestamp": "2026-08-30T18:33:17-07:00",
+      "entryId": "core-history-2026-08-31-9244614fc6af"
+    },
+    {
+      "sha": "13eb22c70c45b0c73e7cedf7797c40aa5c55fcfa",
+      "timestamp": "2026-08-30T18:11:48-07:00",
+      "entryId": "core-history-2026-08-31-9244614fc6af"
+    },
+    {
+      "sha": "ec21ab9364781e2afee3e51e1516d73aca262674",
+      "timestamp": "2026-08-30T17:57:32-07:00",
+      "entryId": "core-history-2026-08-31-9244614fc6af"
+    },
+    {
+      "sha": "61c02313bc639d67d3c957e13c02f791f7f50a49",
+      "timestamp": "2026-08-30T17:53:54-07:00",
+      "entryId": "core-history-2026-08-31-9244614fc6af"
+    },
+    {
+      "sha": "04c5a0b2a84c38dce6b95d4d83fe78fbd41bdf15",
+      "timestamp": "2026-08-30T03:45:27-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "f5ff2b1febdf120b7fa4e540825e54bb472f5bd5",
+      "timestamp": "2026-08-30T03:03:10-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "d1b56cca4a96676d5e2d6b49029208945479bb1e",
+      "timestamp": "2026-08-30T02:21:39-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "7879d3f6145b091f285ec86c160430feae421f59",
+      "timestamp": "2026-08-30T01:45:17-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "0319eed60f4fb8c46ad4d1e344048c934b0ac7b3",
+      "timestamp": "2026-08-30T01:40:31-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "74cbbb51e9703ba839407fc9cadae7b95612258a",
+      "timestamp": "2026-08-30T01:04:46-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "d7c5049bc57e4c808595847025b3c3acaefc5eb7",
+      "timestamp": "2026-08-30T01:01:11-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "0b886207abc6ce5e52ed5e744b3f0b1ba086e154",
+      "timestamp": "2026-08-30T00:56:13-07:00",
+      "entryId": "core-history-2026-08-30-04c5a0b2a84c"
+    },
+    {
+      "sha": "418946af15db8cbc83ab6ca8108009526d110659",
+      "timestamp": "2026-08-30T00:39:18-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "e1eca81efc6f13d5c2f5f25565bdc6e2133d429d",
+      "timestamp": "2026-08-30T00:23:53-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "ed6ed156e04ab4a51820a09d56a8872930a66cef",
+      "timestamp": "2026-08-30T00:22:39-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "bdd33bc8d64488a94d48aab8fca49cb9b590050f",
+      "timestamp": "2026-08-30T00:11:28-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "eb8d6f61aae9f1fd089b403f088bf8912ceb9668",
+      "timestamp": "2026-08-30T00:07:42-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "20ac400425027226fd1690d0d17c18935d1b34b4",
+      "timestamp": "2026-08-29T23:54:18-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "2ecb65dbe38af6e5ba9373b266ae4dfc56d81b6c",
+      "timestamp": "2026-08-29T23:35:38-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "22354231f3e0ed72d154df3f8f0851c03d7d3a64",
+      "timestamp": "2026-08-29T23:31:23-07:00",
+      "entryId": "core-history-2026-08-30-418946af15db"
+    },
+    {
+      "sha": "584a6868802c6651a02797c3a59cdfdbe864c842",
+      "timestamp": "2026-08-29T23:17:15-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "05f620a7d57e8109f37bc6c99b10d53f099f9321",
+      "timestamp": "2026-08-29T23:11:13-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "faef07f589aadcefe02066a3aae419deb97a34cc",
+      "timestamp": "2026-08-29T22:59:43-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "1e8a63ec56bf5646b2cd466a3a602ce361f9bbb7",
+      "timestamp": "2026-08-29T22:44:50-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "00f6e0fc5b756f5c9b3854d55880718f516755f7",
+      "timestamp": "2026-08-29T22:11:29-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "d4c67de4a732a16c80b1e11a662501d24b3752a9",
+      "timestamp": "2026-08-29T21:58:32-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "e6b711be3040dbc72ae13dd431013e8ec643cacb",
+      "timestamp": "2026-08-29T21:44:13-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "98d18c63ee46b4fbf35f4545741b6e70372efa65",
+      "timestamp": "2026-08-29T21:29:59-07:00",
+      "entryId": "core-history-2026-08-30-584a6868802c"
+    },
+    {
+      "sha": "683aad31d48c3a108b5c292704c7572b72f47266",
+      "timestamp": "2026-08-29T20:44:14-07:00",
+      "entryId": "core-history-2026-08-30-683aad31d48c"
+    },
+    {
+      "sha": "63195d229db4ee1fa3090459c90776731ec90dd6",
+      "timestamp": "2026-08-29T20:32:08-07:00",
+      "entryId": "core-history-2026-08-30-683aad31d48c"
+    },
+    {
+      "sha": "78a12b96a2ee25be890c552750ddae71791b53a7",
+      "timestamp": "2026-08-29T20:30:44-07:00",
+      "entryId": "core-history-2026-08-30-683aad31d48c"
+    },
+    {
+      "sha": "14fb94ab87c17a2853d9aca8bef8a4e75b5905f3",
+      "timestamp": "2026-08-29T20:15:32-07:00",
+      "entryId": "core-history-2026-08-30-683aad31d48c"
+    },
+    {
+      "sha": "59dc258807fd9c785c20e881b39d05e61adfe17b",
+      "timestamp": "2026-08-29T20:15:11-07:00",
+      "entryId": "core-history-2026-08-30-683aad31d48c"
+    },
+    {
+      "sha": "5e56a96b975008d7ad125664727f351e0724ead3",
+      "timestamp": "2026-08-29T20:09:38-07:00",
+      "entryId": "core-history-2026-08-30-683aad31d48c"
+    }
+  ],
+  "saasMergedPullRequests": [
+    {
+      "number": 1,
+      "title": "Add private portfolio reconciliation and explicit public publishing",
+      "mergedAt": "2026-09-09T12:16:22Z",
+      "mergeCommit": "96ca47f0fab8ad1018757783be05b76cb351cfa0",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/1",
+      "entryId": "saas-history-2026-09-09-pr-3"
+    },
+    {
+      "number": 2,
+      "title": "Add isolated hosted workspaces and customer-scoped MCP",
+      "mergedAt": "2026-09-09T12:09:08Z",
+      "mergeCommit": "c766d06dfc2dc739caecb2bf555012005edd8c10",
+      "base": "codex/public-portfolio",
+      "url": "https://github.com/heathermhuang/dombot/pull/2",
+      "entryId": "saas-history-2026-09-09-pr-3"
+    },
+    {
+      "number": 3,
+      "title": "Launch canonical domain and preserve founder portfolio links",
+      "mergedAt": "2026-09-09T13:03:28Z",
+      "mergeCommit": "01ee03af58ffcc59a68385ae5ea3c8ce86a5ef3a",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/3",
+      "entryId": "saas-history-2026-09-09-pr-3"
+    },
+    {
+      "number": 4,
+      "title": "Build integrated portfolio selection and publishing flow",
+      "mergedAt": "2026-09-10T02:27:44Z",
+      "mergeCommit": "7db685373e2112e91b3272ec10401b510839bd94",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/4",
+      "entryId": "saas-history-2026-09-10-pr-7"
+    },
+    {
+      "number": 5,
+      "title": "Separate portfolio and product testing hosts",
+      "mergedAt": "2026-09-10T02:35:44Z",
+      "mergeCommit": "babd358335be00c944344bcdcbd3f59451d4fa07",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/5",
+      "entryId": "saas-history-2026-09-10-pr-7"
+    },
+    {
+      "number": 6,
+      "title": "Redesign portfolio management for large collections",
+      "mergedAt": "2026-09-10T03:24:04Z",
+      "mergeCommit": "82679530391f22a6f7471b783ec94b1244023c0a",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/6",
+      "entryId": "saas-history-2026-09-10-pr-7"
+    },
+    {
+      "number": 7,
+      "title": "Unify domain management and public-page selection",
+      "mergedAt": "2026-09-10T06:28:21Z",
+      "mergeCommit": "59e821c3a19da1b91a6ea7621f4efedd048aae98",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/7",
+      "entryId": "saas-history-2026-09-10-pr-7"
+    },
+    {
+      "number": 8,
+      "title": "Make inventory-to-public-page selection direct",
+      "mergedAt": "2026-09-11T02:37:40Z",
+      "mergeCommit": "c49a29102b9ea0f824c033b417ec31b824fceb06",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/8",
+      "entryId": "saas-history-2026-09-11-pr-8"
+    },
+    {
+      "number": 9,
+      "title": "Repair portfolio selection, verification, preview and publishing UX",
+      "mergedAt": "2026-09-14T02:58:46Z",
+      "mergeCommit": "e223475687429edb1b8d49c915cb6f848349f0b9",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/9",
+      "entryId": "saas-history-2026-09-14-pr-10"
+    },
+    {
+      "number": 10,
+      "title": "Fix hosted draft preview navigation without frame scripts",
+      "mergedAt": "2026-09-14T03:17:16Z",
+      "mergeCommit": "854458b7486c24eee8133399ffcef57a73c536e9",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/10",
+      "entryId": "saas-history-2026-09-14-pr-10"
+    },
+    {
+      "number": 11,
+      "title": "Sync upstream v1.3.0 into hosted release",
+      "mergedAt": "2026-09-18T03:33:47Z",
+      "mergeCommit": "e2bbc5aa6dc17a69b43a1f803df75958a8d41fa6",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/11",
+      "entryId": "saas-history-2026-09-18-pr-11"
+    },
+    {
+      "number": 12,
+      "title": "Sync upstream v1.4.0 into hosted release",
+      "mergedAt": "2026-09-23T01:06:33Z",
+      "mergeCommit": "73a1ecd83e62385e5cdbc483e272fbabf9c250bd",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/12",
+      "entryId": "saas-history-2026-09-23-pr-12"
+    },
+    {
+      "number": 14,
+      "title": "Sync upstream domain history and activity into hosted release",
+      "mergedAt": "2026-09-28T12:32:00Z",
+      "mergeCommit": "20449f110306d95ab08ac6c8d6301806408172bd",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/14",
+      "entryId": "saas-history-2026-09-28-pr-14"
+    },
+    {
+      "number": 15,
+      "title": "Show expiration and status in phone inventory",
+      "mergedAt": "2026-10-04T10:12:29Z",
+      "mergeCommit": "3489d219f291a4b68da01cf0032baac85149473b",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/15",
+      "entryId": "saas-history-2026-10-04-pr-15"
+    },
+    {
+      "number": 16,
+      "title": "Fix repeated Dynadot Sync rate-limit failures",
+      "mergedAt": "2026-10-06T01:33:53Z",
+      "mergeCommit": "a43f9f44d452f141420acb4f6af94dfbac4f38b8",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/16",
+      "entryId": "saas-history-2026-10-06-pr-18"
+    },
+    {
+      "number": 17,
+      "title": "Finish hosted inventory Sync before background renewal pricing",
+      "mergedAt": "2026-10-06T02:29:34Z",
+      "mergeCommit": "3650578f72e5d2bb24a705088bfaa429b3a3f4a6",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/17",
+      "entryId": "saas-history-2026-10-06-pr-18"
+    },
+    {
+      "number": 18,
+      "title": "Continue renewal pricing when another browser tab is selected",
+      "mergedAt": "2026-10-06T02:55:11Z",
+      "mergeCommit": "1537541c47114a434cd90dcbb6cedb4cd291323c",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/18",
+      "entryId": "saas-history-2026-10-06-pr-18"
+    },
+    {
+      "number": 20,
+      "title": "Sync upstream v1.5.0 into hosted release",
+      "mergedAt": "2026-10-12T00:45:01Z",
+      "mergeCommit": "5672539d248831020e26367d9beccd558d4e68c9",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/20",
+      "entryId": "saas-history-2026-10-12-pr-20"
+    },
+    {
+      "number": 21,
+      "title": "Prevent stalled portfolio reads from leaving an endless skeleton",
+      "mergedAt": "2026-10-14T00:33:34Z",
+      "mergeCommit": "fe041b9c5b55b0201edc69106b518f4c020af563",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/21",
+      "entryId": "saas-history-2026-10-14-pr-23"
+    },
+    {
+      "number": 22,
+      "title": "Recover queued Worker reads after initialization failure",
+      "mergedAt": "2026-10-14T01:12:26Z",
+      "mergeCommit": "6362c610f2a658f79d1a22f2e72b60daf1143bfa",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/22",
+      "entryId": "saas-history-2026-10-14-pr-23"
+    },
+    {
+      "number": 23,
+      "title": "Finish Worker queue cleanup after client disconnects",
+      "mergedAt": "2026-10-14T01:45:13Z",
+      "mergeCommit": "54554a0419c7636674637465c777f3743a93a138",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/23",
+      "entryId": "saas-history-2026-10-14-pr-23"
+    },
+    {
+      "number": 24,
+      "title": "Isolate managed DomBot workspaces and add operator account operations",
+      "mergedAt": "2026-10-15T09:24:44Z",
+      "mergeCommit": "dacce8cedb5bcd279e8e5d2efacf5afe41da193c",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/24",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 25,
+      "title": "Fix imported inventory, mobile controls, and large backup recovery",
+      "mergedAt": "2026-10-15T10:09:10Z",
+      "mergeCommit": "f613f4d6debcc105a489c5b5d2f5f49a3a3388b5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/25",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 26,
+      "title": "Fix Dynadot renewal quote terms and harden dependency diagnostics",
+      "mergedAt": "2026-10-15T11:13:59Z",
+      "mergeCommit": "e4568e26992069343627f954417ce8d8d8091da0",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/26",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 27,
+      "title": "Add pinned CodeQL app and Actions security scans",
+      "mergedAt": "2026-10-15T11:17:04Z",
+      "mergeCommit": "2fad966d754278101ec8e5e310af9002698d96c1",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/27",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 28,
+      "title": "Fix intermittent coordinator 403 from gateway clock skew",
+      "mergedAt": "2026-10-15T11:24:48Z",
+      "mergeCommit": "d9d182f0b60835eac0a578fb24348744aad4066d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/28",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 29,
+      "title": "Remove inline SVG sanitization and verify engine logo source",
+      "mergedAt": "2026-10-15T11:37:51Z",
+      "mergeCommit": "ee3490c69b6768e94641ce11f5234f1fa422b8a7",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/29",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 30,
+      "title": "Revoke signed-out sessions and authenticate desktop MCP traffic",
+      "mergedAt": "2026-10-15T13:02:44Z",
+      "mergeCommit": "79e318e79b53a22154d217dc89e2baf89c74f0f2",
+      "base": "codex/alternative-domains-release",
+      "url": "https://github.com/heathermhuang/dombot/pull/30",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 31,
+      "title": "Deploy session revocation and authenticated desktop MCP on current main",
+      "mergedAt": "2026-10-15T13:44:04Z",
+      "mergeCommit": "e4e54993c5e2987f5da3507970bebdc5a8cb80f6",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/31",
+      "entryId": "saas-history-2026-10-15-pr-31"
+    },
+    {
+      "number": 32,
+      "title": "Add conference logo and free managed early access",
+      "mergedAt": "2026-10-17T12:31:41Z",
+      "mergeCommit": "f3ff69105f826971a469c780a26ebb6b3fd911a7",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/32",
+      "entryId": "saas-history-2026-10-17-pr-35"
+    },
+    {
+      "number": 33,
+      "title": "Harden tenant sessions and account recovery UX",
+      "mergedAt": "2026-10-17T12:09:36Z",
+      "mergeCommit": "fc6f8d0461594943f6876b2ffb82346262729f18",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/33",
+      "entryId": "saas-history-2026-10-17-pr-35"
+    },
+    {
+      "number": 34,
+      "title": "Preserve portfolio at alternative.domains and reconcile free-access branding",
+      "mergedAt": "2026-10-17T12:31:39Z",
+      "mergeCommit": "5b1e35351291f2ad7df4366025f21175ce8eba33",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/34",
+      "entryId": "saas-history-2026-10-17-pr-35"
+    },
+    {
+      "number": 35,
+      "title": "Preserve legacy backend while serving shared portfolio links",
+      "mergedAt": "2026-10-17T12:37:04Z",
+      "mergeCommit": "da986070aeb65396bc87d8f6771a5197a667ef88",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/35",
+      "entryId": "saas-history-2026-10-17-pr-35"
+    },
+    {
+      "number": 36,
+      "title": "Enforce bounded free-service access and workspace lifecycle",
+      "mergedAt": "2026-10-17T12:44:09Z",
+      "mergeCommit": "7b849ebb95f17f5b2e39b436cc5d3c7d679433b9",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/36",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 37,
+      "title": "Prevent unauthenticated cross-source exhaustion of agent quotas",
+      "mergedAt": "2026-10-17T12:52:51Z",
+      "mergeCommit": "98b3a3a016dbe26a8615183652818498df945d77",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/37",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 38,
+      "title": "Complete portfolio asset independence and bound quota integration timing",
+      "mergedAt": "2026-10-17T12:59:06Z",
+      "mergeCommit": "f529858331d1ad5a8fa96b637f805cba481a3a12",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/38",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 39,
+      "title": "Remove rejected monogram and rebuild the domains.domains landing page",
+      "mergedAt": "2026-10-17T14:07:12Z",
+      "mergeCommit": "1ed1d62608b9af0fb3859924ca88c4a2fe431e06",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/39",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 40,
+      "title": "Use account wording and prepare verified public registration",
+      "mergedAt": "2026-10-17T14:38:49Z",
+      "mergeCommit": "b3b035038e2659ed9a1dea7489e2587f682d9b2c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/40",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 41,
+      "title": "Publish Magic Crystal Limited policies for public registration",
+      "mergedAt": "2026-10-17T22:55:44Z",
+      "mergeCommit": "d8f7d78c77b9fb1033df944861507c646c5ceebd",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/41",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 42,
+      "title": "Credit DomBot and expose the open-source SaaS layer clearly",
+      "mergedAt": "2026-10-17T23:32:54Z",
+      "mergeCommit": "b9a18b4cef1a49780e1132e2608acd40cacc2cf1",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/42",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 43,
+      "title": "Explain hosted DomBot and how to start managing domains",
+      "mergedAt": "2026-10-17T23:48:27Z",
+      "mergeCommit": "109ed6115b0ccdeae25fd40232f65fdd680fd4e6",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/43",
+      "entryId": "saas-history-2026-10-17-pr-43"
+    },
+    {
+      "number": 44,
+      "title": "Show DomBot product previews and make the landing page actionable",
+      "mergedAt": "2026-10-18T02:38:53Z",
+      "mergeCommit": "90a427e6ba4f4197a12d3f67a92416d7deafb245",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/44",
+      "entryId": "saas-history-2026-10-18-pr-44"
+    },
+    {
+      "number": 45,
+      "title": "Use domains.domains as the public brand",
+      "mergedAt": "2026-10-18T02:52:16Z",
+      "mergeCommit": "ca539000953afb9fd06547c362f216e8502f9c1e",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/45",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 46,
+      "title": "Clarify original DomBot authorship and hosted SaaS attribution",
+      "mergedAt": "2026-10-18T03:00:35Z",
+      "mergeCommit": "94ac2f6259c27cb5431e4a2b1240eef284f746f9",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/46",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 47,
+      "title": "Use the approved aoxborrow/dombot attribution",
+      "mergedAt": "2026-10-18T03:12:14Z",
+      "mergeCommit": "352a660228148e9f70fa5fdb8f3b565c2668380c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/47",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 48,
+      "title": "Make accounts email-first with magic links, codes and passkeys",
+      "mergedAt": "2026-10-18T08:10:02Z",
+      "mergeCommit": "7aed56b253d4fc387bcc6d135f43d3ec732ed0c2",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/48",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 49,
+      "title": "Add optional owner sites and curated collections",
+      "mergedAt": "2026-10-18T09:17:25Z",
+      "mergeCommit": "76334f4ae64a5f9cd842c6702cb62771875efab9",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/49",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 50,
+      "title": "Preserve preview and review intent in legacy site bookmarks",
+      "mergedAt": "2026-10-18T09:36:33Z",
+      "mergeCommit": "e829d5edc6f72e3e5c4f3d7fcd4853fda5beaa7f",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/50",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 51,
+      "title": "Add gated domain sales workspace, inquiries and lander routing",
+      "mergedAt": "2026-10-18T23:27:27Z",
+      "mergeCommit": "f13b8728b7c8535001c35527e84237418fd32f6f",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/51",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 52,
+      "title": "Include imported holdings in private Sales drafts",
+      "mergedAt": "2026-10-18T23:44:32Z",
+      "mergeCommit": "d2c51edb6d0b1f27818b262e33fdcfa4c58e6b08",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/52",
+      "entryId": "saas-history-2026-10-18-pr-52"
+    },
+    {
+      "number": 53,
+      "title": "Record Sales fleet rollout and mail qualification",
+      "mergedAt": "2026-10-19T00:15:16Z",
+      "mergeCommit": "9e2dbe6f89e850f612f038f2e8c3f4bfa44d4ab5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/53",
+      "entryId": "saas-history-2026-10-19-pr-58"
+    },
+    {
+      "number": 54,
+      "title": "Enable managed Sales pilot with approved buyer privacy",
+      "mergedAt": "2026-10-19T00:49:33Z",
+      "mergeCommit": "8040d1bbd05b843bd5d96bcce4739a0f71be0ad2",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/54",
+      "entryId": "saas-history-2026-10-19-pr-58"
+    },
+    {
+      "number": 55,
+      "title": "Include private collection imports in Sales inventory",
+      "mergedAt": "2026-10-19T07:13:08Z",
+      "mergeCommit": "e8fb41b06410ea921404524acf26566c4204afbb",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/55",
+      "entryId": "saas-history-2026-10-19-pr-58"
+    },
+    {
+      "number": 56,
+      "title": "Fix Workers redirect mode in Sales hostname setup",
+      "mergedAt": "2026-10-19T07:35:44Z",
+      "mergeCommit": "8450b474946b11bc94d14c0f9eb2633394f52013",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/56",
+      "entryId": "saas-history-2026-10-19-pr-58"
+    },
+    {
+      "number": 57,
+      "title": "Fix native fetch receiver during Sales hostname activation",
+      "mergedAt": "2026-10-19T09:03:13Z",
+      "mergeCommit": "16a89538ffd3f81c3c67dff14966e4b912a666c9",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/57",
+      "entryId": "saas-history-2026-10-19-pr-58"
+    },
+    {
+      "number": 58,
+      "title": "Record completed managed Sales pilot qualification",
+      "mergedAt": "2026-10-19T09:41:04Z",
+      "mergeCommit": "adb6f636e1528002e32da38a221adc2c7b607b46",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/58",
+      "entryId": "saas-history-2026-10-19-pr-58"
+    },
+    {
+      "number": 59,
+      "title": "Improve inquiry flow and send complete reply-ready emails",
+      "mergedAt": "2026-10-19T10:10:27Z",
+      "mergeCommit": "a24baf6f124849b8f65e5ed315c3e77c91e39a2d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/59",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 60,
+      "title": "Keep long domain headings readable and copyable",
+      "mergedAt": "2026-10-19T10:27:28Z",
+      "mergeCommit": "224b220b51f62951773687fb706a746a4621b40b",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/60",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 61,
+      "title": "Record normal email replies in domain conversations",
+      "mergedAt": "2026-10-19T11:18:38Z",
+      "mergeCommit": "2e67044167744f01a9c6dab60ae2c326c7a350bb",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/61",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 62,
+      "title": "Trim quoted Gmail HTML from recorded replies",
+      "mergedAt": "2026-10-19T11:53:16Z",
+      "mergeCommit": "bd63981a1ddebdf18a72fd950757a78e1c2cd1ce",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/62",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 63,
+      "title": "Trim quoted email history without prefix markers",
+      "mergedAt": "2026-10-19T12:07:56Z",
+      "mergeCommit": "95427302d07ed7586329af0655f710ec80f07233",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/63",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 64,
+      "title": "Prepare production domain inquiry verification and delivery",
+      "mergedAt": "2026-10-19T14:06:30Z",
+      "mergeCommit": "9fac0490ce50a7114b2873d19bad734f80082920",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/64",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 65,
+      "title": "Allow bounded clock skew in inquiry DNS verification",
+      "mergedAt": "2026-10-19T14:29:02Z",
+      "mergeCommit": "393bfbb63411cdc05425f0a3eff7053af0af0983",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/65",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 66,
+      "title": "Handle Gmail plus-address replies and structured mail quotes",
+      "mergedAt": "2026-10-19T23:33:32Z",
+      "mergeCommit": "416534d3831b03201493dd928af4991b63bcf2cf",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/66",
+      "entryId": "saas-history-2026-10-19-pr-66"
+    },
+    {
+      "number": 67,
+      "title": "Fix conference onboarding, draft retention and Shop review",
+      "mergedAt": "2026-10-20T11:38:38Z",
+      "mergeCommit": "ebed7741428cbd8b0a10d3d5309609aaa05cf217",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/67",
+      "entryId": "saas-history-2026-10-20-pr-71"
+    },
+    {
+      "number": 68,
+      "title": "Cap conference email spend and support a 500-attendee burst",
+      "mergedAt": "2026-10-20T13:42:23Z",
+      "mergeCommit": "28b8c373303223b793c569dc0ed21194738d03a9",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/68",
+      "entryId": "saas-history-2026-10-20-pr-71"
+    },
+    {
+      "number": 69,
+      "title": "Scale qualified signup capacity with Workers for Platforms",
+      "mergedAt": "2026-10-20T14:40:29Z",
+      "mergeCommit": "ac895e0fb11f90aae2573753bb38cf8895e6efc1",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/69",
+      "entryId": "saas-history-2026-10-20-pr-71"
+    },
+    {
+      "number": 70,
+      "title": "Fix imported collection onboarding and runtime provenance",
+      "mergedAt": "2026-10-20T15:18:13Z",
+      "mergeCommit": "efe24a6eb5846980df91d6becfb2d235ad2ff027",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/70",
+      "entryId": "saas-history-2026-10-20-pr-71"
+    },
+    {
+      "number": 71,
+      "title": "Stabilize the 500-attendee throttle regression",
+      "mergedAt": "2026-10-20T15:42:07Z",
+      "mergeCommit": "f94b31f0ea1c590ea2a93ac135acb4be48a1a5cb",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/71",
+      "entryId": "saas-history-2026-10-20-pr-71"
+    },
+    {
+      "number": 72,
+      "title": "Polish conference onboarding, code recovery and private imports",
+      "mergedAt": "2026-10-21T03:39:47Z",
+      "mergeCommit": "b25cdfbf8bb0cfa2e75f69a88306de8f3088ac31",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/72",
+      "entryId": "saas-history-2026-10-21-pr-76"
+    },
+    {
+      "number": 73,
+      "title": "Provide the managed fixed-IP default for hosted Namecheap",
+      "mergedAt": "2026-10-21T04:19:17Z",
+      "mergeCommit": "84804537f85bf222c034f642dac801c4194a4271",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/73",
+      "entryId": "saas-history-2026-10-21-pr-76"
+    },
+    {
+      "number": 74,
+      "title": "Restore reliable hosted inventory, publishing and inquiry UX",
+      "mergedAt": "2026-10-21T06:20:04Z",
+      "mergeCommit": "ce65b26f6c44e646e6b3069d30f80bdbacada96a",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/74",
+      "entryId": "saas-history-2026-10-21-pr-76"
+    },
+    {
+      "number": 75,
+      "title": "Add one authenticated MCP endpoint for SaaS accounts",
+      "mergedAt": "2026-10-21T12:42:12Z",
+      "mergeCommit": "11efe4c3e34997d7a6ecf343581b78405fecb776",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/75",
+      "entryId": "saas-history-2026-10-21-pr-76"
+    },
+    {
+      "number": 76,
+      "title": "Preserve proxy refusal details in sync errors",
+      "mergedAt": "2026-10-21T15:10:07Z",
+      "mergeCommit": "50c0fd83947dd59dd9ca1e8da5a693fe97006b34",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/76",
+      "entryId": "saas-history-2026-10-21-pr-76"
+    },
+    {
+      "number": 77,
+      "title": "Update conference operations for public signup and shared MCP",
+      "mergedAt": "2026-10-22T03:31:48Z",
+      "mergeCommit": "7230ae5e4e5a63a3a8f38754803401367e6873bd",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/77",
+      "entryId": "saas-history-2026-10-22-pr-77"
+    },
+    {
+      "number": 78,
+      "title": "Revoke shared MCP grants and pending codes on password recovery",
+      "mergedAt": "2026-10-23T10:32:39Z",
+      "mergeCommit": "07cf0d96c7da5df017f787a0903bc64154f3c652",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/78",
+      "entryId": "saas-history-2026-10-23-pr-79"
+    },
+    {
+      "number": 79,
+      "title": "Reject incomplete backups before replacing existing inquiry data",
+      "mergedAt": "2026-10-23T10:48:19Z",
+      "mergeCommit": "abf5a87354cdd07a0c67617472184ffabf3a100e",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/79",
+      "entryId": "saas-history-2026-10-23-pr-79"
+    },
+    {
+      "number": 80,
+      "title": "Require fresh authentication for bulk results and domain deletion",
+      "mergedAt": "2026-10-23T11:40:37Z",
+      "mergeCommit": "daa664999e36cf6ba10e3b42487066a9b01ce3c3",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/80",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 81,
+      "title": "Validate release tags before outputs and remove shell interpolation",
+      "mergedAt": "2026-10-23T11:54:06Z",
+      "mergeCommit": "55b63c5972c92201cfda7aec80c7a1ad686624b5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/81",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 82,
+      "title": "Pin dispatcher fairness regression to its lease window",
+      "mergedAt": "2026-10-23T12:23:17Z",
+      "mergeCommit": "c960db21825a6533cae580716c986dd32812dc1d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/82",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 83,
+      "title": "Validate registrar path inputs and quote forwarding expressions",
+      "mergedAt": "2026-10-23T12:34:39Z",
+      "mergeCommit": "fa9cf9e6650c35fe123ad89849bc40e07f8fe572",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/83",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 84,
+      "title": "Enforce MCP scopes and harden bulk exports, input bounds, and desktop navigation",
+      "mergedAt": "2026-10-23T14:18:54Z",
+      "mergeCommit": "474310fd3fb9a2903d1b51e80668f1e239e8f663",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/84",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 85,
+      "title": "Require HTTPS staging origins before deployment",
+      "mergedAt": "2026-10-23T14:24:30Z",
+      "mergeCommit": "e4882ed55ab2b8051b986a0e2e2181118c789f2d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/85",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 86,
+      "title": "Retire self-host roots before rotation and bound registrar retries",
+      "mergedAt": "2026-10-23T14:51:44Z",
+      "mergeCommit": "7a2293ad0d04b1d550a78d04e1c7d6b18b3a7a0b",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/86",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 87,
+      "title": "Route desktop updates to fork security releases",
+      "mergedAt": "2026-10-23T23:25:37Z",
+      "mergeCommit": "ef3388b658244aca11a42c6dba74804f70fdff3d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/87",
+      "entryId": "saas-history-2026-10-23-pr-87"
+    },
+    {
+      "number": 88,
+      "title": "Coordinate shared proxy traffic through a fixed-source relay",
+      "mergedAt": "2026-10-24T02:55:52Z",
+      "mergeCommit": "dc62b8d33812896a7ca8b8819bdb5dcb017d8e0c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/88",
+      "entryId": "saas-history-2026-10-24-pr-92"
+    },
+    {
+      "number": 89,
+      "title": "Use direct droplet egress for the managed registrar route",
+      "mergedAt": "2026-10-24T04:29:37Z",
+      "mergeCommit": "ae04dbdd37834da3efd8dcb785fea89a7754807f",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/89",
+      "entryId": "saas-history-2026-10-24-pr-92"
+    },
+    {
+      "number": 90,
+      "title": "Keep Namecheap and Dynadot on managed fixed-IP egress during proxy cutover",
+      "mergedAt": "2026-10-24T05:21:48Z",
+      "mergeCommit": "555ed7c32b84b6d0e4bd08e03eb5bcbc493879ce",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/90",
+      "entryId": "saas-history-2026-10-24-pr-92"
+    },
+    {
+      "number": 91,
+      "title": "Fix publication removal and unify responsive hosted UI",
+      "mergedAt": "2026-10-24T14:48:23Z",
+      "mergeCommit": "0195fb27b84bb7fbb2354335c69fd8397e576948",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/91",
+      "entryId": "saas-history-2026-10-24-pr-92"
+    },
+    {
+      "number": 92,
+      "title": "Finish passkey naming and remaining UI review gaps",
+      "mergedAt": "2026-10-24T23:11:29Z",
+      "mergeCommit": "937472d09a6fbfecda30d13481c5ac20aa158a7c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/92",
+      "entryId": "saas-history-2026-10-24-pr-92"
+    },
+    {
+      "number": 93,
+      "title": "Fix renewal-pricing cooldown and tablet inquiry challenge overflow",
+      "mergedAt": "2026-10-25T00:41:15Z",
+      "mergeCommit": "ba4e57e10b692083144296eab4ad53e3b2deaf28",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/93",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 94,
+      "title": "Fix mobile inventory selection and Activity readability",
+      "mergedAt": "2026-10-25T02:14:44Z",
+      "mergeCommit": "a52a020c16be2edfb8ba21c8afa00a1e05d6afa7",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/94",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 95,
+      "title": "Fix stale expiry dates after successful registrar sync",
+      "mergedAt": "2026-10-25T04:12:27Z",
+      "mergeCommit": "7c2d2f29d15c107e9cc85f01b5c217eaaa650889",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/95",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 96,
+      "title": "Polish the managed SaaS interface and account screens",
+      "mergedAt": "2026-10-25T07:11:01Z",
+      "mergeCommit": "d57dfe4d7cd29f083803b287972f874c86a49a71",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/96",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 97,
+      "title": "Lead customer-facing SaaS copy and previews with domains.domains",
+      "mergedAt": "2026-10-25T08:23:53Z",
+      "mergeCommit": "ebd95d4ca88b7dd7b73920b6acecb92b4750e85c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/97",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 98,
+      "title": "Show varied portfolio previews and all supported registrar logos",
+      "mergedAt": "2026-10-25T08:48:57Z",
+      "mergeCommit": "8deaebeb0dee9c0af0f332c7e942fb2361a4b6d4",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/98",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 99,
+      "title": "Polish landing pages and account presentation",
+      "mergedAt": "2026-10-25T09:16:55Z",
+      "mergeCommit": "c716eb3c8cc5bb26e3e835efd5797a786a3cce33",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/99",
+      "entryId": "saas-history-2026-10-25-pr-99"
+    },
+    {
+      "number": 100,
+      "title": "Add restricted admin dashboard for system health and user holdings",
+      "mergedAt": "2026-10-27T00:40:53Z",
+      "mergeCommit": "c24399a3be0d87453fda3bade210be5bcd00e19e",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/100",
+      "entryId": "saas-history-2026-10-27-pr-102"
+    },
+    {
+      "number": 101,
+      "title": "Keep admin tables readable and user links tappable on narrow screens",
+      "mergedAt": "2026-10-27T01:24:25Z",
+      "mergeCommit": "8a509539bdab6de5d61e65685bf152cc564715d0",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/101",
+      "entryId": "saas-history-2026-10-27-pr-102"
+    },
+    {
+      "number": 102,
+      "title": "Prevent intermittent sync failures when the shared relay queue is temporarily full",
+      "mergedAt": "2026-10-27T02:25:14Z",
+      "mergeCommit": "3eb3a2f6404df86a6817030a16deeafdd95ebe00",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/102",
+      "entryId": "saas-history-2026-10-27-pr-102"
+    },
+    {
+      "number": 103,
+      "title": "Fix email onboarding and first registrar connection UX",
+      "mergedAt": "2026-10-27T02:50:34Z",
+      "mergeCommit": "d57f0336943c05df40216b9791c7bbc42cc843f6",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/103",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 104,
+      "title": "Monitor production Dynadot sync failures and email retained diagnostics",
+      "mergedAt": "2026-10-27T04:01:26Z",
+      "mergeCommit": "be622b7a71757990bcd3046941a17e1ac73520a3",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/104",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 105,
+      "title": "Stop monitor-health email floods and group Dynadot failure alerts",
+      "mergedAt": "2026-10-27T08:14:21Z",
+      "mergeCommit": "f55f9fda56f24119e538c1ad6862ba85cc102fc5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/105",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 106,
+      "title": "Let empty portfolios sleep while preserving active maintenance",
+      "mergedAt": "2026-10-27T09:02:55Z",
+      "mergeCommit": "cca54a1addbf007ba2ff54a18f1d39662b683329",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/106",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 107,
+      "title": "Show the managed domains.domains About page and deployed release",
+      "mergedAt": "2026-10-27T09:43:12Z",
+      "mergeCommit": "1ea06796e8ac255c5bc7bc0ac352cfe50ef34628",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/107",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 108,
+      "title": "Add admin user domains and renewal costs; isolate monitor reads",
+      "mergedAt": "2026-10-27T10:13:44Z",
+      "mergeCommit": "8f9537bb9d60e2bd1feb4e2efac6cfcd206a0950",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/108",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 109,
+      "title": "Fix email confirmation failing after a committed sign-in",
+      "mergedAt": "2026-10-27T12:12:57Z",
+      "mergeCommit": "0a552ae762b7fb93a8ceca6d414ec2110ee67b1b",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/109",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 110,
+      "title": "Coordinate Dynadot traffic and persist bounded inventory recovery",
+      "mergedAt": "2026-10-27T13:34:36Z",
+      "mergeCommit": "5e5f6f47d151869f0d1fdf7d92c5357aa1896545",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/110",
+      "entryId": "saas-history-2026-10-27-pr-110"
+    },
+    {
+      "number": 111,
+      "title": "Give public portfolios a short domains.domains/name address",
+      "mergedAt": "2026-10-28T00:54:20Z",
+      "mergeCommit": "1eadcc4f34a5aa770e16380b163a311367601398",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/111",
+      "entryId": "saas-history-2026-10-28-pr-113"
+    },
+    {
+      "number": 112,
+      "title": "Retain safe Dynadot rejection diagnostics and serialize an approved alternate route",
+      "mergedAt": "2026-10-28T01:47:14Z",
+      "mergeCommit": "5ad31bff85624cf65d094c0dd204f47d94a9b329",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/112",
+      "entryId": "saas-history-2026-10-28-pr-113"
+    },
+    {
+      "number": 113,
+      "title": "Keep public profile reads responsive during registrar and pricing work",
+      "mergedAt": "2026-10-28T03:48:07Z",
+      "mergeCommit": "c83d0d591a181b72658267f3cf7dce6c7554b175",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/113",
+      "entryId": "saas-history-2026-10-28-pr-113"
+    },
+    {
+      "number": 114,
+      "title": "Add verified custom domains for portfolio pages",
+      "mergedAt": "2026-10-28T04:08:36Z",
+      "mergeCommit": "951cca2773e04bc1a1a3524d1707b278649c46a5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/114",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 115,
+      "title": "Refresh the portfolio share address after domain activation",
+      "mergedAt": "2026-10-28T04:46:23Z",
+      "mergeCommit": "82fb218d26b3e96cc51219d2a932e56cdf0a91c7",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/115",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 116,
+      "title": "Show MCP workflows on the domains.domains landing page",
+      "mergedAt": "2026-10-28T05:54:03Z",
+      "mergeCommit": "de88df4d98a6f817276a88078c790545bca80b84",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/116",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 117,
+      "title": "Polish the landing page and clarify Domain inquiries previews",
+      "mergedAt": "2026-10-28T06:53:36Z",
+      "mergeCommit": "885bac6fbef557619713a2291e24cbc6bd6351de",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/117",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 118,
+      "title": "Keep continuing Dynadot incidents stable across deployments",
+      "mergedAt": "2026-10-28T09:26:01Z",
+      "mergeCommit": "778755215c5b2d58381e3eb68d09f493c296a949",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/118",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 119,
+      "title": "Implement approved MCP-first landing design A",
+      "mergedAt": "2026-10-28T11:42:21Z",
+      "mergeCommit": "ad31b507642aad9a5e2999207028c910d98db213",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/119",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 120,
+      "title": "Serialize hosted Dynadot traffic across users and proxy routes",
+      "mergedAt": "2026-10-28T12:04:37Z",
+      "mergeCommit": "09d22880ad217ddcf322e082cf391ecaf42fbf0e",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/120",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 121,
+      "title": "Fix mobile landing footer and explain core product features",
+      "mergedAt": "2026-10-28T12:19:12Z",
+      "mergeCommit": "eaba9d4b5951c0608a682f559ea4e33dd0920fd7",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/121",
+      "entryId": "saas-history-2026-10-28-pr-121"
+    },
+    {
+      "number": 122,
+      "title": "Add gated on-demand provisioning for new portfolios",
+      "mergedAt": "2026-10-29T02:13:13Z",
+      "mergeCommit": "c433da194bdb8cf628321c1feb7609868ae84f12",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/122",
+      "entryId": "saas-history-2026-10-29-pr-126"
+    },
+    {
+      "number": 123,
+      "title": "Use WFP module content when recovering first-time provisioning",
+      "mergedAt": "2026-10-29T03:53:12Z",
+      "mergeCommit": "dfd1f1c397f00f6a6b43e80f14e23ef7beeb92de",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/123",
+      "entryId": "saas-history-2026-10-29-pr-126"
+    },
+    {
+      "number": 124,
+      "title": "Preserve hosted Namecheap IP guidance before provisioning",
+      "mergedAt": "2026-10-29T04:35:22Z",
+      "mergeCommit": "906fda439c1f3eb82ee679aecceebe4d750c0b3d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/124",
+      "entryId": "saas-history-2026-10-29-pr-126"
+    },
+    {
+      "number": 125,
+      "title": "Record live on-demand activation and reserve retirement custody",
+      "mergedAt": "2026-10-29T05:15:13Z",
+      "mergeCommit": "7b2e619f1806cca222fff0c0092d8d7b825f5d9c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/125",
+      "entryId": "saas-history-2026-10-29-pr-126"
+    },
+    {
+      "number": 126,
+      "title": "Reset Dynadot retry budgets after successful recovery",
+      "mergedAt": "2026-10-29T05:29:41Z",
+      "mergeCommit": "1f73b9763997e38fc914f8ade0d0141926ce8409",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/126",
+      "entryId": "saas-history-2026-10-29-pr-126"
+    },
+    {
+      "number": 127,
+      "title": "Keep all Dynadot renewal quotes current without an open browser",
+      "mergedAt": "2026-10-30T14:59:58Z",
+      "mergeCommit": "1b2b4126840ab8695ece9c35f2e94fa16e154961",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/127",
+      "entryId": "saas-history-2026-10-30-pr-127"
+    },
+    {
+      "number": 128,
+      "title": "Recover exact owned Name.com renewal pricing for .in",
+      "mergedAt": "2026-10-31T02:38:14Z",
+      "mergeCommit": "8cf251f3e327c1b938c1b673c2c07251afb03207",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/128",
+      "entryId": "saas-history-2026-10-31-pr-131"
+    },
+    {
+      "number": 129,
+      "title": "Repair owned-domain pricing fallback and preserve quote provenance",
+      "mergedAt": "2026-10-31T06:47:12Z",
+      "mergeCommit": "7a9a44ca97e9402c5ceff23ec5ee9c53244505fa",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/129",
+      "entryId": "saas-history-2026-10-31-pr-131"
+    },
+    {
+      "number": 130,
+      "title": "Integrate explicit profile, inquiry-page and shop publishing",
+      "mergedAt": "2026-10-31T09:50:44Z",
+      "mergeCommit": "ce63c796895e467da7d6feeb3e6b836087f3268e",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/130",
+      "entryId": "saas-history-2026-10-31-pr-131"
+    },
+    {
+      "number": 131,
+      "title": "Show exact linked prices in private publication previews",
+      "mergedAt": "2026-10-31T10:48:46Z",
+      "mergeCommit": "12b239623946739750425af424b34f40d8990c03",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/131",
+      "entryId": "saas-history-2026-10-31-pr-131"
+    },
+    {
+      "number": 132,
+      "title": "Polish public portfolios and domain inquiry pages",
+      "mergedAt": "2026-11-01T02:31:19Z",
+      "mergeCommit": "e171f18e2c25b5145d793cbbf3c6ae69627aaa98",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/132",
+      "entryId": "saas-history-2026-11-01-pr-137"
+    },
+    {
+      "number": 133,
+      "title": "Resolve inquiry email replies for qualified platform accounts",
+      "mergedAt": "2026-11-01T03:18:52Z",
+      "mergeCommit": "d9f7576f6a2b794da29f83ff07b3d97f7f2f50ae",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/133",
+      "entryId": "saas-history-2026-11-01-pr-137"
+    },
+    {
+      "number": 134,
+      "title": "Persist Dynadot failed-request IP recovery and suppress rejected pricing",
+      "mergedAt": "2026-11-01T03:50:29Z",
+      "mergeCommit": "1f9fe7c1a9df2bed354bfcf9d78f88b57001b8bc",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/134",
+      "entryId": "saas-history-2026-11-01-pr-137"
+    },
+    {
+      "number": 135,
+      "title": "Fence Dynadot recovery to the observed managed egress",
+      "mergedAt": "2026-11-01T04:37:06Z",
+      "mergeCommit": "30e613d91d377071c5f5c23dd9afd7e7a71be3a7",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/135",
+      "entryId": "saas-history-2026-11-01-pr-137"
+    },
+    {
+      "number": 136,
+      "title": "Sync upstream renewal safety, account freshness and table controls",
+      "mergedAt": "2026-11-01T05:36:47Z",
+      "mergeCommit": "ca78a9ba2be9b4419b73338ba98dd941d82e2dba",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/136",
+      "entryId": "saas-history-2026-11-01-pr-137"
+    },
+    {
+      "number": 137,
+      "title": "Merge full upstream DomBot: marketplaces, Listings, Sales and hosted parity",
+      "mergedAt": "2026-11-01T09:13:34Z",
+      "mergeCommit": "760237ec174a450ef5c5935fc6b08f95301eecc5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/137",
+      "entryId": "saas-history-2026-11-01-pr-137"
+    },
+    {
+      "number": 138,
+      "title": "Use clean domain names for public listing URLs",
+      "mergedAt": "2026-11-03T06:13:32Z",
+      "mergeCommit": "22657a2d1d62dff0d502318133d25218fffcf091",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/138",
+      "entryId": "saas-public-links-2026-11-03"
+    },
+    {
+      "number": 139,
+      "title": "Connect private public-page preparation to core market inventory",
+      "mergedAt": "2026-11-03T06:17:19Z",
+      "mergeCommit": "08c62995ef57ab62ca06ef6c18e6403081409a30",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/139",
+      "entryId": "saas-history-2026-11-03-pr-140"
+    },
+    {
+      "number": 140,
+      "title": "Replace fleet discovery with reserved canonical routes and typed market offers",
+      "mergedAt": "2026-11-03T06:17:36Z",
+      "mergeCommit": "8630a1f1574b5852f2e3772e454a4d3b8ec0a720",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/140",
+      "entryId": "saas-history-2026-11-03-pr-140"
+    },
+    {
+      "number": 141,
+      "title": "Prepare source-backed public offers from the existing Domains workflow",
+      "mergedAt": "2026-11-03T06:17:50Z",
+      "mergeCommit": "6d23619029ee693b3e2eee36e6783ad0ce04e829",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/141",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 142,
+      "title": "Suppress stale public terms and reconcile sales through explicit core evidence",
+      "mergedAt": "2026-11-03T06:18:04Z",
+      "mergeCommit": "1c7ae6cb2aa63032d5860e113513d57a822d5828",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/142",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 143,
+      "title": "Preserve legacy routing during directory rollout and qualify native runtime versions",
+      "mergedAt": "2026-11-03T07:41:34Z",
+      "mergeCommit": "15bc7dbd028ac64161f76a2058e246f05d1e8bb1",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/143",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 144,
+      "title": "Record the verified listing/core production release",
+      "mergedAt": "2026-11-03T09:06:41Z",
+      "mergeCommit": "e470926ad836114cb9be0c32ac6e7e20e548a069",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/144",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 145,
+      "title": "Recover the interrupted allocation without replacing its identity",
+      "mergedAt": "2026-11-03T09:59:08Z",
+      "mergeCommit": "9b5d2c56ec2430c7ac2be4932f2282cc3818da62",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/145",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 146,
+      "title": "Record verified recovery of the unfinished allocation",
+      "mergedAt": "2026-11-03T10:10:03Z",
+      "mergeCommit": "1bc846e335c9f2dbdf7b86a7f90bb73cca42f55a",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/146",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 147,
+      "title": "Allocate only when a valid import is submitted",
+      "mergedAt": "2026-11-03T15:19:50Z",
+      "mergeCommit": "b7d9be213a6983fd58bf592573fac7a6fd30be9f",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/147",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 148,
+      "title": "Record real production import and allocation verification",
+      "mergedAt": "2026-11-03T23:49:07Z",
+      "mergeCommit": "eac9c6bee1f7daf72774bb6f613395814a963a98",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/148",
+      "entryId": "saas-history-2026-11-03-pr-148"
+    },
+    {
+      "number": 149,
+      "title": "Record verified deletion of the production import QA account",
+      "mergedAt": "2026-11-04T01:28:21Z",
+      "mergeCommit": "30b1046b664e0a79f37d76096836364e8fe1d7be",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/149",
+      "entryId": "saas-history-2026-11-04-pr-150"
+    },
+    {
+      "number": 150,
+      "title": "Automatically clean up managed production import tests",
+      "mergedAt": "2026-11-04T02:44:10Z",
+      "mergeCommit": "342913aebc6345e018909d3a57781c571965899c",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/150",
+      "entryId": "saas-history-2026-11-04-pr-150"
+    },
+    {
+      "number": 151,
+      "title": "Validate QA cleanup notes by their stored domain",
+      "mergedAt": "2026-11-04T05:55:06Z",
+      "mergeCommit": "4ed323b6e86ff8aaf5bc2c55253951152ba831f5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/151",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 152,
+      "title": "Record verified automatic production import QA cleanup",
+      "mergedAt": "2026-11-04T07:09:27Z",
+      "mergeCommit": "c3b64972dee5316cd79509935c2086efb64e4283",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/152",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 153,
+      "title": "Correct Gandi renewal-date semantics and cached forecasts",
+      "mergedAt": "2026-11-04T11:38:07Z",
+      "mergeCommit": "c09d0d8ada0f91aaa81811fb9ada34352921a785",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/153",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 154,
+      "title": "Surface registrar-held past expiry records for verification",
+      "mergedAt": "2026-11-04T11:38:35Z",
+      "mergeCommit": "079c03e36f5935532888f4c5f97d2ccfc90f6951",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/154",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 155,
+      "title": "Expose renewal quote age and independent inventory observations",
+      "mergedAt": "2026-11-04T11:39:07Z",
+      "mergeCommit": "27c55d217429e8243f49f24cec7be616d484fad0",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/155",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 156,
+      "title": "Sync full upstream DomBot 2.0.0 and preserve hosted weekly-review fixes",
+      "mergedAt": "2026-11-04T11:43:07Z",
+      "mergeCommit": "75eb5dce90e452dd9523bc832ae8c71260581b51",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/156",
+      "entryId": "saas-renewals-2026-11-04"
+    },
+    {
+      "number": 157,
+      "title": "Preserve registrar connections for existing browser tabs during the 2.0 rollout",
+      "mergedAt": "2026-11-04T12:00:20Z",
+      "mergeCommit": "01001a7489abe5df51d1eb0b10399fae114921a4",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/157",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 158,
+      "title": "Record verified weekly-review and upstream 2.0 production release",
+      "mergedAt": "2026-11-04T12:49:43Z",
+      "mergeCommit": "502ec39eca3d56006dd4941d38a4ec49f23ae96b",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/158",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 159,
+      "title": "Fix hosted password-change confirmation and record SaaS QA",
+      "mergedAt": "2026-11-04T23:30:07Z",
+      "mergeCommit": "ec5e7ea2c091a8b38a70635a42c0c607f16ed250",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/159",
+      "entryId": "saas-password-2026-11-05"
+    },
+    {
+      "number": 160,
+      "title": "Record completed SaaS QA release and production verification",
+      "mergedAt": "2026-11-04T23:40:05Z",
+      "mergeCommit": "7482c035075ec34deb883261996f9b3c4759398d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/160",
+      "entryId": "saas-history-2026-11-04-pr-160"
+    },
+    {
+      "number": 161,
+      "title": "Hold uncertain setup writes and patch production dependencies",
+      "mergedAt": "2026-11-05T00:46:57Z",
+      "mergeCommit": "403a4e976a47db9fed4d78062037545071e37cc6",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/161",
+      "entryId": "saas-setup-2026-11-05"
+    },
+    {
+      "number": 162,
+      "title": "Record verified release and qualify the local passkey browser journey",
+      "mergedAt": "2026-11-05T01:57:43Z",
+      "mergeCommit": "1251b881874aa91dc90a9f8240cdecade6e88fd4",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/162",
+      "entryId": "saas-history-2026-11-05-pr-172"
+    },
+    {
+      "number": 163,
+      "title": "Fix Domains filter touch targets and stalled setup artifact reads",
+      "mergedAt": "2026-11-05T03:23:26Z",
+      "mergeCommit": "e481d78ba4ad42598d6a722605de06b55e9b1289",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/163",
+      "entryId": "saas-setup-2026-11-05"
+    },
+    {
+      "number": 164,
+      "title": "Record verified engine .4 home and setup release",
+      "mergedAt": "2026-11-05T03:57:51Z",
+      "mergeCommit": "d9c59dcf240279823e13ed28d10b5c59f099f02f",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/164",
+      "entryId": "saas-history-2026-11-05-pr-172"
+    },
+    {
+      "number": 165,
+      "title": "Prevent hidden bulk targets across filters and navigation",
+      "mergedAt": "2026-11-05T09:25:50Z",
+      "mergeCommit": "b170df17524b9909a90fb6df6ff5ebe1cd08942e",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/165",
+      "entryId": "saas-selection-2026-11-05"
+    },
+    {
+      "number": 166,
+      "title": "Record verified selection and managed title release",
+      "mergedAt": "2026-11-05T09:53:43Z",
+      "mergeCommit": "a8405d3dce92d601fc88892975d8bd6919b78c4f",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/166",
+      "entryId": "saas-history-2026-11-05-pr-172"
+    },
+    {
+      "number": 167,
+      "title": "Sync full upstream DomBot v2.1.0 while preserving SaaS behavior",
+      "mergedAt": "2026-11-05T11:47:00Z",
+      "mergeCommit": "26e3933f0afa05e6c29337b219b7d8a546328143",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/167",
+      "entryId": "saas-history-2026-11-05-pr-172"
+    },
+    {
+      "number": 168,
+      "title": "Add public changelog for core and SaaS updates",
+      "mergedAt": "2026-11-05T12:45:27Z",
+      "mergeCommit": "a18d81712c173a98127b654aa40c09c419762ab4",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/168",
+      "entryId": "saas-history-2026-11-05-pr-172"
+    },
+    {
+      "number": 170,
+      "title": "Keep the public changelog current automatically",
+      "mergedAt": "2026-11-05T13:24:27Z",
+      "mergeCommit": "7350b473e715af6776da820d7863cce067edfd7d",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/170",
+      "entryId": "saas-changelog-freshness-2026-11-05"
+    },
+    {
+      "number": 171,
+      "title": "Fix native Workers changelog feed refresh",
+      "mergedAt": "2026-11-05T13:41:39Z",
+      "mergeCommit": "568e45abd0f5689aa0e0370b445e04dec83515e5",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/171",
+      "entryId": "saas-changelog-freshness-2026-11-05"
+    },
+    {
+      "number": 172,
+      "title": "Record verified automatic changelog release",
+      "mergedAt": "2026-11-05T13:58:51Z",
+      "mergeCommit": "eab8abb50681a1e08ed0ae5beb25bb34a79f1ad6",
+      "base": "main",
+      "url": "https://github.com/heathermhuang/dombot/pull/172",
+      "entryId": "saas-history-2026-11-05-pr-172"
+    }
+  ],
+  "firstHostedSource": {
+    "sha": "f3e5833779363981f53831e00c8d440fc6083539",
+    "entryId": "saas-first-hosted-source-2026-09-09",
+    "date": "2026-09-09"
+  },
+  "historicalReleaseBranchOnlyPullRequests": [30]
+}
