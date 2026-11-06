@@ -48,18 +48,20 @@ migration or production activation is introduced by the source merge.
   archive and source/test patch hashes match the recorded provenance.
 - Root/Worker/hosted typechecks, lint, engine integrity, four security regressions,
   four fixed-source relay checks, web/demo/site builds and six Worker dry bundles pass.
-- The final local full run passed 260 files and 2,788 tests. The remaining homepage
-  assertion was updated for the twelfth registrar; the unchanged 500-workspace setup
-  fixture exceeded its 10-second hook during parallel checks. A subsequent serial
-  run passed all 16 tests across platform, views and public product assets, without
-  changing the timeout. The earlier full run also passed the platform tests.
+- Final PR CI passed 262 files and 2,791 tests with one existing manual skip;
+  merged-main CI and both CodeQL languages passed for the identical checked tree.
 - The exact installed `2.1.0-hosted.1` package passed all 11 desktop/mobile Chrome
   scenarios, including filtered bulk targets, pagination, navigation, real synthetic
   pricing/notes/folder saves, export and stale-completion isolation.
 - Production dependency audit: zero advisories. The source sync changes no schema,
   tenant data, credentials, publication, routing or scheduling configuration.
 
-CI on the PR remains the clean final full-suite gate. These offline and local
-synthetic results do not claim a managed fleet deployment or live provider
-acceptance. Managed production remains on its separately recorded release until
-that engine/UI pair is rolled out and verified.
+The managed production rollout is now recorded separately in the
+[v2.1.0 production receipt](upstream-v2.1-production-release-20261105/README.md):
+all 44 admitted portfolios, future template/private provisioner and gateway agree;
+production import/retries/readback, exact served assets and independent cleanup
+passed, with accounts, holdings, credentials, publications and schedules preserved.
+Native owner desktop selection/target previews and subsequent production registrar,
+sync and mobile-emulator checks passed within the receipt’s recorded coverage.
+Real Unstoppable acceptance still requires controlled credentials. Local synthetic results
+and successful Namecheap/Dynadot connection reads do not clear those holds.

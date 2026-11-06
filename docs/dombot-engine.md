@@ -23,6 +23,13 @@ Preserve an older coordinator's headers, and leave them absent when it supplies
 none; do not stamp the outer Worker's version onto that response. Qualification
 waits for the actual runtime headers and platform release marker to agree.
 
+The 5 November 2026 [managed v2.1.0 rollout](upstream-v2.1-production-release-20261105/README.md)
+qualified `2.1.0-hosted.1` on all 44 admitted portfolios and the future template,
+with serving-source and exact asset-hash checks. Consult that receipt for
+preservation, cleanup, the completed owner-browser coverage and the remaining real
+Unstoppable acceptance hold.
+Re-check production before future releases.
+
 To update the maintained engine:
 
 1. Change the engine package version in `scripts/dombot-engine.mjs` and the file
