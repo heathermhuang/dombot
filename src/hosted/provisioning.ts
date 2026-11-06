@@ -67,6 +67,15 @@ export interface SetupEvent {
   phase: SetupPhase;
   status?: number;
   upstreamReference?: string;
+  /** Bounded private observations; no bodies, proof headers or arbitrary text. */
+  qualification?: {
+    outcome:
+      'matched' | 'http_error' | 'provenance_mismatch' | 'dispatch_failed';
+    enginePresent?: boolean;
+    engineMatches?: boolean;
+    sourcePresent?: boolean;
+    sourceMatches?: boolean;
+  };
 }
 export class SetupPending extends Error {}
 const reserved = new Set([
@@ -364,7 +373,38 @@ export async function provisionPortfolio(
       PROOF_HEADER,
       await signGatewayRequest(state!.gateway, workspace, owner, request),
     );
-    const response = await env.DISPATCHER.get(name).fetch(request);
+    let response: Response;
+    try {
+      response = await env.DISPATCHER.get(name).fetch(request);
+    } catch (error) {
+      if (path === '/api/getAppInfo')
+        await journal.diagnose?.({
+          phase: 'provenance',
+          qualification: { outcome: 'dispatch_failed' },
+        });
+      throw error;
+    }
+    if (path === '/api/getAppInfo') {
+      const engine = response.headers.get('X-DomBot-Engine');
+      const source = response.headers.get('X-DomBot-Engine-Source');
+      const engineMatches = engine === template.engine;
+      const sourceMatches = source === template.sourceSha256;
+      await journal.diagnose?.({
+        phase: 'provenance',
+        status: response.status,
+        qualification: {
+          outcome: !response.ok
+            ? 'http_error'
+            : engineMatches && sourceMatches
+              ? 'matched'
+              : 'provenance_mismatch',
+          enginePresent: engine !== null,
+          engineMatches,
+          sourcePresent: source !== null,
+          sourceMatches,
+        },
+      });
+    }
     if (!response.ok) throw Error('Tenant qualification failed');
     return response;
   };

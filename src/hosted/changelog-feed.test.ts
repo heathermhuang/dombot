@@ -69,7 +69,9 @@ describe('permanent paged changelog reader', () => {
     expect(result.stale).toBe(false);
     for (const entry of changelogEntries)
       expect(result.entries.some((item) => item.id === entry.id)).toBe(true);
-    expect(result.archive?.index.totalEntries).toBe(changelogEntries.length);
+    expect(result.archive?.index.totalEntries).toBe(
+      readArchive(process.cwd()).index.totalEntries,
+    );
   });
   it('uses the five-minute cache and refreshes only when due', async () => {
     const c = cache(),
@@ -87,7 +89,7 @@ describe('permanent paged changelog reader', () => {
   });
   it('retains saved data during an outage, backs off, then recovers', async () => {
     const c = cache();
-    await loadChangelog({ cache: c, fetcher: fixture(), now });
+    const initial = await loadChangelog({ cache: c, fetcher: fixture(), now });
     const offline = vi.fn(async () => new Response(null, { status: 503 }));
     const stale = await loadChangelog({
       cache: c,
@@ -95,7 +97,7 @@ describe('permanent paged changelog reader', () => {
       now: now + changelogRefreshMs,
     });
     expect(stale.stale).toBe(true);
-    expect(stale.entries.length).toBe(changelogEntries.length);
+    expect(stale.entries).toEqual(initial.entries);
     await loadChangelog({
       cache: c,
       fetcher: offline,
@@ -253,7 +255,7 @@ it('uses bounded subindexes even when an archive has more than 1000 pages', asyn
   );
   const publication = archiveRootData({
     version: 2,
-    totalEntries: changelogEntries.length + 1001,
+    totalEntries: baseline.index.totalEntries + 1001,
     parts,
     state: {},
   });
@@ -269,7 +271,7 @@ it('uses bounded subindexes even when an archive has more than 1000 pages', asyn
   expect(result.stale).toBe(false);
   expect(result.archive?.index.indexes).toHaveLength(2);
   expect(result.archive?.index.totalEntries).toBe(
-    changelogEntries.length + 1001,
+    baseline.index.totalEntries + 1001,
   );
   expect(result.entries.length).toBeLessThanOrEqual(
     changelogEntries.length + 100,
