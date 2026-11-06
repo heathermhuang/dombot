@@ -50,7 +50,11 @@ import {
   AuthEmailUnavailable,
 } from './auth-policy';
 import { Passkeys, passkeyNameSchema } from './passkeys';
-import { authScript, importStartScript } from '../../hosted/generated-auth';
+import {
+  authScript,
+  importStartScript,
+  parkioMobileScript,
+} from '../../hosted/generated-auth';
 import {
   emailStart,
   authRetry,
@@ -317,6 +321,11 @@ app.get('/auth/browser.js', (c) => {
   c.header('Content-Type', 'text/javascript; charset=utf-8');
   return c.body(authScript);
 });
+app.get('/auth/parkio-mobile.js', (c) =>
+  c.body(parkioMobileScript, 200, {
+    'Content-Type': 'text/javascript; charset=utf-8',
+  }),
+);
 app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
   if (!emailReady(c.env)) {

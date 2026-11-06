@@ -1,4 +1,8 @@
 import type { BrowserRun } from '../../hosted/browser-run-types';
+import {
+  parkioMobileConnection,
+  type ParkioMobileConnection,
+} from '../../hosted/parkio-mobile-contract';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { isAdmin } from './admin';
@@ -120,6 +124,7 @@ export class ParkioPilot {
         'capture',
         'retest',
         'cancel',
+        'mobile',
       ].includes(action)
     )
       return new Response('Not found', { status: 404 });
@@ -134,6 +139,7 @@ export class ParkioPilot {
             | 'capture'
             | 'retest'
             | 'cancel'
+            | 'mobile'
         ](),
       );
     } catch (error) {
@@ -295,6 +301,24 @@ export class ParkioPilot {
       if (url.origin !== 'https://live.browser.run')
         throw new PilotError('browser_unavailable');
       return url.href;
+    });
+  }
+  async mobile(): Promise<ParkioMobileConnection> {
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (!a) throw new PilotError('not_started');
+      this.#assertLive(a);
+      try {
+        return parkioMobileConnection(
+          await this.#browser().getLiveView(a.sessionId!, {
+            mode: 'tab',
+            targetId: a.targetId!,
+            expiresInMs: 120_000,
+          }),
+        );
+      } catch {
+        throw new PilotError('browser_unavailable');
+      }
     });
   }
   async inspect() {
@@ -613,6 +637,7 @@ export function parkioPilotRoutes(
       status: () => run<ReturnType<typeof safeState>>('status'),
       start: () => run('start'),
       view: () => run<string>('view'),
+      mobile: () => run<ParkioMobileConnection>('mobile'),
       inspect: () => run('inspect'),
       capture: () => run('capture'),
       retest: () => run('retest'),
@@ -628,6 +653,27 @@ export function parkioPilotRoutes(
   app.get('/status', async (c) =>
     c.json(await stub(c.env, c.get('owner')).status()),
   );
+  app.get('/mobile', (c) => {
+    c.header(
+      'Content-Security-Policy',
+      "default-src 'none';style-src 'unsafe-inline';font-src 'self';script-src 'self';connect-src 'self' wss://live.browser.run;frame-src https://live.browser.run;form-action 'self';base-uri 'none';frame-ancestors 'none'",
+    );
+    return c.html(
+      page(
+        'Park.io mobile sign-in',
+        `<style>
+      #parkio-mobile{max-width:760px;margin:8px auto 24px}#parkio-mobile h1{font-size:26px;line-height:1.2;margin:12px 0}#parkio-mobile p{font-size:14px;margin:8px 0}#parkio-mobile label{margin:12px 0 8px}#parkio-keyboard{display:block;width:100%;height:48px;min-height:48px;resize:none;border:1px solid var(--line);border-radius:7px;padding:12px;font:16px/1.4 Archivo,sans-serif;background:#fff;color:var(--ink)}#parkio-mobile .keys{display:flex;gap:8px;flex-wrap:wrap}#parkio-mobile .keys button{min-height:44px;padding:8px 12px;font-size:14px}#parkio-mobile .keys button:disabled{opacity:.55}#parkio-viewer{display:block;width:100%;height:440px;border:1px solid var(--line);border-radius:8px;margin:12px 0;background:#f2f5f1}#parkio-keyboard-status{min-height:22px}#parkio-mobile a{display:inline-flex;min-height:44px;align-items:center}@media(max-width:600px){header{padding:12px 16px}header .brand{font-size:23px}main{padding:8px 16px}#parkio-viewer{height:390px}#parkio-mobile h1{font-size:23px}}
+      </style><section id="parkio-mobile"><span class="eyebrow">Temporary sign-in browser</span><h1>Sign in to Park.io</h1><p>Tap a Park.io field, then use the phone keyboard below. Input is sent directly to the temporary browser and is not saved here.</p><iframe id="parkio-viewer" title="Park.io temporary sign-in browser" sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer"></iframe><label for="parkio-keyboard">Phone keyboard</label><input id="parkio-keyboard" type="password" maxlength="2048" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="Tap here to type into Park.io" readonly disabled><div class="keys"><button type="button" data-remote-key="Tab" disabled>Next field</button><button type="button" data-remote-key="Backspace" disabled>Delete</button><button type="button" data-remote-key="Enter" disabled>Enter</button></div><p id="parkio-keyboard-status" role="status" aria-live="polite">Opening Park.io…</p><p>After signing in, open Orders → Active in Park.io.</p><a href="${base}">Return to the test →</a></section><script type="module" src="/auth/parkio-mobile.js"></script>`,
+      ),
+    );
+  });
+  app.post('/mobile-start', async (c) => {
+    await stub(c.env, c.get('owner')).start();
+    return c.redirect(base + '/mobile', 303);
+  });
+  app.post('/mobile-connection', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).mobile()),
+  );
   app.get('/', async (c) => {
     const state = await stub(c.env, c.get('owner')).status();
     const form = (action: string, label: string, blank = false) =>
@@ -635,7 +681,7 @@ export function parkioPilotRoutes(
     return c.html(
       page(
         'Park.io private feasibility test',
-        `<section class="account"><span class="eyebrow">Owner-only pilot</span><h1>Connect Park.io</h1><p>Sign in on Park.io in a temporary hosted browser. This test checks whether saved login access works after that browser closes. No domain settings are changed.</p><p>For this first qualification, open <strong>Orders → Active</strong> after signing in. Return here to inspect the export, then save the session and close the browser.</p><p>Passwords and MFA are entered in Park.io. Session recording is off. Encrypted test state expires after 24 hours; capture is available for ten minutes.</p>${form('start', 'Open Park.io sign-in', true)}${form('view', 'Reopen current sign-in window', true)}${form('inspect', 'Inspect Active export')}${form('capture', 'Save session and close browser')}${form('retest', 'Test saved session from Worker')}${form('cancel', 'Close browser and clear test session')}<p><a href="${base}">Refresh test status</a> · <a href="/admin">Back to administration</a></p><pre style="white-space:pre-wrap;font-size:13px">${e(JSON.stringify(state, null, 2))}</pre><p class="note">This pilot reports matching counts, schema and errors. It does not import domains into your portfolio or establish permanent login or multi-account identity support.</p></section>`,
+        `<section class="account"><span class="eyebrow">Owner-only pilot</span><h1>Connect Park.io</h1><p>Sign in on Park.io in a temporary hosted browser. This test checks whether saved login access works after that browser closes. No domain settings are changed.</p><p>For this first qualification, open <strong>Orders → Active</strong> after signing in. Return here to inspect the export, then save the session and close the browser.</p><p>Passwords and MFA are entered in Park.io. Session recording is off. Encrypted test state expires after 24 hours; capture is available for ten minutes.</p>${form('mobile-start', 'Open mobile sign-in')}${form('start', 'Open desktop sign-in', true)}${form('view', 'Reopen desktop sign-in', true)}${form('inspect', 'Inspect Active export')}${form('capture', 'Save session and close browser')}${form('retest', 'Test saved session from Worker')}${form('cancel', 'Close browser and clear test session')}<p><a href="${base}">Refresh test status</a> · <a href="/admin">Back to administration</a></p><pre style="white-space:pre-wrap;font-size:13px">${e(JSON.stringify(state, null, 2))}</pre><p class="note">This pilot reports matching counts, schema and errors. It does not import domains into your portfolio or establish permanent login or multi-account identity support.</p></section>`,
       ),
     );
   });

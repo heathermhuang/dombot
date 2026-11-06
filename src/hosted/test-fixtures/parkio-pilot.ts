@@ -16,7 +16,11 @@ export class TestParkioPilot extends ParkioPilot {
       devtools: { newTarget: async () => ({ id: 'synthetic-page' }) },
       getLiveView: async () => ({
         devtoolsFrontendUrl:
+          Reflect.get(env, 'TEST_VIEWER_URL') ??
           'https://live.browser.run/ui/view?mode=tab&jwt=synthetic-only',
+        webSocketDebuggerUrl:
+          Reflect.get(env, 'TEST_SOCKET_URL') ??
+          'wss://live.browser.run/api/devtools/browser/synthetic-browser/page/synthetic-page?jwt=synthetic-only',
       }),
       closeSession: async () => {
         if (mode === 'close-fails') throw Error('close unavailable');

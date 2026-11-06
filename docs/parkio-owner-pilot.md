@@ -10,8 +10,11 @@ portfolio inventory, or change tenant engines.
 
 1. Open the private pilot page while signed in to domains.domains. Complete the
    normal fresh authentication if requested.
-2. Choose **Open Park.io sign-in**. A temporary Cloudflare Live View tab opens
-   Park.io's actual login page. Enter credentials/MFA there, not in chat.
+2. On a phone, choose **Open mobile sign-in**. Tap a field in the embedded
+   Park.io browser, then tap **Phone keyboard** below it to open the native
+   keyboard. **Next field**, **Delete** and **Enter** control that same remote
+   form. On a computer, **Open desktop sign-in** opens Cloudflare Live View in
+   a separate tab. Enter credentials/MFA there, not in chat.
 3. For this first contract-qualification run, navigate to **Orders → Active**.
    Return to the original pilot tab and choose **Inspect Active export**.
 4. Choose **Save session and close browser**. The server reads the Active CSV
@@ -108,6 +111,21 @@ owner/CSRF/fresh-auth checks, idempotent start, server-side capture, verified
 closure, post-closure comparison, clear/retest rejection and cleanup failure.
 Native Worker fixtures use synthetic data and loopback origins; no Park.io
 credentials are used in automated tests.
+
+The mobile page works around Live View's canvas not invoking the phone keyboard.
+Its secure native input forwards text directly over the short-lived Cloudflare
+WebSocket to the same remote tab. Text is cleared immediately and is not sent
+to the gateway, logged or stored. Input is restricted to focused fields on the
+Park.io HTTPS origins. The owner-only connection response is uncached; its
+capability URLs are not included in the page HTML or status record. Leaving the
+page closes its socket and clears pending input. Existing login/browser expiry
+and cleanup limits still apply.
+
+Anonymous synthetic-form checks with the actual Cloudflare viewer/socket passed
+in mobile-sized Chromium and WebKit: native input focus, username/password
+typing, deletion, one submission, no retained local input and no input HTTP
+requests to the gateway. The anonymous browser was closed afterwards. These
+checks do not establish physical iPhone keyboard behavior or a real Park.io login.
 
 Debug report: Miniflare rejected non-loopback Origin headers before fixture
 routing; using the established localhost fixture origin fixes that test
