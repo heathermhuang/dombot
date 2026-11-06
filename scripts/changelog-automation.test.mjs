@@ -448,3 +448,22 @@ it('retains an original release when the provider republishes it on another date
     ),
   ).toBe(true);
 });
+
+it('replaces an archive symlink atomically without overwriting its target', () => {
+  const dir = root(),
+    before = readArchive(dir),
+    part = before.index.parts[0],
+    file = path.join(dir, 'site/public', part.path),
+    victim = path.join(dir, 'outside-copy.json'),
+    bytes = fs.readFileSync(file, 'utf8');
+  fs.writeFileSync(victim, bytes);
+  fs.unlinkSync(file);
+  fs.symlinkSync(victim, file);
+  const entry = before.pages.get(part.id)[0];
+  writeArchive(dir, [{ ...entry, title: entry.title + ' updated' }]);
+  expect(fs.readFileSync(victim, 'utf8')).toBe(bytes);
+  expect(fs.lstatSync(file).isSymbolicLink()).toBe(false);
+  expect(
+    readArchive(dir).entries.get(entry.id).title.endsWith(' updated'),
+  ).toBe(true);
+});

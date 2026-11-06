@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { parseChangelogFeed } from '../src/hosted/changelog-schema.ts';
 import {
   archivePageSize,
@@ -13,6 +13,36 @@ export const archiveIndexPath = 'site/public/changelog-index.json';
 export const archiveHash = (bytes) =>
   createHash('sha256').update(bytes).digest('hex');
 const encode = (value) => JSON.stringify(value, null, 2) + '\n';
+function replaceIfChanged(file, bytes) {
+  try {
+    if (fs.readFileSync(file, 'utf8') === bytes) return false;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = path.join(
+    path.dirname(file),
+    '.changelog-write-' + randomUUID() + '.tmp',
+  );
+  try {
+    const descriptor = fs.openSync(temporary, 'wx', 0o600);
+    try {
+      fs.writeFileSync(descriptor, bytes);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    // Rename replaces a destination symlink rather than following it. There is
+    // no exists-then-open race and readers see either complete file version.
+    fs.renameSync(temporary, file);
+    return true;
+  } finally {
+    try {
+      fs.unlinkSync(temporary);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+}
 export function archiveRootData(index) {
   const grouped = new Map(),
     years = [];
@@ -247,27 +277,18 @@ export function writeArchive(root, updates, state = {}) {
   const publication = archiveRootData(index);
   // Validate the entire publication before changing any files. Never publish partial pagination.
   let changed = false;
-  for (const [file, bytes] of writes) {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== bytes) {
-      fs.writeFileSync(file, bytes);
+  for (const [file, bytes] of writes)
+    if (replaceIfChanged(file, bytes)) changed = true;
+  for (const [file, bytes] of publication.files)
+    if (replaceIfChanged(path.join(root, 'site/public', file), bytes))
       changed = true;
-    }
-  }
-  for (const [file, bytes] of publication.files) {
-    const target = path.join(root, 'site/public', file);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== bytes) {
-      fs.writeFileSync(target, bytes);
-      changed = true;
-    }
-  }
-  const target = path.join(root, archiveIndexPath),
-    bytes = encode(publication.root);
-  if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== bytes) {
-    fs.writeFileSync(target, bytes);
+  if (
+    replaceIfChanged(
+      path.join(root, archiveIndexPath),
+      encode(publication.root),
+    )
+  )
     changed = true;
-  }
   return {
     index,
     added: all.size - before.entries.size,
