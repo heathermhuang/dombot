@@ -114,6 +114,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-178",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Recover transient managed qualification reads without replaying writes",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #178 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #178",
+          "url": "https://github.com/heathermhuang/dombot/pull/178"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
