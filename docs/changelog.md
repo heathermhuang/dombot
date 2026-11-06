@@ -30,9 +30,10 @@ remove historical evidence links or move an ID to a different archive location.
 
 ## Permanent paged archive
 
-`site/public/changelog-index.json` locates the append-only archive pages in
+`site/public/changelog-index.json` locates bounded year/range subindexes in
+`site/public/changelog-archive-index/`, which locate the append-only pages in
 `site/public/changelog-archive/`. Each page contains at most 100 entries and is
-size-bounded. The total archive is not capped at 1,000 entries and has no date or
+size-bounded. The total archive and its subindexes are not capped at 1,000 entries/pages and have no date or
 age cutoff. New pages are allocated as needed. Existing IDs, source links and
 archive-page locations are never removed; Git retains past metadata revisions.
 

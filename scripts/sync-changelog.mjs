@@ -396,7 +396,9 @@ export async function synchronizeArchive({
         releaseIds[key] ??
         knownUrl().get(generated.links[0].url) ??
         generated.id;
-      releaseIds[key] = id;
+      // Automatic release IDs are self-locating. Keep only the small curated
+      // alias set in the root checkpoint, not one root record per future release.
+      if (!id.startsWith('auto-')) releaseIds[key] = id;
       if (records.has(id) && records.get(id).date !== generated.date) {
         const republication =
           generated.id +
