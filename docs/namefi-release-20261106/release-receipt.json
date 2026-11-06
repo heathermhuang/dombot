@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-06",
+  "status": "deployed_owner_connection_pending",
+  "engine": "2.1.0-hosted.2",
+  "registrarSdk": "1.1.0-hosted.2",
+  "engineReleaseCommit": "8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb",
+  "engineSourceSha256": "746b5b5a24a96b74c0c63a625d92fb3bbb00b092103cb62bef3c3c6fd9e5143d",
+  "preservedGatewaySource": "c4b48bac855a83de883e7943e16375bf970a3a3a",
+  "privateProvisionerSource": "ab8b70652203303afdc9b42e3d68cd31c84c0fb9",
+  "privateProvisionerSha256": "6371f1d5d58128524582f6e24fb4c724b44220e5649c162a80837d3ba13cd67d",
+  "futureTemplateSha256": "d70e7c3937fa89c60674d97a1c85c82e17f1c7e0bc7f33e8348117b058aa17fe",
+  "servingExistingPortfolios": 44,
+  "originalAccountsPreserved": 56,
+  "additionalRealAccountsRetained": 1,
+  "originalWorkspaceIdentitiesPreserved": 546,
+  "credentialNamespacesAndHoldingsPreserved": true,
+  "managedTemplateBindingsPreserved": 14,
+  "freshProductionImportRetryReadback": true,
+  "exactServedAssetsAndRegistrarCatalog": true,
+  "independentCleanupVerifiedAt": "2026-11-06T09:58:04.128Z",
+  "activeQaRuns": 0,
+  "unfinishedAllocations": 0,
+  "temporaryQaPasswordScrubbed": true,
+  "originalAllocationPolicyRestored": true,
+  "cleanupCronPreserved": true,
+  "providerReadOnlyAcceptance": true,
+  "providerDomainsObserved": 7,
+  "registrarMutationsForAcceptance": 0,
+  "ownerConnection": {
+    "nonExpiringKeyCreated": true,
+    "encryptedCredentialStoreSaved": false,
+    "productionBrowserAcceptance": false,
+    "blocker": "Mac locked; native signed-in Chrome requires manual unlock"
+  },
+  "upstream": [
+    {
+      "url": "https://github.com/aoxborrow/registrar-client/pull/106",
+      "state": "open",
+      "ci": "passed"
+    },
+    {
+      "url": "https://github.com/aoxborrow/dombot/pull/268",
+      "state": "draft_pending_sdk_release",
+      "ci": "passed"
+    }
+  ]
+}
