@@ -12,6 +12,29 @@ publication in that upstream index. There is no recurring model task or new cron
 The page refreshes feeds when visited, works without sign-in or browser JavaScript,
 and keeps the existing layer filters and stable entry links.
 
+## Full history from day one
+
+The archive starts with core source development on 30 August 2026 (UTC), before
+the first published 1.0.0 release, and hosted SaaS source on 9 September 2026.
+It includes all eight published upstream releases through 2.1.0, both maintained
+fork desktop releases, 268 upstream primary-branch integrations and all 169
+merged SaaS PRs through the audited source snapshots. Busy dates are grouped in
+batches of up to eight linked changes; no item in those inventories is omitted.
+Existing detailed entries and their permalinks are preserved.
+
+`docs/changelog-history-inventory-20261106.json` records the source snapshots,
+release dates and the entry covering every historical commit/PR. It is a coverage
+baseline, not a deployment ledger. One historical release-branch PR (#30) is
+labelled as such rather than being represented as current main or a rollout.
+Release notes, desktop packages, historical source changes and verified hosted
+availability are labelled separately. Dates are normalized to UTC.
+
+There is no November or other date cutoff. The upstream release parser retains
+all published releases; the SaaS reader rejects feeds that drop bundled or
+previously saved history. The full snapshot is also the recovery fallback.
+History coverage tests and the CI ID-preservation policy prevent silent loss.
+The page remains newest first and each filter offers a link to its oldest entry.
+
 ## Adding SaaS updates
 
 Every PR changing application behavior, security, UI, API, dependencies or hosted

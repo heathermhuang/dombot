@@ -94,6 +94,41 @@ describe('live changelog feeds', () => {
     expect(changelogPage('core', updated)).not.toContain(newer.title);
   });
 
+  it('does not let a valid but truncated feed erase the historical archive', async () => {
+    const cache = memoryCache();
+    await loadChangelog({ cache, fetcher: feeds(), now });
+    const truncated = feeds([changelogEntries[0]]);
+    const result = await loadChangelog({
+      cache,
+      fetcher: truncated,
+      now: now + changelogRefreshMs,
+    });
+    expect(result.stale).toBe(true);
+    expect(result.entries.some((entry) => entry.id === 'core-1-0-0')).toBe(
+      true,
+    );
+    expect(
+      result.entries.some(
+        (entry) => entry.id === 'saas-first-hosted-source-2026-09-09',
+      ),
+    ).toBe(true);
+  });
+
+  it('refreshes an older cached highlights feed rather than hiding the new full snapshot', async () => {
+    const cache = memoryCache();
+    cache.saved.set(
+      'https://domains.domains/__changelog-cache/v1/saas',
+      Response.json({ fetchedAt: now, entries: [changelogEntries[0]] }),
+    );
+    const fetcher = feeds();
+    const result = await loadChangelog({ cache, fetcher, now: now + 1 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.stale).toBe(false);
+    expect(result.entries.some((entry) => entry.id === 'core-1-0-0')).toBe(
+      true,
+    );
+  });
+
   it('retains last good data and reports stale on a failed refresh, then recovers', async () => {
     const cache = memoryCache();
     await loadChangelog({
@@ -124,7 +159,7 @@ describe('live changelog feeds', () => {
     expect(offline).toHaveBeenCalledTimes(2);
     const recovered = await loadChangelog({
       cache,
-      fetcher: feeds(),
+      fetcher: feeds([newer, ...changelogEntries]),
       now: now + changelogRefreshMs + 60_000,
     });
     expect(recovered.stale).toBe(false);

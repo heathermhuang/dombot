@@ -74,6 +74,7 @@ describe('public changelog', () => {
     expect(new Set(changelogEntries.map((entry) => entry.id)).size).toBe(
       changelogEntries.length,
     );
+    const html = { core: changelogPage('core'), saas: changelogPage('saas') };
     let previous = '9999-12-31';
     for (const entry of changelogEntries) {
       expect(entry.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -83,9 +84,7 @@ describe('public changelog', () => {
       expect(entry.date <= previous).toBe(true);
       previous = entry.date;
       expect(entry.id).toMatch(/^[a-z0-9-]+$/);
-      expect(changelogPage(entry.layer)).toContain(
-        `href="/changelog#${entry.id}"`,
-      );
+      expect(html[entry.layer]).toContain(`href="/changelog#${entry.id}"`);
       expect(entry.links.length).toBeGreaterThan(0);
       for (const link of entry.links) {
         expect(link.url).toMatch(
