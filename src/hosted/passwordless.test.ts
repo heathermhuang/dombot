@@ -407,6 +407,59 @@ describe('one email flow for sign-in and signup', () => {
     expect(messages).toHaveLength(1);
   });
 
+  it('retains the exact owner pilot destination through email sign-in and session-bound reauthentication', async () => {
+    const existing = await owner();
+    const next = '/admin/parkio-pilot';
+    const page = await gateway.fetch(
+      new Request(
+        'https://domains.domains/login?next=' + encodeURIComponent(next),
+      ),
+      env,
+    );
+    expect(await page.text()).toContain(
+      'name="next" value="/admin/parkio-pilot"',
+    );
+    await post('/auth/email/request', { email: existing.user.email, next });
+    const login = delivered();
+    const signedIn = await post('/auth/email/confirm', {
+      id: login.id,
+      code: login.code,
+    });
+    expect(signedIn.status).toBe(303);
+    expect(signedIn.headers.get('location')).toBe(next);
+    await post(
+      '/auth/email/request',
+      { intent: 'reauth', next },
+      existing.token,
+    );
+    const confirm = delivered();
+    const reauthenticated = await post(
+      '/auth/email/confirm',
+      { id: confirm.id, code: confirm.code },
+      existing.token,
+    );
+    expect(reauthenticated.status).toBe(303);
+    expect(reauthenticated.headers.get('location')).toBe(next);
+  });
+
+  it.each([
+    '/admin/parkio-pilot/elsewhere',
+    '/admin/parkio-pilot?next=https://other.test',
+    '//other.test',
+    '/admin/parkio-pilot\\elsewhere',
+  ])(
+    'does not broaden the pilot destination allowlist for %s',
+    async (next) => {
+      const response = await gateway.fetch(
+        new Request(
+          'https://domains.domains/login?next=' + encodeURIComponent(next),
+        ),
+        env,
+      );
+      expect(await response.text()).toContain('name="next" value="/app"');
+    },
+  );
+
   it('does not extend five attempts through the code correction form', async () => {
     await new EmailAuth(env).issue('attempts@example.test', '/app');
     const p = delivered();

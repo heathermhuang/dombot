@@ -15,9 +15,11 @@ export const emailStart = (next = '/app', notice = '') =>
     ),
   );
 export const emailCode = (id: string, error = '') =>
-  page(
-    'Check your email',
-    `<form action="/auth/email/confirm" method="post"><h1>Check your email.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>Open the sign-in email, or enter its six-digit code below. If your address is eligible, the email will arrive shortly. Check Spam if it is missing.</p><input type="hidden" name="id" value="${e(id)}"><label>Six-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" minlength="6" required></label><button type="submit">Continue</button><p class="note">Expires in 10 minutes. A new request replaces your previous link and code. Delivery may take a few minutes.</p><p><a href="/login">Request a new link</a></p></form>`,
+  withAuthScript(
+    page(
+      'Check your email',
+      `<form action="/auth/email/confirm" method="post"><h1>Check your email.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>Open the sign-in email, or enter its six-digit code below. If your address is eligible, the email will arrive shortly. Check Spam if it is missing.</p><input type="hidden" name="id" value="${e(id)}"><label>Six-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" minlength="6" required></label><button type="submit">Continue</button><p class="note">Expires in 10 minutes. A new request replaces your previous link and code. Delivery may take a few minutes.</p><p><a href="/login">Request a new link</a></p></form>`,
+    ),
   );
 export const emailConfirm = (
   id: string,
@@ -27,9 +29,11 @@ export const emailConfirm = (
   error = '',
   proofKind: 'token' | 'code' = 'token',
 ) =>
-  page(
-    'Confirm your sign-in',
-    `<form action="/auth/email/confirm" method="post"><h1>${isNew ? 'Create your account.' : 'Continue to your portfolio.'}</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}${isNew && proofKind === 'code' ? '<p class="notice" role="status">Email confirmed. Review the Terms below to finish creating your account.</p>' : ''}<p>Continue as <strong>${e(email)}</strong>. Only continue if this is your email address.</p><input type="hidden" name="id" value="${e(id)}"><input type="hidden" name="${proofKind}" value="${e(token)}">${isNew ? legal(true) : ''}<button type="submit">${isNew ? 'Create account' : 'Continue'}</button><p class="note">This confirmation can be used once. Your account opens after you continue.</p><p><a href="/login">Use another email</a></p></form>`,
+  withAuthScript(
+    page(
+      'Confirm your sign-in',
+      `<form action="/auth/email/confirm" method="post"><h1>${isNew ? 'Create your account.' : 'Continue to your portfolio.'}</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}${isNew && proofKind === 'code' ? '<p class="notice" role="status">Email confirmed. Review the Terms below to finish creating your account.</p>' : ''}<p>Continue as <strong>${e(email)}</strong>. Only continue if this is your email address.</p><input type="hidden" name="id" value="${e(id)}"><input type="hidden" name="${proofKind}" value="${e(token)}">${isNew ? legal(true) : ''}<button type="submit">${isNew ? 'Create account' : 'Continue'}</button><p class="note">This confirmation can be used once. Your account opens after you continue.</p><p><a href="/login">Use another email</a></p></form>`,
+    ),
   );
 export const authUnavailable = () =>
   page(

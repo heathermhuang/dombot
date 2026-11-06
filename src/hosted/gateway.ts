@@ -147,6 +147,7 @@ const safeNext = (value: unknown) =>
   !/[\r\n\\]/.test(value)
     ? value
     : value === '/admin' ||
+        value === '/admin/parkio-pilot' ||
         value === '/account' ||
         value === '/account/close' ||
         sharedMcpNext(value)
