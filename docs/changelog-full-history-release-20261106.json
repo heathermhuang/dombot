@@ -1,0 +1,74 @@
+{
+  "date": "2026-11-06",
+  "status": "deployed_and_verified",
+  "releaseCommit": "7ae604793fa04ab595fe255968a3be82582d4ce8",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/173",
+  "ci": "https://github.com/heathermhuang/dombot/actions/runs/42150117107",
+  "securityCi": "https://github.com/heathermhuang/dombot/actions/runs/42150117130",
+  "moduleSha256": "b99a32283553b22cb3e03d7cb03112d6f22ac145b4ec5faeeacc785a5cd53664",
+  "history": {
+    "at": "2026-11-06T02:34:52.434Z",
+    "source": "7ae604793fa04ab595fe255968a3be82582d4ce8",
+    "upstreamPublishedReleases": 8,
+    "forkDesktopReleases": 2,
+    "upstreamSourceChanges": 268,
+    "saasMergedChanges": 169,
+    "results": [
+      {
+        "layer": "all",
+        "status": 200,
+        "entries": 104,
+        "earliest": "2026-08-30",
+        "reverseChronological": true,
+        "fullReferenceCoverage": true,
+        "feedsFresh": true
+      },
+      {
+        "layer": "core",
+        "status": 200,
+        "entries": 55,
+        "earliest": "2026-08-30",
+        "reverseChronological": true,
+        "fullReferenceCoverage": true,
+        "feedsFresh": true
+      },
+      {
+        "layer": "saas",
+        "status": 200,
+        "entries": 49,
+        "earliest": "2026-09-09",
+        "reverseChronological": true,
+        "fullReferenceCoverage": true,
+        "feedsFresh": true
+      },
+      {
+        "layer": "unknown",
+        "status": 200,
+        "entries": 104,
+        "earliest": "2026-08-30",
+        "reverseChronological": true,
+        "fullReferenceCoverage": true,
+        "feedsFresh": true
+      }
+    ]
+  },
+  "http": {
+    "at": "2026-11-06T02:34:56.345Z",
+    "passed": 42,
+    "total": 42
+  },
+  "preservation": {
+    "bindings": 72,
+    "unrelatedBindingsPreserved": true,
+    "assetsPreserved": true,
+    "secretsInherited": true,
+    "runtimeSettingsPreserved": true,
+    "schedulesPreserved": true,
+    "tenantEngineRollouts": 0,
+    "databaseWrites": 0
+  },
+  "upstreamLatestRelease": "2.1.0",
+  "observedHostedEngine": "2.1.0-hosted.1",
+  "dates": "UTC",
+  "browserVisualVerified": false
+}

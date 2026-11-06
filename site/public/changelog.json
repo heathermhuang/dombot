@@ -6,15 +6,19 @@
       "date": "2026-11-06",
       "layer": "saas",
       "title": "Complete changelog history from day one",
-      "status": "Source update · Deployment verified separately",
+      "status": "Deployed · Full history verified",
       "changes": [
         "Backfills every published upstream and maintained-fork release, the upstream primary-source timeline and the complete merged SaaS change history.",
         "Removes the November cutoff, preserves existing permalinks and distinguishes historical source records from verified deployments."
       ],
       "links": [
         {
-          "label": "SaaS source history",
-          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+          "label": "Complete history #173",
+          "url": "https://github.com/heathermhuang/dombot/pull/173"
+        },
+        {
+          "label": "Audited historical inventory",
+          "url": "https://github.com/heathermhuang/dombot/blob/7ae604793fa04ab595fe255968a3be82582d4ce8/docs/changelog-history-inventory-20261106.json"
         }
       ]
     },
