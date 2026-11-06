@@ -98,6 +98,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-177",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Record bounded private tenant qualification outcomes",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #177 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #177",
+          "url": "https://github.com/heathermhuang/dombot/pull/177"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
@@ -149,6 +165,23 @@
         {
           "label": "Namefi integration details",
           "url": "https://github.com/heathermhuang/dombot/blob/main/docs/namefi-support.md"
+        }
+      ]
+    },
+    {
+      "id": "saas-setup-provenance-observations-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "More precise private setup diagnostics",
+      "status": "Source update · Runtime qualification tracked separately",
+      "changes": [
+        "Distinguishes setup HTTP failures, unavailable dispatch and mismatched runtime provenance without recording response bodies or arbitrary header values.",
+        "Preserves the existing setup qualification and admission checks."
+      ],
+      "links": [
+        {
+          "label": "Diagnostic implementation",
+          "url": "https://github.com/heathermhuang/dombot/blob/main/src/hosted/provisioning.ts"
         }
       ]
     },
