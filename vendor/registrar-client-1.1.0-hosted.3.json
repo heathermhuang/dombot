@@ -1,0 +1,16 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "1.1.0-hosted.3",
+  "base": "vendor/registrar-client-1.1.0-hosted.2.json",
+  "archive": "vendor/aoxborrow-registrar-client-1.1.0-hosted.3.tgz",
+  "sha256": "a8511433731b7e25377fab996bdd32ae7322a2e54ab3b342b45ba53f463768b7",
+  "integrity": "sha512-QlW3I0tEQOKhZV3jMy+CD/sxOntMu4kkCZR6e3nnM9nLzy5eqi7DWzznLHue1bjL2BZBdpHPO0i/xfJ2Pi/aCg==",
+  "patch": {
+    "path": "vendor/registrar-client-1.1.0-hosted.3.worker-redirect.patch",
+    "sha256": "a3d9ce21797c784b48e2683d5f71d3f681bb9314c5d059dff7d3144e902061f2"
+  },
+  "license": "MIT",
+  "changes": [
+    "Use manual redirects and reject non-success responses, preserving key confidentiality while supporting the Worker runtime."
+  ]
+}

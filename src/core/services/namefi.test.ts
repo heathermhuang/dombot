@@ -110,7 +110,7 @@ describe('packaged Namefi adapter', () => {
       success: true,
       message: 'Connection successful',
     });
-    expect(fetch.mock.calls[0][1]?.redirect).toBe('error');
+    expect(fetch.mock.calls[0][1]?.redirect).toBe('manual');
     expect(String(fetch.mock.calls[0][0])).toBe(
       'https://api.namefi.io/v-next/user',
     );
@@ -315,7 +315,10 @@ describe('packaged Namefi adapter', () => {
       zoneName: 'example.com',
       records: [{ type: 'TXT', name: 'new', rdata: 'new value', ttl: 300 }],
     });
-    expect(body(fetch, 3)).toEqual({ zoneName: 'example.com', recordsIds: ['stale'] });
+    expect(body(fetch, 3)).toEqual({
+      zoneName: 'example.com',
+      recordsIds: ['stale'],
+    });
   });
   it('performs no DNS writes for unchanged content', async () => {
     const fetch = responses([raw], [record()]);
