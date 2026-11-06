@@ -6,6 +6,13 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  "browser": { "binding": "PARKIO_BROWSER" },
+  "durable_objects": {
+    "bindings": [{ "name": "PARKIO_PILOT", "class_name": "ParkioPilot" }],
+  },
+  "migrations": [
+    { "tag": "parkio-pilot-v1", "new_sqlite_classes": ["ParkioPilot"] },
+  ],
   "assets": {
     "directory": "../site/public",
     "binding": "LANDING_ASSETS",
@@ -42,6 +49,9 @@
     },
   ],
   "vars": {
+    "PARKIO_PILOT_ENABLED": "false",
+    "PARKIO_PILOT_OWNER_ID": "",
+    "PARKIO_PILOT_EXPIRES_AT": "",
     "SHARED_MCP_MANAGEMENT_ENABLED": "false",
     "ADMIN_USER_IDS": "[]",
     "ON_DEMAND_ENABLED": "false",

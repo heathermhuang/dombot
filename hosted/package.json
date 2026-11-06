@@ -9,6 +9,7 @@
     "postal-mime": "4.0.11"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261106.1",
     "@types/html-to-text": "9.0.4"
   }
 }

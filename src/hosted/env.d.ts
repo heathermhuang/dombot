@@ -1,4 +1,11 @@
 interface HostedEnv {
+  /** Temporary owner-only Park.io feasibility harness; absent/false is closed. */
+  PARKIO_PILOT_ENABLED?: string;
+  PARKIO_PILOT_OWNER_ID?: string;
+  PARKIO_PILOT_EXPIRES_AT?: string;
+  PARKIO_PILOT_SECRET?: string;
+  PARKIO_BROWSER?: import('../../hosted/browser-run-types').BrowserRun;
+  PARKIO_PILOT?: DurableObjectNamespace;
   /** Temporary explicit legacy fallback during directory rollout; default is strict. */
   PUBLIC_DOMAIN_DIRECTORY_READY?: string;
   DOMBOT_MANAGED_PROXY_IP?: string;

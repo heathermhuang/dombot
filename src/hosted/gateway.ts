@@ -29,6 +29,8 @@ import { monitorDynadotSync } from './sync-monitor';
 import { continueRenewalPricing, reservePricingStep } from './renewal-pricing';
 import { canonicalDomain } from '../shared/publication';
 import { adminRoutes, isAdmin } from './admin';
+import { parkioPilotRoutes } from './parkio-pilot';
+export { ParkioPilot } from './parkio-pilot';
 import { receiveSalesReply } from './sales-relay';
 import {
   domainControlRequest,
@@ -939,6 +941,12 @@ app.get('/health', async (c) => {
     );
   }
 });
+app.route(
+  '/admin/parkio-pilot',
+  parkioPilotRoutes((request, env) =>
+    account(env).session(readSession(request)),
+  ),
+);
 app.route(
   '/admin',
   adminRoutes((request, env) => account(env).session(readSession(request))),
