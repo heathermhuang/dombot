@@ -572,7 +572,8 @@ export function parkioPilotRoutes(
   app.use('*', bodyLimit({ maxSize: 2048 }));
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
-    c.header('Referrer-Policy', 'no-referrer');
+    // Native POST forms need a non-null Origin for the strict CSRF check.
+    c.header('Referrer-Policy', 'same-origin');
     c.header('X-Robots-Tag', 'noindex, nofollow');
     if (!pilotEnabled(c.env) || !c.env.PARKIO_PILOT || !c.env.PARKIO_BROWSER)
       return c.notFound();
@@ -630,7 +631,7 @@ export function parkioPilotRoutes(
   app.get('/', async (c) => {
     const state = await stub(c.env, c.get('owner')).status();
     const form = (action: string, label: string, blank = false) =>
-      `<form method="post" action="${base}/${action}"${blank ? ' target="_blank" rel="noreferrer"' : ''}><button type="submit">${label}</button></form>`;
+      `<form method="post" action="${base}/${action}"${blank ? ' target="_blank" rel="noopener"' : ''}><button type="submit">${label}</button></form>`;
     return c.html(
       page(
         'Park.io private feasibility test',
@@ -650,9 +651,13 @@ export function parkioPilotRoutes(
       const target = stub(c.env, c.get('owner'));
       if (action === 'start') {
         await target.start();
+        c.header('Referrer-Policy', 'no-referrer');
         return c.redirect(await target.view(), 303);
       }
-      if (action === 'view') return c.redirect(await target.view(), 303);
+      if (action === 'view') {
+        c.header('Referrer-Policy', 'no-referrer');
+        return c.redirect(await target.view(), 303);
+      }
       await target[action]();
       return c.redirect(base, 303);
     });
