@@ -562,3 +562,70 @@ describe('private tenant qualification diagnostics', () => {
     expect(JSON.stringify(events)).not.toContain('private-token');
   });
 });
+
+it('recovers a transient qualification dispatch using a fresh signed read without repeating resource writes', async () => {
+  const original = env.DISPATCHER.get('fixture-tenant');
+  let reads = 0;
+  env.DISPATCHER = {
+    get: () => ({
+      fetch: async (request: Request) => {
+        if (
+          new URL(request.url).pathname === '/api/getAppInfo' &&
+          reads++ === 0
+        ) {
+          await request.text();
+          throw Error('transient-dispatch');
+        }
+        return original.fetch(request);
+      },
+    }),
+  } as unknown as ProvisioningEnv['DISPATCHER'];
+  const result = await provisionPortfolio(
+    env,
+    journal,
+    workspace,
+    user,
+    transport,
+  );
+  expect(result.engine).toBe('test-engine');
+  expect(reads).toBe(2);
+  expect(creates).toBe(1);
+  expect(uploads).toBe(1);
+});
+it('bounds persistent qualification dispatch failures and never retries bootstrap', async () => {
+  const original = env.DISPATCHER.get('fixture-tenant');
+  let reads = 0,
+    bootstraps = 0;
+  env.DISPATCHER = {
+    get: () => ({
+      fetch: async (request: Request) => {
+        if (new URL(request.url).pathname === '/api/getAppInfo') {
+          reads++;
+          throw Error('persistent-dispatch');
+        }
+        return original.fetch(request);
+      },
+    }),
+  } as unknown as ProvisioningEnv['DISPATCHER'];
+  await expect(
+    provisionPortfolio(env, journal, workspace, user, transport),
+  ).rejects.toThrow('persistent-dispatch');
+  expect(reads).toBe(4);
+  expect(creates).toBe(1);
+  expect(uploads).toBe(1);
+  saved = undefined;
+  database = false;
+  worker = false;
+  env.DISPATCHER = {
+    get: () => ({
+      fetch: async () => {
+        bootstraps++;
+        throw Error('bootstrap-dispatch');
+      },
+    }),
+  } as unknown as ProvisioningEnv['DISPATCHER'];
+  await expect(
+    provisionPortfolio(env, journal, workspace, user, transport),
+  ).rejects.toThrow('bootstrap-dispatch');
+  expect(bootstraps).toBe(1);
+});

@@ -361,29 +361,40 @@ export async function provisionPortfolio(
     body?: string,
     owner: string | null = null,
   ) => {
-    const request = new Request('https://workspace.internal' + path, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Origin: 'https://workspace.internal',
-      },
-      body,
-    });
-    request.headers.set(
-      PROOF_HEADER,
-      await signGatewayRequest(state!.gateway, workspace, owner, request),
-    );
-    let response: Response;
-    try {
-      response = await env.DISPATCHER.get(name).fetch(request);
-    } catch (error) {
-      if (path === '/api/getAppInfo')
-        await journal.diagnose?.({
-          phase: 'provenance',
-          qualification: { outcome: 'dispatch_failed' },
-        });
-      throw error;
-    }
+    const delays = path === '/api/getAppInfo' ? [250, 750, 1500] : [];
+    const retryDeadline = Date.now() + 10_000;
+    const dispatch = async (attempt: number): Promise<Response> => {
+      // Each read retry gets a fresh body and proof; a failed fetch may consume
+      // the prior request. Resource mutations and bootstrap are never replayed.
+      const request = new Request('https://workspace.internal' + path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://workspace.internal',
+        },
+        body,
+      });
+      request.headers.set(
+        PROOF_HEADER,
+        await signGatewayRequest(state!.gateway, workspace, owner, request),
+      );
+      try {
+        return await env.DISPATCHER.get(name).fetch(request);
+      } catch (error) {
+        const delay = delays[attempt];
+        if (delay !== undefined && Date.now() + delay < retryDeadline) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return dispatch(attempt + 1);
+        }
+        if (path === '/api/getAppInfo')
+          await journal.diagnose?.({
+            phase: 'provenance',
+            qualification: { outcome: 'dispatch_failed' },
+          });
+        throw error;
+      }
+    };
+    const response = await dispatch(0);
     if (path === '/api/getAppInfo') {
       const engine = response.headers.get('X-DomBot-Engine');
       const source = response.headers.get('X-DomBot-Engine-Source');
