@@ -226,6 +226,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-183",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Preserve native form origins in the Park.io owner pilot",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #183 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #183",
+          "url": "https://github.com/heathermhuang/dombot/pull/183"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
