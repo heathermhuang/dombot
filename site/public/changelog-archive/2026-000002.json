@@ -210,6 +210,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-182",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Add an owner-only Park.io session feasibility pilot",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #182 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #182",
+          "url": "https://github.com/heathermhuang/dombot/pull/182"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
