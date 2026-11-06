@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-evidence-13972f6d793deb0d4570a801",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Verified hosted release record 2.1.0-hosted.3",
+      "status": "Verified release evidence published · Scope follows the linked record",
+      "changes": [
+        "A verified release record was published. Its linked evidence defines the deployed source, engine and validation scope; the date here is its publication date."
+      ],
+      "links": [
+        {
+          "label": "Verified release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/956a50e8299880063acf195fed4e86804c185468/docs/namefi-release-20261106/release-receipt.json"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb-1",
       "date": "2026-11-06",
       "layer": "saas",
@@ -174,6 +190,22 @@
         {
           "label": "Change #180",
           "url": "https://github.com/heathermhuang/dombot/pull/180"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-181",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Record completed Namefi production connection and qualification",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #181 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #181",
+          "url": "https://github.com/heathermhuang/dombot/pull/181"
         }
       ]
     },
