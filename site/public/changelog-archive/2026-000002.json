@@ -290,6 +290,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-185",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Fix mobile keyboard input for Park.io sign-in pilot",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #185 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #185",
+          "url": "https://github.com/heathermhuang/dombot/pull/185"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
