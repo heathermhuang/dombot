@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "totalEntries": 105,
+  "parts": [
+    {
+      "id": "2026-000002",
+      "path": "changelog-archive/2026-000002.json",
+      "sha256": "db501228d7f71631b1caa37d0364cc8a25b00bd0137e5e6915d1a837467ecdf5",
+      "count": 5,
+      "core": 1,
+      "saas": 4,
+      "newest": "2026-11-06",
+      "oldest": "2026-11-05"
+    },
+    {
+      "id": "2026-000001",
+      "path": "changelog-archive/2026-000001.json",
+      "sha256": "afc71a220d0abbd9e11d84f09d69c017d80c5880615c97e23a3f9c97f1c060f7",
+      "count": 100,
+      "core": 54,
+      "saas": 46,
+      "newest": "2026-11-05",
+      "oldest": "2026-08-30"
+    }
+  ],
+  "state": {}
+}

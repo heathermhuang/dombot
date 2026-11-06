@@ -12,3 +12,8 @@ worker-configuration.d.ts
 # Hand-compacted on purpose (one-line rules); keep them that way.
 site/index.html
 site/src/styles.css
+
+# Generated content-addressed archive data
+site/public/changelog-archive/
+site/public/changelog-archive-index/
+site/public/changelog-index.json

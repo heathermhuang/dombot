@@ -13,22 +13,23 @@ describe('changelog release coverage', () => {
     'package-lock.json',
     'hosted/wrangler.gateway.jsonc',
     'hosted/migrations/0024.sql',
-  ])('fails a behavior change without a new SaaS note: %s', (file) => {
-    expect(() => checkChangelogChange(base, base, [file])).toThrow(
-      'new SaaS entry',
-    );
-    expect(() =>
-      checkChangelogChange(base, [added, ...base], [file]),
-    ).not.toThrow();
-  });
-  it('does not let editing an old note hide an undocumented code change', () => {
+  ])(
+    'leaves behavior-change ingestion to the automatic publisher: %s',
+    (file) => {
+      expect(checkChangelogChange(base, base, [file]).runtimeFiles).toBe(1);
+      expect(() =>
+        checkChangelogChange(base, [added, ...base], [file]),
+      ).not.toThrow();
+    },
+  );
+  it('allows optional enrichment without requiring hand-written release notes', () => {
     expect(() =>
       checkChangelogChange(
         base,
         [{ ...base[0], title: 'edited' }, ...base.slice(1)],
         ['src/hosted/gateway.ts'],
       ),
-    ).toThrow('new SaaS entry');
+    ).not.toThrow();
   });
   it('does not require release notes for tests or ordinary documentation', () => {
     expect(() =>
@@ -40,10 +41,10 @@ describe('changelog release coverage', () => {
       ]),
     ).not.toThrow();
   });
-  it('requires a changelog/status update alongside release receipts', () => {
+  it('allows release evidence to be captured automatically', () => {
     expect(() =>
       checkChangelogChange(base, base, ['docs/example-release-20261105.json']),
-    ).toThrow('Release receipts');
+    ).not.toThrow();
     expect(() =>
       checkChangelogChange(
         base,

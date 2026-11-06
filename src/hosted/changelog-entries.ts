@@ -1,6 +1,6 @@
-import feed from '../../site/public/changelog.json';
+import feed from '../../site/public/changelog-legacy.json';
 import { parseChangelogFeed } from './changelog-schema';
 
-/** Bundled recovery snapshot; the public page refreshes the same feed from main. */
+/** Bundled recovery snapshot; legacy root permalinks remain available while new history is paged. */
 export const changelogEntries = parseChangelogFeed(feed);
 export type { ChangelogEntry } from './changelog-schema';

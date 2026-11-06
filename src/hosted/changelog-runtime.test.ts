@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
-import feed from '../../site/public/changelog.json';
+import fs from 'node:fs';
 
 let runtime: Miniflare;
 let requests = 0;
@@ -36,12 +36,10 @@ beforeAll(async () => {
                 status: 302,
                 headers: { Location: 'https://other.invalid/feed' },
               });
-            const url = new URL(request.url);
-            return Response.json(
-              url.pathname.endsWith('/changelog.json')
-                ? feed
-                : { releases: [] },
-            );
+            const file = new URL(request.url).pathname.split(
+              '/site/public/',
+            )[1];
+            return new Response(fs.readFileSync('site/public/' + file));
           },
         },
       ],
@@ -64,15 +62,17 @@ it('refreshes and caches both feeds through native Workers fetch and Cache APIs'
   };
   const first = await read(now);
   expect(first.stale).toBe(false);
-  expect(requests).toBe(2);
-  expect(first.entries.some((entry) => entry.id === feed.entries[0].id)).toBe(
-    true,
-  );
+  expect(requests).toBe(4);
+  expect(
+    first.entries.some(
+      (entry) => entry.id === 'saas-automatic-release-archive-2026-11-06',
+    ),
+  ).toBe(true);
   const cached = await read(now + 1);
   expect(cached.stale).toBe(false);
-  expect(requests).toBe(2);
+  expect(requests).toBe(4);
   redirect = true;
   const refused = await read(now + 300_001);
   expect(refused.stale).toBe(true);
-  expect(requests).toBe(4); // Each source redirect is refused; neither target is followed.
+  expect(requests).toBe(5); // The index redirect is refused without following its target.
 });

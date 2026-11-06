@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "saas-automatic-release-archive-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Automatic release publishing and permanent archive pages",
+      "status": "Published source · Deployment observations tracked separately",
+      "changes": [
+        "Published releases, merged changes and observed gateway deployments are added by an automated publisher.",
+        "Archive pages preserve all historical IDs and links without a global entry limit; older pages remain accessible as history grows."
+      ],
+      "links": [
+        {
+          "label": "SaaS source history",
+          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+        }
+      ]
+    },
+    {
+      "id": "saas-changelog-full-history-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Complete changelog history from day one",
+      "status": "Deployed · Full history verified",
+      "changes": [
+        "Backfills every published upstream and maintained-fork release, the upstream primary-source timeline and the complete merged SaaS change history.",
+        "Removes the November cutoff, preserves existing permalinks and distinguishes historical source records from verified deployments."
+      ],
+      "links": [
+        {
+          "label": "Complete history #173",
+          "url": "https://github.com/heathermhuang/dombot/pull/173"
+        },
+        {
+          "label": "Audited historical inventory",
+          "url": "https://github.com/heathermhuang/dombot/blob/7ae604793fa04ab595fe255968a3be82582d4ce8/docs/changelog-history-inventory-20261106.json"
+        }
+      ]
+    },
+    {
+      "id": "core-2-1-0",
+      "date": "2026-11-05",
+      "layer": "core",
+      "title": "DomBot 2.1.0",
+      "status": "Upstream released · Deployed as SaaS 2.1.0-hosted.1",
+      "changes": [
+        "Adds Unstoppable Domains registrar support and improves Namecheap domain details and request pacing.",
+        "Improves Afternic sales-history synchronization, sync error visibility and scrubbed desktop logs.",
+        "Improves registrar-name matching in imports, currency formatting, release notices and upstream API timeouts; hosted queues retain their separate budgets.",
+        "Available in managed portfolios as engine 2.1.0-hosted.1, with hosted compatibility and the existing account and publication controls."
+      ],
+      "links": [
+        {
+          "label": "Upstream release",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v2.1.0"
+        },
+        {
+          "label": "SaaS integration #167",
+          "url": "https://github.com/heathermhuang/dombot/pull/167"
+        }
+      ]
+    },
+    {
+      "id": "saas-changelog-freshness-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Automatic changelog updates",
+      "status": "Deployed · Automatic updates verified",
+      "changes": [
+        "The changelog refreshes upstream releases and SaaS notes without a separate page deployment.",
+        "SaaS code changes require a changelog entry in CI. Saved updates remain readable if a source is temporarily unavailable."
+      ],
+      "links": [
+        {
+          "label": "Automatic upkeep #170",
+          "url": "https://github.com/heathermhuang/dombot/pull/170"
+        },
+        {
+          "label": "Hosted refresh verification #171",
+          "url": "https://github.com/heathermhuang/dombot/pull/171"
+        }
+      ]
+    },
+    {
+      "id": "saas-changelog-runtime-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Reliable hosted changelog refresh",
+      "status": "Deployed · Hosted refresh verified",
+      "changes": [
+        "Restores automatic feed refresh in the hosted changelog while retaining saved updates during source outages."
+      ],
+      "links": [
+        {
+          "label": "Runtime correction #171",
+          "url": "https://github.com/heathermhuang/dombot/pull/171"
+        }
+      ]
+    }
+  ]
+}

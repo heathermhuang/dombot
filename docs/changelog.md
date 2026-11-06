@@ -1,85 +1,85 @@
-# Public changelog upkeep
+# Automatic changelog and permanent history
 
-`/changelog` reads two public, fixed sources on demand:
+The release archive is published by `changelog-sync.yml` when main changes, a
+GitHub release is published/edited, or the desktop release workflow completes.
+A quarter-hour scheduled catch-up handles upstream changes and manual gateway
+releases. The nightly reconciliation traverses all release and merged-PR pages,
+including old drafts published later. GitHub scheduling/source availability can
+introduce delays; the page does not promise instantaneous provider delivery.
 
-- SaaS notes: `heathermhuang/dombot/main/site/public/changelog.json`.
-- Core releases: `aoxborrow/dombot/main/site/public/releases.json`, maintained by
-  the original project's release workflow after publication.
+The publisher uses GitHub's ordinary temporary workflow token and public source
+metadata. It requires no new production secret, customer binding, model task or
+Cloudflare write authority. The public gateway is observed through `/health`.
 
-Successful reads are cached for five minutes. New SaaS notes reach the page
-without another gateway deployment; new upstream releases are discovered after
-publication in that upstream index. There is no recurring model task or new cron.
-The page refreshes feeds when visited, works without sign-in or browser JavaScript,
-and keeps the existing layer filters and stable entry links.
+## Automatically captured events
 
-## Full history from day one
+- All published upstream and maintained-fork releases, including prereleases and
+  arbitrary release tags; drafts are excluded. Release IDs remain stable.
+- All merged SaaS PRs, including historical release branches, and primary-branch
+  source integrations in both repositories. Source merge is not deployment.
+- New published release receipts explicitly marked `deployed_and_verified`.
+  Their linked evidence defines the scope; their publication date is labelled.
+- Changed public gateway source revisions, qualified against the public source
+  repository. These are observations, not fabricated deployment timestamps or
+  proof that every tenant engine was rolled out.
 
-The archive starts with core source development on 30 August 2026 (UTC), before
-the first published 1.0.0 release, and hosted SaaS source on 9 September 2026.
-It includes all eight published upstream releases through 2.1.0, both maintained
-fork desktop releases, 268 upstream primary-branch integrations and all 169
-merged SaaS PRs through the audited source snapshots. Busy dates are grouped in
-batches of up to eight linked changes; no item in those inventories is omitted.
-Existing detailed entries and their permalinks are preserved.
+Authored notes are optional enrichment in `changelog-notes/<id>.json`; no person
+has to add a note to make a future release appear. Existing curated history is
+retained. Notes and upstream records can enrich an existing stable ID, but cannot
+remove historical evidence links or move an ID to a different archive location.
 
-`docs/changelog-history-inventory-20261106.json` records the source snapshots,
-release dates and the entry covering every historical commit/PR. It is a coverage
-baseline, not a deployment ledger. One historical release-branch PR (#30) is
-labelled as such rather than being represented as current main or a rollout.
-Release notes, desktop packages, historical source changes and verified hosted
-availability are labelled separately. Dates are normalized to UTC.
+## Permanent paged archive
 
-There is no November or other date cutoff. The upstream release parser retains
-all published releases; the SaaS reader rejects feeds that drop bundled or
-previously saved history. The full snapshot is also the recovery fallback.
-History coverage tests and the CI ID-preservation policy prevent silent loss.
-The page remains newest first and each filter offers a link to its oldest entry.
+`site/public/changelog-index.json` locates the append-only archive pages in
+`site/public/changelog-archive/`. Each page contains at most 100 entries and is
+size-bounded. The total archive is not capped at 1,000 entries and has no date or
+age cutoff. New pages are allocated as needed. Existing IDs, source links and
+archive-page locations are never removed; Git retains past metadata revisions.
 
-## Adding SaaS updates
+Every publication validates every page's digest, unique IDs, counts, references
+and index totals before writing/pushing. A failed page fetch, incomplete API
+pagination, rate limit or concurrent main push fails the job without publishing
+partial data or advancing its checkpoint. The next sync reconciles it. Normal
+non-force pushes and one publisher concurrency group preserve other work.
 
-Every PR changing application behavior, security, UI, API, dependencies or hosted
-runtime adds an entry to `site/public/changelog.json`. Use a unique, stable `id`,
-a UTC `date`, `layer: "saas"`, a short `title`, explicit `status`, user-facing
-`changes`, and public project-repository `links`. Preserve existing entries and
-IDs. Test-only and documentation-only changes do not require an entry.
+The page loads bounded archive pages and provides year, older/newer and beginning
+links. Original root-fragment URLs remain available from the fixed legacy
+snapshot, refreshed from their permanent pages. New entries use stable
+`/changelog?archive=<page-id>#<entry-id>` addresses. Pagination changes what is
+shown on one view; it never discards older records.
 
-A merged change is not a deployment. Before rollout use a status such as
-`Source update · Deployment verified separately`. After verified deployment,
-update the matching entry to its deployed engine/service status and link the
-public release evidence in the release-receipt PR. Do not expose private provider
-receipts, customer data, credentials or operational identifiers.
+## Efficient and honest refresh
 
-Run `npm run changelog:check` to validate data. Set `CHANGELOG_BASE_SHA` to the
-base commit to also check coverage for the actual diff. The CI test job does this
-for PRs and main pushes. Application changes require a new SaaS entry; release
-receipt changes require a matching entry/status update. Existing entry IDs cannot
-be silently removed. CI is a release gate; do not bypass a failed coverage check.
+Scheduled checks start with small head-page fingerprints. Unchanged sources stop
+without rewriting files or committing a clock heartbeat. The nightly full pass
+catches older/backdated records that a recent head page cannot reveal. Bot archive
+commits are recognized by their actual data-only files to avoid self-trigger loops.
 
-## Core releases and availability
+The gateway caches successful archive reads for five minutes. Individual origin
+reads have three-second deadlines, manual redirect refusal and byte limits. Page
+hashes/counts are checked against the index. Failed refreshes retain last-good
+cached data with an explicit stale notice and one-minute retry backoff. A later
+uncached archive page that cannot be loaded returns 503, never a fake empty page.
+The original legacy snapshot remains readable when the source is unavailable.
 
-New core releases get their upstream version/date and a direct release-notes
-link automatically. Their status says released upstream, with hosted rollout
-tracked separately. This never claims SaaS deployment. Existing curated core
-entries retain richer descriptions and verified managed availability. Update
-those descriptions/statuses in the coordinated SaaS release when appropriate.
+The first core source record is 30 August 2026 UTC; hosted source starts on
+9 September. The historical inventory protects eight initial upstream releases,
+two fork releases, 268 core source references and 169 merged SaaS references.
+The automatic publisher extends that archive without truncating the baseline.
 
-## Outages and limits
+## Commands and verification
 
-Each source read has a three-second deadline, rejects redirects and is streamed
-with a 1 MB limit. The feed schema bounds entries/text and accepts evidence links
-only in the two project repositories. All displayed text and URLs are escaped.
-No credentials or customer/session information is sent to the public sources.
+- `npm run changelog:sync` reconciles source events and writes archive data.
+  `-- --full` forces complete pagination. CI supplies `GH_TOKEN`; local automated
+  tests use public fixtures without credentials.
+- `npm run changelog:check` validates all published pages and baseline IDs.
+  `CHANGELOG_BASE_SHA=<base>` also rejects removal or relocation of any previously
+  published archive identity/evidence.
+- `workflow_dispatch` can run a bounded catch-up. It is not needed for routine
+  publication; scheduled/event triggers continue after the agent finishes.
 
-The last valid normalized data is retained in the existing edge cache for up to
-seven days, subject to cache eviction. Refresh failures show saved data with an
-explicit notice that newer changes may be missing. With no cached data, the
-checked bundled snapshot remains readable. A failed or malformed fetch never
-replaces a good cached feed. Failed sources back off for one minute when the
-cache is available, rather than retrying on every visit. The timestamp describes successful source checks,
-not deployment time. Availability depends on the public source services; the
-page does not silently claim freshness during an outage.
-
-Validation covers feed changes without redeployment, cache expiration, source
-failure, malformed/oversized feeds, hostile content, rollout labels, both filters,
-and CI's missing-note/release-receipt checks, plus the normal project checks.
-This remains a gateway-only release: no tenant repack, migration, or import QA.
+Tests cover multiple API pages, prereleases, failed/incomplete pagination,
+unchanged runs, deployment/source distinctions, more than 1,000 archived entries,
+all-page traversal, stable legacy/new URLs, integrity failures and native Workers
+fetch/cache behavior. This remains a gateway-only code release; archive updates
+need no gateway deploy, tenant rollout or database migration.

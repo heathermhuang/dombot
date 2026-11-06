@@ -1,0 +1,3561 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "saas-automatic-release-archive-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Automatic release publishing and permanent archive pages",
+      "status": "Published source · Deployment observations tracked separately",
+      "changes": [
+        "Published releases, merged changes and observed gateway deployments are added by an automated publisher.",
+        "Archive pages preserve all historical IDs and links without a global entry limit; older pages remain accessible as history grows."
+      ],
+      "links": [
+        {
+          "label": "SaaS source history",
+          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+        }
+      ]
+    },
+    {
+      "id": "saas-changelog-full-history-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Complete changelog history from day one",
+      "status": "Deployed · Full history verified",
+      "changes": [
+        "Backfills every published upstream and maintained-fork release, the upstream primary-source timeline and the complete merged SaaS change history.",
+        "Removes the November cutoff, preserves existing permalinks and distinguishes historical source records from verified deployments."
+      ],
+      "links": [
+        {
+          "label": "Complete history #173",
+          "url": "https://github.com/heathermhuang/dombot/pull/173"
+        },
+        {
+          "label": "Audited historical inventory",
+          "url": "https://github.com/heathermhuang/dombot/blob/7ae604793fa04ab595fe255968a3be82582d4ce8/docs/changelog-history-inventory-20261106.json"
+        }
+      ]
+    },
+    {
+      "id": "saas-changelog-runtime-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Reliable hosted changelog refresh",
+      "status": "Deployed · Hosted refresh verified",
+      "changes": [
+        "Restores automatic feed refresh in the hosted changelog while retaining saved updates during source outages."
+      ],
+      "links": [
+        {
+          "label": "Runtime correction #171",
+          "url": "https://github.com/heathermhuang/dombot/pull/171"
+        }
+      ]
+    },
+    {
+      "id": "saas-changelog-freshness-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Automatic changelog updates",
+      "status": "Deployed · Automatic updates verified",
+      "changes": [
+        "The changelog refreshes upstream releases and SaaS notes without a separate page deployment.",
+        "SaaS code changes require a changelog entry in CI. Saved updates remain readable if a source is temporarily unavailable."
+      ],
+      "links": [
+        {
+          "label": "Automatic upkeep #170",
+          "url": "https://github.com/heathermhuang/dombot/pull/170"
+        },
+        {
+          "label": "Hosted refresh verification #171",
+          "url": "https://github.com/heathermhuang/dombot/pull/171"
+        }
+      ]
+    },
+    {
+      "id": "core-2-1-0",
+      "date": "2026-11-05",
+      "layer": "core",
+      "title": "DomBot 2.1.0",
+      "status": "Upstream released · Deployed as SaaS 2.1.0-hosted.1",
+      "changes": [
+        "Adds Unstoppable Domains registrar support and improves Namecheap domain details and request pacing.",
+        "Improves Afternic sales-history synchronization, sync error visibility and scrubbed desktop logs.",
+        "Improves registrar-name matching in imports, currency formatting, release notices and upstream API timeouts; hosted queues retain their separate budgets.",
+        "Available in managed portfolios as engine 2.1.0-hosted.1, with hosted compatibility and the existing account and publication controls."
+      ],
+      "links": [
+        {
+          "label": "Upstream release",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v2.1.0"
+        },
+        {
+          "label": "SaaS integration #167",
+          "url": "https://github.com/heathermhuang/dombot/pull/167"
+        }
+      ]
+    },
+    {
+      "id": "saas-selection-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Bulk actions follow your current view",
+      "status": "Deployed · 2.0.0-hosted.5",
+      "changes": [
+        "Domains and Activity clear selection when you change filters or navigate away. Pagination and sorting within the same result retain your selection.",
+        "Bulk-action counts and targets use the same filtered scope, preventing hidden or stale selections from carrying into another view.",
+        "Managed portfolio browser tabs now use the domains.domains title."
+      ],
+      "links": [
+        {
+          "label": "Changes #165",
+          "url": "https://github.com/heathermhuang/dombot/pull/165"
+        },
+        {
+          "label": "Release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/a8405d3d/docs/selection-scope-release-20261105.json"
+        }
+      ]
+    },
+    {
+      "id": "saas-setup-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Clearer setup recovery and easier touch controls",
+      "status": "Deployed · 2.0.0-hosted.3–4",
+      "changes": [
+        "Setup pauses for reconciliation when a provider write has an uncertain outcome, with a safe reference for support.",
+        "Setup downloads now time out safely, so a stalled connection cannot leave setup waiting indefinitely.",
+        "Fixes touch targets around the Domains filters and presence inspector, and updates production dependencies."
+      ],
+      "links": [
+        {
+          "label": "Setup recovery #161",
+          "url": "https://github.com/heathermhuang/dombot/pull/161"
+        },
+        {
+          "label": "Touch and setup fixes #163",
+          "url": "https://github.com/heathermhuang/dombot/pull/163"
+        },
+        {
+          "label": "Release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/d9c59dcf/docs/home-provisioning-release-20261105.json"
+        }
+      ]
+    },
+    {
+      "id": "saas-password-2026-11-05",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "Password-change confirmation",
+      "status": "Deployed · Account access",
+      "changes": [
+        "After changing your password, the password sign-in page shows the confirmation message and explains the next step."
+      ],
+      "links": [
+        {
+          "label": "Changes #159",
+          "url": "https://github.com/heathermhuang/dombot/pull/159"
+        },
+        {
+          "label": "Release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/7482c035/docs/saas-qa-release-20261105.json"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-11-05-b48e803b966d",
+      "date": "2026-11-05",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": ["site: v2.1.0 download links", "Release 2.1.0"],
+      "links": [
+        {
+          "label": "b48e803b: site: v2.1.0 download links",
+          "url": "https://github.com/aoxborrow/dombot/commit/b48e803b966dc7a30654065dbeed25a7710a9797"
+        },
+        {
+          "label": "e93d5210: Release 2.1.0",
+          "url": "https://github.com/aoxborrow/dombot/commit/e93d5210707f706451310e0a85c147a44c3177c1"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-11-05-pr-172",
+      "date": "2026-11-05",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#172: Record verified automatic changelog release",
+        "#168: Add public changelog for core and SaaS updates",
+        "#167: Sync full upstream DomBot v2.1.0 while preserving SaaS behavior",
+        "#166: Record verified selection and managed title release",
+        "#164: Record verified engine .4 home and setup release",
+        "#162: Record verified release and qualify the local passkey browser journey"
+      ],
+      "links": [
+        {
+          "label": "Change #172",
+          "url": "https://github.com/heathermhuang/dombot/pull/172"
+        },
+        {
+          "label": "Change #168",
+          "url": "https://github.com/heathermhuang/dombot/pull/168"
+        },
+        {
+          "label": "Change #167",
+          "url": "https://github.com/heathermhuang/dombot/pull/167"
+        },
+        {
+          "label": "Change #166",
+          "url": "https://github.com/heathermhuang/dombot/pull/166"
+        },
+        {
+          "label": "Change #164",
+          "url": "https://github.com/heathermhuang/dombot/pull/164"
+        },
+        {
+          "label": "Change #162",
+          "url": "https://github.com/heathermhuang/dombot/pull/162"
+        }
+      ]
+    },
+    {
+      "id": "saas-renewals-2026-11-04",
+      "date": "2026-11-04",
+      "layer": "saas",
+      "title": "More useful renewal reviews",
+      "status": "Deployed · 2.0.0-hosted.2",
+      "changes": [
+        "Separates past reported expiry from upcoming renewals so domains that need verification have their own review workflow.",
+        "Excludes Gandi update timestamps from renewal deadlines and shows renewal quote age separately from inventory sync age.",
+        "Integrates the complete DomBot 2.0.0 core while preserving registrar connections for already-open browser tabs."
+      ],
+      "links": [
+        {
+          "label": "Core integration #156",
+          "url": "https://github.com/heathermhuang/dombot/pull/156"
+        },
+        {
+          "label": "Release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/502ec39e/docs/weekly-review-production-release-20261104/README.md"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-11-04-d80f81fa2dde",
+      "date": "2026-11-04",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "registrar-client 1.0: Namecheap detail in two calls",
+        "Namecheap detail: right auto-renew, lock and nameservers",
+        "Use registrar-client's redactSecrets (1.1.0)",
+        "Add Unstoppable Domains as a registrar",
+        "One registrar name matcher for imports and Afternic",
+        "About: refetch the release list when it's over a day old",
+        "Afternic sales a year at a time; 90-second API timeouts",
+        "Desktop error log for support; sync failures as an alert icon by Sync now"
+      ],
+      "links": [
+        {
+          "label": "d80f81fa: registrar-client 1.0: Namecheap detail in two calls",
+          "url": "https://github.com/aoxborrow/dombot/commit/d80f81fa2dde15e4a90cef559aa7a21613a02b3a"
+        },
+        {
+          "label": "9453ea54: Namecheap detail: right auto-renew, lock and nameservers",
+          "url": "https://github.com/aoxborrow/dombot/commit/9453ea54dbf7f8c36b521c31233859d7bb3e8407"
+        },
+        {
+          "label": "331ceece: Use registrar-client's redactSecrets (1.1.0)",
+          "url": "https://github.com/aoxborrow/dombot/commit/331ceeceadeb59bdc0f7bbea5ea8db9fd857f4dd"
+        },
+        {
+          "label": "e544f87a: Add Unstoppable Domains as a registrar",
+          "url": "https://github.com/aoxborrow/dombot/commit/e544f87af205bfa0d86cea0e3d2d34fd17e514df"
+        },
+        {
+          "label": "4df377fc: One registrar name matcher for imports and Afternic",
+          "url": "https://github.com/aoxborrow/dombot/commit/4df377fc28acb118febf2b04da716afe8b146af8"
+        },
+        {
+          "label": "1ccb0951: About: refetch the release list when it's over a day old",
+          "url": "https://github.com/aoxborrow/dombot/commit/1ccb0951149871ff5d9b59547db813b51db84a43"
+        },
+        {
+          "label": "ac0bce1c: Afternic sales a year at a time; 90-second API timeouts",
+          "url": "https://github.com/aoxborrow/dombot/commit/ac0bce1c130747baddfcd80505bd94cbd030b6bf"
+        },
+        {
+          "label": "39c57961: Desktop error log for support; sync failures as an alert icon by Sync now",
+          "url": "https://github.com/aoxborrow/dombot/commit/39c57961072e6c74a046cb7ea6e3ebf41e1ef414"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-11-04-pr-160",
+      "date": "2026-11-04",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#160: Record completed SaaS QA release and production verification",
+        "#158: Record verified weekly-review and upstream 2.0 production release",
+        "#157: Preserve registrar connections for existing browser tabs during the 2.0 rollout",
+        "#155: Expose renewal quote age and independent inventory observations",
+        "#154: Surface registrar-held past expiry records for verification",
+        "#153: Correct Gandi renewal-date semantics and cached forecasts",
+        "#152: Record verified automatic production import QA cleanup",
+        "#151: Validate QA cleanup notes by their stored domain"
+      ],
+      "links": [
+        {
+          "label": "Change #160",
+          "url": "https://github.com/heathermhuang/dombot/pull/160"
+        },
+        {
+          "label": "Change #158",
+          "url": "https://github.com/heathermhuang/dombot/pull/158"
+        },
+        {
+          "label": "Change #157",
+          "url": "https://github.com/heathermhuang/dombot/pull/157"
+        },
+        {
+          "label": "Change #155",
+          "url": "https://github.com/heathermhuang/dombot/pull/155"
+        },
+        {
+          "label": "Change #154",
+          "url": "https://github.com/heathermhuang/dombot/pull/154"
+        },
+        {
+          "label": "Change #153",
+          "url": "https://github.com/heathermhuang/dombot/pull/153"
+        },
+        {
+          "label": "Change #152",
+          "url": "https://github.com/heathermhuang/dombot/pull/152"
+        },
+        {
+          "label": "Change #151",
+          "url": "https://github.com/heathermhuang/dombot/pull/151"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-11-04-pr-150",
+      "date": "2026-11-04",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#150: Automatically clean up managed production import tests",
+        "#149: Record verified deletion of the production import QA account"
+      ],
+      "links": [
+        {
+          "label": "Change #150",
+          "url": "https://github.com/heathermhuang/dombot/pull/150"
+        },
+        {
+          "label": "Change #149",
+          "url": "https://github.com/heathermhuang/dombot/pull/149"
+        }
+      ]
+    },
+    {
+      "id": "saas-public-links-2026-11-03",
+      "date": "2026-11-03",
+      "layer": "saas",
+      "title": "Readable public domain links",
+      "status": "Deployed · SaaS public pages",
+      "changes": [
+        "Published domain pages use a domain-based address such as domains.domains/working.io, keeping internal account identifiers out of the shared link.",
+        "Existing domain-page URLs redirect to the new address. Publishing remains an explicit owner action.",
+        "Public routing follows current publication and domain-control state."
+      ],
+      "links": [
+        {
+          "label": "Changes #138",
+          "url": "https://github.com/heathermhuang/dombot/pull/138"
+        },
+        {
+          "label": "Release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/e470926a/docs/listing-core-production-release-20261103/README.md"
+        }
+      ]
+    },
+    {
+      "id": "core-2-0-0",
+      "date": "2026-11-03",
+      "layer": "core",
+      "title": "DomBot 2.0.0",
+      "status": "Upstream released · Included in the 4 November SaaS release",
+      "changes": [
+        "Introduces Afternic, Sedo and Atom marketplace connections, with listing, pricing, traffic and ownership-verification workflows.",
+        "Adds the Sales ledger and assisted handover steps for sold names, plus broader Activity review, domain history and MCP coverage.",
+        "Improves table customization, date filters, currency totals, registrar controls and mobile interactions.",
+        "The SaaS integration also includes the subsequent exact-currency formatting update."
+      ],
+      "links": [
+        {
+          "label": "Upstream release",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v2.0.0"
+        },
+        {
+          "label": "Currency update #250",
+          "url": "https://github.com/aoxborrow/dombot/pull/250"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-11-03-ccb918deed20",
+      "date": "2026-11-03",
+      "layer": "core",
+      "title": "Core development history (1/2)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Money: cents where amounts have them, whole totals with exact hovers",
+        "site: v2.0.0 download links",
+        "Release 2.0.0",
+        "Row and bulk menus: room for a scrollbar",
+        "Domains: floating bulk actions bar and organized row menu",
+        "GoDaddy: v2 API settings, WHOIS privacy on and off, transfer-out read (registrar-client 0.15.1)",
+        "Docs: Afternic RESYNC doesn't run the ownership check",
+        "Lowercase nameservers everywhere"
+      ],
+      "links": [
+        {
+          "label": "ccb918de: Money: cents where amounts have them, whole totals with exact hovers",
+          "url": "https://github.com/aoxborrow/dombot/commit/ccb918deed20f8d01009970064027fcb021bac97"
+        },
+        {
+          "label": "b1de248b: site: v2.0.0 download links",
+          "url": "https://github.com/aoxborrow/dombot/commit/b1de248b84affa1836ba144ce1ba98f50f54a7a4"
+        },
+        {
+          "label": "28c188f6: Release 2.0.0",
+          "url": "https://github.com/aoxborrow/dombot/commit/28c188f6fbdeded068cf9ceb9f5d9305c2f91277"
+        },
+        {
+          "label": "695388c1: Row and bulk menus: room for a scrollbar",
+          "url": "https://github.com/aoxborrow/dombot/commit/695388c1fe53674782c2d949f75bc5bf7f42d7ef"
+        },
+        {
+          "label": "4888d8a4: Domains: floating bulk actions bar and organized row menu",
+          "url": "https://github.com/aoxborrow/dombot/commit/4888d8a4ece28fc9dad7a1b75c67007def0695cf"
+        },
+        {
+          "label": "69aee706: GoDaddy: v2 API settings, WHOIS privacy on and off, transfer-out read (registrar-client 0.15.1)",
+          "url": "https://github.com/aoxborrow/dombot/commit/69aee706dbe43d24248bd78aeb5fe1615023b3dd"
+        },
+        {
+          "label": "c3dbfb7e: Docs: Afternic RESYNC doesn't run the ownership check",
+          "url": "https://github.com/aoxborrow/dombot/commit/c3dbfb7e0ad7b71aed7059ea842086233178097d"
+        },
+        {
+          "label": "d9e5e9ac: Lowercase nameservers everywhere",
+          "url": "https://github.com/aoxborrow/dombot/commit/d9e5e9aced7c0542630bc9ebdc6ec154acd30ab0"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-11-03-a1b16055f791",
+      "date": "2026-11-03",
+      "layer": "core",
+      "title": "Core development history (2/2)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Ownership verification: ID setting, TXT records, market nameserver presets, Recheck",
+        "Dynadot activation wait checks the 401 status (registrar-client 0.13.0)"
+      ],
+      "links": [
+        {
+          "label": "a1b16055: Ownership verification: ID setting, TXT records, market nameserver presets, Recheck",
+          "url": "https://github.com/aoxborrow/dombot/commit/a1b16055f791cade9496d6005199c6e1ba22f998"
+        },
+        {
+          "label": "952e2115: Dynadot activation wait checks the 401 status (registrar-client 0.13.0)",
+          "url": "https://github.com/aoxborrow/dombot/commit/952e211581d07693c1947c67b33131c64b6b9b41"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-11-03-pr-148",
+      "date": "2026-11-03",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#148: Record real production import and allocation verification",
+        "#147: Allocate only when a valid import is submitted",
+        "#146: Record verified recovery of the unfinished allocation",
+        "#145: Recover the interrupted allocation without replacing its identity",
+        "#144: Record the verified listing/core production release",
+        "#143: Preserve legacy routing during directory rollout and qualify native runtime versions",
+        "#142: Suppress stale public terms and reconcile sales through explicit core evidence",
+        "#141: Prepare source-backed public offers from the existing Domains workflow"
+      ],
+      "links": [
+        {
+          "label": "Change #148",
+          "url": "https://github.com/heathermhuang/dombot/pull/148"
+        },
+        {
+          "label": "Change #147",
+          "url": "https://github.com/heathermhuang/dombot/pull/147"
+        },
+        {
+          "label": "Change #146",
+          "url": "https://github.com/heathermhuang/dombot/pull/146"
+        },
+        {
+          "label": "Change #145",
+          "url": "https://github.com/heathermhuang/dombot/pull/145"
+        },
+        {
+          "label": "Change #144",
+          "url": "https://github.com/heathermhuang/dombot/pull/144"
+        },
+        {
+          "label": "Change #143",
+          "url": "https://github.com/heathermhuang/dombot/pull/143"
+        },
+        {
+          "label": "Change #142",
+          "url": "https://github.com/heathermhuang/dombot/pull/142"
+        },
+        {
+          "label": "Change #141",
+          "url": "https://github.com/heathermhuang/dombot/pull/141"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-11-03-pr-140",
+      "date": "2026-11-03",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#140: Replace fleet discovery with reserved canonical routes and typed market offers",
+        "#139: Connect private public-page preparation to core market inventory"
+      ],
+      "links": [
+        {
+          "label": "Change #140",
+          "url": "https://github.com/heathermhuang/dombot/pull/140"
+        },
+        {
+          "label": "Change #139",
+          "url": "https://github.com/heathermhuang/dombot/pull/139"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-11-02-24e70dc2c9fc",
+      "date": "2026-11-02",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Header tabs: drop pills, then icons, so the bell always fits",
+        "Bump registrar-client to 0.12.1",
+        "Demo: a second sale waiting on the auth code, pasted in",
+        "Sales: step buttons right after the status",
+        "Docs: ownership verification picks a method while listing",
+        "Short windows and narrow tables: tighter spacing, one-row footer",
+        "Demo: show dev+<commit> instead of the last release's version",
+        "Sales: every sale step shows from the start; paste the auth code inline"
+      ],
+      "links": [
+        {
+          "label": "24e70dc2: Header tabs: drop pills, then icons, so the bell always fits",
+          "url": "https://github.com/aoxborrow/dombot/commit/24e70dc2c9fcd7d18b9ebd5fe2d1eac56d96a694"
+        },
+        {
+          "label": "fd46e4dc: Bump registrar-client to 0.12.1",
+          "url": "https://github.com/aoxborrow/dombot/commit/fd46e4dca2d7599f032acb36fdef15b50b26362b"
+        },
+        {
+          "label": "1bf41649: Demo: a second sale waiting on the auth code, pasted in",
+          "url": "https://github.com/aoxborrow/dombot/commit/1bf4164912f3cfedd390e5904525a38e90893041"
+        },
+        {
+          "label": "c07297c3: Sales: step buttons right after the status",
+          "url": "https://github.com/aoxborrow/dombot/commit/c07297c3c78dce4e7cc5c6db653895b258046863"
+        },
+        {
+          "label": "2b69766c: Docs: ownership verification picks a method while listing",
+          "url": "https://github.com/aoxborrow/dombot/commit/2b69766c9cf754e1274f6e9a4b99f28495054eb5"
+        },
+        {
+          "label": "8118402a: Short windows and narrow tables: tighter spacing, one-row footer",
+          "url": "https://github.com/aoxborrow/dombot/commit/8118402a8d1210f1b2b1b7a646484ee2ca445ef5"
+        },
+        {
+          "label": "9235b4e6: Demo: show dev+<commit> instead of the last release's version",
+          "url": "https://github.com/aoxborrow/dombot/commit/9235b4e6f4aa6c2143db328c9c2bc154ccb48085"
+        },
+        {
+          "label": "50fef35a: Sales: every sale step shows from the start; paste the auth code inline",
+          "url": "https://github.com/aoxborrow/dombot/commit/50fef35a4ab5c1308d0406ed95d9709ade45a6c8"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-11-01-pr-137",
+      "date": "2026-11-01",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#137: Merge full upstream DomBot: marketplaces, Listings, Sales and hosted parity",
+        "#136: Sync upstream renewal safety, account freshness and table controls",
+        "#135: Fence Dynadot recovery to the observed managed egress",
+        "#134: Persist Dynadot failed-request IP recovery and suppress rejected pricing",
+        "#133: Resolve inquiry email replies for qualified platform accounts",
+        "#132: Polish public portfolios and domain inquiry pages"
+      ],
+      "links": [
+        {
+          "label": "Change #137",
+          "url": "https://github.com/heathermhuang/dombot/pull/137"
+        },
+        {
+          "label": "Change #136",
+          "url": "https://github.com/heathermhuang/dombot/pull/136"
+        },
+        {
+          "label": "Change #135",
+          "url": "https://github.com/heathermhuang/dombot/pull/135"
+        },
+        {
+          "label": "Change #134",
+          "url": "https://github.com/heathermhuang/dombot/pull/134"
+        },
+        {
+          "label": "Change #133",
+          "url": "https://github.com/heathermhuang/dombot/pull/133"
+        },
+        {
+          "label": "Change #132",
+          "url": "https://github.com/heathermhuang/dombot/pull/132"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-31-1cc33720aef4",
+      "date": "2026-10-31",
+      "layer": "core",
+      "title": "Core development history (1/2)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Activity: the Change filter is Changes, with the Diff icon",
+        "Activity: Sales' column order, answers in Details",
+        "Same look for every empty state; no icons or detour buttons",
+        "Show Unlocking… only for Unlock's own write",
+        "Bell icons; Activity Needs review with inline answers, Mark dropped",
+        "Sales: Approve transfer when the registrar holds the buyer's request",
+        "Sales: Unlock and auth code steps inline on pending sales",
+        "Bump @vitest/mocker from 4.1.11 to 4.1.12 in the npm_and_yarn group across 1 directory"
+      ],
+      "links": [
+        {
+          "label": "1cc33720: Activity: the Change filter is Changes, with the Diff icon",
+          "url": "https://github.com/aoxborrow/dombot/commit/1cc33720aef42074f5c0a77a680d87661a54b560"
+        },
+        {
+          "label": "450e37ec: Activity: Sales' column order, answers in Details",
+          "url": "https://github.com/aoxborrow/dombot/commit/450e37ec508acc7d73629e66d038b2c23f256aa5"
+        },
+        {
+          "label": "0b5cf08b: Same look for every empty state; no icons or detour buttons",
+          "url": "https://github.com/aoxborrow/dombot/commit/0b5cf08b5717fa9bd4b49b4a34ccb1edb9e42768"
+        },
+        {
+          "label": "d3681c05: Show Unlocking… only for Unlock's own write",
+          "url": "https://github.com/aoxborrow/dombot/commit/d3681c05c254cfe37cb353332a5ec963396c659e"
+        },
+        {
+          "label": "d02f0bbe: Bell icons; Activity Needs review with inline answers, Mark dropped",
+          "url": "https://github.com/aoxborrow/dombot/commit/d02f0bbe6870862c8f7cd36fb3bb0894f1862488"
+        },
+        {
+          "label": "1dc81f2a: Sales: Approve transfer when the registrar holds the buyer's request",
+          "url": "https://github.com/aoxborrow/dombot/commit/1dc81f2a9e83900dd0332104feb7ef7815366928"
+        },
+        {
+          "label": "e948909b: Sales: Unlock and auth code steps inline on pending sales",
+          "url": "https://github.com/aoxborrow/dombot/commit/e948909bf3beedd0148a63d57ec18d8a6306f719"
+        },
+        {
+          "label": "b818d77a: Bump @vitest/mocker from 4.1.11 to 4.1.12 in the npm_and_yarn group across 1 directory",
+          "url": "https://github.com/aoxborrow/dombot/commit/b818d77afde9a2405e462eca475d79b3dd74c62a"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-31-9280c6bdb02d",
+      "date": "2026-10-31",
+      "layer": "core",
+      "title": "Core development history (2/2)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Toolbars: the switch moves up only when needed, a Filters button, one filter order",
+        "Sync covers market accounts; Settings gets Sync and Import/Export tabs",
+        "Stat cards: a middle icon size, numbers that fit, extra text whole or not at all",
+        "Sales tab, and Domains split into Owned, Listings and Archive"
+      ],
+      "links": [
+        {
+          "label": "9280c6bd: Toolbars: the switch moves up only when needed, a Filters button, one filter order",
+          "url": "https://github.com/aoxborrow/dombot/commit/9280c6bdb02d03b2ecc88031e9eebe6f621c7ff3"
+        },
+        {
+          "label": "2a642aef: Sync covers market accounts; Settings gets Sync and Import/Export tabs",
+          "url": "https://github.com/aoxborrow/dombot/commit/2a642aefa05252ffb497412110ed353c55a349ce"
+        },
+        {
+          "label": "715eef6f: Stat cards: a middle icon size, numbers that fit, extra text whole or not at all",
+          "url": "https://github.com/aoxborrow/dombot/commit/715eef6f5890cb073b2d3626776f49d5a723ad84"
+        },
+        {
+          "label": "288d9df9: Sales tab, and Domains split into Owned, Listings and Archive",
+          "url": "https://github.com/aoxborrow/dombot/commit/288d9df95d561728781d7cce861ce13b1e63f707"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-31-pr-131",
+      "date": "2026-10-31",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#131: Show exact linked prices in private publication previews",
+        "#130: Integrate explicit profile, inquiry-page and shop publishing",
+        "#129: Repair owned-domain pricing fallback and preserve quote provenance",
+        "#128: Recover exact owned Name.com renewal pricing for .in"
+      ],
+      "links": [
+        {
+          "label": "Change #131",
+          "url": "https://github.com/heathermhuang/dombot/pull/131"
+        },
+        {
+          "label": "Change #130",
+          "url": "https://github.com/heathermhuang/dombot/pull/130"
+        },
+        {
+          "label": "Change #129",
+          "url": "https://github.com/heathermhuang/dombot/pull/129"
+        },
+        {
+          "label": "Change #128",
+          "url": "https://github.com/heathermhuang/dombot/pull/128"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-30-750674d93755",
+      "date": "2026-10-30",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Activity: record every settings change as a Changed event",
+        "Owned and Archive: Archive holds only names you no longer have",
+        "Folders: count what the Domains table shows; a Folder filter in Archive",
+        "Tables: a clickable cell lights green as one button"
+      ],
+      "links": [
+        {
+          "label": "750674d9: Activity: record every settings change as a Changed event",
+          "url": "https://github.com/aoxborrow/dombot/commit/750674d93755cb82ec563cf3a683b59baf608aa0"
+        },
+        {
+          "label": "9e1235f4: Owned and Archive: Archive holds only names you no longer have",
+          "url": "https://github.com/aoxborrow/dombot/commit/9e1235f4f8b640e495ebbabf5c35ad3b96f19416"
+        },
+        {
+          "label": "3e3dd64b: Folders: count what the Domains table shows; a Folder filter in Archive",
+          "url": "https://github.com/aoxborrow/dombot/commit/3e3dd64b4ad25ea81f89d64f3f01b7f9fa3ce65c"
+        },
+        {
+          "label": "b1eac33f: Tables: a clickable cell lights green as one button",
+          "url": "https://github.com/aoxborrow/dombot/commit/b1eac33f2fb8d114ce2c822aca6708bfd9982ccd"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-30-pr-127",
+      "date": "2026-10-30",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#127: Keep all Dynadot renewal quotes current without an open browser"
+      ],
+      "links": [
+        {
+          "label": "Change #127",
+          "url": "https://github.com/heathermhuang/dombot/pull/127"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-29-8eb6590ab5a1",
+      "date": "2026-10-29",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Bump @hono/node-server from 2.1.1 to 2.1.5 in the npm_and_yarn group across 1 directory",
+        "Demo: the sale waiting on an auth code can send it",
+        "Market listing editor, Afternic account settings, and markets in the demo",
+        "Pricing filter: for sale, BIN price, min offer, floor",
+        "Stop asking Afternic for offer counts, and record the live API retest",
+        "Add marketplaces: Afternic, Sedo and Atom"
+      ],
+      "links": [
+        {
+          "label": "8eb6590a: Bump @hono/node-server from 2.1.1 to 2.1.5 in the npm_and_yarn group across 1 directory",
+          "url": "https://github.com/aoxborrow/dombot/commit/8eb6590ab5a1fd0d8f5ffaaa571f55d6f3111fdc"
+        },
+        {
+          "label": "407ed693: Demo: the sale waiting on an auth code can send it",
+          "url": "https://github.com/aoxborrow/dombot/commit/407ed6933d4bc85459bdb9d92cdbc3c9538b7524"
+        },
+        {
+          "label": "a44dd56d: Market listing editor, Afternic account settings, and markets in the demo",
+          "url": "https://github.com/aoxborrow/dombot/commit/a44dd56d25ea867ee87a33b98f2e1de172576cf6"
+        },
+        {
+          "label": "98b5cdcc: Pricing filter: for sale, BIN price, min offer, floor",
+          "url": "https://github.com/aoxborrow/dombot/commit/98b5cdcc7b252d803e09a82ad60e083d4f918b61"
+        },
+        {
+          "label": "4fb95154: Stop asking Afternic for offer counts, and record the live API retest",
+          "url": "https://github.com/aoxborrow/dombot/commit/4fb951544a2dad4099c5e30454841ab2b686b208"
+        },
+        {
+          "label": "0950630c: Add marketplaces: Afternic, Sedo and Atom",
+          "url": "https://github.com/aoxborrow/dombot/commit/0950630c6f5fce26e9a27c656cc9fb03de929d8a"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-29-pr-126",
+      "date": "2026-10-29",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#126: Reset Dynadot retry budgets after successful recovery",
+        "#125: Record live on-demand activation and reserve retirement custody",
+        "#124: Preserve hosted Namecheap IP guidance before provisioning",
+        "#123: Use WFP module content when recovering first-time provisioning",
+        "#122: Add gated on-demand provisioning for new portfolios"
+      ],
+      "links": [
+        {
+          "label": "Change #126",
+          "url": "https://github.com/heathermhuang/dombot/pull/126"
+        },
+        {
+          "label": "Change #125",
+          "url": "https://github.com/heathermhuang/dombot/pull/125"
+        },
+        {
+          "label": "Change #124",
+          "url": "https://github.com/heathermhuang/dombot/pull/124"
+        },
+        {
+          "label": "Change #123",
+          "url": "https://github.com/heathermhuang/dombot/pull/123"
+        },
+        {
+          "label": "Change #122",
+          "url": "https://github.com/heathermhuang/dombot/pull/122"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-28-3059a08155bc",
+      "date": "2026-10-28",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Persist bounded Dynadot inventory recovery across scheduled syncs",
+        "Handle new Dynadot key activation delays during account setup"
+      ],
+      "links": [
+        {
+          "label": "3059a081: Persist bounded Dynadot inventory recovery across scheduled syncs",
+          "url": "https://github.com/aoxborrow/dombot/commit/3059a08155bc24f1d550939a2e65b7b93778827a"
+        },
+        {
+          "label": "5b8e19c6: Handle new Dynadot key activation delays during account setup",
+          "url": "https://github.com/aoxborrow/dombot/commit/5b8e19c62d936e67a585153370310f7f508ef45e"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-28-pr-121",
+      "date": "2026-10-28",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#121: Fix mobile landing footer and explain core product features",
+        "#120: Serialize hosted Dynadot traffic across users and proxy routes",
+        "#119: Implement approved MCP-first landing design A",
+        "#118: Keep continuing Dynadot incidents stable across deployments",
+        "#117: Polish the landing page and clarify Domain inquiries previews",
+        "#116: Show MCP workflows on the domains.domains landing page",
+        "#115: Refresh the portfolio share address after domain activation",
+        "#114: Add verified custom domains for portfolio pages"
+      ],
+      "links": [
+        {
+          "label": "Change #121",
+          "url": "https://github.com/heathermhuang/dombot/pull/121"
+        },
+        {
+          "label": "Change #120",
+          "url": "https://github.com/heathermhuang/dombot/pull/120"
+        },
+        {
+          "label": "Change #119",
+          "url": "https://github.com/heathermhuang/dombot/pull/119"
+        },
+        {
+          "label": "Change #118",
+          "url": "https://github.com/heathermhuang/dombot/pull/118"
+        },
+        {
+          "label": "Change #117",
+          "url": "https://github.com/heathermhuang/dombot/pull/117"
+        },
+        {
+          "label": "Change #116",
+          "url": "https://github.com/heathermhuang/dombot/pull/116"
+        },
+        {
+          "label": "Change #115",
+          "url": "https://github.com/heathermhuang/dombot/pull/115"
+        },
+        {
+          "label": "Change #114",
+          "url": "https://github.com/heathermhuang/dombot/pull/114"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-28-pr-113",
+      "date": "2026-10-28",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#113: Keep public profile reads responsive during registrar and pricing work",
+        "#112: Retain safe Dynadot rejection diagnostics and serialize an approved alternate route",
+        "#111: Give public portfolios a short domains.domains/name address"
+      ],
+      "links": [
+        {
+          "label": "Change #113",
+          "url": "https://github.com/heathermhuang/dombot/pull/113"
+        },
+        {
+          "label": "Change #112",
+          "url": "https://github.com/heathermhuang/dombot/pull/112"
+        },
+        {
+          "label": "Change #111",
+          "url": "https://github.com/heathermhuang/dombot/pull/111"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-27-523818279dcc",
+      "date": "2026-10-27",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Update registrar-client to 0.10.0 (Gandi forwarding fixes, https mode)",
+        "Bump dependencies (supersedes Dependabot #189, #190)",
+        "Fix stale expiry dates after successful registrar sync",
+        "Settings: make secret reveal controls accessible by keyboard",
+        "Settings: retry failed registrar credential reads",
+        "Bump the npm_and_yarn group across 1 directory with 2 updates",
+        "Flag registrar accounts that haven't synced in a while"
+      ],
+      "links": [
+        {
+          "label": "52381827: Update registrar-client to 0.10.0 (Gandi forwarding fixes, https mode)",
+          "url": "https://github.com/aoxborrow/dombot/commit/523818279dccbc3eacc606ba696fe590086b80c8"
+        },
+        {
+          "label": "8007d394: Bump dependencies (supersedes Dependabot #189, #190)",
+          "url": "https://github.com/aoxborrow/dombot/commit/8007d39400bf9520ced4a23f49694459bfc91f9c"
+        },
+        {
+          "label": "58fa7774: Fix stale expiry dates after successful registrar sync",
+          "url": "https://github.com/aoxborrow/dombot/commit/58fa7774f06a8a25fd9edaafbeaccf2071863c8d"
+        },
+        {
+          "label": "d0c21a26: Settings: make secret reveal controls accessible by keyboard",
+          "url": "https://github.com/aoxborrow/dombot/commit/d0c21a26599d165ee4a1c991fba4507ffed6ff11"
+        },
+        {
+          "label": "cf3ee3b8: Settings: retry failed registrar credential reads",
+          "url": "https://github.com/aoxborrow/dombot/commit/cf3ee3b87bc0577124fbcbf0b7441d5e94aabe4c"
+        },
+        {
+          "label": "82da26ce: Bump the npm_and_yarn group across 1 directory with 2 updates",
+          "url": "https://github.com/aoxborrow/dombot/commit/82da26ce533a69cab0087307f4cb23a5c2ea1595"
+        },
+        {
+          "label": "056e9816: Flag registrar accounts that haven't synced in a while",
+          "url": "https://github.com/aoxborrow/dombot/commit/056e981629afe9e9327182dae021781ee9ab31a8"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-27-pr-110",
+      "date": "2026-10-27",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#110: Coordinate Dynadot traffic and persist bounded inventory recovery",
+        "#109: Fix email confirmation failing after a committed sign-in",
+        "#108: Add admin user domains and renewal costs; isolate monitor reads",
+        "#107: Show the managed domains.domains About page and deployed release",
+        "#106: Let empty portfolios sleep while preserving active maintenance",
+        "#105: Stop monitor-health email floods and group Dynadot failure alerts",
+        "#104: Monitor production Dynadot sync failures and email retained diagnostics",
+        "#103: Fix email onboarding and first registrar connection UX"
+      ],
+      "links": [
+        {
+          "label": "Change #110",
+          "url": "https://github.com/heathermhuang/dombot/pull/110"
+        },
+        {
+          "label": "Change #109",
+          "url": "https://github.com/heathermhuang/dombot/pull/109"
+        },
+        {
+          "label": "Change #108",
+          "url": "https://github.com/heathermhuang/dombot/pull/108"
+        },
+        {
+          "label": "Change #107",
+          "url": "https://github.com/heathermhuang/dombot/pull/107"
+        },
+        {
+          "label": "Change #106",
+          "url": "https://github.com/heathermhuang/dombot/pull/106"
+        },
+        {
+          "label": "Change #105",
+          "url": "https://github.com/heathermhuang/dombot/pull/105"
+        },
+        {
+          "label": "Change #104",
+          "url": "https://github.com/heathermhuang/dombot/pull/104"
+        },
+        {
+          "label": "Change #103",
+          "url": "https://github.com/heathermhuang/dombot/pull/103"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-27-pr-102",
+      "date": "2026-10-27",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#102: Prevent intermittent sync failures when the shared relay queue is temporarily full",
+        "#101: Keep admin tables readable and user links tappable on narrow screens",
+        "#100: Add restricted admin dashboard for system health and user holdings"
+      ],
+      "links": [
+        {
+          "label": "Change #102",
+          "url": "https://github.com/heathermhuang/dombot/pull/102"
+        },
+        {
+          "label": "Change #101",
+          "url": "https://github.com/heathermhuang/dombot/pull/101"
+        },
+        {
+          "label": "Change #100",
+          "url": "https://github.com/heathermhuang/dombot/pull/100"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-25-pr-99",
+      "date": "2026-10-25",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#99: Polish landing pages and account presentation",
+        "#98: Show varied portfolio previews and all supported registrar logos",
+        "#97: Lead customer-facing SaaS copy and previews with domains.domains",
+        "#96: Polish the managed SaaS interface and account screens",
+        "#95: Fix stale expiry dates after successful registrar sync",
+        "#94: Fix mobile inventory selection and Activity readability",
+        "#93: Fix renewal-pricing cooldown and tablet inquiry challenge overflow"
+      ],
+      "links": [
+        {
+          "label": "Change #99",
+          "url": "https://github.com/heathermhuang/dombot/pull/99"
+        },
+        {
+          "label": "Change #98",
+          "url": "https://github.com/heathermhuang/dombot/pull/98"
+        },
+        {
+          "label": "Change #97",
+          "url": "https://github.com/heathermhuang/dombot/pull/97"
+        },
+        {
+          "label": "Change #96",
+          "url": "https://github.com/heathermhuang/dombot/pull/96"
+        },
+        {
+          "label": "Change #95",
+          "url": "https://github.com/heathermhuang/dombot/pull/95"
+        },
+        {
+          "label": "Change #94",
+          "url": "https://github.com/heathermhuang/dombot/pull/94"
+        },
+        {
+          "label": "Change #93",
+          "url": "https://github.com/heathermhuang/dombot/pull/93"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-24-pr-92",
+      "date": "2026-10-24",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#92: Finish passkey naming and remaining UI review gaps",
+        "#91: Fix publication removal and unify responsive hosted UI",
+        "#90: Keep Namecheap and Dynadot on managed fixed-IP egress during proxy cutover",
+        "#89: Use direct droplet egress for the managed registrar route",
+        "#88: Coordinate shared proxy traffic through a fixed-source relay"
+      ],
+      "links": [
+        {
+          "label": "Change #92",
+          "url": "https://github.com/heathermhuang/dombot/pull/92"
+        },
+        {
+          "label": "Change #91",
+          "url": "https://github.com/heathermhuang/dombot/pull/91"
+        },
+        {
+          "label": "Change #90",
+          "url": "https://github.com/heathermhuang/dombot/pull/90"
+        },
+        {
+          "label": "Change #89",
+          "url": "https://github.com/heathermhuang/dombot/pull/89"
+        },
+        {
+          "label": "Change #88",
+          "url": "https://github.com/heathermhuang/dombot/pull/88"
+        }
+      ]
+    },
+    {
+      "id": "saas-desktop-1-5-2",
+      "date": "2026-10-23",
+      "layer": "saas",
+      "title": "Maintained fork desktop 1.5.2",
+      "status": "Published fork desktop release · Separate from SaaS deployment",
+      "changes": [
+        "Moves fork desktop update discovery and downloads to the maintained fork release channel.",
+        "Older desktop builds require a one-time manual update; macOS and Linux retain their documented manual-download limitations."
+      ],
+      "links": [
+        {
+          "label": "Fork release v1.5.2",
+          "url": "https://github.com/heathermhuang/dombot/releases/tag/v1.5.2"
+        }
+      ]
+    },
+    {
+      "id": "saas-desktop-1-5-1",
+      "date": "2026-10-23",
+      "layer": "saas",
+      "title": "Maintained fork desktop 1.5.1",
+      "status": "Published fork desktop release · Separate from SaaS deployment",
+      "changes": [
+        "Publishes the maintained fork as a desktop release, including the accumulated hosted-source changes and security repairs.",
+        "This is a fork desktop package release, not evidence that every included source change was deployed to managed portfolios."
+      ],
+      "links": [
+        {
+          "label": "Fork release v1.5.1",
+          "url": "https://github.com/heathermhuang/dombot/releases/tag/v1.5.1"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-23-pr-87",
+      "date": "2026-10-23",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#87: Route desktop updates to fork security releases",
+        "#86: Retire self-host roots before rotation and bound registrar retries",
+        "#85: Require HTTPS staging origins before deployment",
+        "#84: Enforce MCP scopes and harden bulk exports, input bounds, and desktop navigation",
+        "#83: Validate registrar path inputs and quote forwarding expressions",
+        "#82: Pin dispatcher fairness regression to its lease window",
+        "#81: Validate release tags before outputs and remove shell interpolation",
+        "#80: Require fresh authentication for bulk results and domain deletion"
+      ],
+      "links": [
+        {
+          "label": "Change #87",
+          "url": "https://github.com/heathermhuang/dombot/pull/87"
+        },
+        {
+          "label": "Change #86",
+          "url": "https://github.com/heathermhuang/dombot/pull/86"
+        },
+        {
+          "label": "Change #85",
+          "url": "https://github.com/heathermhuang/dombot/pull/85"
+        },
+        {
+          "label": "Change #84",
+          "url": "https://github.com/heathermhuang/dombot/pull/84"
+        },
+        {
+          "label": "Change #83",
+          "url": "https://github.com/heathermhuang/dombot/pull/83"
+        },
+        {
+          "label": "Change #82",
+          "url": "https://github.com/heathermhuang/dombot/pull/82"
+        },
+        {
+          "label": "Change #81",
+          "url": "https://github.com/heathermhuang/dombot/pull/81"
+        },
+        {
+          "label": "Change #80",
+          "url": "https://github.com/heathermhuang/dombot/pull/80"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-23-pr-79",
+      "date": "2026-10-23",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#79: Reject incomplete backups before replacing existing inquiry data",
+        "#78: Revoke shared MCP grants and pending codes on password recovery"
+      ],
+      "links": [
+        {
+          "label": "Change #79",
+          "url": "https://github.com/heathermhuang/dombot/pull/79"
+        },
+        {
+          "label": "Change #78",
+          "url": "https://github.com/heathermhuang/dombot/pull/78"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-22-pr-77",
+      "date": "2026-10-22",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#77: Update conference operations for public signup and shared MCP"
+      ],
+      "links": [
+        {
+          "label": "Change #77",
+          "url": "https://github.com/heathermhuang/dombot/pull/77"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-21-pr-76",
+      "date": "2026-10-21",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#76: Preserve proxy refusal details in sync errors",
+        "#75: Add one authenticated MCP endpoint for SaaS accounts",
+        "#74: Restore reliable hosted inventory, publishing and inquiry UX",
+        "#73: Provide the managed fixed-IP default for hosted Namecheap",
+        "#72: Polish conference onboarding, code recovery and private imports"
+      ],
+      "links": [
+        {
+          "label": "Change #76",
+          "url": "https://github.com/heathermhuang/dombot/pull/76"
+        },
+        {
+          "label": "Change #75",
+          "url": "https://github.com/heathermhuang/dombot/pull/75"
+        },
+        {
+          "label": "Change #74",
+          "url": "https://github.com/heathermhuang/dombot/pull/74"
+        },
+        {
+          "label": "Change #73",
+          "url": "https://github.com/heathermhuang/dombot/pull/73"
+        },
+        {
+          "label": "Change #72",
+          "url": "https://github.com/heathermhuang/dombot/pull/72"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-20-pr-71",
+      "date": "2026-10-20",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#71: Stabilize the 500-attendee throttle regression",
+        "#70: Fix imported collection onboarding and runtime provenance",
+        "#69: Scale qualified signup capacity with Workers for Platforms",
+        "#68: Cap conference email spend and support a 500-attendee burst",
+        "#67: Fix conference onboarding, draft retention and Shop review"
+      ],
+      "links": [
+        {
+          "label": "Change #71",
+          "url": "https://github.com/heathermhuang/dombot/pull/71"
+        },
+        {
+          "label": "Change #70",
+          "url": "https://github.com/heathermhuang/dombot/pull/70"
+        },
+        {
+          "label": "Change #69",
+          "url": "https://github.com/heathermhuang/dombot/pull/69"
+        },
+        {
+          "label": "Change #68",
+          "url": "https://github.com/heathermhuang/dombot/pull/68"
+        },
+        {
+          "label": "Change #67",
+          "url": "https://github.com/heathermhuang/dombot/pull/67"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-19-pr-66",
+      "date": "2026-10-19",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#66: Handle Gmail plus-address replies and structured mail quotes",
+        "#65: Allow bounded clock skew in inquiry DNS verification",
+        "#64: Prepare production domain inquiry verification and delivery",
+        "#63: Trim quoted email history without prefix markers",
+        "#62: Trim quoted Gmail HTML from recorded replies",
+        "#61: Record normal email replies in domain conversations",
+        "#60: Keep long domain headings readable and copyable",
+        "#59: Improve inquiry flow and send complete reply-ready emails"
+      ],
+      "links": [
+        {
+          "label": "Change #66",
+          "url": "https://github.com/heathermhuang/dombot/pull/66"
+        },
+        {
+          "label": "Change #65",
+          "url": "https://github.com/heathermhuang/dombot/pull/65"
+        },
+        {
+          "label": "Change #64",
+          "url": "https://github.com/heathermhuang/dombot/pull/64"
+        },
+        {
+          "label": "Change #63",
+          "url": "https://github.com/heathermhuang/dombot/pull/63"
+        },
+        {
+          "label": "Change #62",
+          "url": "https://github.com/heathermhuang/dombot/pull/62"
+        },
+        {
+          "label": "Change #61",
+          "url": "https://github.com/heathermhuang/dombot/pull/61"
+        },
+        {
+          "label": "Change #60",
+          "url": "https://github.com/heathermhuang/dombot/pull/60"
+        },
+        {
+          "label": "Change #59",
+          "url": "https://github.com/heathermhuang/dombot/pull/59"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-19-pr-58",
+      "date": "2026-10-19",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#58: Record completed managed Sales pilot qualification",
+        "#57: Fix native fetch receiver during Sales hostname activation",
+        "#56: Fix Workers redirect mode in Sales hostname setup",
+        "#55: Include private collection imports in Sales inventory",
+        "#54: Enable managed Sales pilot with approved buyer privacy",
+        "#53: Record Sales fleet rollout and mail qualification"
+      ],
+      "links": [
+        {
+          "label": "Change #58",
+          "url": "https://github.com/heathermhuang/dombot/pull/58"
+        },
+        {
+          "label": "Change #57",
+          "url": "https://github.com/heathermhuang/dombot/pull/57"
+        },
+        {
+          "label": "Change #56",
+          "url": "https://github.com/heathermhuang/dombot/pull/56"
+        },
+        {
+          "label": "Change #55",
+          "url": "https://github.com/heathermhuang/dombot/pull/55"
+        },
+        {
+          "label": "Change #54",
+          "url": "https://github.com/heathermhuang/dombot/pull/54"
+        },
+        {
+          "label": "Change #53",
+          "url": "https://github.com/heathermhuang/dombot/pull/53"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-18-pr-52",
+      "date": "2026-10-18",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#52: Include imported holdings in private Sales drafts",
+        "#51: Add gated domain sales workspace, inquiries and lander routing",
+        "#50: Preserve preview and review intent in legacy site bookmarks",
+        "#49: Add optional owner sites and curated collections",
+        "#48: Make accounts email-first with magic links, codes and passkeys",
+        "#47: Use the approved aoxborrow/dombot attribution",
+        "#46: Clarify original DomBot authorship and hosted SaaS attribution",
+        "#45: Use domains.domains as the public brand"
+      ],
+      "links": [
+        {
+          "label": "Change #52",
+          "url": "https://github.com/heathermhuang/dombot/pull/52"
+        },
+        {
+          "label": "Change #51",
+          "url": "https://github.com/heathermhuang/dombot/pull/51"
+        },
+        {
+          "label": "Change #50",
+          "url": "https://github.com/heathermhuang/dombot/pull/50"
+        },
+        {
+          "label": "Change #49",
+          "url": "https://github.com/heathermhuang/dombot/pull/49"
+        },
+        {
+          "label": "Change #48",
+          "url": "https://github.com/heathermhuang/dombot/pull/48"
+        },
+        {
+          "label": "Change #47",
+          "url": "https://github.com/heathermhuang/dombot/pull/47"
+        },
+        {
+          "label": "Change #46",
+          "url": "https://github.com/heathermhuang/dombot/pull/46"
+        },
+        {
+          "label": "Change #45",
+          "url": "https://github.com/heathermhuang/dombot/pull/45"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-18-pr-44",
+      "date": "2026-10-18",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#44: Show DomBot product previews and make the landing page actionable"
+      ],
+      "links": [
+        {
+          "label": "Change #44",
+          "url": "https://github.com/heathermhuang/dombot/pull/44"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-17-pr-43",
+      "date": "2026-10-17",
+      "layer": "saas",
+      "title": "SaaS change history (1/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#43: Explain hosted DomBot and how to start managing domains",
+        "#42: Credit DomBot and expose the open-source SaaS layer clearly",
+        "#41: Publish Magic Crystal Limited policies for public registration",
+        "#40: Use account wording and prepare verified public registration",
+        "#39: Remove rejected monogram and rebuild the domains.domains landing page",
+        "#38: Complete portfolio asset independence and bound quota integration timing",
+        "#37: Prevent unauthenticated cross-source exhaustion of agent quotas",
+        "#36: Enforce bounded free-service access and workspace lifecycle"
+      ],
+      "links": [
+        {
+          "label": "Change #43",
+          "url": "https://github.com/heathermhuang/dombot/pull/43"
+        },
+        {
+          "label": "Change #42",
+          "url": "https://github.com/heathermhuang/dombot/pull/42"
+        },
+        {
+          "label": "Change #41",
+          "url": "https://github.com/heathermhuang/dombot/pull/41"
+        },
+        {
+          "label": "Change #40",
+          "url": "https://github.com/heathermhuang/dombot/pull/40"
+        },
+        {
+          "label": "Change #39",
+          "url": "https://github.com/heathermhuang/dombot/pull/39"
+        },
+        {
+          "label": "Change #38",
+          "url": "https://github.com/heathermhuang/dombot/pull/38"
+        },
+        {
+          "label": "Change #37",
+          "url": "https://github.com/heathermhuang/dombot/pull/37"
+        },
+        {
+          "label": "Change #36",
+          "url": "https://github.com/heathermhuang/dombot/pull/36"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-17-pr-35",
+      "date": "2026-10-17",
+      "layer": "saas",
+      "title": "SaaS change history (2/2)",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#35: Preserve legacy backend while serving shared portfolio links",
+        "#32: Add conference logo and free managed early access",
+        "#34: Preserve portfolio at alternative.domains and reconcile free-access branding",
+        "#33: Harden tenant sessions and account recovery UX"
+      ],
+      "links": [
+        {
+          "label": "Change #35",
+          "url": "https://github.com/heathermhuang/dombot/pull/35"
+        },
+        {
+          "label": "Change #32",
+          "url": "https://github.com/heathermhuang/dombot/pull/32"
+        },
+        {
+          "label": "Change #34",
+          "url": "https://github.com/heathermhuang/dombot/pull/34"
+        },
+        {
+          "label": "Change #33",
+          "url": "https://github.com/heathermhuang/dombot/pull/33"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-15-pr-31",
+      "date": "2026-10-15",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#31: Deploy session revocation and authenticated desktop MCP on current main",
+        "#30: Revoke signed-out sessions and authenticate desktop MCP traffic (historical release branch)",
+        "#29: Remove inline SVG sanitization and verify engine logo source",
+        "#28: Fix intermittent coordinator 403 from gateway clock skew",
+        "#27: Add pinned CodeQL app and Actions security scans",
+        "#26: Fix Dynadot renewal quote terms and harden dependency diagnostics",
+        "#25: Fix imported inventory, mobile controls, and large backup recovery",
+        "#24: Isolate managed DomBot workspaces and add operator account operations"
+      ],
+      "links": [
+        {
+          "label": "Change #31",
+          "url": "https://github.com/heathermhuang/dombot/pull/31"
+        },
+        {
+          "label": "Change #30",
+          "url": "https://github.com/heathermhuang/dombot/pull/30"
+        },
+        {
+          "label": "Change #29",
+          "url": "https://github.com/heathermhuang/dombot/pull/29"
+        },
+        {
+          "label": "Change #28",
+          "url": "https://github.com/heathermhuang/dombot/pull/28"
+        },
+        {
+          "label": "Change #27",
+          "url": "https://github.com/heathermhuang/dombot/pull/27"
+        },
+        {
+          "label": "Change #26",
+          "url": "https://github.com/heathermhuang/dombot/pull/26"
+        },
+        {
+          "label": "Change #25",
+          "url": "https://github.com/heathermhuang/dombot/pull/25"
+        },
+        {
+          "label": "Change #24",
+          "url": "https://github.com/heathermhuang/dombot/pull/24"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-14-pr-23",
+      "date": "2026-10-14",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#23: Finish Worker queue cleanup after client disconnects",
+        "#22: Recover queued Worker reads after initialization failure",
+        "#21: Prevent stalled portfolio reads from leaving an endless skeleton"
+      ],
+      "links": [
+        {
+          "label": "Change #23",
+          "url": "https://github.com/heathermhuang/dombot/pull/23"
+        },
+        {
+          "label": "Change #22",
+          "url": "https://github.com/heathermhuang/dombot/pull/22"
+        },
+        {
+          "label": "Change #21",
+          "url": "https://github.com/heathermhuang/dombot/pull/21"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-12-3c3831cefae7",
+      "date": "2026-10-12",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Choose and reorder columns on Active and Archive",
+        "Prettier: format the stragglers and ignore what isn't ours to format",
+        "Filter the Domains table by a date range"
+      ],
+      "links": [
+        {
+          "label": "3c3831ce: Choose and reorder columns on Active and Archive",
+          "url": "https://github.com/aoxborrow/dombot/commit/3c3831cefae70e750bc566bcecb52c2d12ce37ad"
+        },
+        {
+          "label": "c232f241: Prettier: format the stragglers and ignore what isn't ours to format",
+          "url": "https://github.com/aoxborrow/dombot/commit/c232f2415ad135dcc7e524f7c281de0e29c6b5c1"
+        },
+        {
+          "label": "08ce3e06: Filter the Domains table by a date range",
+          "url": "https://github.com/aoxborrow/dombot/commit/08ce3e061805245f0dd9dcee4ee82f04ea1abaf2"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-12-pr-20",
+      "date": "2026-10-12",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": ["#20: Sync upstream v1.5.0 into hosted release"],
+      "links": [
+        {
+          "label": "Change #20",
+          "url": "https://github.com/heathermhuang/dombot/pull/20"
+        }
+      ]
+    },
+    {
+      "id": "core-1-5-0",
+      "date": "2026-10-09",
+      "layer": "core",
+      "title": "DomBot 1.5.0",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "Imports domains from CSVs or pasted lists with a preview before saving, and tracks purchases, disposals, notes and asking prices.",
+        "Adds Activity review, notifications, expanded MCP tools and 101domain support.",
+        "Improves Namecheap account/premium renewal estimates, currency preferences, table selection and mobile controls."
+      ],
+      "links": [
+        {
+          "label": "Upstream release v1.5.0",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.5.0"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-09-feef729a1758",
+      "date": "2026-10-09",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "About: show Release notes even when up to date",
+        "site: v1.5.0 download links",
+        "Release 1.5.0",
+        "Updates: bell notification, desktop update-on-click, Settings → About, releases.json",
+        "Drop registrar rows without a domain name",
+        "Imported domains: rename manual domains everywhere",
+        "Self-hosting: recommend fork + dashboard; fix Deploy-button update docs",
+        "Import: drop the Dan export format"
+      ],
+      "links": [
+        {
+          "label": "feef729a: About: show Release notes even when up to date",
+          "url": "https://github.com/aoxborrow/dombot/commit/feef729a1758c1ff667ce3b78d03a13ec3d6573b"
+        },
+        {
+          "label": "21d7ff16: site: v1.5.0 download links",
+          "url": "https://github.com/aoxborrow/dombot/commit/21d7ff162afed7e405ca331e61628c9f0703b219"
+        },
+        {
+          "label": "bc206bf8: Release 1.5.0",
+          "url": "https://github.com/aoxborrow/dombot/commit/bc206bf82f83918a1405e786395d131471cc7690"
+        },
+        {
+          "label": "96af1b8c: Updates: bell notification, desktop update-on-click, Settings → About, releases.json",
+          "url": "https://github.com/aoxborrow/dombot/commit/96af1b8ca725e435378974eb77cab587b93790f9"
+        },
+        {
+          "label": "9d6368a5: Drop registrar rows without a domain name",
+          "url": "https://github.com/aoxborrow/dombot/commit/9d6368a5c6d01fa066941e0250196b27faa43220"
+        },
+        {
+          "label": "4a34e511: Imported domains: rename manual domains everywhere",
+          "url": "https://github.com/aoxborrow/dombot/commit/4a34e511b1c1f1f9a5d9c670d2394a87f817e0f4"
+        },
+        {
+          "label": "ec42f756: Self-hosting: recommend fork + dashboard; fix Deploy-button update docs",
+          "url": "https://github.com/aoxborrow/dombot/commit/ec42f75630791a8faa141cc52af237efb8b20ebc"
+        },
+        {
+          "label": "f98cda03: Import: drop the Dan export format",
+          "url": "https://github.com/aoxborrow/dombot/commit/f98cda03da0454021b1424c097bf6cbd78a07390"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-07-acffe4278747",
+      "date": "2026-10-07",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Domain rows: a real source marker",
+        "Make the demo's data export re-importable",
+        "MCP: Owned / Archive on portfolio_query",
+        "Archive RDAP unknowns, and manual-name wording in Activity",
+        "Registrars: compact account card header with an actions menu",
+        "Bump @modelcontextprotocol/sdk from 1.30.0 to 1.31.0 in the npm_and_yarn group across 1 directory",
+        "Add 101domain support",
+        "Namecheap: price premium renewals per name"
+      ],
+      "links": [
+        {
+          "label": "acffe427: Domain rows: a real source marker",
+          "url": "https://github.com/aoxborrow/dombot/commit/acffe4278747c1cf01c3f29b7d16ed308f21bfdb"
+        },
+        {
+          "label": "79909a26: Make the demo's data export re-importable",
+          "url": "https://github.com/aoxborrow/dombot/commit/79909a269df64f759e68ed5d3842830ef7bdaf8b"
+        },
+        {
+          "label": "5a0e3149: MCP: Owned / Archive on portfolio_query",
+          "url": "https://github.com/aoxborrow/dombot/commit/5a0e3149ea6b9b08cf8c19d89f2e96fde18c119d"
+        },
+        {
+          "label": "db26a98c: Archive RDAP unknowns, and manual-name wording in Activity",
+          "url": "https://github.com/aoxborrow/dombot/commit/db26a98c8f9a1bd576949cb14aea346330e75fca"
+        },
+        {
+          "label": "76372ad4: Registrars: compact account card header with an actions menu",
+          "url": "https://github.com/aoxborrow/dombot/commit/76372ad4d974ab2f066d7508fe9af30c1324118b"
+        },
+        {
+          "label": "03232c70: Bump @modelcontextprotocol/sdk from 1.30.0 to 1.31.0 in the npm_and_yarn group across 1 directory",
+          "url": "https://github.com/aoxborrow/dombot/commit/03232c705783710080d1de9efb3c584aeedf3e0e"
+        },
+        {
+          "label": "c9e105b2: Add 101domain support",
+          "url": "https://github.com/aoxborrow/dombot/commit/c9e105b261e266af176ad747052a63aef639379b"
+        },
+        {
+          "label": "dcd53454: Namecheap: price premium renewals per name",
+          "url": "https://github.com/aoxborrow/dombot/commit/dcd53454b66ff4f865ee85351dc5b6c1c3f823e7"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-06-90b6af59e605",
+      "date": "2026-10-06",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Namecheap: use the account's own TLD pricing for renewal estimates",
+        "Bump the npm_and_yarn group across 1 directory with 5 updates"
+      ],
+      "links": [
+        {
+          "label": "90b6af59: Namecheap: use the account's own TLD pricing for renewal estimates",
+          "url": "https://github.com/aoxborrow/dombot/commit/90b6af59e605faa1a67272deca1f638e51f02352"
+        },
+        {
+          "label": "da5c4e93: Bump the npm_and_yarn group across 1 directory with 5 updates",
+          "url": "https://github.com/aoxborrow/dombot/commit/da5c4e93ae57291e130e7efdf89031ed527cc0f2"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-06-pr-18",
+      "date": "2026-10-06",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#18: Continue renewal pricing when another browser tab is selected",
+        "#17: Finish hosted inventory Sync before background renewal pricing",
+        "#16: Fix repeated Dynadot Sync rate-limit failures"
+      ],
+      "links": [
+        {
+          "label": "Change #18",
+          "url": "https://github.com/heathermhuang/dombot/pull/18"
+        },
+        {
+          "label": "Change #17",
+          "url": "https://github.com/heathermhuang/dombot/pull/17"
+        },
+        {
+          "label": "Change #16",
+          "url": "https://github.com/heathermhuang/dombot/pull/16"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-05-ba25106509e5",
+      "date": "2026-10-05",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Docs: delete finished plans, trim the rest to current reference",
+        "Domains header: Active/Archive, quieter counts, no subtitle",
+        "Demo: no sync cooldown after the boot sync",
+        "Tables: no column rule on the outer cells"
+      ],
+      "links": [
+        {
+          "label": "ba251065: Docs: delete finished plans, trim the rest to current reference",
+          "url": "https://github.com/aoxborrow/dombot/commit/ba25106509e55a6e5faebc1bcc98ae53fafc5d66"
+        },
+        {
+          "label": "a704c1f0: Domains header: Active/Archive, quieter counts, no subtitle",
+          "url": "https://github.com/aoxborrow/dombot/commit/a704c1f0f119e4c81a955b06dd1b2b607951d3ef"
+        },
+        {
+          "label": "6574202b: Demo: no sync cooldown after the boot sync",
+          "url": "https://github.com/aoxborrow/dombot/commit/6574202b076046091e625581a821c8ee19d2c7e9"
+        },
+        {
+          "label": "b262d914: Tables: no column rule on the outer cells",
+          "url": "https://github.com/aoxborrow/dombot/commit/b262d9147f0755401440147604f0bc46e2f66878"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-10-04-pr-15",
+      "date": "2026-10-04",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": ["#15: Show expiration and status in phone inventory"],
+      "links": [
+        {
+          "label": "Change #15",
+          "url": "https://github.com/heathermhuang/dombot/pull/15"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-03-b89784d174c6",
+      "date": "2026-10-03",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Domains: one Sync split button for sync, import and export",
+        "Domains: filter bar with Add filter and filter chips",
+        "Domain import and export, asking prices, and renewal prices in any currency"
+      ],
+      "links": [
+        {
+          "label": "b89784d1: Domains: one Sync split button for sync, import and export",
+          "url": "https://github.com/aoxborrow/dombot/commit/b89784d174c63a9a46f9cddbcffa0d46a7c0f90b"
+        },
+        {
+          "label": "71741459: Domains: filter bar with Add filter and filter chips",
+          "url": "https://github.com/aoxborrow/dombot/commit/717414597252ecedd18943494d28a486fdc26903"
+        },
+        {
+          "label": "2865298d: Domain import and export, asking prices, and renewal prices in any currency",
+          "url": "https://github.com/aoxborrow/dombot/commit/2865298df7033a1af77c525e0ceb19b74bb8e4dd"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-10-02-3bf0a67e05d0",
+      "date": "2026-10-02",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Map RDAP registrars to formatted names by IANA ID",
+        "Tables and Settings polish: registrar logos, notes beside the row menu, density switch, settings fields",
+        "Bump undici from 7.29.0 to 7.29.1 in the npm_and_yarn group across 1 directory",
+        "Bump fast-uri from 3.1.6 to 3.1.8 in the npm_and_yarn group across 1 directory",
+        "UI polish: status-bar sync, centered header, Activity rows and menus, notes editor"
+      ],
+      "links": [
+        {
+          "label": "3bf0a67e: Map RDAP registrars to formatted names by IANA ID",
+          "url": "https://github.com/aoxborrow/dombot/commit/3bf0a67e05d012c897831495c348044004ecba59"
+        },
+        {
+          "label": "f92b7da5: Tables and Settings polish: registrar logos, notes beside the row menu, density switch, settings fields",
+          "url": "https://github.com/aoxborrow/dombot/commit/f92b7da5628c3126a2b0598fb1c79140ffa9b5d0"
+        },
+        {
+          "label": "d026c0e1: Bump undici from 7.29.0 to 7.29.1 in the npm_and_yarn group across 1 directory",
+          "url": "https://github.com/aoxborrow/dombot/commit/d026c0e11f837219d867381a1b7e2e9c48da236f"
+        },
+        {
+          "label": "3992728f: Bump fast-uri from 3.1.6 to 3.1.8 in the npm_and_yarn group across 1 directory",
+          "url": "https://github.com/aoxborrow/dombot/commit/3992728f0380c56c520befcf05c9808ee7c5bab7"
+        },
+        {
+          "label": "a51532dd: UI polish: status-bar sync, centered header, Activity rows and menus, notes editor",
+          "url": "https://github.com/aoxborrow/dombot/commit/a51532ddaea7dc8dc703f8753e5a46eda51eb9a0"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-28-pr-14",
+      "date": "2026-09-28",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#14: Sync upstream domain history and activity into hosted release"
+      ],
+      "links": [
+        {
+          "label": "Change #14",
+          "url": "https://github.com/heathermhuang/dombot/pull/14"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-27-3f279bf8ca11",
+      "date": "2026-09-27",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Bell: a compact list of what needs you, no actions",
+        "Tabs: singular domain count in the Domains pill tooltip",
+        "Tabbed header: browser-style tab strip with metric pills"
+      ],
+      "links": [
+        {
+          "label": "3f279bf8: Bell: a compact list of what needs you, no actions",
+          "url": "https://github.com/aoxborrow/dombot/commit/3f279bf8ca11a1ac895acc4e4fc8f83d4a4790e7"
+        },
+        {
+          "label": "a5fe2188: Tabs: singular domain count in the Domains pill tooltip",
+          "url": "https://github.com/aoxborrow/dombot/commit/a5fe218869d6cc423162eba401e30fb4c364a827"
+        },
+        {
+          "label": "1b7f392f: Tabbed header: browser-style tab strip with metric pills",
+          "url": "https://github.com/aoxborrow/dombot/commit/1b7f392f56b2d20d93088ddd4bf8eaa914b195cd"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-26-e7d427077c85",
+      "date": "2026-09-26",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Add remote sync design doc",
+        "Keep the domain table header and page bar on screen",
+        "Storage model: clearer namespace names, name-keyed folders and prices, migration",
+        "Checkbox focus ring: thinner and brighter"
+      ],
+      "links": [
+        {
+          "label": "e7d42707: Add remote sync design doc",
+          "url": "https://github.com/aoxborrow/dombot/commit/e7d427077c858a8eac843b9d2b47c2701a86ce7f"
+        },
+        {
+          "label": "45dfa7d2: Keep the domain table header and page bar on screen",
+          "url": "https://github.com/aoxborrow/dombot/commit/45dfa7d2fff6fc920994ac58525efbca30707756"
+        },
+        {
+          "label": "4195e580: Storage model: clearer namespace names, name-keyed folders and prices, migration",
+          "url": "https://github.com/aoxborrow/dombot/commit/4195e5806eedc482a77d7a8cfd0b5c9e3ee46da5"
+        },
+        {
+          "label": "b691a33e: Checkbox focus ring: thinner and brighter",
+          "url": "https://github.com/aoxborrow/dombot/commit/b691a33eeb69efc8c3a43d4e7f50add17073b754"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-25-ac941cd5b03f",
+      "date": "2026-09-25",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": ["Select a range of domains with shift-click"],
+      "links": [
+        {
+          "label": "ac941cd5: Select a range of domains with shift-click",
+          "url": "https://github.com/aoxborrow/dombot/commit/ac941cd5b03fd70b80d07b7f8e3aa55d039f3cb0"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-23-pr-12",
+      "date": "2026-09-23",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": ["#12: Sync upstream v1.4.0 into hosted release"],
+      "links": [
+        {
+          "label": "Change #12",
+          "url": "https://github.com/heathermhuang/dombot/pull/12"
+        }
+      ]
+    },
+    {
+      "id": "core-1-4-0",
+      "date": "2026-09-18",
+      "layer": "core",
+      "title": "DomBot 1.4.0",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "Adds light, automatic and dark themes, a shared green palette and per-device table preferences.",
+        "Improves domain links, expiry/lifecycle indicators, mobile navigation and renewal-spend charts."
+      ],
+      "links": [
+        {
+          "label": "Upstream release v1.4.0",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.4.0"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-18-c177cbccf77f",
+      "date": "2026-09-18",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Site: header CTAs + GitHub icon, proper footer",
+        "Demo site: favicon, title and sharing-card metadata",
+        "site: v1.4.0 download links",
+        "Release v1.4.0",
+        "Renewals: fix month-label wrap, add Spend by TLD donut",
+        "Light mode polish, General preferences, brand palette"
+      ],
+      "links": [
+        {
+          "label": "c177cbcc: Site: header CTAs + GitHub icon, proper footer",
+          "url": "https://github.com/aoxborrow/dombot/commit/c177cbccf77f72b8ef62ff7654e9db9ea7a2c3d1"
+        },
+        {
+          "label": "e3e94c4b: Demo site: favicon, title and sharing-card metadata",
+          "url": "https://github.com/aoxborrow/dombot/commit/e3e94c4be3448baf173d16d2c9b6284e4ee5873f"
+        },
+        {
+          "label": "04c1d67b: site: v1.4.0 download links",
+          "url": "https://github.com/aoxborrow/dombot/commit/04c1d67bf7a1baa18c835ea8d4b5b8e101a8496a"
+        },
+        {
+          "label": "1b59fcf0: Release v1.4.0",
+          "url": "https://github.com/aoxborrow/dombot/commit/1b59fcf0b6a1a094f7a9bc2f78224773780931d4"
+        },
+        {
+          "label": "809a9c15: Renewals: fix month-label wrap, add Spend by TLD donut",
+          "url": "https://github.com/aoxborrow/dombot/commit/809a9c15fbe9c1c2eb92c9bc1c0f47ae2ab0a05e"
+        },
+        {
+          "label": "5e6ed6ad: Light mode polish, General preferences, brand palette",
+          "url": "https://github.com/aoxborrow/dombot/commit/5e6ed6ad91da5a2cff11191a3bd79fb3b0f0617d"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-18-pr-11",
+      "date": "2026-09-18",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": ["#11: Sync upstream v1.3.0 into hosted release"],
+      "links": [
+        {
+          "label": "Change #11",
+          "url": "https://github.com/heathermhuang/dombot/pull/11"
+        }
+      ]
+    },
+    {
+      "id": "core-1-3-0",
+      "date": "2026-09-17",
+      "layer": "core",
+      "title": "DomBot 1.3.0",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "Adds multiple accounts per registrar, configurable HTTP/HTTPS proxies and clearer registrar/account controls.",
+        "Introduces the responsive web demo and self-hosting improvements, reorganizes settings and strengthens authentication and credential handling."
+      ],
+      "links": [
+        {
+          "label": "Upstream release v1.3.0",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.3.0"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-17-c48e090558c1",
+      "date": "2026-09-17",
+      "layer": "core",
+      "title": "Core development history (1/2)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "site: v1.3.0 download links",
+        "Release 1.3.0",
+        "Domains & Settings polish: folder menus, Archive rename, password reveal, editable demo, bulk bar",
+        "Make the web UI usable at phone widths",
+        "Proxy settings polish + domains registrar/account column",
+        "Demo: rework seed folders and restore banner link",
+        "Registrar account cards and central proxy settings",
+        "Homepage: push the hosted version, tidy copy, add mobile menu"
+      ],
+      "links": [
+        {
+          "label": "c48e0905: site: v1.3.0 download links",
+          "url": "https://github.com/aoxborrow/dombot/commit/c48e090558c1a362c2533fce74dd533e15995377"
+        },
+        {
+          "label": "390adcd8: Release 1.3.0",
+          "url": "https://github.com/aoxborrow/dombot/commit/390adcd896f09d984eedb02355cc86850fa4884c"
+        },
+        {
+          "label": "afcc76ef: Domains & Settings polish: folder menus, Archive rename, password reveal, editable demo, bulk bar",
+          "url": "https://github.com/aoxborrow/dombot/commit/afcc76ef1a17d360fd9c67fb95a705bb778dd1fb"
+        },
+        {
+          "label": "0951349a: Make the web UI usable at phone widths",
+          "url": "https://github.com/aoxborrow/dombot/commit/0951349af3a194d40743c5f08420ee92932f4f2c"
+        },
+        {
+          "label": "479a991f: Proxy settings polish + domains registrar/account column",
+          "url": "https://github.com/aoxborrow/dombot/commit/479a991f1524187695a6699002c6b2da5d5d4119"
+        },
+        {
+          "label": "0a3ddd7b: Demo: rework seed folders and restore banner link",
+          "url": "https://github.com/aoxborrow/dombot/commit/0a3ddd7b8629fb17e43f5fe197eedcc98be36379"
+        },
+        {
+          "label": "a4445c14: Registrar account cards and central proxy settings",
+          "url": "https://github.com/aoxborrow/dombot/commit/a4445c1417c58261414208c71ae0ad85213d81ca"
+        },
+        {
+          "label": "b34725c2: Homepage: push the hosted version, tidy copy, add mobile menu",
+          "url": "https://github.com/aoxborrow/dombot/commit/b34725c2e980c78214f06896a2769b27ac1fbd42"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-17-eaa4f40ff78e",
+      "date": "2026-09-17",
+      "layer": "core",
+      "title": "Core development history (2/2)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "deploy-worker.yml: pass DOMBOT_CUSTOM_DOMAIN through",
+        "Self-hosting: DOMBOT_CUSTOM_DOMAIN for builds without a local file",
+        "Link the live demo from the site and README",
+        "Demo site: in-memory registrar, seeded portfolio, in-browser app, demo mode, deploy (phases 1–4)",
+        "scripts/wrangler.mjs: run wrangler with node, not npx (Windows)",
+        "Self-hosting: local overrides for the Worker name and database id"
+      ],
+      "links": [
+        {
+          "label": "eaa4f40f: deploy-worker.yml: pass DOMBOT_CUSTOM_DOMAIN through",
+          "url": "https://github.com/aoxborrow/dombot/commit/eaa4f40ff78e96a5659f66bf654f7e11a4c33d3c"
+        },
+        {
+          "label": "8fbc4862: Self-hosting: DOMBOT_CUSTOM_DOMAIN for builds without a local file",
+          "url": "https://github.com/aoxborrow/dombot/commit/8fbc486240d3473d9e2a4ca21cc0df9d21eea225"
+        },
+        {
+          "label": "48923a81: Link the live demo from the site and README",
+          "url": "https://github.com/aoxborrow/dombot/commit/48923a817ee8e5cce7fdc84dc2796bbe6cf6842b"
+        },
+        {
+          "label": "fff839e5: Demo site: in-memory registrar, seeded portfolio, in-browser app, demo mode, deploy (phases 1–4)",
+          "url": "https://github.com/aoxborrow/dombot/commit/fff839e5d8540a5fecfd290d3ae3d81006f32988"
+        },
+        {
+          "label": "c5e0cc0a: scripts/wrangler.mjs: run wrangler with node, not npx (Windows)",
+          "url": "https://github.com/aoxborrow/dombot/commit/c5e0cc0af31b958392c7d4e954ef8d3baa1f0790"
+        },
+        {
+          "label": "ffcd3269: Self-hosting: local overrides for the Worker name and database id",
+          "url": "https://github.com/aoxborrow/dombot/commit/ffcd3269bc512aeb6aebc2cf32d19208919c9c46"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-16-5d6d6b0695d3",
+      "date": "2026-09-16",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Allow hostnames and HTTP or HTTPS for the Namecheap proxy",
+        "Capture each GoDaddy account's own TLD renewal rates on sync",
+        "Harden registrar diagnostics, login limits, OAuth redemption, and data handling"
+      ],
+      "links": [
+        {
+          "label": "5d6d6b06: Allow hostnames and HTTP or HTTPS for the Namecheap proxy",
+          "url": "https://github.com/aoxborrow/dombot/commit/5d6d6b0695d372e18635b2d64907b400ba8444f6"
+        },
+        {
+          "label": "01442d41: Capture each GoDaddy account's own TLD renewal rates on sync",
+          "url": "https://github.com/aoxborrow/dombot/commit/01442d41672994ba1fa572880889c9149bc691b3"
+        },
+        {
+          "label": "08a7c6b7: Harden registrar diagnostics, login limits, OAuth redemption, and data handling",
+          "url": "https://github.com/aoxborrow/dombot/commit/08a7c6b7ac7e408cdf5e7ee4d14569436ab907b3"
+        }
+      ]
+    },
+    {
+      "id": "core-1-2-0",
+      "date": "2026-09-15",
+      "layer": "core",
+      "title": "DomBot 1.2.0",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "Introduces the shared core, Cloudflare web host, browser interface and OAuth-backed web MCP access.",
+        "Adds durable bulk jobs, backup import/export, secret rotation, domain editing and support for multiple registrar accounts."
+      ],
+      "links": [
+        {
+          "label": "Upstream release v1.2.0",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.2.0"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-14-pr-10",
+      "date": "2026-09-14",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#10: Fix hosted draft preview navigation without frame scripts",
+        "#9: Repair portfolio selection, verification, preview and publishing UX"
+      ],
+      "links": [
+        {
+          "label": "Change #10",
+          "url": "https://github.com/heathermhuang/dombot/pull/10"
+        },
+        {
+          "label": "Change #9",
+          "url": "https://github.com/heathermhuang/dombot/pull/9"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-11-d8832cf4bdda",
+      "date": "2026-09-11",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": ["Add optional fixed-IP proxies for Namecheap accounts"],
+      "links": [
+        {
+          "label": "d8832cf4: Add optional fixed-IP proxies for Namecheap accounts",
+          "url": "https://github.com/aoxborrow/dombot/commit/d8832cf4bdda03ea0f22ab0e56ca7db20a32981f"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-11-pr-8",
+      "date": "2026-09-11",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": ["#8: Make inventory-to-public-page selection direct"],
+      "links": [
+        {
+          "label": "Change #8",
+          "url": "https://github.com/heathermhuang/dombot/pull/8"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-10-a1dc8212b5b1",
+      "date": "2026-09-10",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Prepare Name.com registrar help, icon and renewal pricing",
+        "Support multiple registrar accounts with minimal UI changes (closes #69), plus review fixes."
+      ],
+      "links": [
+        {
+          "label": "a1dc8212: Prepare Name.com registrar help, icon and renewal pricing",
+          "url": "https://github.com/aoxborrow/dombot/commit/a1dc8212b5b12aead6ea36ea88e7e1a13b793699"
+        },
+        {
+          "label": "45bed6dd: Support multiple registrar accounts with minimal UI changes (closes #69), plus review fixes.",
+          "url": "https://github.com/aoxborrow/dombot/commit/45bed6ddefa5a1792de729d0061c548b9a5bc9ae"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-10-pr-7",
+      "date": "2026-09-10",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#7: Unify domain management and public-page selection",
+        "#6: Redesign portfolio management for large collections",
+        "#5: Separate portfolio and product testing hosts",
+        "#4: Build integrated portfolio selection and publishing flow"
+      ],
+      "links": [
+        {
+          "label": "Change #7",
+          "url": "https://github.com/heathermhuang/dombot/pull/7"
+        },
+        {
+          "label": "Change #6",
+          "url": "https://github.com/heathermhuang/dombot/pull/6"
+        },
+        {
+          "label": "Change #5",
+          "url": "https://github.com/heathermhuang/dombot/pull/5"
+        },
+        {
+          "label": "Change #4",
+          "url": "https://github.com/heathermhuang/dombot/pull/4"
+        }
+      ]
+    },
+    {
+      "id": "saas-history-2026-09-09-pr-3",
+      "date": "2026-09-09",
+      "layer": "saas",
+      "title": "SaaS change history",
+      "status": "Merged SaaS source history · See individual rollout records",
+      "changes": [
+        "#3: Launch canonical domain and preserve founder portfolio links",
+        "#1: Add private portfolio reconciliation and explicit public publishing",
+        "#2: Add isolated hosted workspaces and customer-scoped MCP"
+      ],
+      "links": [
+        {
+          "label": "Change #3",
+          "url": "https://github.com/heathermhuang/dombot/pull/3"
+        },
+        {
+          "label": "Change #1",
+          "url": "https://github.com/heathermhuang/dombot/pull/1"
+        },
+        {
+          "label": "Change #2",
+          "url": "https://github.com/heathermhuang/dombot/pull/2"
+        }
+      ]
+    },
+    {
+      "id": "saas-first-hosted-source-2026-09-09",
+      "date": "2026-09-09",
+      "layer": "saas",
+      "title": "The first hosted SaaS foundation",
+      "status": "Initial hosted source · Deployment not inferred",
+      "changes": [
+        "Introduces invitation-based hosted portfolios, isolated workspaces and customer-scoped MCP access."
+      ],
+      "links": [
+        {
+          "label": "First hosted source change",
+          "url": "https://github.com/heathermhuang/dombot/commit/f3e5833779363981f53831e00c8d440fc6083539"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-07-af52dcb2c9e0",
+      "date": "2026-09-07",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "web:rotate-secret: passphrase up front, unattended mode",
+        "Deploy experience: Deploy button, export/import bundle, rotate-secret (phase 6)",
+        "MCP on the web host: Hono routes + OAuth state in the store (phase 5)",
+        "Web host: Cloudflare Worker + browser renderer (phase 4)",
+        "Bulk jobs: persisted, step-driven runner; syncAll() (phase 3)",
+        "API method table: one validated contract generates the IPC layer (phase 2)",
+        "Core extraction: host-agnostic src/core with DocStore storage (phase 1)",
+        "Plan: self-hosting DomBot on Cloudflare"
+      ],
+      "links": [
+        {
+          "label": "af52dcb2: web:rotate-secret: passphrase up front, unattended mode",
+          "url": "https://github.com/aoxborrow/dombot/commit/af52dcb2c9e0342621adb770c727a4ca06371835"
+        },
+        {
+          "label": "0dfe8484: Deploy experience: Deploy button, export/import bundle, rotate-secret (phase 6)",
+          "url": "https://github.com/aoxborrow/dombot/commit/0dfe848455cbf12d39e2c6694aa10b4ab2cd10b1"
+        },
+        {
+          "label": "1c1ca8a2: MCP on the web host: Hono routes + OAuth state in the store (phase 5)",
+          "url": "https://github.com/aoxborrow/dombot/commit/1c1ca8a2e848f8939f55b8fa7bb8784240310e1f"
+        },
+        {
+          "label": "c4b64c5a: Web host: Cloudflare Worker + browser renderer (phase 4)",
+          "url": "https://github.com/aoxborrow/dombot/commit/c4b64c5af579eaa33622cec3fd413fba72971918"
+        },
+        {
+          "label": "04d4ee53: Bulk jobs: persisted, step-driven runner; syncAll() (phase 3)",
+          "url": "https://github.com/aoxborrow/dombot/commit/04d4ee538d9d25b4bf317752676e5771bde5abf5"
+        },
+        {
+          "label": "6a5f3993: API method table: one validated contract generates the IPC layer (phase 2)",
+          "url": "https://github.com/aoxborrow/dombot/commit/6a5f3993bfb27c3f10efff6b6ffafb0bb02296f0"
+        },
+        {
+          "label": "93901ad8: Core extraction: host-agnostic src/core with DocStore storage (phase 1)",
+          "url": "https://github.com/aoxborrow/dombot/commit/93901ad8a0126a37066a8fd6da1d39b6ab02a51e"
+        },
+        {
+          "label": "79924025: Plan: self-hosting DomBot on Cloudflare",
+          "url": "https://github.com/aoxborrow/dombot/commit/7992402555adf7b73c5c388d945d60c62765fde5"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-06-389222fa3be7",
+      "date": "2026-09-06",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Remove Domains toolbar Export button; widen default window",
+        "Logic-layer tests (Tier 4): deferred registrar flows + MCP handlers",
+        "Logic-layer tests (Tier 3): registrars service",
+        "Logic-layer tests (Tier 2): renewals, CSV, bulk gaps, pricing",
+        "Logic-layer tests (Tier 1): dispatcher, MCP tools/query, bulk runner",
+        "Domain editing: shared op dispatcher, inline toggles, row actions"
+      ],
+      "links": [
+        {
+          "label": "389222fa: Remove Domains toolbar Export button; widen default window",
+          "url": "https://github.com/aoxborrow/dombot/commit/389222fa3be71d89204a53e48ed6c26d0be1cc54"
+        },
+        {
+          "label": "55b212c3: Logic-layer tests (Tier 4): deferred registrar flows + MCP handlers",
+          "url": "https://github.com/aoxborrow/dombot/commit/55b212c34f258f25ec9d3ae51cea185301368694"
+        },
+        {
+          "label": "1c3d2d1d: Logic-layer tests (Tier 3): registrars service",
+          "url": "https://github.com/aoxborrow/dombot/commit/1c3d2d1de59d4d7ee7eb5c786da9fcbd70aa7019"
+        },
+        {
+          "label": "58d1119e: Logic-layer tests (Tier 2): renewals, CSV, bulk gaps, pricing",
+          "url": "https://github.com/aoxborrow/dombot/commit/58d1119e5500787666d9644509cd1b4fd9ebd0ad"
+        },
+        {
+          "label": "737f1b4a: Logic-layer tests (Tier 1): dispatcher, MCP tools/query, bulk runner",
+          "url": "https://github.com/aoxborrow/dombot/commit/737f1b4aecd6df3d43efca49f3db869c671a18bd"
+        },
+        {
+          "label": "93118615: Domain editing: shared op dispatcher, inline toggles, row actions",
+          "url": "https://github.com/aoxborrow/dombot/commit/931186150e3235bd98916143b50f387486b45d43"
+        }
+      ]
+    },
+    {
+      "id": "core-1-1-0",
+      "date": "2026-09-03",
+      "layer": "core",
+      "title": "DomBot 1.1.0",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "Adds a desktop stdio connection for MCP clients and expands portfolio queries and domain tools.",
+        "Improves first-run registrar connection, credential handling, account enable/disable controls and provider setup guidance."
+      ],
+      "links": [
+        {
+          "label": "Upstream release v1.1.0",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.1.0"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-03-4bed7d549f54",
+      "date": "2026-09-03",
+      "layer": "core",
+      "title": "Core development history (1/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Site: tagline, meta, features, and download copy",
+        "Site: copy and layout pass on the landing page",
+        "Site: rework features list, add Renewals screenshot (#52)",
+        "Release 1.1.0 (#51)",
+        "Site: show the whole hero screenshot",
+        "Site: descriptive page title, og:site_name, og:image dimensions (#50)",
+        "new og-image",
+        "Settings: own the registrar help copy, with real links and per-field help (#49)"
+      ],
+      "links": [
+        {
+          "label": "4bed7d54: Site: tagline, meta, features, and download copy",
+          "url": "https://github.com/aoxborrow/dombot/commit/4bed7d549f5486a488223545b3a1b00ca1855040"
+        },
+        {
+          "label": "e8276974: Site: copy and layout pass on the landing page",
+          "url": "https://github.com/aoxborrow/dombot/commit/e8276974c08245098730d9875bd5e0f9ad0b7618"
+        },
+        {
+          "label": "eb42b782: Site: rework features list, add Renewals screenshot (#52)",
+          "url": "https://github.com/aoxborrow/dombot/commit/eb42b78204d1931041d19005e00c1f183c6ef2f0"
+        },
+        {
+          "label": "1fcc4673: Release 1.1.0 (#51)",
+          "url": "https://github.com/aoxborrow/dombot/commit/1fcc4673a6cc498ce87d91530f898806421995fa"
+        },
+        {
+          "label": "25166300: Site: show the whole hero screenshot",
+          "url": "https://github.com/aoxborrow/dombot/commit/251663008d1086a43eeb5e18c2b57538eea8b814"
+        },
+        {
+          "label": "b0fed2fc: Site: descriptive page title, og:site_name, og:image dimensions (#50)",
+          "url": "https://github.com/aoxborrow/dombot/commit/b0fed2fc38111140eb99b900ae9a1dd43fe2d4a5"
+        },
+        {
+          "label": "2bd7fa55: new og-image",
+          "url": "https://github.com/aoxborrow/dombot/commit/2bd7fa55ce026e1e479c49f9f8171352d0f59565"
+        },
+        {
+          "label": "509e119c: Settings: own the registrar help copy, with real links and per-field help (#49)",
+          "url": "https://github.com/aoxborrow/dombot/commit/509e119c1f9c587c37c28d7933654d6bd1666830"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-03-9191f2a64e11",
+      "date": "2026-09-03",
+      "layer": "core",
+      "title": "Core development history (2/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Settings: move the registrar enable toggle to the row's left edge",
+        "GoDaddy: single PAT credential (registrar-client 0.4.0) (#48)",
+        "MCP: add domain_auth_code_get and domain_dnssec_get tools (#47)",
+        "Renewals: recolor charts with a multi-hue palette, flat blue bars",
+        "Add per-registrar enable/disable toggle",
+        "Harden credential handling and make the trust model verifiable (#46)",
+        "Fold renewal pricing into Sync; drop the separate refresh + cache",
+        "CI: run typecheck, lint, and unit tests on PRs (#44)"
+      ],
+      "links": [
+        {
+          "label": "9191f2a6: Settings: move the registrar enable toggle to the row's left edge",
+          "url": "https://github.com/aoxborrow/dombot/commit/9191f2a64e11342a6cdcf66e60f6da3ecf07b169"
+        },
+        {
+          "label": "8feff683: GoDaddy: single PAT credential (registrar-client 0.4.0) (#48)",
+          "url": "https://github.com/aoxborrow/dombot/commit/8feff683cca6b69596ffdb2e0427f76b2996d0db"
+        },
+        {
+          "label": "eb84f32a: MCP: add domain_auth_code_get and domain_dnssec_get tools (#47)",
+          "url": "https://github.com/aoxborrow/dombot/commit/eb84f32a2ae376f8dd85c4541b948baa083b78b8"
+        },
+        {
+          "label": "1fcf76a5: Renewals: recolor charts with a multi-hue palette, flat blue bars",
+          "url": "https://github.com/aoxborrow/dombot/commit/1fcf76a5007e7abafa65869f7ad5674b12e70109"
+        },
+        {
+          "label": "7479ff6e: Add per-registrar enable/disable toggle",
+          "url": "https://github.com/aoxborrow/dombot/commit/7479ff6ee7dd586851d79b49a2e682dc90cc5688"
+        },
+        {
+          "label": "8bd69e20: Harden credential handling and make the trust model verifiable (#46)",
+          "url": "https://github.com/aoxborrow/dombot/commit/8bd69e203f4ae0877ec5a77522b3cc917f7db7a5"
+        },
+        {
+          "label": "1463ba28: Fold renewal pricing into Sync; drop the separate refresh + cache",
+          "url": "https://github.com/aoxborrow/dombot/commit/1463ba28bfcedceacfa222b3a71d3c37d48cac3a"
+        },
+        {
+          "label": "9ef17ff6: CI: run typecheck, lint, and unit tests on PRs (#44)",
+          "url": "https://github.com/aoxborrow/dombot/commit/9ef17ff6cd2f5675729c397e6d5145b754d66d78"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-03-30937f67a3f7",
+      "date": "2026-09-03",
+      "layer": "core",
+      "title": "Core development history (3/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Remove aftermarket/DomDB pricing and .env config; settings + cache fixes",
+        "Settings: show registrar logos next to each name",
+        "Bump @aoxborrow/registrar-client to ^0.3.0",
+        "Settings: add page title and align the tab menu",
+        "MCP tools: cache-backed reads/writes + portfolio_query",
+        "Settings: green active tabs, card header bands, tidier folder rows",
+        "Add GitHub Sponsors: FUNDING.yml and README badge",
+        "Site: registrar logo cloud, features retitle, MCP chat polish"
+      ],
+      "links": [
+        {
+          "label": "30937f67: Remove aftermarket/DomDB pricing and .env config; settings + cache fixes",
+          "url": "https://github.com/aoxborrow/dombot/commit/30937f67a3f72797d80fcb06a3becc8c003ddb86"
+        },
+        {
+          "label": "2572672c: Settings: show registrar logos next to each name",
+          "url": "https://github.com/aoxborrow/dombot/commit/2572672c4a1ebd7f809a5cb580dd24d8c86ef00e"
+        },
+        {
+          "label": "2ce36095: Bump @aoxborrow/registrar-client to ^0.3.0",
+          "url": "https://github.com/aoxborrow/dombot/commit/2ce360957c0b98bc358f936e0b5f068179131d3f"
+        },
+        {
+          "label": "f2ab398c: Settings: add page title and align the tab menu",
+          "url": "https://github.com/aoxborrow/dombot/commit/f2ab398cd5a93428569ac9df5ead06d4d9dc9306"
+        },
+        {
+          "label": "df433a91: MCP tools: cache-backed reads/writes + portfolio_query",
+          "url": "https://github.com/aoxborrow/dombot/commit/df433a9194e446c8aea0ae49ef89c4549fa95d8e"
+        },
+        {
+          "label": "3afba9e1: Settings: green active tabs, card header bands, tidier folder rows",
+          "url": "https://github.com/aoxborrow/dombot/commit/3afba9e11926681fe7a7a2569a56513b7a8e97ed"
+        },
+        {
+          "label": "03773aa1: Add GitHub Sponsors: FUNDING.yml and README badge",
+          "url": "https://github.com/aoxborrow/dombot/commit/03773aa116f65b8510b45fcabf9dab2541b92391"
+        },
+        {
+          "label": "7d3b1b22: Site: registrar logo cloud, features retitle, MCP chat polish",
+          "url": "https://github.com/aoxborrow/dombot/commit/7d3b1b229ccaacf3e76f10346ce084e30d11a036"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-03-e219c099710e",
+      "date": "2026-09-03",
+      "layer": "core",
+      "title": "Core development history (4/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Sync button polish, 5-min sync timeout, logo→Domains, macOS About link",
+        "Site: stdio command snippet for Claude Desktop",
+        "Add `DomBot --mcp-stdio`: stdio bridge to the MCP server for Claude Desktop"
+      ],
+      "links": [
+        {
+          "label": "e219c099: Sync button polish, 5-min sync timeout, logo→Domains, macOS About link",
+          "url": "https://github.com/aoxborrow/dombot/commit/e219c099710ed0a1f83a21b7313a4f0467f992f4"
+        },
+        {
+          "label": "74d46725: Site: stdio command snippet for Claude Desktop",
+          "url": "https://github.com/aoxborrow/dombot/commit/74d46725334d3a6a122150f8d5bfd337c76d40c5"
+        },
+        {
+          "label": "55a97b09: Add `DomBot --mcp-stdio`: stdio bridge to the MCP server for Claude Desktop",
+          "url": "https://github.com/aoxborrow/dombot/commit/55a97b0939bb43202fa15c6aaef125622fab46a2"
+        }
+      ]
+    },
+    {
+      "id": "core-1-0-0",
+      "date": "2026-09-02",
+      "layer": "core",
+      "title": "DomBot 1.0.0",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "The first stable desktop release packages the domain portfolio app and its MCP integration.",
+        "Includes bundled renewal-cost reference data and release-linked installer downloads."
+      ],
+      "links": [
+        {
+          "label": "Upstream release v1.0.0",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v1.0.0"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-02-6d992e9a5bd8",
+      "date": "2026-09-02",
+      "layer": "core",
+      "title": "Core development history (1/3)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Navbar: icon tabs + Settings, global Sync control, \"synced\" status copy",
+        "Per-registrar sync model + connection-aware registrar cards",
+        "Landing page: mock chat for MCP, rewritten features, copy tweaks",
+        "Landing page: OG/social meta, mobile nav, hero image + copy fixes",
+        "Don't show orphaned cached portfolio when no registrars are configured",
+        "Group + clarify release asset names (mac-intel-x64, dombot-linux-)",
+        "Fix CI mac signing (derive identity) + clearer mac asset names",
+        "more readme updates"
+      ],
+      "links": [
+        {
+          "label": "6d992e9a: Navbar: icon tabs + Settings, global Sync control, \"synced\" status copy",
+          "url": "https://github.com/aoxborrow/dombot/commit/6d992e9a5bd8511d2f86938a7cd52b0c5513506b"
+        },
+        {
+          "label": "d6a92e62: Per-registrar sync model + connection-aware registrar cards",
+          "url": "https://github.com/aoxborrow/dombot/commit/d6a92e6225840f7da7f1fc6d41a310bde0430c08"
+        },
+        {
+          "label": "be99ce73: Landing page: mock chat for MCP, rewritten features, copy tweaks",
+          "url": "https://github.com/aoxborrow/dombot/commit/be99ce7321142a53c27b3392fc0aeeec792c93b6"
+        },
+        {
+          "label": "8766f0af: Landing page: OG/social meta, mobile nav, hero image + copy fixes",
+          "url": "https://github.com/aoxborrow/dombot/commit/8766f0afa541735508a186b7ca37fde514ab3c86"
+        },
+        {
+          "label": "cd0819a0: Don't show orphaned cached portfolio when no registrars are configured",
+          "url": "https://github.com/aoxborrow/dombot/commit/cd0819a07d937ea36d4e66ba28756dba99c6aec0"
+        },
+        {
+          "label": "13c846c2: Group + clarify release asset names (mac-intel-x64, dombot-linux-)",
+          "url": "https://github.com/aoxborrow/dombot/commit/13c846c2f1e5d7dcf615b5ec3913f8222ba2aa1d"
+        },
+        {
+          "label": "d7072fff: Fix CI mac signing (derive identity) + clearer mac asset names",
+          "url": "https://github.com/aoxborrow/dombot/commit/d7072ffff0493bafe38fa8fbf3ec6dbafb6ebd86"
+        },
+        {
+          "label": "fc5c4937: more readme updates",
+          "url": "https://github.com/aoxborrow/dombot/commit/fc5c4937048b9459a337fd18bbedf3a7752c01ab"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-02-3fd2d973e768",
+      "date": "2026-09-02",
+      "layer": "core",
+      "title": "Core development history (2/3)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Shrink + link-to-expand README screenshot; add GitHub to site nav",
+        "Add Domains screenshot to README",
+        "Rewrite Configuring registrars for end users",
+        "Fold Download section into the intro",
+        "Remove Getting started and Architecture notes from README",
+        "Trim README: cut aftermarket, safe-actions, why-it's-useful, and dev-internals",
+        "Sharpen README copy, drop Stack section, reflect notarized macOS build",
+        "Restructure README for end users + set repo description"
+      ],
+      "links": [
+        {
+          "label": "3fd2d973: Shrink + link-to-expand README screenshot; add GitHub to site nav",
+          "url": "https://github.com/aoxborrow/dombot/commit/3fd2d973e76893426dcfb7d51273123d20dac1f5"
+        },
+        {
+          "label": "703c9f17: Add Domains screenshot to README",
+          "url": "https://github.com/aoxborrow/dombot/commit/703c9f17be403d40a1468bf00e71a4711c37fa19"
+        },
+        {
+          "label": "a0d515fb: Rewrite Configuring registrars for end users",
+          "url": "https://github.com/aoxborrow/dombot/commit/a0d515fba739937e5aeb9f25b5b691cb8995d4d9"
+        },
+        {
+          "label": "d6852c4e: Fold Download section into the intro",
+          "url": "https://github.com/aoxborrow/dombot/commit/d6852c4e877f8f63dba4043e12bb5f061688ae95"
+        },
+        {
+          "label": "253c132b: Remove Getting started and Architecture notes from README",
+          "url": "https://github.com/aoxborrow/dombot/commit/253c132bc8a5a1db7a9abf216cd095eef026495a"
+        },
+        {
+          "label": "2a561444: Trim README: cut aftermarket, safe-actions, why-it's-useful, and dev-internals",
+          "url": "https://github.com/aoxborrow/dombot/commit/2a5614442d625a95666928c52d765df7807f1df6"
+        },
+        {
+          "label": "fc9ca294: Sharpen README copy, drop Stack section, reflect notarized macOS build",
+          "url": "https://github.com/aoxborrow/dombot/commit/fc9ca294b765342db1370f7d31ed1acb82d8c09f"
+        },
+        {
+          "label": "2a011ccc: Restructure README for end users + set repo description",
+          "url": "https://github.com/aoxborrow/dombot/commit/2a011ccc97023124341dbfdf8cae88e2df994183"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-02-029b5bc0f554",
+      "date": "2026-09-02",
+      "layer": "core",
+      "title": "Core development history (3/3)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Cut a release from the Actions UI (workflow_dispatch: publish)",
+        "Bundle base renewal pricing for all supported registrars (#32)",
+        "Landing page: bake download links + version from the latest Release (build-time)",
+        "Fix fresh-install experience: no phantom registrar, dark window chrome",
+        "Scaffold macOS Developer ID signing + notarization",
+        "Ignore code-signing artifacts",
+        "macOS build fixes: cross-build Intel + restore \"DomBot\" display name"
+      ],
+      "links": [
+        {
+          "label": "029b5bc0: Cut a release from the Actions UI (workflow_dispatch: publish)",
+          "url": "https://github.com/aoxborrow/dombot/commit/029b5bc0f5547b989d074ce965391c996e5c1483"
+        },
+        {
+          "label": "25cb0c04: Bundle base renewal pricing for all supported registrars (#32)",
+          "url": "https://github.com/aoxborrow/dombot/commit/25cb0c04c9a2f5380f025e7340bf83fff2175065"
+        },
+        {
+          "label": "267e0c42: Landing page: bake download links + version from the latest Release (build-time)",
+          "url": "https://github.com/aoxborrow/dombot/commit/267e0c42d93d3477ed70f8d3e08e3c5a68bdfdf2"
+        },
+        {
+          "label": "2117ec6f: Fix fresh-install experience: no phantom registrar, dark window chrome",
+          "url": "https://github.com/aoxborrow/dombot/commit/2117ec6f6339f670b0c71d6bec31f37bf124104e"
+        },
+        {
+          "label": "0d6db957: Scaffold macOS Developer ID signing + notarization",
+          "url": "https://github.com/aoxborrow/dombot/commit/0d6db957401913a10300e05aa6c9bf3db28a8204"
+        },
+        {
+          "label": "d9be558d: Ignore code-signing artifacts",
+          "url": "https://github.com/aoxborrow/dombot/commit/d9be558d43c76e28aa181f1392c33cb27fc5a0ea"
+        },
+        {
+          "label": "67eb30e1: macOS build fixes: cross-build Intel + restore \"DomBot\" display name",
+          "url": "https://github.com/aoxborrow/dombot/commit/67eb30e14f1efb740e0501d3f287ec7425cdea7a"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-09-01-d1a436aba144",
+      "date": "2026-09-01",
+      "layer": "core",
+      "title": "Core development history",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Fix macOS \"damaged\" app + Linux deb/rpm build",
+        "Make the auto-renew toggle write through to the registrar",
+        "Public-launch prep: binary release pipeline + AGPL license"
+      ],
+      "links": [
+        {
+          "label": "d1a436ab: Fix macOS \"damaged\" app + Linux deb/rpm build",
+          "url": "https://github.com/aoxborrow/dombot/commit/d1a436aba14403990500b4a195788097de3526a5"
+        },
+        {
+          "label": "92ad44b9: Make the auto-renew toggle write through to the registrar",
+          "url": "https://github.com/aoxborrow/dombot/commit/92ad44b97bf9ee68f65066a21d5a3ebad036fdcc"
+        },
+        {
+          "label": "c753acb7: Public-launch prep: binary release pipeline + AGPL license",
+          "url": "https://github.com/aoxborrow/dombot/commit/c753acb7afa2c9acd3b35dfc647be4cfc05b09fe"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-31-a122376b575e",
+      "date": "2026-08-31",
+      "layer": "core",
+      "title": "Core development history (1/6)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Tune hero screenshot framing and reorder registrar logos",
+        "newscreenshot",
+        "Show real app screenshot in hero with accent backlight",
+        "domains screenshot",
+        "dev launch config",
+        "MVP UI polish and feature gating for launch",
+        "Trim meta description",
+        "Move releases line into Download intro; refresh meta description"
+      ],
+      "links": [
+        {
+          "label": "a122376b: Tune hero screenshot framing and reorder registrar logos",
+          "url": "https://github.com/aoxborrow/dombot/commit/a122376b575e2d172a5eb9ce289aa5aff8ab63d7"
+        },
+        {
+          "label": "327f74d5: newscreenshot",
+          "url": "https://github.com/aoxborrow/dombot/commit/327f74d55bf5bcede1c8438e0a62fdd973cdaeb6"
+        },
+        {
+          "label": "8cebc66d: Show real app screenshot in hero with accent backlight",
+          "url": "https://github.com/aoxborrow/dombot/commit/8cebc66d5f5c3562bb8edc8d54ee0b13ddf21a62"
+        },
+        {
+          "label": "d9ec19a7: domains screenshot",
+          "url": "https://github.com/aoxborrow/dombot/commit/d9ec19a7597a943f396b53c3bc02a5780c060da1"
+        },
+        {
+          "label": "1886e754: dev launch config",
+          "url": "https://github.com/aoxborrow/dombot/commit/1886e75431e6bd80bd37bc6129196ffa2e2b44ae"
+        },
+        {
+          "label": "001ce8d9: MVP UI polish and feature gating for launch",
+          "url": "https://github.com/aoxborrow/dombot/commit/001ce8d9ca4b4587aa61e75cc439f6e5f815bf0c"
+        },
+        {
+          "label": "716a8b9e: Trim meta description",
+          "url": "https://github.com/aoxborrow/dombot/commit/716a8b9e19ea287cb8083c46fe05dd3d730f97cc"
+        },
+        {
+          "label": "da24c351: Move releases line into Download intro; refresh meta description",
+          "url": "https://github.com/aoxborrow/dombot/commit/da24c3519f6c5a7ba8d37594c8ed7081336cc3c9"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-31-af653a517ed2",
+      "date": "2026-08-31",
+      "layer": "core",
+      "title": "Core development history (2/6)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Refine download cards, eyebrows, and add robot favicon",
+        "Restyle landing page: army-green brand, copy cleanup, copy button",
+        "Consume @aoxborrow/registrar-client from npm",
+        "Scope-based MCP tool structure",
+        "Landing page: redesign variants for review",
+        "Capitalize \"DomBot\" in app UI, MCP/OAuth surfaces, and docs",
+        "Add Dynadot/NameSilo/Spaceship logos; enlarge registrar strip",
+        "Convert landing page to a Vite project; content polish"
+      ],
+      "links": [
+        {
+          "label": "af653a51: Refine download cards, eyebrows, and add robot favicon",
+          "url": "https://github.com/aoxborrow/dombot/commit/af653a517ed21ddcd0f0dd563bf13b1236a6f35c"
+        },
+        {
+          "label": "4134bcbf: Restyle landing page: army-green brand, copy cleanup, copy button",
+          "url": "https://github.com/aoxborrow/dombot/commit/4134bcbf72ef857f346fbd1b50d57a0a99b67518"
+        },
+        {
+          "label": "e931b293: Consume @aoxborrow/registrar-client from npm",
+          "url": "https://github.com/aoxborrow/dombot/commit/e931b29378a749ce19ab8f818b9d357f9ac3556e"
+        },
+        {
+          "label": "1e699a13: Scope-based MCP tool structure",
+          "url": "https://github.com/aoxborrow/dombot/commit/1e699a13199ee10231956a1d5a6ebb3e3c4d07d6"
+        },
+        {
+          "label": "10511b21: Landing page: redesign variants for review",
+          "url": "https://github.com/aoxborrow/dombot/commit/10511b2143beb4153b12dc5175a3276404ca1bd1"
+        },
+        {
+          "label": "775ed729: Capitalize \"DomBot\" in app UI, MCP/OAuth surfaces, and docs",
+          "url": "https://github.com/aoxborrow/dombot/commit/775ed729d5029464fa12e0a0b46a99d564a9adfc"
+        },
+        {
+          "label": "822e6c1f: Add Dynadot/NameSilo/Spaceship logos; enlarge registrar strip",
+          "url": "https://github.com/aoxborrow/dombot/commit/822e6c1f9eabafba644ccfbd1fa0a47030990e54"
+        },
+        {
+          "label": "2c811111: Convert landing page to a Vite project; content polish",
+          "url": "https://github.com/aoxborrow/dombot/commit/2c81111128ff65d7d573ced18967e36003db03bd"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-31-1a296705b175",
+      "date": "2026-08-31",
+      "layer": "core",
+      "title": "Core development history (3/6)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Add Domains bulk-selection UI",
+        "Redesign landing page: minimal dark with a single amber accent",
+        "Add a status-grouped registrars settings page variant",
+        "Move CSV export into an Export dropdown menu",
+        "Add a build step that externalizes and minifies the landing page CSS/JS",
+        "Add landing page + GitHub Pages deploy",
+        "Add domain folders (#9)",
+        "Add product overview to README"
+      ],
+      "links": [
+        {
+          "label": "1a296705: Add Domains bulk-selection UI",
+          "url": "https://github.com/aoxborrow/dombot/commit/1a296705b1754d8cc5964abc78f87534f2d3e674"
+        },
+        {
+          "label": "60b2372c: Redesign landing page: minimal dark with a single amber accent",
+          "url": "https://github.com/aoxborrow/dombot/commit/60b2372cdb18dac813f25b5a874b5fd561c2e16c"
+        },
+        {
+          "label": "77cfd1fb: Add a status-grouped registrars settings page variant",
+          "url": "https://github.com/aoxborrow/dombot/commit/77cfd1fbbde5382d192533978e1509a139e25f34"
+        },
+        {
+          "label": "db82e4e8: Move CSV export into an Export dropdown menu",
+          "url": "https://github.com/aoxborrow/dombot/commit/db82e4e8460dc1d2e66d95f49afcf9a09b3da99f"
+        },
+        {
+          "label": "8766d73c: Add a build step that externalizes and minifies the landing page CSS/JS",
+          "url": "https://github.com/aoxborrow/dombot/commit/8766d73c4555905183058857d141d2d80dad8c4f"
+        },
+        {
+          "label": "92d84f41: Add landing page + GitHub Pages deploy",
+          "url": "https://github.com/aoxborrow/dombot/commit/92d84f4172e2f06c4fdc52303b555d7c58b55dc6"
+        },
+        {
+          "label": "258ef0a2: Add domain folders (#9)",
+          "url": "https://github.com/aoxborrow/dombot/commit/258ef0a25e352e29304b13def0859fb9d0519f08"
+        },
+        {
+          "label": "be6d6298: Add product overview to README",
+          "url": "https://github.com/aoxborrow/dombot/commit/be6d62981e9a879d761ec6415576e32ef82926de"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-31-a8eb66ebfb88",
+      "date": "2026-08-31",
+      "layer": "core",
+      "title": "Core development history (4/6)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Renewals dashboard, theme-toggle cycling, and table refinements",
+        "Add an app-wide bottom status bar (#8)",
+        "Add nameserver filter, renewal column, and load-status lights",
+        "Use singular filter labels (TLD, Registrar, Expiration)",
+        "Make portfolio filters multi-select; refine toolbar controls",
+        "Add expiration and Afternic price filters to the portfolio",
+        "Reduce Domain column extra left padding to 4px",
+        "Refine domains table header alignment, height, and name padding"
+      ],
+      "links": [
+        {
+          "label": "a8eb66eb: Renewals dashboard, theme-toggle cycling, and table refinements",
+          "url": "https://github.com/aoxborrow/dombot/commit/a8eb66ebfb88249f30a5cf9e815c5ce69db9c6ad"
+        },
+        {
+          "label": "072315c2: Add an app-wide bottom status bar (#8)",
+          "url": "https://github.com/aoxborrow/dombot/commit/072315c2ad38f5819d9399f42b1d035cfad9b3a7"
+        },
+        {
+          "label": "ce6e3ccd: Add nameserver filter, renewal column, and load-status lights",
+          "url": "https://github.com/aoxborrow/dombot/commit/ce6e3ccd37f39245b290bc46cf5ad742a72794dc"
+        },
+        {
+          "label": "26669e3b: Use singular filter labels (TLD, Registrar, Expiration)",
+          "url": "https://github.com/aoxborrow/dombot/commit/26669e3bfd86931900879295596db255dc63d063"
+        },
+        {
+          "label": "ea4b9f99: Make portfolio filters multi-select; refine toolbar controls",
+          "url": "https://github.com/aoxborrow/dombot/commit/ea4b9f9916d2542819914351560c73e8bf5a4fc2"
+        },
+        {
+          "label": "9b578746: Add expiration and Afternic price filters to the portfolio",
+          "url": "https://github.com/aoxborrow/dombot/commit/9b578746db04455c7ab0d1c3d3eb135e24c885ee"
+        },
+        {
+          "label": "eefbc9b7: Reduce Domain column extra left padding to 4px",
+          "url": "https://github.com/aoxborrow/dombot/commit/eefbc9b77fee875ed375fd63cb441b247cb9f7fb"
+        },
+        {
+          "label": "34c46b80: Refine domains table header alignment, height, and name padding",
+          "url": "https://github.com/aoxborrow/dombot/commit/34c46b809482655ac7d7a524dc35130779b37f49"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-31-cb0fbb791398",
+      "date": "2026-08-31",
+      "layer": "core",
+      "title": "Core development history (5/6)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Style table headers and restore pointer cursor on buttons",
+        "Right-align navbar pages and rate-limit the refresh button",
+        "Make refresh button label \"Refresh\" with time as smaller subtext",
+        "Shorten refresh label and dim it when data is fresh",
+        "Add CSV export and unify refresh with data freshness on Domains",
+        "Give each domain lifecycle state its own colored pill",
+        "Cache domain data on disk for instant, timestamped launches",
+        "Populate base renewal pricing from the tldes.com dataset"
+      ],
+      "links": [
+        {
+          "label": "cb0fbb79: Style table headers and restore pointer cursor on buttons",
+          "url": "https://github.com/aoxborrow/dombot/commit/cb0fbb791398000fc20c48fd6b6b32f4468ad8be"
+        },
+        {
+          "label": "19d9b0c9: Right-align navbar pages and rate-limit the refresh button",
+          "url": "https://github.com/aoxborrow/dombot/commit/19d9b0c9a8f19713162984bc22fdfbe4dbf3b51d"
+        },
+        {
+          "label": "8dc6be6b: Make refresh button label \"Refresh\" with time as smaller subtext",
+          "url": "https://github.com/aoxborrow/dombot/commit/8dc6be6bcb55b4084b066b83cbfe03bc967168a4"
+        },
+        {
+          "label": "b700f2d2: Shorten refresh label and dim it when data is fresh",
+          "url": "https://github.com/aoxborrow/dombot/commit/b700f2d2164bc1bda6434c32de82d54b3e8ed1ea"
+        },
+        {
+          "label": "780696fa: Add CSV export and unify refresh with data freshness on Domains",
+          "url": "https://github.com/aoxborrow/dombot/commit/780696fadaaf541b7cf9ce1fb48caf585545a1f1"
+        },
+        {
+          "label": "41a3b547: Give each domain lifecycle state its own colored pill",
+          "url": "https://github.com/aoxborrow/dombot/commit/41a3b547d5f255ea16c3bdb4c3c800527f4fd694"
+        },
+        {
+          "label": "8a61f270: Cache domain data on disk for instant, timestamped launches",
+          "url": "https://github.com/aoxborrow/dombot/commit/8a61f270deb912bb0d4a07e1656a32dc110a6162"
+        },
+        {
+          "label": "14d15279: Populate base renewal pricing from the tldes.com dataset",
+          "url": "https://github.com/aoxborrow/dombot/commit/14d152793004ecdbbb358965f59334b68caacac9"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-31-9244614fc6af",
+      "date": "2026-08-31",
+      "layer": "core",
+      "title": "Core development history (6/6)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Show only the Afternic marketplace column (#2)",
+        "Add Porkbun to per-name renewal pricing (throttled)",
+        "Price Dynadot renewals accurately via renew price-check",
+        "Drop generic TLD pricing; specific-domain quotes + base-DB fill",
+        "Theme native scrollbars for dark mode"
+      ],
+      "links": [
+        {
+          "label": "9244614f: Show only the Afternic marketplace column (#2)",
+          "url": "https://github.com/aoxborrow/dombot/commit/9244614fc6afcff020ed1877eb6001894616a461"
+        },
+        {
+          "label": "77b5052e: Add Porkbun to per-name renewal pricing (throttled)",
+          "url": "https://github.com/aoxborrow/dombot/commit/77b5052e67ad7fa4ef849cddd386ec08097180cc"
+        },
+        {
+          "label": "13eb22c7: Price Dynadot renewals accurately via renew price-check",
+          "url": "https://github.com/aoxborrow/dombot/commit/13eb22c70c45b0c73e7cedf7797c40aa5c55fcfa"
+        },
+        {
+          "label": "ec21ab93: Drop generic TLD pricing; specific-domain quotes + base-DB fill",
+          "url": "https://github.com/aoxborrow/dombot/commit/ec21ab9364781e2afee3e51e1516d73aca262674"
+        },
+        {
+          "label": "61c02313: Theme native scrollbars for dark mode",
+          "url": "https://github.com/aoxborrow/dombot/commit/61c02313bc639d67d3c957e13c02f791f7f50a49"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-30-04c5a0b2a84c",
+      "date": "2026-08-30",
+      "layer": "core",
+      "title": "Core development history (1/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Price Dynadot renewals by TLD (owned names carry no per-name price)",
+        "Add Renewals dashboard with per-domain renewal pricing",
+        "Refine domains table: flag colors, compact flags, NS truncation, split markets",
+        "Backfill creation date from dns.tools when the registrar lacks one",
+        "Add a Market column with DomDB aftermarket pricing",
+        "Resolve nameservers even when the registrar detail call fails",
+        "Only enrich domains the list left without nameservers",
+        "Use the dns.tools domain API for the nameserver fallback"
+      ],
+      "links": [
+        {
+          "label": "04c5a0b2: Price Dynadot renewals by TLD (owned names carry no per-name price)",
+          "url": "https://github.com/aoxborrow/dombot/commit/04c5a0b2a84c38dce6b95d4d83fe78fbd41bdf15"
+        },
+        {
+          "label": "f5ff2b1f: Add Renewals dashboard with per-domain renewal pricing",
+          "url": "https://github.com/aoxborrow/dombot/commit/f5ff2b1febdf120b7fa4e540825e54bb472f5bd5"
+        },
+        {
+          "label": "d1b56cca: Refine domains table: flag colors, compact flags, NS truncation, split markets",
+          "url": "https://github.com/aoxborrow/dombot/commit/d1b56cca4a96676d5e2d6b49029208945479bb1e"
+        },
+        {
+          "label": "7879d3f6: Backfill creation date from dns.tools when the registrar lacks one",
+          "url": "https://github.com/aoxborrow/dombot/commit/7879d3f6145b091f285ec86c160430feae421f59"
+        },
+        {
+          "label": "0319eed6: Add a Market column with DomDB aftermarket pricing",
+          "url": "https://github.com/aoxborrow/dombot/commit/0319eed60f4fb8c46ad4d1e344048c934b0ac7b3"
+        },
+        {
+          "label": "74cbbb51: Resolve nameservers even when the registrar detail call fails",
+          "url": "https://github.com/aoxborrow/dombot/commit/74cbbb51e9703ba839407fc9cadae7b95612258a"
+        },
+        {
+          "label": "d7c5049b: Only enrich domains the list left without nameservers",
+          "url": "https://github.com/aoxborrow/dombot/commit/d7c5049bc57e4c808595847025b3c3acaefc5eb7"
+        },
+        {
+          "label": "0b886207: Use the dns.tools domain API for the nameserver fallback",
+          "url": "https://github.com/aoxborrow/dombot/commit/0b886207abc6ce5e52ed5e744b3f0b1ba086e154"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-30-418946af15db",
+      "date": "2026-08-30",
+      "layer": "core",
+      "title": "Core development history (2/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Handle unsupported-TLD detail failures and RDAP-fill default nameservers",
+        "Switch shadcn to new-york style and a neutral grey theme",
+        "Show per-cell loading while domain detail is fetched",
+        "Lazily enrich visible domains with full detail",
+        "Migrate the UI to shadcn/ui and add a theme toggle",
+        "Tighten Expires cell gap to ~10px",
+        "Return 404 for unknown MCP session so clients re-initialize",
+        "Tidy registrar settings and expiry column"
+      ],
+      "links": [
+        {
+          "label": "418946af: Handle unsupported-TLD detail failures and RDAP-fill default nameservers",
+          "url": "https://github.com/aoxborrow/dombot/commit/418946af15db8cbc83ab6ca8108009526d110659"
+        },
+        {
+          "label": "e1eca81e: Switch shadcn to new-york style and a neutral grey theme",
+          "url": "https://github.com/aoxborrow/dombot/commit/e1eca81efc6f13d5c2f5f25565bdc6e2133d429d"
+        },
+        {
+          "label": "ed6ed156: Show per-cell loading while domain detail is fetched",
+          "url": "https://github.com/aoxborrow/dombot/commit/ed6ed156e04ab4a51820a09d56a8872930a66cef"
+        },
+        {
+          "label": "bdd33bc8: Lazily enrich visible domains with full detail",
+          "url": "https://github.com/aoxborrow/dombot/commit/bdd33bc8d64488a94d48aab8fca49cb9b590050f"
+        },
+        {
+          "label": "eb8d6f61: Migrate the UI to shadcn/ui and add a theme toggle",
+          "url": "https://github.com/aoxborrow/dombot/commit/eb8d6f61aae9f1fd089b403f088bf8912ceb9668"
+        },
+        {
+          "label": "20ac4004: Tighten Expires cell gap to ~10px",
+          "url": "https://github.com/aoxborrow/dombot/commit/20ac400425027226fd1690d0d17c18935d1b34b4"
+        },
+        {
+          "label": "2ecb65db: Return 404 for unknown MCP session so clients re-initialize",
+          "url": "https://github.com/aoxborrow/dombot/commit/2ecb65dbe38af6e5ba9373b266ae4dfc56d81b6c"
+        },
+        {
+          "label": "22354231: Tidy registrar settings and expiry column",
+          "url": "https://github.com/aoxborrow/dombot/commit/22354231f3e0ed72d154df3f8f0851c03d7d3a64"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-30-584a6868802c",
+      "date": "2026-08-30",
+      "layer": "core",
+      "title": "Core development history (3/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Simplify domains table: one expiry column with day count",
+        "Clean up UI: trim tabs, fix domains table, no auto devtools",
+        "Stop reading process.env for registrar credentials",
+        "Add Domains tab with cross-registrar portfolio table (#1)",
+        "Add Settings screen, encrypted credential store, in-window MCP approval",
+        "Replace static token with OAuth approve-in-app pairing",
+        "Make MCP tools registrar-aware and add write tools",
+        "Add embedded local MCP server with read-only portfolio tools"
+      ],
+      "links": [
+        {
+          "label": "584a6868: Simplify domains table: one expiry column with day count",
+          "url": "https://github.com/aoxborrow/dombot/commit/584a6868802c6651a02797c3a59cdfdbe864c842"
+        },
+        {
+          "label": "05f620a7: Clean up UI: trim tabs, fix domains table, no auto devtools",
+          "url": "https://github.com/aoxborrow/dombot/commit/05f620a7d57e8109f37bc6c99b10d53f099f9321"
+        },
+        {
+          "label": "faef07f5: Stop reading process.env for registrar credentials",
+          "url": "https://github.com/aoxborrow/dombot/commit/faef07f589aadcefe02066a3aae419deb97a34cc"
+        },
+        {
+          "label": "1e8a63ec: Add Domains tab with cross-registrar portfolio table (#1)",
+          "url": "https://github.com/aoxborrow/dombot/commit/1e8a63ec56bf5646b2cd466a3a602ce361f9bbb7"
+        },
+        {
+          "label": "00f6e0fc: Add Settings screen, encrypted credential store, in-window MCP approval",
+          "url": "https://github.com/aoxborrow/dombot/commit/00f6e0fc5b756f5c9b3854d55880718f516755f7"
+        },
+        {
+          "label": "d4c67de4: Replace static token with OAuth approve-in-app pairing",
+          "url": "https://github.com/aoxborrow/dombot/commit/d4c67de4a732a16c80b1e11a662501d24b3752a9"
+        },
+        {
+          "label": "e6b711be: Make MCP tools registrar-aware and add write tools",
+          "url": "https://github.com/aoxborrow/dombot/commit/e6b711be3040dbc72ae13dd431013e8ec643cacb"
+        },
+        {
+          "label": "98d18c63: Add embedded local MCP server with read-only portfolio tools",
+          "url": "https://github.com/aoxborrow/dombot/commit/98d18c63ee46b4fbf35f4545741b6e70372efa65"
+        }
+      ]
+    },
+    {
+      "id": "core-history-2026-08-30-683aad31d48c",
+      "date": "2026-08-30",
+      "layer": "core",
+      "title": "Core development history (4/4)",
+      "status": "Published core source history · Release availability tracked separately",
+      "changes": [
+        "Reorganize into main / preload / renderer / shared layout",
+        "Add .env.example documenting registrar credentials",
+        "Wire registrar-client from source and add Dynadot demo",
+        "Add README documenting stack, scripts, and architecture",
+        "Add React, Tailwind, Router, Zustand, typed IPC, and tooling",
+        "Scaffold Electron Forge Vite + TypeScript template"
+      ],
+      "links": [
+        {
+          "label": "683aad31: Reorganize into main / preload / renderer / shared layout",
+          "url": "https://github.com/aoxborrow/dombot/commit/683aad31d48c3a108b5c292704c7572b72f47266"
+        },
+        {
+          "label": "63195d22: Add .env.example documenting registrar credentials",
+          "url": "https://github.com/aoxborrow/dombot/commit/63195d229db4ee1fa3090459c90776731ec90dd6"
+        },
+        {
+          "label": "78a12b96: Wire registrar-client from source and add Dynadot demo",
+          "url": "https://github.com/aoxborrow/dombot/commit/78a12b96a2ee25be890c552750ddae71791b53a7"
+        },
+        {
+          "label": "14fb94ab: Add README documenting stack, scripts, and architecture",
+          "url": "https://github.com/aoxborrow/dombot/commit/14fb94ab87c17a2853d9aca8bef8a4e75b5905f3"
+        },
+        {
+          "label": "59dc2588: Add React, Tailwind, Router, Zustand, typed IPC, and tooling",
+          "url": "https://github.com/aoxborrow/dombot/commit/59dc258807fd9c785c20e881b39d05e61adfe17b"
+        },
+        {
+          "label": "5e56a96b: Scaffold Electron Forge Vite + TypeScript template",
+          "url": "https://github.com/aoxborrow/dombot/commit/5e56a96b975008d7ad125664727f351e0724ead3"
+        }
+      ]
+    }
+  ],
+  "locations": {
+    "saas-automatic-release-archive-2026-11-06": "2026-000002",
+    "saas-changelog-full-history-2026-11-06": "2026-000002",
+    "core-2-1-0": "2026-000002",
+    "saas-changelog-freshness-2026-11-05": "2026-000002",
+    "saas-changelog-runtime-2026-11-05": "2026-000002",
+    "core-history-2026-11-05-b48e803b966d": "2026-000001",
+    "saas-history-2026-11-05-pr-172": "2026-000001",
+    "saas-password-2026-11-05": "2026-000001",
+    "saas-selection-2026-11-05": "2026-000001",
+    "saas-setup-2026-11-05": "2026-000001",
+    "core-history-2026-11-04-d80f81fa2dde": "2026-000001",
+    "saas-history-2026-11-04-pr-150": "2026-000001",
+    "saas-history-2026-11-04-pr-160": "2026-000001",
+    "saas-renewals-2026-11-04": "2026-000001",
+    "core-2-0-0": "2026-000001",
+    "core-history-2026-11-03-a1b16055f791": "2026-000001",
+    "core-history-2026-11-03-ccb918deed20": "2026-000001",
+    "saas-history-2026-11-03-pr-140": "2026-000001",
+    "saas-history-2026-11-03-pr-148": "2026-000001",
+    "saas-public-links-2026-11-03": "2026-000001",
+    "core-history-2026-11-02-24e70dc2c9fc": "2026-000001",
+    "saas-history-2026-11-01-pr-137": "2026-000001",
+    "core-history-2026-10-31-1cc33720aef4": "2026-000001",
+    "core-history-2026-10-31-9280c6bdb02d": "2026-000001",
+    "saas-history-2026-10-31-pr-131": "2026-000001",
+    "core-history-2026-10-30-750674d93755": "2026-000001",
+    "saas-history-2026-10-30-pr-127": "2026-000001",
+    "core-history-2026-10-29-8eb6590ab5a1": "2026-000001",
+    "saas-history-2026-10-29-pr-126": "2026-000001",
+    "core-history-2026-10-28-3059a08155bc": "2026-000001",
+    "saas-history-2026-10-28-pr-113": "2026-000001",
+    "saas-history-2026-10-28-pr-121": "2026-000001",
+    "core-history-2026-10-27-523818279dcc": "2026-000001",
+    "saas-history-2026-10-27-pr-102": "2026-000001",
+    "saas-history-2026-10-27-pr-110": "2026-000001",
+    "saas-history-2026-10-25-pr-99": "2026-000001",
+    "saas-history-2026-10-24-pr-92": "2026-000001",
+    "saas-desktop-1-5-1": "2026-000001",
+    "saas-desktop-1-5-2": "2026-000001",
+    "saas-history-2026-10-23-pr-79": "2026-000001",
+    "saas-history-2026-10-23-pr-87": "2026-000001",
+    "saas-history-2026-10-22-pr-77": "2026-000001",
+    "saas-history-2026-10-21-pr-76": "2026-000001",
+    "saas-history-2026-10-20-pr-71": "2026-000001",
+    "saas-history-2026-10-19-pr-58": "2026-000001",
+    "saas-history-2026-10-19-pr-66": "2026-000001",
+    "saas-history-2026-10-18-pr-44": "2026-000001",
+    "saas-history-2026-10-18-pr-52": "2026-000001",
+    "saas-history-2026-10-17-pr-35": "2026-000001",
+    "saas-history-2026-10-17-pr-43": "2026-000001",
+    "saas-history-2026-10-15-pr-31": "2026-000001",
+    "saas-history-2026-10-14-pr-23": "2026-000001",
+    "core-history-2026-10-12-3c3831cefae7": "2026-000001",
+    "saas-history-2026-10-12-pr-20": "2026-000001",
+    "core-1-5-0": "2026-000001",
+    "core-history-2026-10-09-feef729a1758": "2026-000001",
+    "core-history-2026-10-07-acffe4278747": "2026-000001",
+    "core-history-2026-10-06-90b6af59e605": "2026-000001",
+    "saas-history-2026-10-06-pr-18": "2026-000001",
+    "core-history-2026-10-05-ba25106509e5": "2026-000001",
+    "saas-history-2026-10-04-pr-15": "2026-000001",
+    "core-history-2026-10-03-b89784d174c6": "2026-000001",
+    "core-history-2026-10-02-3bf0a67e05d0": "2026-000001",
+    "saas-history-2026-09-28-pr-14": "2026-000001",
+    "core-history-2026-09-27-3f279bf8ca11": "2026-000001",
+    "core-history-2026-09-26-e7d427077c85": "2026-000001",
+    "core-history-2026-09-25-ac941cd5b03f": "2026-000001",
+    "saas-history-2026-09-23-pr-12": "2026-000001",
+    "core-1-4-0": "2026-000001",
+    "core-history-2026-09-18-c177cbccf77f": "2026-000001",
+    "saas-history-2026-09-18-pr-11": "2026-000001",
+    "core-1-3-0": "2026-000001",
+    "core-history-2026-09-17-c48e090558c1": "2026-000001",
+    "core-history-2026-09-17-eaa4f40ff78e": "2026-000001",
+    "core-history-2026-09-16-5d6d6b0695d3": "2026-000001",
+    "core-1-2-0": "2026-000001",
+    "saas-history-2026-09-14-pr-10": "2026-000001",
+    "core-history-2026-09-11-d8832cf4bdda": "2026-000001",
+    "saas-history-2026-09-11-pr-8": "2026-000001",
+    "core-history-2026-09-10-a1dc8212b5b1": "2026-000001",
+    "saas-history-2026-09-10-pr-7": "2026-000001",
+    "saas-first-hosted-source-2026-09-09": "2026-000001",
+    "saas-history-2026-09-09-pr-3": "2026-000001",
+    "core-history-2026-09-07-af52dcb2c9e0": "2026-000001",
+    "core-history-2026-09-06-389222fa3be7": "2026-000001",
+    "core-1-1-0": "2026-000001",
+    "core-history-2026-09-03-30937f67a3f7": "2026-000001",
+    "core-history-2026-09-03-4bed7d549f54": "2026-000001",
+    "core-history-2026-09-03-9191f2a64e11": "2026-000001",
+    "core-history-2026-09-03-e219c099710e": "2026-000001",
+    "core-1-0-0": "2026-000001",
+    "core-history-2026-09-02-029b5bc0f554": "2026-000001",
+    "core-history-2026-09-02-3fd2d973e768": "2026-000001",
+    "core-history-2026-09-02-6d992e9a5bd8": "2026-000001",
+    "core-history-2026-09-01-d1a436aba144": "2026-000001",
+    "core-history-2026-08-31-1a296705b175": "2026-000001",
+    "core-history-2026-08-31-9244614fc6af": "2026-000001",
+    "core-history-2026-08-31-a122376b575e": "2026-000001",
+    "core-history-2026-08-31-a8eb66ebfb88": "2026-000001",
+    "core-history-2026-08-31-af653a517ed2": "2026-000001",
+    "core-history-2026-08-31-cb0fbb791398": "2026-000001",
+    "core-history-2026-08-30-04c5a0b2a84c": "2026-000001",
+    "core-history-2026-08-30-418946af15db": "2026-000001",
+    "core-history-2026-08-30-584a6868802c": "2026-000001",
+    "core-history-2026-08-30-683aad31d48c": "2026-000001"
+  }
+}

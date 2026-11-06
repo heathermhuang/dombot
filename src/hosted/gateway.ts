@@ -273,9 +273,17 @@ app.get('/', (c) =>
   ),
 );
 app.get('/source', (c) => c.html(sourcePage(c.env.SOURCE_COMMIT)));
-app.get('/changelog', async (c) =>
-  c.html(changelogPage(c.req.query('layer'), await loadChangelog({ cache: typeof caches === 'undefined' ? undefined : caches.default }))),
-);
+app.get('/changelog', async (c) => {
+  const snapshot = await loadChangelog({
+    cache: typeof caches === 'undefined' ? undefined : caches.default,
+    archive: c.req.query('archive'),
+    layer: c.req.query('layer'),
+  });
+  return c.html(
+    changelogPage(c.req.query('layer'), snapshot),
+    snapshot.unavailable ? 503 : snapshot.notFound ? 404 : 200,
+  );
+});
 app.get('/domains', (c) => {
   const path =
     c.env.PUBLIC_PORTFOLIO_ORIGIN === 'https://alternative.domains'

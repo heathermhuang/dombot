@@ -11,6 +11,18 @@ const historyDate = new Intl.DateTimeFormat('en-GB', {
 const formatHistoryDate = (date: string) =>
   historyDate.format(new Date(`${date}T00:00:00Z`));
 
+const legacyIds = new Set(changelogEntries.map((entry) => entry.id));
+const historyHref = (layer: string, archive?: string, fragment?: string) => {
+  const params = new URLSearchParams();
+  if (layer !== 'all') params.set('layer', layer);
+  if (archive) params.set('archive', archive);
+  return (
+    '/changelog' +
+    (params.size ? '?' + params.toString() : '') +
+    (fragment ? '#' + fragment : '')
+  );
+};
+
 const layers = [
   { id: 'all', label: 'All updates' },
   { id: 'core', label: 'Core app' },
@@ -22,10 +34,50 @@ export function changelogPage(
   snapshot?: ChangelogSnapshot,
 ): string {
   const selected = layer === 'core' || layer === 'saas' ? layer : 'all';
+  if (snapshot?.notFound || snapshot?.unavailable)
+    return page(
+      'Changelog archive',
+      `<section class="changelog"><h1>${snapshot.unavailable ? 'Archive temporarily unavailable' : 'Archive page not found'}</h1><p>${snapshot.unavailable ? 'This archive page could not be loaded. Its records are retained; please try again shortly.' : 'Choose an archive page from the history navigation.'}</p><p><a href="/changelog">Return to the changelog</a></p></section>`,
+    );
+  const archive = snapshot?.archive;
+  const years =
+    archive?.index.years.filter(
+      (year) => selected === 'all' || year[selected] > 0,
+    ) ?? [];
+  const currentYear = years.find((year) =>
+    archive?.selected.startsWith(year.year + '-'),
+  );
+  const yearPosition = years.indexOf(currentYear!);
+  const sequence = Number(archive?.selected.slice(5));
+  const partId = (year: string, number: number) =>
+    year + '-' + String(number).padStart(6, '0');
+  const newer =
+    archive && currentYear
+      ? sequence < currentYear.lastPart
+        ? partId(currentYear.year, sequence + 1)
+        : years[yearPosition - 1]?.latest[selected]
+      : undefined;
+  const older =
+    archive && currentYear
+      ? sequence > 1
+        ? partId(currentYear.year, sequence - 1)
+        : years[yearPosition + 1]?.latest[selected]
+      : undefined;
+  const first = changelogEntries
+    .filter((entry) => selected === 'all' || entry.layer === selected)
+    .at(-1);
+  const total = archive
+    ? selected === 'all'
+      ? archive.index.totalEntries
+      : archive.index[selected]
+    : undefined;
+  const navigation = archive
+    ? `<nav class="changelog-filters" aria-label="History archive"><a href="${historyHref(selected)}">Latest</a>${years.map((year) => `<a href="${historyHref(selected, year.latest[selected])}">${year.year}</a>`).join('')}${newer ? `<a href="${historyHref(selected, newer)}">Newer page</a>` : ''}${older ? `<a href="${historyHref(selected, older)}">Older page</a>` : ''}<a href="${historyHref(selected, undefined, first?.id)}">Beginning</a></nav><p class="note">${archive.root ? 'Recent updates and the original archive are shown here. Browse older pages for the complete permanent history.' : 'Archive page ' + e(archive.selected) + '. Each entry keeps a permanent archive address.'}</p>`
+    : '';
   const entries = (snapshot?.entries ?? changelogEntries).filter(
     (entry) => selected === 'all' || entry.layer === selected,
   );
-  const oldest = entries.at(-1);
+  const oldest = first ?? entries.at(-1);
   return page(
     'Changelog',
     `<style>
@@ -36,23 +88,23 @@ export function changelogPage(
         ? `<p class="note" role="status">${
             snapshot.stale
               ? 'Update feeds are temporarily unavailable. Showing saved updates; newer changes may be missing.'
-              : 'Feeds checked ' +
+              : 'Archive checked ' +
                 e(
                   new Date(snapshot.checkedAt!)
                     .toISOString()
                     .replace('T', ' ')
                     .replace(/\.\d+Z$/, ' UTC'),
                 ) +
-                '. Refreshes every five minutes.'
+                '. Page cache refreshes every five minutes; release synchronization runs automatically.'
           }</p>`
         : ''
-    }</div><nav class="changelog-filters" aria-label="Filter updates">${layers.map(({ id, label }) => `<a href="/changelog${id === 'all' ? '' : `?layer=${id}`}"${selected === id ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav><p class="changelog-count">${entries.length} ${selected === 'all' ? 'updates' : selected === 'core' ? 'core app updates' : 'SaaS layer updates'} · Dates shown in UTC${oldest ? ` · From ${e(formatHistoryDate(oldest.date))} · <a href="/changelog${selected === 'all' ? '' : `?layer=${selected}`}#${e(oldest.id)}">Jump to the beginning</a>` : ''}</p>${entries
+    }</div><nav class="changelog-filters" aria-label="Filter updates">${layers.map(({ id, label }) => `<a href="${historyHref(id, archive && !archive.root ? archive.selected : undefined)}"${selected === id ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>${navigation}<p class="changelog-count">${total ?? entries.length} ${selected === 'all' ? 'updates' : selected === 'core' ? 'core app updates' : 'SaaS layer updates'}${total !== undefined ? ` in the full archive · ${entries.length} shown` : ''} · Dates shown in UTC${oldest ? ` · From ${e(formatHistoryDate(oldest.date))} · <a href="/changelog${selected === 'all' ? '' : `?layer=${selected}`}#${e(oldest.id)}">Jump to the beginning</a>` : ''}</p>${entries
       .map((entry) => {
         const date = formatHistoryDate(entry.date);
-        return `<article class="changelog-entry" aria-labelledby="${e(entry.id)}"><div class="changelog-meta"><time datetime="${e(entry.date)}">${e(date)}</time><span class="changelog-layer">${entry.layer === 'core' ? 'Core app' : 'SaaS layer'}</span></div><div><h2 id="${e(entry.id)}"><a href="/changelog#${e(entry.id)}">${e(entry.title)}</a></h2><p class="changelog-status">${e(entry.status)}</p><ul>${entry.changes.map((change) => `<li>${e(change)}</li>`).join('')}</ul><div class="changelog-links">${entry.links.map((link) => `<a href="${e(link.url)}">${e(link.label)}</a>`).join('')}</div></div></article>`;
+        return `<article class="changelog-entry" aria-labelledby="${e(entry.id)}"><div class="changelog-meta"><time datetime="${e(entry.date)}">${e(date)}</time><span class="changelog-layer">${entry.layer === 'core' ? 'Core app' : 'SaaS layer'}</span></div><div><h2 id="${e(entry.id)}"><a href="${e(historyHref('all', archive && !legacyIds.has(entry.id) ? archive.locations[entry.id] : undefined, entry.id))}">${e(entry.title)}</a></h2><p class="changelog-status">${e(entry.status)}</p><ul>${entry.changes.map((change) => `<li>${e(change)}</li>`).join('')}</ul><div class="changelog-links">${entry.links.map((link) => `<a href="${e(link.url)}">${e(link.label)}</a>`).join('')}</div></div></article>`;
       })
       .join(
         '',
-      )}<p class="changelog-archive">Full published-release and recorded source history, newest first. Browse the <a href="https://github.com/aoxborrow/dombot/releases">upstream release history</a> and <a href="https://github.com/heathermhuang/dombot/commits/main/">SaaS source history</a> for individual discussions and implementation details.</p></section>`,
+      )}${entries.length ? '' : '<p>No updates in this layer on this archive page. Use the history navigation to browse other pages.</p>'}<p class="changelog-archive">Full published-release and recorded source history, newest first. Browse the <a href="https://github.com/aoxborrow/dombot/releases">upstream release history</a> and <a href="https://github.com/heathermhuang/dombot/commits/main/">SaaS source history</a> for individual discussions and implementation details.</p></section>`,
   );
 }

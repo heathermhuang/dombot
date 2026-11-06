@@ -251,6 +251,9 @@ jobs:
 
   # Flip the draft Release to published once every platform has uploaded.
   publish:
+    concurrency:
+      group: changelog-publication
+      cancel-in-progress: false
     needs: [setup, build]
     if: needs.setup.outputs.releasing == 'true'
     runs-on: ubuntu-latest
@@ -292,3 +295,13 @@ jobs:
             git commit -m "site: $TAG download links"
             git push origin HEAD:main
           fi
+
+  changelog:
+    needs: [setup, publish]
+    if: needs.setup.outputs.releasing == 'true'
+    uses: ./.github/workflows/changelog-sync.yml
+    with:
+      full: true
+    permissions:
+      contents: write
+      pull-requests: read

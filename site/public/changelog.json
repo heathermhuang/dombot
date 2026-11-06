@@ -2,6 +2,23 @@
   "version": 1,
   "entries": [
     {
+      "id": "saas-automatic-release-archive-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Automatic release publishing and permanent archive pages",
+      "status": "Published source · Deployment observations tracked separately",
+      "changes": [
+        "Published releases, merged changes and observed gateway deployments are added by an automated publisher.",
+        "Archive pages preserve all historical IDs and links without a global entry limit; older pages remain accessible as history grows."
+      ],
+      "links": [
+        {
+          "label": "SaaS source history",
+          "url": "https://github.com/heathermhuang/dombot/commits/main/"
+        }
+      ]
+    },
+    {
       "id": "saas-changelog-full-history-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
@@ -156,7 +173,10 @@
       "layer": "core",
       "title": "Core development history",
       "status": "Published core source history · Release availability tracked separately",
-      "changes": ["site: v2.1.0 download links", "Release 2.1.0"],
+      "changes": [
+        "site: v2.1.0 download links",
+        "Release 2.1.0"
+      ],
       "links": [
         {
           "label": "b48e803b: site: v2.1.0 download links",
@@ -1719,7 +1739,9 @@
       "layer": "saas",
       "title": "SaaS change history",
       "status": "Merged SaaS source history · See individual rollout records",
-      "changes": ["#20: Sync upstream v1.5.0 into hosted release"],
+      "changes": [
+        "#20: Sync upstream v1.5.0 into hosted release"
+      ],
       "links": [
         {
           "label": "Change #20",
@@ -1931,7 +1953,9 @@
       "layer": "saas",
       "title": "SaaS change history",
       "status": "Merged SaaS source history · See individual rollout records",
-      "changes": ["#15: Show expiration and status in phone inventory"],
+      "changes": [
+        "#15: Show expiration and status in phone inventory"
+      ],
       "links": [
         {
           "label": "Change #15",
@@ -2080,7 +2104,9 @@
       "layer": "core",
       "title": "Core development history",
       "status": "Published core source history · Release availability tracked separately",
-      "changes": ["Select a range of domains with shift-click"],
+      "changes": [
+        "Select a range of domains with shift-click"
+      ],
       "links": [
         {
           "label": "ac941cd5: Select a range of domains with shift-click",
@@ -2094,7 +2120,9 @@
       "layer": "saas",
       "title": "SaaS change history",
       "status": "Merged SaaS source history · See individual rollout records",
-      "changes": ["#12: Sync upstream v1.4.0 into hosted release"],
+      "changes": [
+        "#12: Sync upstream v1.4.0 into hosted release"
+      ],
       "links": [
         {
           "label": "Change #12",
@@ -2166,7 +2194,9 @@
       "layer": "saas",
       "title": "SaaS change history",
       "status": "Merged SaaS source history · See individual rollout records",
-      "changes": ["#11: Sync upstream v1.3.0 into hosted release"],
+      "changes": [
+        "#11: Sync upstream v1.3.0 into hosted release"
+      ],
       "links": [
         {
           "label": "Change #11",
@@ -2353,7 +2383,9 @@
       "layer": "core",
       "title": "Core development history",
       "status": "Published core source history · Release availability tracked separately",
-      "changes": ["Add optional fixed-IP proxies for Namecheap accounts"],
+      "changes": [
+        "Add optional fixed-IP proxies for Namecheap accounts"
+      ],
       "links": [
         {
           "label": "d8832cf4: Add optional fixed-IP proxies for Namecheap accounts",
@@ -2367,7 +2399,9 @@
       "layer": "saas",
       "title": "SaaS change history",
       "status": "Merged SaaS source history · See individual rollout records",
-      "changes": ["#8: Make inventory-to-public-page selection direct"],
+      "changes": [
+        "#8: Make inventory-to-public-page selection direct"
+      ],
       "links": [
         {
           "label": "Change #8",

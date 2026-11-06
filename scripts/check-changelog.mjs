@@ -2,6 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readArchive, archiveHash } from './changelog-archive.mjs';
+import {
+  parseArchiveIndex,
+  parseArchiveRoot,
+} from '../src/hosted/changelog-archive-schema.ts';
 import {
   changelogFeedLimit,
   parseChangelogFeed,
@@ -29,22 +34,8 @@ export function checkChangelogChange(baseEntries, entries, files) {
   for (const id of before.keys())
     if (!entries.some((entry) => entry.id === id))
       throw new Error(`Keep existing changelog entry and permalink: ${id}`);
-  if (
-    runtime.length &&
-    !entries.some((entry) => entry.layer === 'saas' && !before.has(entry.id))
-  )
-    throw new Error(
-      'Application changes require a new SaaS entry in site/public/changelog.json. Describe merged source separately from verified deployment.',
-    );
-  if (
-    receipts.length &&
-    !entries.some(
-      (entry) => JSON.stringify(entry) !== JSON.stringify(before.get(entry.id)),
-    )
-  )
-    throw new Error(
-      'Release receipts require a matching changelog update, including verified rollout status and evidence.',
-    );
+  // Source and release events are published automatically after merge. Authored
+  // notes remain optional enrichment, rather than a prerequisite for ingestion.
   return { runtimeFiles: runtime.length, releaseReceipts: receipts.length };
 }
 
@@ -58,6 +49,40 @@ export function run(base) {
     !entries.some((entry) => entry.layer === 'saas')
   )
     throw new Error('The changelog must document both core and SaaS updates');
+  const archive = readArchive(process.cwd());
+  if (!archive.index)
+    throw new Error('The permanent changelog archive is missing');
+  const legacyRaw = JSON.parse(
+    fs.readFileSync('site/public/changelog-legacy.json', 'utf8'),
+  );
+  const legacy = parseChangelogFeed(legacyRaw);
+  for (const entry of legacy)
+    if (
+      !archive.entries.has(entry.id) ||
+      archive.locations.get(entry.id) !== legacyRaw.locations[entry.id]
+    )
+      throw new Error('A legacy changelog entry was lost');
+  const notesDirectory = 'changelog-notes';
+  if (fs.existsSync(notesDirectory))
+    for (const name of fs
+      .readdirSync(notesDirectory)
+      .filter((name) => name.endsWith('.json'))) {
+      const note = parseChangelogFeed({
+        version: 1,
+        entries: [
+          JSON.parse(fs.readFileSync(path.join(notesDirectory, name), 'utf8')),
+        ],
+      })[0];
+      if (name !== note.id + '.json')
+        throw new Error('Curated note filenames must match their stable IDs');
+      const existing = archive.entries.get(note.id);
+      if (
+        existing &&
+        (existing.layer !== note.layer ||
+          existing.date.slice(0, 4) !== note.date.slice(0, 4))
+      )
+        throw new Error('A published archive identity cannot move');
+    }
   let result = {};
   if (base && !/^0+$/.test(base)) {
     if (!/^[a-f0-9]{40}$/.test(base))
@@ -102,6 +127,76 @@ export function run(base) {
         throw new Error('Existing changelog history was lost');
       previous = JSON.stringify({ version: 1, entries: preserved });
     }
+    let priorArchive;
+    try {
+      priorArchive = execFileSync(
+        'git',
+        ['show', `${base}:site/public/changelog-index.json`],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+    } catch {
+      /* Initial archive introduction. */
+    }
+    if (priorArchive) {
+      const raw = JSON.parse(priorArchive);
+      let index;
+      if (raw.version === 3) {
+        const root = parseArchiveRoot(raw),
+          parts = [];
+        for (const group of root.indexes) {
+          const bytes = execFileSync(
+            'git',
+            ['show', `${base}:site/public/${group.path}`],
+            { stdio: ['ignore', 'pipe', 'pipe'] },
+          );
+          if (archiveHash(bytes) !== group.sha256)
+            throw new Error('Base archive index integrity failure');
+          parts.push(...parseArchiveIndex(JSON.parse(bytes)).parts);
+        }
+        index = parseArchiveIndex({
+          version: 2,
+          totalEntries: root.totalEntries,
+          parts,
+          state: root.state,
+        });
+      } else index = parseArchiveIndex(raw);
+      for (const part of index.parts) {
+        const bytes = execFileSync(
+          'git',
+          ['show', `${base}:site/public/${part.path}`],
+          { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        if (archiveHash(bytes) !== part.sha256)
+          throw new Error('Base archive integrity failure');
+        for (const old of parseChangelogFeed(JSON.parse(bytes))) {
+          const current = archive.entries.get(old.id);
+          if (
+            !current ||
+            archive.locations.get(old.id) !== part.id ||
+            current.layer !== old.layer
+          )
+            throw new Error(
+              'Published archive identity or location was removed: ' + old.id,
+            );
+          for (const link of old.links)
+            if (!current.links.some((item) => item.url === link.url))
+              throw new Error('Historical source evidence was removed');
+        }
+      }
+    }
+    let previousLegacy;
+    try {
+      previousLegacy = execFileSync(
+        'git',
+        ['show', `${base}:site/public/changelog-legacy.json`],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+    } catch {
+      previousLegacy = previous;
+    }
+    for (const entry of parseChangelogFeed(JSON.parse(previousLegacy)))
+      if (!legacy.some((item) => item.id === entry.id))
+        throw new Error('A legacy root permalink was removed: ' + entry.id);
     result = checkChangelogChange(
       parseChangelogFeed(JSON.parse(previous)),
       entries,
