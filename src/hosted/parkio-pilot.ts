@@ -5,7 +5,11 @@ import { isAdmin } from './admin';
 import type { SessionUser } from './accounts';
 import { Passkeys } from './passkeys';
 import { page, escapeHtml as e } from './views';
-import { evaluatePilot, withPilotPage } from './parkio-pilot-cdp';
+import {
+  callPilotFunction,
+  evaluatePilot,
+  withPilotPage,
+} from './parkio-pilot-cdp';
 import {
   PARKIO_ORIGIN,
   PILOT_LOGIN_MS,
@@ -372,14 +376,29 @@ export class ParkioPilot {
               !/^\/orders(?:\/|$)/.test(current.path)
             )
               throw new PilotError('open_active_orders');
-            const download = await evaluatePilot<{
+            const download = await callPilotFunction<{
               ok: boolean;
               status: number;
               contentType: string;
               text: string;
             }>(
               command,
-              `(async()=>{const r=await fetch(${JSON.stringify(exportUrl(a.activeExport!))},{credentials:'include',redirect:'manual',signal:AbortSignal.timeout(12000)});if(!r.ok||!r.body)return {ok:false,status:r.status,contentType:'',text:''};const reader=r.body.getReader();const parts=[];let size=0;try{for(;;){const v=await reader.read();if(v.done)break;size+=v.value.length;if(size>${PILOT_MAX_BYTES})throw Error('limit');parts.push(v.value)}}finally{await reader.cancel()}const all=new Uint8Array(size);let offset=0;for(const v of parts){all.set(v,offset);offset+=v.length}return {ok:r.ok,status:r.status,contentType:r.headers.get('content-type')||'',text:new TextDecoder('utf-8',{fatal:true}).decode(all)}})()`,
+              `async function(url, limit) {
+                const r = await fetch(url, { credentials: 'include', redirect: 'manual', signal: AbortSignal.timeout(12000) });
+                if (!r.ok || !r.body) return { ok: false, status: r.status, contentType: '', text: '' };
+                const reader = r.body.getReader(); const parts = []; let size = 0;
+                try {
+                  for (;;) {
+                    const part = await reader.read(); if (part.done) break;
+                    size += part.value.length; if (size > limit) throw Error('limit');
+                    parts.push(part.value);
+                  }
+                } finally { await reader.cancel(); }
+                const all = new Uint8Array(size); let offset = 0;
+                for (const part of parts) { all.set(part, offset); offset += part.length; }
+                return { ok: r.ok, status: r.status, contentType: r.headers.get('content-type') || '', text: new TextDecoder('utf-8', {fatal: true}).decode(all) };
+              }`,
+              [exportUrl(a.activeExport!), PILOT_MAX_BYTES],
             );
             if (!download.ok || /text\/html/i.test(download.contentType))
               throw new PilotError('export_rejected');
@@ -604,6 +623,9 @@ export function parkioPilotRoutes(
       { error: error instanceof PilotError ? error.code : 'pilot_unavailable' },
       409,
     ),
+  );
+  app.get('/status', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).status()),
   );
   app.get('/', async (c) => {
     const state = await stub(c.env, c.get('owner')).status();

@@ -137,7 +137,7 @@ building the full scheduled customer integration.
 - Root/Worker/hosted typecheck, lint, changelog validation and gateway dry-run:
   passed. Pinned engine `2.1.0-hosted.3` verification passed without rebuilding
   or changing the tenant artifact.
-- Focused contract/runtime coverage: 34 tests. Existing admin/passwordless plus
+- Focused contract/runtime/CDP coverage: 36 tests. Existing admin/passwordless plus
   pilot runtime regression run: 69 tests passed.
 - Full local run: 269 files passed; three files encountered macOS loopback
   `EADDRNOTAVAIL` failures. All 101 tests in those three files passed in one
@@ -151,3 +151,7 @@ building the full scheduled customer integration.
 - Live gateway binding/observability metadata was read into protected local
   custody for deployment planning. No production settings or resources were
   changed as part of preparation.
+- CI CodeQL initially flagged dynamic browser-code construction and a test-only
+  chained HTML decode. Browser URL/limit values now use CDP arguments to a static
+  function; diagnostics tests use the protected JSON status route. Dedicated
+  regressions cover argument separation and remote-object cleanup on exceptions.

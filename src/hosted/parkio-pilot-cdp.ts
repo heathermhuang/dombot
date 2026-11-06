@@ -88,3 +88,38 @@ export async function evaluatePilot<T>(
     throw new PilotError('browser_read_failed');
   return value.result.value;
 }
+
+/** Data is serialized as CDP arguments, never interpolated into browser code. */
+export async function callPilotFunction<T>(
+  command: <R>(method: string, params?: Record<string, unknown>) => Promise<R>,
+  functionDeclaration: string,
+  args: unknown[],
+): Promise<T> {
+  const global = await command<{ result: { objectId?: string } }>(
+    'Runtime.evaluate',
+    {
+      expression: 'globalThis',
+      returnByValue: false,
+    },
+  );
+  if (!global.result.objectId) throw new PilotError('browser_read_failed');
+  try {
+    const result = await command<{
+      result: { value?: T };
+      exceptionDetails?: unknown;
+    }>('Runtime.callFunctionOn', {
+      objectId: global.result.objectId,
+      functionDeclaration,
+      arguments: args.map((value) => ({ value })),
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (result.exceptionDetails || result.result.value === undefined)
+      throw new PilotError('browser_read_failed');
+    return result.result.value;
+  } finally {
+    await command('Runtime.releaseObject', {
+      objectId: global.result.objectId,
+    });
+  }
+}

@@ -95,18 +95,9 @@ async function request(
 const action = (name: string, path: string) =>
   request(name, '/' + path, { identity: owner, method: 'POST' });
 async function state(name: string) {
-  const res = await request(name, '/', { identity: owner });
-  const html = await res.text();
-  const raw = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)?.[1];
-  expect(raw).toBeTruthy();
-  return JSON.parse(
-    raw!
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&#39;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>'),
-  );
+  const res = await request(name, '/status', { identity: owner });
+  expect(res.status).toBe(200);
+  return res.json();
 }
 
 describe('owner-only Park.io pilot runtime', () => {

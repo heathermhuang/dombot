@@ -47,7 +47,7 @@ export class TestParkioPilot extends ParkioPilot {
                     },
                   ],
                 };
-              else if (message.params.expression.includes('fetch('))
+              else if (message.method === 'Runtime.callFunctionOn')
                 result = {
                   result: {
                     value: {
@@ -58,6 +58,9 @@ export class TestParkioPilot extends ParkioPilot {
                     },
                   },
                 };
+              else if (message.params.expression === 'globalThis')
+                result = { result: { objectId: 'synthetic-global' } };
+              else if (message.method === 'Runtime.releaseObject') result = {};
               else if (message.params.expression.includes('hasPassword'))
                 result = {
                   result: {
