@@ -1,0 +1,18 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "1.1.0-hosted.2",
+  "base": "vendor/registrar-client-1.1.0-hosted.1.json",
+  "archive": "vendor/aoxborrow-registrar-client-1.1.0-hosted.2.tgz",
+  "sha256": "86a1501870139f470aebbdfd6262728f3a55d4be6f7cfb0c2b07009bae149bd9",
+  "integrity": "sha512-jOwiLDQKbdquO1GeuO42eqF8M9ta/PqKS38riU/a2VgdbXN7SfQwJ41UoXTxH4MytABq4B0GAf5bHU9aCsMhkw==",
+  "patch": {
+    "path": "vendor/registrar-client-1.1.0-hosted.2.namefi.patch",
+    "sha256": "9099f1b43ba3ac4195d9a95e2fd69f634a5e77d78d0cdf3d5417e04205484c2f"
+  },
+  "license": "MIT",
+  "apiSpecification": "https://api.namefi.io/v-next/openapi/doc.json",
+  "changes": [
+    "Namefi personal portfolio (email and NFT), domain/details/nameservers, availability and annual domain quotes, DNS reconciliation and auto-renew.",
+    "Unexposed operations retain NotImplementedError; no payment or registrar mutation used for live acceptance."
+  ]
+}

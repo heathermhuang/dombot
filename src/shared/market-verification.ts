@@ -140,6 +140,7 @@ const REGISTRAR_DNS: Record<RegistrarName, readonly string[]> = {
   namebright: ['namebrightdns.com'],
   namecheap: ['registrar-servers.com'],
   namecom: ['name.com'],
+  namefi: ['namefi.io'],
   namesilo: ['dnsowl.com'],
   porkbun: ['porkbun.com'],
   spaceship: ['spaceship.net'],

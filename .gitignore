@@ -132,3 +132,6 @@ hosted/generated-auth.ts
 
 # Current pinned registrar SDK with retained hosted safety patches
 !vendor/aoxborrow-registrar-client-1.1.0-hosted.1.tgz
+
+# Namefi registrar extension
+!vendor/aoxborrow-registrar-client-1.1.0-hosted.2.tgz

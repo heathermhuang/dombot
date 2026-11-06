@@ -182,6 +182,21 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
     },
   },
 
+  namefi: {
+    summary:
+      'Create a Plain API Key in your Namefi account. Both email-held and NFT-held domains are included. Keys can spend your NFSC balance and charge your saved card, so keep the key private.',
+    hostedNotice:
+      'Inventory, expiry dates, nameservers, DNS records, auto-renew and domain pricing are supported. Use Namefi for registration, manual renewals, transfers, contacts, nameserver changes and transfer locks. Privacy and lock status are not reported by this API.',
+    links: [
+      { label: 'Create an API key', url: 'https://namefi.io/api-keys' },
+      {
+        label: 'Namefi API documentation',
+        url: 'https://api.namefi.io/v-next/openapi/doc',
+      },
+    ],
+    fields: { apiKey: 'Use a Plain API Key beginning with `nfk_`.' },
+  },
+
   namesilo: {
     summary:
       'An API key generated in the API Manager under Account Options, ' +
