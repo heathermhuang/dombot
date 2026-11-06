@@ -1,14 +1,14 @@
 {
   "version": 3,
-  "totalEntries": 124,
+  "totalEntries": 125,
   "core": 55,
-  "saas": 69,
+  "saas": 70,
   "years": [
     {
       "year": "2026",
-      "count": 124,
+      "count": 125,
       "core": 55,
-      "saas": 69,
+      "saas": 70,
       "lastPart": 2,
       "oldest": "2026-08-30",
       "newest": "2026-11-06",
@@ -23,7 +23,7 @@
     {
       "id": "2026-000000",
       "path": "changelog-archive-index/2026-000000.json",
-      "sha256": "e075260e7020a8d1f71bfcd89c92786d1b44bfb131b7fa92ba0f46e5ea537ad1",
+      "sha256": "01fe433b2425d1538f8909e551451da83807b94941122e531aef7b6092e98c25",
       "year": "2026",
       "firstPart": 1,
       "lastPart": 2
@@ -37,9 +37,9 @@
     },
     "upstreamHead": "b48e803b966dc7a30654065dbeed25a7710a9797",
     "mainHead": "914b753c6747fabd0ccdb7c636b88ae7ae9e5454",
-    "gatewaySource": "1950c3f2ec96f7e8d0020e7ade942303421b72cd",
+    "gatewaySource": "914b753c6747fabd0ccdb7c636b88ae7ae9e5454",
     "curationFingerprint": "cbc903f1301dc436abaa0869de5fdc2cba75396170c8d5918e1558f1536206d3",
-    "gatewayObservationSerial": 4,
+    "gatewayObservationSerial": 5,
     "releaseIds": {
       "aoxborrow/dombot:434617227": "core-2-1-0",
       "aoxborrow/dombot:432149358": "core-2-0-0",
@@ -52,6 +52,6 @@
       "heathermhuang/dombot:422392606": "saas-desktop-1-5-2",
       "heathermhuang/dombot:422382156": "saas-desktop-1-5-1"
     },
-    "archiveParent": "914b753c6747fabd0ccdb7c636b88ae7ae9e5454"
+    "archiveParent": "620770ab535c2dd5347ac8fb28c9966bc76fb905"
   }
 }
