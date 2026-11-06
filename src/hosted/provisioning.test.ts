@@ -4,6 +4,7 @@ import {
   type ProvisioningEnv,
   type SetupJournal,
   type SetupState,
+  type SetupEvent,
 } from './provisioning';
 import { tokenHash } from './crypto';
 import { verifyGatewayRequest } from '../shared/gateway-proof';
@@ -475,3 +476,89 @@ it.each(['database', 'worker'])(
     expect(uploads).toBe(kind === 'database' ? 0 : 1);
   },
 );
+
+describe('private tenant qualification diagnostics', () => {
+  it.each([
+    {
+      status: 503,
+      headers: {},
+      outcome: 'http_error',
+      enginePresent: false,
+      sourcePresent: false,
+    },
+    {
+      status: 200,
+      headers: {
+        'X-DomBot-Engine': 'different',
+        'X-DomBot-Engine-Source': 'private-token',
+      },
+      outcome: 'provenance_mismatch',
+      enginePresent: true,
+      sourcePresent: true,
+    },
+  ])(
+    'records bounded observations for $outcome without weakening qualification',
+    async (expected) => {
+      const events: SetupEvent[] = [];
+      journal.diagnose = async (event) => {
+        events.push(event);
+      };
+      const original = env.DISPATCHER.get('fixture-tenant');
+      env.DISPATCHER = {
+        get: () => ({
+          fetch: async (request: Request) => {
+            const response = await original.fetch(request);
+            if (new URL(request.url).pathname !== '/api/getAppInfo')
+              return response;
+            await response.body?.cancel();
+            return new Response('private-body fixture-token', {
+              status: expected.status,
+              headers: expected.headers,
+            });
+          },
+        }),
+      } as unknown as ProvisioningEnv['DISPATCHER'];
+      await expect(
+        provisionPortfolio(env, journal, workspace, user, transport),
+      ).rejects.toThrow();
+      expect(events.at(-1)).toEqual({
+        phase: 'provenance',
+        status: expected.status,
+        qualification: {
+          outcome: expected.outcome,
+          enginePresent: expected.enginePresent,
+          sourcePresent: expected.sourcePresent,
+          engineMatches: false,
+          sourceMatches: false,
+        },
+      });
+      expect(JSON.stringify(events)).not.toMatch(
+        /private-token|private-body|fixture-token/,
+      );
+    },
+  );
+  it('distinguishes a dispatch exception without retaining its message', async () => {
+    const events: SetupEvent[] = [];
+    journal.diagnose = async (event) => {
+      events.push(event);
+    };
+    const original = env.DISPATCHER.get('fixture-tenant');
+    env.DISPATCHER = {
+      get: () => ({
+        fetch: async (request: Request) => {
+          if (new URL(request.url).pathname === '/api/getAppInfo')
+            throw Error('private-token');
+          return original.fetch(request);
+        },
+      }),
+    } as unknown as ProvisioningEnv['DISPATCHER'];
+    await expect(
+      provisionPortfolio(env, journal, workspace, user, transport),
+    ).rejects.toThrow('private-token');
+    expect(events.at(-1)).toEqual({
+      phase: 'provenance',
+      qualification: { outcome: 'dispatch_failed' },
+    });
+    expect(JSON.stringify(events)).not.toContain('private-token');
+  });
+});

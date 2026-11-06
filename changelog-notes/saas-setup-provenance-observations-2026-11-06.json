@@ -1,0 +1,17 @@
+{
+  "id": "saas-setup-provenance-observations-2026-11-06",
+  "date": "2026-11-06",
+  "layer": "saas",
+  "title": "More precise private setup diagnostics",
+  "status": "Source update \u00b7 Runtime qualification tracked separately",
+  "changes": [
+    "Distinguishes setup HTTP failures, unavailable dispatch and mismatched runtime provenance without recording response bodies or arbitrary header values.",
+    "Preserves the existing setup qualification and admission checks."
+  ],
+  "links": [
+    {
+      "label": "Diagnostic implementation",
+      "url": "https://github.com/heathermhuang/dombot/blob/main/src/hosted/provisioning.ts"
+    }
+  ]
+}

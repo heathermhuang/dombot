@@ -43,6 +43,26 @@ export function setupFailureReceipt(method, status, reference, diagnostic) {
       result.upstreamStatus = diagnostic.status;
     if (/^[a-f0-9]{16}-[A-Z0-9]{3}$/.test(diagnostic.upstreamReference ?? ''))
       result.upstreamReference = diagnostic.upstreamReference;
+    const qualification = diagnostic.qualification;
+    if (
+      qualification &&
+      [
+        'matched',
+        'http_error',
+        'provenance_mismatch',
+        'dispatch_failed',
+      ].includes(qualification.outcome)
+    ) {
+      result.qualification = { outcome: qualification.outcome };
+      for (const key of [
+        'enginePresent',
+        'engineMatches',
+        'sourcePresent',
+        'sourceMatches',
+      ])
+        if (typeof qualification[key] === 'boolean')
+          result.qualification[key] = qualification[key];
+    }
   }
   return result;
 }
