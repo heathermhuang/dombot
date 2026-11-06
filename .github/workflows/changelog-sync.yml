@@ -1,0 +1,74 @@
+name: Synchronize release archive
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published, edited]
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+    - cron: '19 18 * * *'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Reconcile all release and merged-change pages'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: changelog-publication
+  cancel-in-progress: false
+jobs:
+  synchronize:
+    if: github.repository == 'heathermhuang/dombot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /changelog-notes/**
+            /package.json
+            /scripts/check-changelog.mjs
+            /scripts/changelog-archive.mjs
+            /scripts/sync-changelog.mjs
+            /src/hosted/changelog-schema.ts
+            /src/hosted/changelog-archive-schema.ts
+            /docs/changelog-history-inventory-20261106.json
+            /site/public/changelog.json
+            /site/public/changelog-legacy.json
+            /site/public/changelog-index.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Reconcile published events without dropping history
+        id: synchronize
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGELOG_FULL_RECONCILE: ${{ inputs.full == true || github.event_name == 'release' || github.event.schedule == '19 18 * * *' }}
+        run: node --experimental-strip-types scripts/sync-changelog.mjs
+      - name: Validate the complete archive
+        if: steps.synchronize.outputs.changed == 'true'
+        run: node --experimental-strip-types scripts/check-changelog.mjs
+      - name: Publish only changed archive data
+        if: steps.synchronize.outputs.changed == 'true'
+        run: |
+          git add site/public/changelog-index.json site/public/changelog-archive site/public/changelog-archive-index
+          if git diff --cached --quiet; then
+            echo "Release sources are unchanged; no archive publication needed."
+          else
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "changelog: synchronize release archive"
+            git push origin HEAD:main
+          fi

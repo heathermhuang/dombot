@@ -1,30 +1,25 @@
-import { describe, expect, it, vi } from 'vitest';
-import { changelogEntries } from './changelog-entries';
 import {
-  loadChangelog,
-  changelogRefreshMs,
-  changelogSources,
-} from './changelog-feed';
-import { changelogFeedLimit, parseChangelogFeed } from './changelog-schema';
-import { changelogPage } from './changelog';
+  archiveRootData,
+  archiveHash,
+  writeArchive,
+  readArchive,
+} from '../../scripts/changelog-archive.mjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
-const now = Date.parse('2026-11-05T12:00:00Z');
-const newer = {
-  ...changelogEntries[0],
-  id: 'saas-new-source-update',
-  title: 'A newly merged SaaS update',
-};
-const upstream = {
-  releases: [
-    {
-      version: '2.2.0',
-      tag: 'v2.2.0',
-      publishedAt: '2026-11-05T10:00:00Z',
-      url: 'https://github.com/aoxborrow/dombot/releases/tag/v2.2.0',
-    },
-  ],
-};
-function memoryCache() {
+import { changelogEntries } from './changelog-entries';
+import { loadChangelog, changelogRefreshMs } from './changelog-feed';
+import { changelogPage } from './changelog';
+import index from '../../site/public/changelog-index.json';
+const now = Date.parse('2026-11-06T03:00:00Z');
+const dirs: string[] = [];
+afterEach(() => {
+  for (const dir of dirs.splice(0))
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+function cache() {
   const saved = new Map<string, Response>();
   return {
     saved,
@@ -34,174 +29,177 @@ function memoryCache() {
     }),
   };
 }
-function feeds(entries = changelogEntries) {
+function fixture(root = process.cwd()) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(String(input));
+    expect(init?.redirect).toBe('manual');
     expect(init?.headers).toEqual({
       Accept: 'application/json',
       'Cache-Control': 'no-cache',
     });
-    expect(init?.redirect).toBe('manual');
-    expect(init?.signal).toBeInstanceOf(AbortSignal);
-    expect([changelogSources.saas, changelogSources.core]).toContain(
-      url.origin + url.pathname,
-    );
-    return Response.json(
-      url.pathname.endsWith('/changelog.json')
-        ? { version: 1, entries }
-        : upstream,
-    );
+    const url = new URL(String(input));
+    expect(url.origin).toBe('https://raw.githubusercontent.com');
+    const file = url.pathname.split('/site/public/')[1];
+    if (
+      !file ||
+      !/^changelog-(?:index\.json|archive(?:-index)?\/\d{4}-\d{6,}\.json)$/.test(
+        file,
+      )
+    )
+      throw Error('Unexpected archive source');
+    return new Response(fs.readFileSync(path.join(root, 'site/public', file)));
   });
 }
+function bigArchive() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'changelog-reader-test-'));
+  dirs.push(root);
+  writeArchive(root, changelogEntries);
+  writeArchive(root, [
+    ...Array.from({ length: 1200 }, (_, i) => ({
+      ...changelogEntries[0],
+      id: 'future-' + i,
+      title: 'Future ' + i,
+    })),
+  ]);
+  return root;
+}
 
-describe('live changelog feeds', () => {
-  it('discovers new upstream releases without claiming a hosted rollout', async () => {
-    const result = await loadChangelog({ fetcher: feeds(), now });
+describe('permanent paged changelog reader', () => {
+  it('loads real archive pages and keeps all legacy root permalinks', async () => {
+    const result = await loadChangelog({ fetcher: fixture(), now });
     expect(result.stale).toBe(false);
-    expect(
-      result.entries.find((entry) => entry.id === 'core-2-2-0')?.status,
-    ).toBe('Released upstream · Hosted rollout tracked separately');
-    expect(
-      result.entries.find((entry) => entry.id === 'core-2-1-0')?.status,
-    ).toContain('Deployed as SaaS 2.1.0-hosted.1');
+    for (const entry of changelogEntries)
+      expect(result.entries.some((item) => item.id === entry.id)).toBe(true);
+    expect(result.archive?.index.totalEntries).toBe(changelogEntries.length);
   });
-
-  it('loads newly published SaaS notes after five minutes without rebuilding the page', async () => {
-    const cache = memoryCache(),
-      first = feeds(),
-      next = feeds([newer, ...changelogEntries]);
-    await loadChangelog({ cache, fetcher: first, now });
-    const fresh = await loadChangelog({
-      cache,
-      fetcher: next,
+  it('uses the five-minute cache and refreshes only when due', async () => {
+    const c = cache(),
+      fetcher = fixture();
+    await loadChangelog({ cache: c, fetcher, now });
+    const calls = fetcher.mock.calls.length;
+    await loadChangelog({
+      cache: c,
+      fetcher,
       now: now + changelogRefreshMs - 1,
     });
-    expect(next).not.toHaveBeenCalled();
-    expect(fresh.entries.some((entry) => entry.id === newer.id)).toBe(false);
-    const updated = await loadChangelog({
-      cache,
-      fetcher: next,
-      now: now + changelogRefreshMs,
-    });
-    expect(next).toHaveBeenCalledTimes(2);
-    expect(
-      new URL(String(next.mock.calls[0][0])).searchParams.get(
-        'changelog-check',
-      ),
-    ).toBe(String(now + changelogRefreshMs));
-    expect(updated.entries.some((entry) => entry.id === newer.id)).toBe(true);
-    expect(changelogPage('saas', updated)).toContain(newer.title);
-    expect(changelogPage('core', updated)).not.toContain(newer.title);
+    expect(fetcher).toHaveBeenCalledTimes(calls);
+    await loadChangelog({ cache: c, fetcher, now: now + changelogRefreshMs });
+    expect(fetcher.mock.calls.length).toBeGreaterThan(calls);
   });
-
-  it('does not let a valid but truncated feed erase the historical archive', async () => {
-    const cache = memoryCache();
-    await loadChangelog({ cache, fetcher: feeds(), now });
-    const truncated = feeds([changelogEntries[0]]);
-    const result = await loadChangelog({
-      cache,
-      fetcher: truncated,
-      now: now + changelogRefreshMs,
-    });
-    expect(result.stale).toBe(true);
-    expect(result.entries.some((entry) => entry.id === 'core-1-0-0')).toBe(
-      true,
-    );
-    expect(
-      result.entries.some(
-        (entry) => entry.id === 'saas-first-hosted-source-2026-09-09',
-      ),
-    ).toBe(true);
-  });
-
-  it('refreshes an older cached highlights feed rather than hiding the new full snapshot', async () => {
-    const cache = memoryCache();
-    cache.saved.set(
-      'https://domains.domains/__changelog-cache/v1/saas',
-      Response.json({ fetchedAt: now, entries: [changelogEntries[0]] }),
-    );
-    const fetcher = feeds();
-    const result = await loadChangelog({ cache, fetcher, now: now + 1 });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(result.stale).toBe(false);
-    expect(result.entries.some((entry) => entry.id === 'core-1-0-0')).toBe(
-      true,
-    );
-  });
-
-  it('retains last good data and reports stale on a failed refresh, then recovers', async () => {
-    const cache = memoryCache();
-    await loadChangelog({
-      cache,
-      fetcher: feeds([newer, ...changelogEntries]),
-      now,
-    });
-    const offline = vi.fn(
-      async () => new Response('unavailable', { status: 503 }),
-    );
+  it('retains saved data during an outage, backs off, then recovers', async () => {
+    const c = cache();
+    await loadChangelog({ cache: c, fetcher: fixture(), now });
+    const offline = vi.fn(async () => new Response(null, { status: 503 }));
     const stale = await loadChangelog({
-      cache,
+      cache: c,
       fetcher: offline,
       now: now + changelogRefreshMs,
     });
     expect(stale.stale).toBe(true);
-    expect(stale.checkedAt).toBe(now);
-    expect(stale.entries.some((entry) => entry.id === newer.id)).toBe(true);
-    expect(changelogPage(undefined, stale)).toContain(
-      'newer changes may be missing',
-    );
-
+    expect(stale.entries.length).toBe(changelogEntries.length);
     await loadChangelog({
-      cache,
+      cache: c,
       fetcher: offline,
       now: now + changelogRefreshMs + 1,
     });
-    expect(offline).toHaveBeenCalledTimes(2);
-    const recovered = await loadChangelog({
-      cache,
-      fetcher: feeds([newer, ...changelogEntries]),
-      now: now + changelogRefreshMs + 60_000,
-    });
-    expect(recovered.stale).toBe(false);
+    expect(offline).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await loadChangelog({
+          cache: c,
+          fetcher: fixture(),
+          now: now + changelogRefreshMs + 60000,
+        })
+      ).stale,
+    ).toBe(false);
   });
-
-  it('keeps the bundled history readable with no cache and both sources unavailable', async () => {
-    const result = await loadChangelog({
-      fetcher: vi.fn(async () => {
-        throw new Error('offline');
-      }),
-      now,
+  it('fails to the legacy snapshot but returns unavailable for an uncached requested page', async () => {
+    const fetcher = vi.fn(async () => {
+      throw Error('offline');
     });
-    expect(result.entries).toEqual(changelogEntries);
-    expect(result.stale).toBe(true);
-    expect(result.checkedAt).toBeNull();
+    const root = await loadChangelog({ fetcher, now });
+    expect(root.stale).toBe(true);
+    expect(root.entries).toEqual(changelogEntries);
+    const archive = await loadChangelog({
+      fetcher,
+      now,
+      archive: index.years[0].latest.all,
+    });
+    expect(archive.unavailable).toBe(true);
+    expect(archive.notFound).not.toBe(true);
   });
-
-  it('does not replace a good feed with malformed or oversized content', async () => {
-    const cache = memoryCache();
-    await loadChangelog({
-      cache,
-      fetcher: feeds([newer, ...changelogEntries]),
-      now,
-    });
-    const broken = vi.fn(
-      async (input: RequestInfo | URL) =>
-        new Response(
-          String(input).includes('/changelog.json')
-            ? '{broken'
-            : 'x'.repeat(changelogFeedLimit + 1),
-        ),
+  it('keeps more than 1000 records accessible through every bounded archive page', async () => {
+    const root = bigArchive(),
+      origin = fixture(root),
+      state = readArchive(root),
+      seen = new Set<string>();
+    const latest = await loadChangelog({ fetcher: origin, now });
+    expect(latest.archive?.index.totalEntries).toBeGreaterThan(1000);
+    expect(latest.entries.length).toBeLessThanOrEqual(
+      changelogEntries.length + 100,
     );
-    const result = await loadChangelog({
-      cache,
-      fetcher: broken,
-      now: now + changelogRefreshMs,
-    });
-    expect(result.stale).toBe(true);
-    expect(result.entries.some((entry) => entry.id === newer.id)).toBe(true);
+    expect(changelogPage(undefined, latest)).toContain('Older page');
+    for (const part of state.index.parts) {
+      const snapshot = await loadChangelog({
+        fetcher: origin,
+        now,
+        archive: part.id,
+      });
+      expect(snapshot.stale).toBe(false);
+      expect(snapshot.entries.length).toBeLessThanOrEqual(100);
+      for (const entry of snapshot.entries) seen.add(entry.id);
+    }
+    expect(seen.size).toBe(state.index.totalEntries);
   });
-
-  it('cancels an oversized stream before consuming unbounded input', async () => {
+  it('gives new records stable page URLs while keeping legacy fragment URLs', async () => {
+    const root = bigArchive(),
+      result = await loadChangelog({ fetcher: fixture(root), now });
+    const html = changelogPage(undefined, result);
+    expect(html).toContain('/changelog?archive=');
+    expect(html).toContain(`/changelog#${changelogEntries[0].id}`);
+    const entry = result.entries.find((item) => item.id.startsWith('future-'))!;
+    const location = result.archive!.locations[entry.id];
+    const page = await loadChangelog({
+      fetcher: fixture(root),
+      now,
+      archive: location,
+    });
+    expect(page.entries.some((item) => item.id === entry.id)).toBe(true);
+  });
+  it('does not silently accept a truncated index or a corrupted page', async () => {
+    const c = cache();
+    await loadChangelog({ cache: c, fetcher: fixture(), now });
+    const corrupt = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes('changelog-index.json')
+        ? Response.json({ ...index, totalEntries: 1, parts: [] })
+        : new Response('{}'),
+    );
+    expect(
+      (
+        await loadChangelog({
+          cache: c,
+          fetcher: corrupt,
+          now: now + changelogRefreshMs,
+        })
+      ).stale,
+    ).toBe(true);
+  });
+  it('refuses invalid and missing archive identities without reflecting untrusted input', async () => {
+    const fetcher = fixture();
+    const invalid = await loadChangelog({
+      fetcher,
+      now,
+      archive: '../../secrets',
+    });
+    expect(invalid.notFound).toBe(true);
+    expect(fetcher).not.toHaveBeenCalled();
+    const missing = await loadChangelog({
+      fetcher,
+      now,
+      archive: '2026-999999',
+    });
+    expect(missing.notFound).toBe(true);
+  });
+  it('cancels oversized source streams', async () => {
     let canceled = 0;
     const result = await loadChangelog({
       now,
@@ -210,7 +208,7 @@ describe('live changelog feeds', () => {
           new Response(
             new ReadableStream({
               start(controller) {
-                controller.enqueue(new Uint8Array(changelogFeedLimit + 1));
+                controller.enqueue(new Uint8Array(1_000_001));
               },
               cancel() {
                 canceled++;
@@ -219,40 +217,65 @@ describe('live changelog feeds', () => {
           ),
       ),
     });
-    expect(canceled).toBe(2);
     expect(result.stale).toBe(true);
+    expect(canceled).toBe(1);
   });
+});
 
-  it('escapes hostile feed content and refuses external evidence links', async () => {
-    const hostile = { ...newer, title: '<script>alert(1)</script>' };
-    const result = await loadChangelog({
-      fetcher: feeds([hostile, ...changelogEntries]),
-      now,
+it('uses bounded subindexes even when an archive has more than 1000 pages', async () => {
+  const baseline = readArchive(process.cwd()),
+    parts = [...baseline.index.parts],
+    documents = new Map<string, string>();
+  for (let sequence = 3; sequence <= 1003; sequence++) {
+    const id = '2026-' + String(sequence).padStart(6, '0'),
+      entry = {
+        ...changelogEntries[0],
+        id: 'index-growth-' + sequence,
+        date: '2026-11-07',
+        title: 'Index growth ' + sequence,
+      };
+    const bytes = JSON.stringify({ version: 1, entries: [entry] }) + '\n',
+      file = 'changelog-archive/' + id + '.json';
+    documents.set(file, bytes);
+    parts.push({
+      id,
+      path: file,
+      sha256: archiveHash(bytes),
+      count: 1,
+      core: 0,
+      saas: 1,
+      newest: entry.date,
+      oldest: entry.date,
     });
-    const html = changelogPage(undefined, result);
-    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-    expect(html).not.toContain('<script>');
-    expect(() =>
-      parseChangelogFeed({
-        version: 1,
-        entries: [
-          { ...newer, links: [{ label: 'Bad', url: 'javascript:alert(1)' }] },
-        ],
-      }),
-    ).toThrow();
+  }
+  parts.sort(
+    (a, b) => b.newest.localeCompare(a.newest) || b.id.localeCompare(a.id),
+  );
+  const publication = archiveRootData({
+    version: 2,
+    totalEntries: changelogEntries.length + 1001,
+    parts,
+    state: {},
   });
-
-  it('tolerates cache outages without marking successful source data stale', async () => {
-    const cache = {
-      match: vi.fn(async () => {
-        throw new Error('cache unavailable');
-      }),
-      put: vi.fn(async () => {
-        throw new Error('cache unavailable');
-      }),
-    };
-    const result = await loadChangelog({ cache, fetcher: feeds(), now });
-    expect(result.stale).toBe(false);
-    expect(result.checkedAt).toBe(now);
+  documents.set('changelog-index.json', JSON.stringify(publication.root));
+  for (const [file, bytes] of publication.files) documents.set(file, bytes);
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const file = new URL(String(input)).pathname.split('/site/public/')[1];
+    return new Response(
+      documents.get(file) ?? fs.readFileSync('site/public/' + file),
+    );
   });
+  const result = await loadChangelog({ fetcher, now });
+  expect(result.stale).toBe(false);
+  expect(result.archive?.index.indexes).toHaveLength(2);
+  expect(result.archive?.index.totalEntries).toBe(
+    changelogEntries.length + 1001,
+  );
+  expect(result.entries.length).toBeLessThanOrEqual(
+    changelogEntries.length + 100,
+  );
+  expect(fetcher).toHaveBeenCalledTimes(6);
+  const older = await loadChangelog({ fetcher, now, archive: '2026-001002' });
+  expect(older.stale).toBe(false);
+  expect(older.entries[0].id).toBe('index-growth-1002');
 });

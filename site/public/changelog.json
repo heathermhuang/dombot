@@ -2,19 +2,19 @@
   "version": 1,
   "entries": [
     {
-      "id": "saas-namefi-support-2026-11-06",
+      "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
-      "title": "Connect your Namefi domains",
-      "status": "Source update · Rollout pending",
+      "title": "Automatic release publishing and permanent archive pages",
+      "status": "Published source · Deployment observations tracked separately",
       "changes": [
-        "Adds Namefi account connection, portfolio sync, expiry dates, nameservers, auto-renew, DNS records and domain pricing for email-held and NFT-held names.",
-        "Shows unreported privacy and transfer-lock state accurately and directs unsupported registrar operations to Namefi."
+        "Published releases, merged changes and observed gateway deployments are added by an automated publisher.",
+        "Archive pages preserve all historical IDs and links without a global entry limit; older pages remain accessible as history grows."
       ],
       "links": [
         {
-          "label": "Namefi integration details",
-          "url": "https://github.com/heathermhuang/dombot/blob/main/docs/namefi-support.md"
+          "label": "SaaS source history",
+          "url": "https://github.com/heathermhuang/dombot/commits/main/"
         }
       ]
     },
@@ -36,6 +36,23 @@
         {
           "label": "Audited historical inventory",
           "url": "https://github.com/heathermhuang/dombot/blob/7ae604793fa04ab595fe255968a3be82582d4ce8/docs/changelog-history-inventory-20261106.json"
+        }
+      ]
+    },
+    {
+      "id": "saas-namefi-support-2026-11-06",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Connect your Namefi domains",
+      "status": "Source update · Rollout pending",
+      "changes": [
+        "Adds Namefi account connection, portfolio sync, expiry dates, nameservers, auto-renew, DNS records and domain pricing for email-held and NFT-held names.",
+        "Shows unreported privacy and transfer-lock state accurately and directs unsupported registrar operations to Namefi."
+      ],
+      "links": [
+        {
+          "label": "Namefi integration details",
+          "url": "https://github.com/heathermhuang/dombot/blob/main/docs/namefi-support.md"
         }
       ]
     },
