@@ -258,6 +258,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-184",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Prevent email sign-in submissions from losing the session handoff",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #184 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #184",
+          "url": "https://github.com/heathermhuang/dombot/pull/184"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
