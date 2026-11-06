@@ -61,7 +61,7 @@ The managed production rollout is now recorded separately in the
 all 44 admitted portfolios, future template/private provisioner and gateway agree;
 production import/retries/readback, exact served assets and independent cleanup
 passed, with accounts, holdings, credentials, publications and schedules preserved.
-Native owner desktop selection and target previews passed after unlock. Remaining
-registrar/mobile browser checks await stable Chrome control, and real Unstoppable
-acceptance requires controlled credentials. Local synthetic results
+Native owner desktop selection/target previews and subsequent production registrar,
+sync and mobile-emulator checks passed within the receipt’s recorded coverage.
+Real Unstoppable acceptance still requires controlled credentials. Local synthetic results
 and successful Namecheap/Dynadot connection reads do not clear those holds.

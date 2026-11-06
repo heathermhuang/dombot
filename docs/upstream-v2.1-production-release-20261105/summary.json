@@ -160,13 +160,12 @@
     }
   },
   "acceptanceHolds": [
-    "Remaining signed-in owner registrar and mobile production browser checks require stable Chrome control; desktop selection and target previews passed after unlock.",
     "Real Unstoppable provider acceptance: no controlled credential available."
   ],
   "schemaMigrationsApplied": 0,
   "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0,
   "nativeOwnerBrowserFollowup": {
-    "at": "2026-11-05T13:11:12.391917+00:00",
+    "at": "2026-11-06T02:20:28Z",
     "method": "Native owner Chrome via CUA after user unlock",
     "engine": "2.1.0-hosted.1",
     "observedGatewaySource": "a18d81712c173a98127b654aa40c09c419762ab4",
@@ -181,9 +180,37 @@
     "paginationPricingNamesMatched": true,
     "productionDataChangesSubmitted": 0,
     "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0,
-    "registrarPageAcceptance": "pending stable browser control; loading view alone is not a defect",
-    "mobileProductionBrowserAcceptance": "pending stable browser control",
+    "registrarPageAcceptance": "passed: 12-provider catalog, Unstoppable blank-key submission disabled, draft cancelled without save",
+    "mobileProductionBrowserAcceptance": "passed within the recorded emulator and responsive probe coverage",
     "browserInterferenceObserved": true,
-    "complete": false
+    "complete": true,
+    "desktopChecksObservedAt": "2026-11-05T13:11:12.391917+00:00",
+    "registrarMobileCompletedAt": "2026-11-06T02:20:28Z",
+    "productionRegistrarOptions": 12,
+    "productionUnstoppableBlankKeySubmitDisabled": true,
+    "productionUnstoppableDraftCancelled": true,
+    "productionSyncSettingsLoaded": true,
+    "productionSyncScheduleChanged": false,
+    "mobileEmulatorViewport": [390, 844],
+    "mobileSyncLayoutVerified": true,
+    "mobileRegistrarMenuTapped": true,
+    "mobileUnstoppableFormOpened": true,
+    "mobileBlankKeySubmitDisabled": true,
+    "mobileNavigationToDomainsVerified": true,
+    "narrowerResponsiveFilterProbe": {
+      "viewportWidth": 146,
+      "selectedBeforeFilter": 940,
+      "selectedAfterFilter": 0,
+      "method": "Native accessibility text control in the real owner browser"
+    },
+    "physicalDeviceAcceptance": false,
+    "temporaryOwnerTestTabClosed": true,
+    "engineArtifactUnchangedSinceRollout": true,
+    "freshPublicHealth": {
+      "at": "2026-11-06T02:20:28Z",
+      "status": 200,
+      "source": "568e45abd0f5689aa0e0370b445e04dec83515e5"
+    },
+    "loadedOwnerUiBadgeSource": "a18d81712c173a98127b654aa40c09c419762ab4"
   }
 }

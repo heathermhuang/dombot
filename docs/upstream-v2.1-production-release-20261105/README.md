@@ -4,8 +4,8 @@ Production serves **2.1.0-hosted.1** across all **44 admitted portfolios**, from
 source `26e3933f0afa05e6c29337b219b7d8a546328143` ([PR #167](https://github.com/heathermhuang/dombot/pull/167)).
 The future template, private provisioner and gateway agree, and the original
 allocation policy is restored. Production runtime, import and preservation checks
-passed. Signed-in owner browser and real Unstoppable acceptance remain held as
-specified below. [Machine-readable receipt](summary.json).
+passed. Owner browser checks subsequently passed within the coverage recorded below;
+real Unstoppable provider acceptance remains held. [Machine-readable receipt](summary.json).
 
 This contains the complete upstream v2.1.0 release
 `e93d5210707f706451310e0a85c147a44c3177c1`, with registrar-client
@@ -63,13 +63,28 @@ the separate public-changelog release from PR #168; that follow-up did not roll
 new tenant engines. The original deployment source above remains the source of
 this fleet rollout.
 
-Another active workflow subsequently switched Chrome focus. Remaining registrar
-and mobile production browser checks await stable browser control. An initially
-loading registrar view is not classified as a product defect. No controlled
-Unstoppable credential was available, so real Unstoppable provider acceptance
-remains held. Connection tests do not establish every provider operation,
-physical-device or mailbox acceptance. No lock or authentication bypass was
-attempted. Already-open owner tabs need a refresh to load the new renderer.
+Browser-control interference initially paused the remaining checks. On 6 November,
+the actual signed-in production registrar screen loaded all 12 providers. The
+Unstoppable form kept submission disabled with an empty key and its desktop draft
+was cancelled. Production Sync settings loaded with the existing 24-hour frequency;
+no sync, cache clear or schedule change was submitted. The earlier loading view
+was not a reproduced application defect.
+
+Chrome’s 390×844 mobile emulator rendered the production Sync and Registrar views;
+the registrar menu opened through its visible tap target, the Unstoppable form
+opened with empty-key submission disabled, and header navigation returned to
+Domains. A subsequent narrower responsive probe at 146 pixels verified that typing
+a one-domain filter cleared the previous 940-domain selection. These observations
+are separate from the exact package’s 390-pixel synthetic mobile selection test.
+No physical phone was used. The temporary owner test tab was closed, and no
+credentials or data were saved. Fresh public health returned HTTP 200 with gateway
+source `568e45abd0f5689aa0e0370b445e04dec83515e5`; the already-loaded owner UI
+badge retained `a18d817`. The pinned engine artifact is unchanged from this rollout.
+
+Real Unstoppable provider acceptance still requires a controlled credential.
+Connection and UI tests do not establish every provider operation, physical-device
+or mailbox acceptance. No lock or authentication bypass was attempted.
+Already-open owner tabs need a refresh to load a newer renderer.
 
 No registrar, marketplace, DNS, publication, payment or messaging write was used
 as a production fixture. Customer data, keys, passwords and raw provider receipts
