@@ -2,6 +2,86 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-evidence-06627875036d6e19cf6b1b81",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Verified hosted release record",
+      "status": "Verified release evidence published · Scope follows the linked record",
+      "changes": [
+        "A verified release record was published. Its linked evidence defines the deployed source, engine and validation scope; the date here is its publication date."
+      ],
+      "links": [
+        {
+          "label": "Verified release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/34aae6df21087a32570c9cdd8084fab1274a30c5/docs/changelog-full-history-release-20261106.json"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb-1",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Hosted service update observed: Add Namefi account connection, portfolio sync and domain management",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/8450d0fb9f5b5bdad4b482ce9b9832af3599d5fb"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-174",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Record verified full-history changelog publication",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #174 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #174",
+          "url": "https://github.com/heathermhuang/dombot/pull/174"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-175",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Add Namefi account connection, portfolio sync and domain management",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #175 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #175",
+          "url": "https://github.com/heathermhuang/dombot/pull/175"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-176",
+      "date": "2026-11-06",
+      "layer": "saas",
+      "title": "Automatically publish releases into a permanent paged changelog",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #176 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #176",
+          "url": "https://github.com/heathermhuang/dombot/pull/176"
+        }
+      ]
+    },
+    {
       "id": "saas-automatic-release-archive-2026-11-06",
       "date": "2026-11-06",
       "layer": "saas",
