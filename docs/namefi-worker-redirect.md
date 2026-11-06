@@ -23,3 +23,11 @@ documents the supported modes. The same fix is included in
 
 Source/regression checks establish the fix. Final deployment and owner connection
 acceptance are tracked in the release receipt after live verification.
+
+## Completed verification
+
+Status: DONE. The corrected engine is deployed across all 44 portfolios. The
+owner connection synced seven domains and persisted after browser refresh; the
+credential, account and inventory have AES-GCM envelopes. Fresh managed production
+import/retry/readback and independent cleanup passed. See the
+[final release evidence](namefi-release-20261106/README.md).
