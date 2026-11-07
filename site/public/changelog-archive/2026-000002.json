@@ -66,6 +66,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-188",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Scope saved-credential autofill on the Park.io proof form",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #188 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #188",
+          "url": "https://github.com/heathermhuang/dombot/pull/188"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-06627875036d6e19cf6b1b81",
       "date": "2026-11-06",
       "layer": "saas",
