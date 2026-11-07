@@ -98,6 +98,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-189",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Use Domains.Domains throughout hosted outputs and downloads",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #189 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #189",
+          "url": "https://github.com/heathermhuang/dombot/pull/189"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-06627875036d6e19cf6b1b81",
       "date": "2026-11-06",
       "layer": "saas",
