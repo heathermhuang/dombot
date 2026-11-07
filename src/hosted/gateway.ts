@@ -54,6 +54,7 @@ import {
   authScript,
   importStartScript,
   parkioMobileScript,
+  parkioNativeScript,
 } from '../../hosted/generated-auth';
 import {
   emailStart,
@@ -323,6 +324,11 @@ app.get('/auth/browser.js', (c) => {
 });
 app.get('/auth/parkio-mobile.js', (c) =>
   c.body(parkioMobileScript, 200, {
+    'Content-Type': 'text/javascript; charset=utf-8',
+  }),
+);
+app.get('/auth/parkio-native.js', (c) =>
+  c.body(parkioNativeScript, 200, {
     'Content-Type': 'text/javascript; charset=utf-8',
   }),
 );

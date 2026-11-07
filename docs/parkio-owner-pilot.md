@@ -10,26 +10,34 @@ portfolio inventory, or change tenant engines.
 
 1. Open the private pilot page while signed in to domains.domains. Complete the
    normal fresh authentication if requested.
-2. Choose **Sign in to Park.io**. The same embedded browser opens on every device.
-   Touch capability is detected automatically, including tablets with desktop
-   user agents. On a phone or tablet, tap a field in Park.io, then tap **Phone
-   keyboard** below it to open the native keyboard. **Next field**, **Delete**
-   and **Enter** control the same form. On a computer, type directly in the
-   embedded browser. Enter credentials/MFA there, not in chat.
-3. For this first contract-qualification run, navigate to **Orders → Active**.
-   Return to the original pilot tab and choose **Inspect Active export**.
-4. Choose **Save session and close browser**. The server reads the Active CSV
-   inside the authenticated remote browser, validates the schema, encrypts a
-   candidate cookie jar and baseline, then verifies that the browser has closed.
-5. Choose **Test saved session from Worker**. An ordinary Worker HTTP request
-   downloads the same export with the saved cookies, without a browser. The
-   report compares normalized domain names and every available expiration date.
-6. A later manual check can measure short-term session survival. Close/clear the
-   pilot when finished. The alarm also removes encrypted test session data after
-   its 24-hour retention period.
+2. Choose **Sign in to Park.io**. The native proof at `/admin/parkio-pilot/native`
+   has ordinary username/password fields and a conditional verification-code field.
+   Credentials go directly from the frontend to the same isolated Browser Run tab
+   over its short-lived signed socket. They are never control-request payloads,
+   URL parameters, logs or persisted connector data. The retained session is
+   encrypted and expires after 24 hours.
+3. The native adapter submits Park.io's original login form, preserving its
+   submission behavior and any hidden fields. Unsupported challenges open a
+   clearly labelled secure provider-verification step. No credential submission
+   is automatically retried after an uncertain outcome.
+4. After authentication, the server follows observed read-only Orders/Active
+   links, qualifies an Active view, captures its export, closes the browser and
+   independently compares a Worker HTTP read. The page automatically shows the
+   actual private export preview only after that comparison passes.
+5. The receipt distinguishes `native_credentials` from `resumed_session` (or an
+   older unqualified flow). A resumed session is not proof that native credential
+   submission works. A non-secret attempt marker in the temporary browser's
+   sessionStorage identifies the native submission; it contains no credentials
+   and disappears with that browser.
+6. A later bounded background check measures short-term session survival. The
+   account identity, export completeness and daily reliability remain explicitly
+   unqualified. This proof does not import or modify portfolio inventory.
 
-The extra inspection steps are specific to the first pilot because the real
-Active CSV contract has not yet been inspected. The proposed customer experience
+Manual inspection/capture controls remain under **Qualification diagnostics**
+for unsupported export contracts. They are diagnostic fallbacks rather than the
+normal native journey.
+
+The real Active CSV contract still needs owner-account qualification. The proposed customer experience
 remains connect, sign in, and automatically see holdings once that contract is
 qualified. A completed pilot does not establish a permanent login or public
 readiness. `accountIdentityQualified` remains false until a separate stable

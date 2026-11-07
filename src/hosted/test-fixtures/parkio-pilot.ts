@@ -1,6 +1,7 @@
 import { ParkioPilot, parkioPilotRoutes } from '../parkio-pilot';
 import type { BrowserRun } from '../../../hosted/browser-run-types';
 import { openPilot, sealPilot } from '../parkio-pilot-contract';
+import { parkioNativeSnapshot } from '../../../hosted/parkio-native-contract';
 
 const csv = 'Domain,Expires\nalpha.test,2028-02-29\nbeta.test,2029-01-01\n';
 
@@ -75,6 +76,23 @@ export class TestParkioPilot extends ParkioPilot {
               else if (message.params.expression === 'globalThis')
                 result = { result: { objectId: 'synthetic-global' } };
               else if (message.method === 'Runtime.releaseObject') result = {};
+              else if (message.params.expression === parkioNativeSnapshot)
+                result = {
+                  result: {
+                    value: {
+                      kind:
+                        mode === 'not-authenticated'
+                          ? 'credentials'
+                          : 'candidate',
+                      origin: 'https://park.io',
+                      path: '/orders/active',
+                      rejected: false,
+                      active: true,
+                      orders: null,
+                      activeOrders: null,
+                    },
+                  },
+                };
               else if (message.params.expression.includes('hasPassword'))
                 result = {
                   result: {

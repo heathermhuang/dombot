@@ -13,6 +13,8 @@ const names = [
   'close-fails',
   'native-not-found',
   'lookup-fails',
+  'automatic',
+  'not-authenticated',
 ];
 
 beforeAll(async () => {
@@ -86,6 +88,7 @@ async function request(
     origin?: string;
     stale?: boolean;
     accept?: string;
+    body?: string;
   } = {},
 ) {
   const worker = await mf.getWorker(name);
@@ -95,10 +98,12 @@ async function request(
       redirect: 'manual',
       headers: {
         Origin: options.origin ?? 'http://localhost',
+        'Content-Type': 'application/json',
         ...(options.identity ? { 'X-Test-Identity': options.identity } : {}),
         ...(options.stale ? { 'X-Test-Stale': '1' } : {}),
         ...(options.accept ? { Accept: options.accept } : {}),
       },
+      body: options.method === 'POST' ? (options.body ?? '{}') : undefined,
     }),
   );
 }
@@ -111,6 +116,83 @@ async function state(name: string) {
 }
 
 describe('owner-only Park.io pilot runtime', () => {
+  it('automatically captures, closes and independently compares holdings once for concurrent completion requests', async () => {
+    expect((await action('automatic', 'start')).status).toBe(303);
+    expect(
+      (await request('automatic', '/native-proof', { identity: owner })).status,
+    ).toBe(409);
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => action('automatic', 'native-complete')),
+    );
+    for (const r of results) {
+      expect(r.status, await r.clone().text()).toBe(200);
+      expect((await r.json()).phase).toBe('passed');
+    }
+    const proof = await request('automatic', '/native-proof', {
+      identity: owner,
+    });
+    expect(proof.headers.get('cache-control')).toBe('no-store');
+    expect(await proof.json()).toMatchObject({
+      phase: 'passed',
+      browserClosed: true,
+      count: 2,
+      accountIdentityQualified: false,
+      holdings: [
+        { domain: 'alpha.test', expirationDate: '2028-02-29' },
+        { domain: 'beta.test', expirationDate: '2029-01-01' },
+      ],
+    });
+    expect((await action('automatic', 'native-complete')).status).toBe(200);
+    expect((await action('automatic', 'native-retest')).status).toBe(409);
+  });
+  it('does not treat an unauthenticated page as a completed proof', async () => {
+    await action('not-authenticated', 'start');
+    const result = await action('not-authenticated', 'native-complete');
+    expect(result.status).toBe(409);
+    expect(await result.json()).toEqual({ error: 'authentication_required' });
+    expect(
+      (await request('not-authenticated', '/native-proof', { identity: owner }))
+        .status,
+    ).toBe(409);
+  });
+  it('serves native fields without a viewer and retains owner/fresh-auth/CSRF admission', async () => {
+    expect((await request('normal', '/native')).status).toBe(303);
+    expect(
+      (await request('normal', '/native', { identity: 'other-user' })).status,
+    ).toBe(403);
+    expect(
+      (
+        await request('normal', '/native', { identity: owner, stale: true })
+      ).headers.get('location'),
+    ).toContain('/account/reauth');
+    const page = await request('normal', '/native', { identity: owner });
+    const html = await page.text();
+    expect(html).toContain('id="native-username"');
+    expect(html).toContain('id="native-password"');
+    expect(html).not.toContain('<iframe');
+    expect(html).not.toContain('name="password"');
+    expect(html).not.toContain('synthetic-only');
+    expect(page.headers.get('content-security-policy')).toContain(
+      "form-action 'none'",
+    );
+    const rejected = await request('normal', '/native-connection', {
+      identity: owner,
+      method: 'POST',
+      body: '{"password":"synthetic-secret"}',
+    });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.text()).not.toContain('synthetic-secret');
+    expect((await state('normal')).phase).toBe('not_started');
+    expect(
+      (
+        await request('normal', '/native-connection', {
+          identity: owner,
+          method: 'POST',
+          origin: 'https://other.test',
+        })
+      ).status,
+    ).toBe(403);
+  });
   it('recovers an idle-closed expired browser in one start request when native lookup throws 404', async () => {
     await action('native-not-found', 'start');
     const previous = await state('native-not-found');

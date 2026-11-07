@@ -3,12 +3,18 @@ import {
   parkioMobileConnection,
   type ParkioMobileConnection,
 } from '../../hosted/parkio-mobile-contract';
+import {
+  parkioNativeSnapshot,
+  parkioOrdersPage,
+  type ParkioNativeSnapshot,
+} from '../../hosted/parkio-native-contract';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { isAdmin } from './admin';
 import type { SessionUser } from './accounts';
 import { Passkeys } from './passkeys';
 import { page, escapeHtml as e } from './views';
+import { parkioNativeContent } from './parkio-native-view';
 import {
   callPilotFunction,
   evaluatePilot,
@@ -61,6 +67,7 @@ interface Attempt {
   checkedAt?: number;
   checks?: number;
   cleanupAttempts?: number;
+  authenticationFlow?: 'native_credentials' | 'resumed_session';
   result?: {
     count: number;
     namesMatch: boolean;
@@ -94,6 +101,8 @@ function safeState(a: Attempt | null) {
     expiryAvailable: a.expiryAvailable ?? false,
     checkedAt: a.checkedAt ?? null,
     result: a.result ?? null,
+    authenticationFlow: a.authenticationFlow ?? 'unqualified',
+    exportCompletenessQualified: false,
     // This single-owner feasibility test is not qualification of multi-account identity.
     accountIdentityQualified: false,
   };
@@ -125,6 +134,8 @@ export class ParkioPilot {
         'retest',
         'cancel',
         'mobile',
+        'complete',
+        'proof',
       ].includes(action)
     )
       return new Response('Not found', { status: 404 });
@@ -140,6 +151,8 @@ export class ParkioPilot {
             | 'retest'
             | 'cancel'
             | 'mobile'
+            | 'complete'
+            | 'proof'
         ](),
       );
     } catch (error) {
@@ -152,6 +165,7 @@ export class ParkioPilot {
     }
   }
   #tail: Promise<unknown> = Promise.resolve();
+  #completion?: Promise<ReturnType<typeof safeState>>;
   #serial<T>(work: () => Promise<T>): Promise<T> {
     const run = this.#tail.then(work);
     this.#tail = run.catch(() => {});
@@ -344,6 +358,99 @@ export class ParkioPilot {
         throw new PilotError('browser_unavailable');
       }
     });
+  }
+  /** Idempotent owner proof orchestration; credentials never pass through this method. */
+  async complete(): Promise<ReturnType<typeof safeState>> {
+    if (this.#completion) return this.#completion;
+    this.#completion = this.#finish().finally(() => {
+      this.#completion = undefined;
+    });
+    return this.#completion;
+  }
+  async #finish(): Promise<ReturnType<typeof safeState>> {
+    let state = await this.status();
+    if (state.phase === 'passed') return state;
+    if (state.phase === 'closing') {
+      await this.#serial(async () => {
+        const a = await this.#load();
+        if (a?.phase === 'closing' && (await this.#close(a))) {
+          a.phase = 'ready';
+          await this.#save(a);
+          await this.ctx.storage.setAlarm(a.expiresAt);
+        }
+      });
+      state = await this.status();
+    }
+    if (state.phase === 'ready') return this.retest();
+    await this.#prepareActive();
+    await this.inspect();
+    const captured = await this.capture();
+    if (!captured.browserClosed) throw new PilotError('close_browser_first');
+    return this.retest();
+  }
+  async #prepareActive() {
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (!a) throw new PilotError('not_started');
+      this.#assertLive(a);
+      await withPilotPage(
+        this.#browser(),
+        a.sessionId!,
+        a.targetId!,
+        async (command) => {
+          for (let navigation = 0; navigation < 3; navigation++) {
+            let snapshot = await evaluatePilot<ParkioNativeSnapshot>(
+              command,
+              parkioNativeSnapshot,
+            );
+            for (let n = 0; snapshot.kind === 'waiting' && n < 12; n++) {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+              snapshot = await evaluatePilot<ParkioNativeSnapshot>(
+                command,
+                parkioNativeSnapshot,
+              );
+            }
+            if (
+              snapshot.origin !== PARKIO_ORIGIN ||
+              snapshot.kind !== 'candidate'
+            )
+              throw new PilotError('authentication_required');
+            if (snapshot.active) {
+              a.authenticationFlow =
+                snapshot.nativeAttemptId === a.id
+                  ? 'native_credentials'
+                  : 'resumed_session';
+              await this.#save(a);
+              return;
+            }
+            const next = snapshot.activeOrders ?? snapshot.orders;
+            if (!next) throw new PilotError('active_view_required');
+            let url;
+            try {
+              url = parkioOrdersPage(next);
+            } catch {
+              throw new PilotError('active_view_required');
+            }
+            await command('Page.navigate', { url });
+            await new Promise((resolve) => setTimeout(resolve, 350));
+          }
+          throw new PilotError('active_view_required');
+        },
+      );
+    });
+  }
+  async proof() {
+    const a = await this.#load();
+    if (
+      !a ||
+      a.phase !== 'passed' ||
+      !a.browserClosed ||
+      !a.result?.namesMatch ||
+      !a.result.expiriesMatch ||
+      a.expiresAt <= Date.now()
+    )
+      throw new PilotError('proof_not_ready');
+    return { ...safeState(a), holdings: a.baseline ?? [] };
   }
   async inspect() {
     return this.#serial(async () => {
@@ -659,9 +766,11 @@ export function parkioPilotRoutes(
     };
     return {
       status: () => run<ReturnType<typeof safeState>>('status'),
-      start: () => run('start'),
+      start: () => run<ReturnType<typeof safeState>>('start'),
       view: () => run<string>('view'),
       mobile: () => run<ParkioMobileConnection>('mobile'),
+      complete: () => run<ReturnType<typeof safeState>>('complete'),
+      proof: () => run<{ holdings: PilotHolding[] }>('proof'),
       inspect: () => run('inspect'),
       capture: () => run('capture'),
       retest: () => run('retest'),
@@ -688,6 +797,42 @@ export function parkioPilotRoutes(
   });
   app.get('/status', async (c) =>
     c.json(await stub(c.env, c.get('owner')).status()),
+  );
+  app.get('/native', (c) => {
+    c.header(
+      'Content-Security-Policy',
+      "default-src 'none';style-src 'unsafe-inline';font-src 'self';script-src 'self';connect-src 'self' wss://live.browser.run;form-action 'none';base-uri 'none';frame-ancestors 'none'",
+    );
+    return c.html(page('Park.io native connection proof', parkioNativeContent));
+  });
+  app.post('/native-open', (c) => c.redirect(base + '/native', 303));
+  for (const path of [
+    '/native-connection',
+    '/native-complete',
+    '/native-retest',
+  ])
+    app.use(path, async (c, next) => {
+      if (
+        c.req.method === 'POST' &&
+        (!c.req.header('content-type')?.startsWith('application/json') ||
+          (await c.req.text()).trim() !== '{}')
+      )
+        return c.json({ error: 'empty_control_payload_required' }, 400);
+      await next();
+    });
+  app.post('/native-connection', async (c) => {
+    const target = stub(c.env, c.get('owner'));
+    const state = await target.start();
+    return c.json({ ...(await target.mobile()), ...state });
+  });
+  app.post('/native-complete', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).complete()),
+  );
+  app.get('/native-proof', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).proof()),
+  );
+  app.post('/native-retest', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).retest()),
   );
   app.get('/mobile', (c) => c.redirect(base + '/sign-in', 303));
   app.get('/sign-in', (c) => {
@@ -718,7 +863,7 @@ export function parkioPilotRoutes(
     return c.html(
       page(
         'Park.io private feasibility test',
-        `<section class="account"><span class="eyebrow">Owner-only pilot</span><h1>Connect Park.io</h1><p>Sign in on Park.io in a temporary hosted browser. This test checks whether saved login access works after that browser closes. No domain settings are changed.</p><p>For this first qualification, open <strong>Orders → Active</strong> after signing in. Return here to inspect the export, then save the session and close the browser.</p><p>Passwords and MFA are entered in Park.io. Session recording is off. Encrypted test state expires after 24 hours; capture is available for ten minutes.</p>${form('start', 'Sign in to Park.io')}${form('inspect', 'Inspect Active export')}${form('capture', 'Save session and close browser')}${form('retest', 'Test saved session from Worker')}${form('cancel', 'Close browser and clear test session')}<p><a href="${base}">Refresh test status</a> · <a href="/admin">Back to administration</a></p><pre style="white-space:pre-wrap;font-size:13px">${e(JSON.stringify(state, null, 2))}</pre><p class="note">This pilot reports matching counts, schema and errors. It does not import domains into your portfolio or establish permanent login or multi-account identity support.</p></section>`,
+        `<section class="account"><span class="eyebrow">Owner-only pilot</span><h1>Connect Park.io</h1><p>Use native username and password fields to verify a real holdings read and background refresh. No domain settings or portfolio records are changed.</p>${form('native-open', 'Sign in to Park.io')}<details><summary>Qualification diagnostics</summary><p>These manual steps are retained for unsupported verification or export contracts. Recording is off; encrypted test state expires after 24 hours.</p><a href="${base}/sign-in">Open secure provider verification →</a>${form('inspect', 'Inspect Active export')}${form('capture', 'Save session and close browser')}${form('retest', 'Test saved session from Worker')}${form('cancel', 'Close browser and clear test session')}<pre style="white-space:pre-wrap;font-size:13px">${e(JSON.stringify(state, null, 2))}</pre></details><p><a href="${base}">Refresh test status</a> · <a href="/admin">Back to administration</a></p><p class="note">This pilot does not import domains into your portfolio or establish permanent login or multi-account identity support.</p></section>`,
       ),
     );
   });
