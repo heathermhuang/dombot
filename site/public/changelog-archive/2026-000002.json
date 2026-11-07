@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-evidence-10032370e5864b12ba1e15f1",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Verified hosted release record 2.1.0-hosted.4",
+      "status": "Verified release evidence published · Scope follows the linked record",
+      "changes": [
+        "A verified release record was published. Its linked evidence defines the deployed source, engine and validation scope; the date here is its publication date."
+      ],
+      "links": [
+        {
+          "label": "Verified release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/3c98d06d179f1a819088fd79affb5ea754db53f8/docs/product-branding-release-20261107.json"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-aecf74e21120d7c3fab041bd8d7cb1c64345e7e2-9",
       "date": "2026-11-07",
       "layer": "saas",
@@ -126,6 +142,22 @@
         {
           "label": "Change #189",
           "url": "https://github.com/heathermhuang/dombot/pull/189"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-190",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Record verified Domains.Domains branding production release",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #190 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #190",
+          "url": "https://github.com/heathermhuang/dombot/pull/190"
         }
       ]
     },
