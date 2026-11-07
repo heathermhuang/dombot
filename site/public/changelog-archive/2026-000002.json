@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-aecf74e21120d7c3fab041bd8d7cb1c64345e7e2-9",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Hosted service update observed: Use Domains.Domains throughout hosted outputs and downloads",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/aecf74e21120d7c3fab041bd8d7cb1c64345e7e2"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-c3c6d50950c8f48c8a770a14277099644e950697-7",
       "date": "2026-11-07",
       "layer": "saas",
