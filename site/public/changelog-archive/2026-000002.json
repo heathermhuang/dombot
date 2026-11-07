@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-c3c6d50950c8f48c8a770a14277099644e950697-7",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix(hosted): recover closed Park.io browsers and adapt sign-in automatically (#186)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/c3c6d50950c8f48c8a770a14277099644e950697"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-cd00ced5ed49cb8857182b9cb4cf35fc1519dba6-6",
       "date": "2026-11-07",
       "layer": "saas",
