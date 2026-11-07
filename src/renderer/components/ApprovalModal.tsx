@@ -49,9 +49,10 @@ export default function ApprovalModal() {
             <DialogHeader>
               <DialogTitle>Approve MCP connection</DialogTitle>
               <DialogDescription>
-                A client wants to connect to your DomBot portfolio. Approve only
-                if you started this connection. The name is whatever the client
-                claimed; the callback address is where its access will go.
+                A client wants to connect to your Domains.Domains portfolio.
+                Approve only if you started this connection. The name is
+                whatever the client claimed; the callback address is where its
+                access will go.
               </DialogDescription>
             </DialogHeader>
 

@@ -407,7 +407,7 @@ describe('rows', () => {
     expect(r.issues.map((i) => [i.line, i.message])).toEqual([
       [
         2,
-        "Purchase amount: DomBot can't convert TWD. Choose one of the 30 currencies it converts, such as USD, EUR or GBP.",
+        "Purchase amount: Domains.Domains can't convert TWD. Choose one of the 30 currencies it converts, such as USD, EUR or GBP.",
       ],
     ]);
   });

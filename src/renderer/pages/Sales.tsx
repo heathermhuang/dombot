@@ -1,3 +1,4 @@
+import { DOWNLOAD_PREFIX } from '../../shared/product-brand';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -422,7 +423,7 @@ export default function Sales() {
     try {
       const result = await window.api.saveTextFile(
         csv,
-        `dombot-sales-${localDay()}.csv`,
+        `${DOWNLOAD_PREFIX}-sales-${localDay()}.csv`,
       );
       if (!result.saved) return;
       setExportNote(
@@ -454,7 +455,7 @@ export default function Sales() {
             c,
             r.soldOn,
           )
-        : `DomBot can’t convert ${r.currency}`;
+        : `Domains.Domains can’t convert ${r.currency}`;
     }
     return (
       <span className={className} title={title}>

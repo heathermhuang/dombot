@@ -415,7 +415,8 @@ export function statusWord(raw: string): ImportStatus | null {
 export function readStatus(raw: string): ImportStatus | null {
   if (!raw.trim()) return null;
   const status = statusWord(raw);
-  if (!status) throw new Error(`${raw.trim()} isn't a status DomBot knows.`);
+  if (!status)
+    throw new Error(`${raw.trim()} isn't a status Domains.Domains knows.`);
   return status;
 }
 

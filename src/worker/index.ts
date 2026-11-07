@@ -239,7 +239,7 @@ app.use('*', async (c, next) => {
     // only (this page is reachable before any auth exists).
     const message = err instanceof Error ? err.message : String(err);
     console.error('[worker] boot failed:', message);
-    return c.text(`DomBot isn't configured yet.\n\n${message}\n`, 503);
+    return c.text(`Domains.Domains isn't configured yet.\n\n${message}\n`, 503);
   }
   c.set('auth', b.auth);
   await next();

@@ -101,7 +101,7 @@ export function isMarketId(value: unknown): value is MarketId {
 
 export function marketInfo(market: MarketId): MarketInfo {
   const entry = MARKETS[market];
-  if (!entry) throw new Error(`DomBot doesn't support ${market} yet.`);
+  if (!entry) throw new Error(`Domains.Domains doesn't support ${market} yet.`);
   return entry.info;
 }
 
@@ -126,7 +126,7 @@ export function buildAdapter(
   credentials: Credentials,
 ): AnyMarketAdapter {
   const entry = MARKETS[market];
-  if (!entry) throw new Error(`DomBot doesn't support ${market} yet.`);
+  if (!entry) throw new Error(`Domains.Domains doesn't support ${market} yet.`);
   for (const field of entry.info.configFields) {
     if (field.required && !credentials[field.name]?.trim()) {
       throw new Error(`${field.label} is required.`);

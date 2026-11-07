@@ -92,7 +92,7 @@ export default function FoldersSettings() {
         <p className="mt-1 text-sm text-muted-foreground">
           Organize your domains into named, colored groups. Assign a domain to a
           folder from the Domains table. Folders are saved with your other
-          DomBot settings.
+          Domains.Domains settings.
         </p>
       </div>
 

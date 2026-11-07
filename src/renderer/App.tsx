@@ -216,7 +216,7 @@ export default function App() {
             aria-label={
               webAuthMode() === 'gateway'
                 ? 'domains.domains — go to Domains'
-                : 'DomBot — go to Domains'
+                : 'Domains.Domains — go to Domains'
             }
             className="group relative -top-px -ml-1 flex items-center gap-2"
           >
@@ -325,7 +325,11 @@ export default function App() {
               {/* A serif italic "v", dimmer than the monospace digits (like
                   the domain names) and set a little apart from them. */}
               <span className="block">
-                {!isDevVersion(displayedVersion) && <span className="mr-px font-serif text-[12px] italic opacity-60">v</span>}
+                {!isDevVersion(displayedVersion) && (
+                  <span className="mr-px font-serif text-[12px] italic opacity-60">
+                    v
+                  </span>
+                )}
                 <span className="font-mono text-[10px]">
                   {displayedVersion}
                 </span>

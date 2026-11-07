@@ -1,3 +1,4 @@
+import { MCP_CLIENT_NAME } from '../../../shared/product-brand';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { McpClient, McpInfo } from '../../../shared/ipc';
@@ -65,8 +66,9 @@ export default function McpClientsSettings() {
       <div>
         <h2 className="text-2xl font-bold">MCP</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Agents connect to DomBot&apos;s {web ? '' : 'local '}MCP server to
-          manage your portfolio. New connections must be approved here.
+          Agents connect to Domains.Domains&apos;s {web ? '' : 'local '}MCP
+          server to manage your portfolio. New connections must be approved
+          here.
         </p>
       </div>
 
@@ -139,7 +141,7 @@ export default function McpClientsSettings() {
           <CopyField label="Server URL" value={info.url} />
           <CopyField
             label="Claude Code"
-            value={`claude mcp add dombot --transport http ${info.url}`}
+            value={`claude mcp add ${MCP_CLIENT_NAME} --transport http ${info.url}`}
           />
           {!web && (
             <CopyField

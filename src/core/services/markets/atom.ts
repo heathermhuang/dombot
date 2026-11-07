@@ -299,7 +299,7 @@ export function checkAtomChange(change: MarketListingChange): void {
   if (tier && tier !== 'standard' && tier !== 'plus') {
     unsupported(
       'tier',
-      'DomBot adds Standard or Plus listings; submit Premium names on atom.com.',
+      'Domains.Domains adds Standard or Plus listings; submit Premium names on atom.com.',
     );
   }
 }

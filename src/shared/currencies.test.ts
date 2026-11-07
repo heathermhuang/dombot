@@ -37,7 +37,9 @@ describe('currencies', () => {
     expect(toEntryCurrency('')).toBeNull();
     expect(toEntryCurrency(null)).toBeNull();
     expect(() => toEntryCurrency('nope')).toThrow('Unknown currency NOPE.');
-    expect(() => toEntryCurrency('TWD')).toThrow("DomBot can't convert TWD.");
+    expect(() => toEntryCurrency('TWD')).toThrow(
+      "Domains.Domains can't convert TWD.",
+    );
     expect(() => toEntryCurrency('TWD', 'KES')).toThrow(/convert TWD/);
     expect(toEntryCurrency('twd', 'TWD')).toBe('TWD');
   });

@@ -332,7 +332,7 @@ export function MarketListingDialog({
             </Field>
             {mineDiffers && (
               <p className="-mt-2 text-xs text-muted-foreground">
-                Your BIN price in DomBot is{' '}
+                Your BIN price in Domains.Domains is{' '}
                 {formatMoney(
                   mine.amount!,
                   mine.currency,

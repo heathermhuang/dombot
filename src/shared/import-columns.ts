@@ -398,7 +398,7 @@ const n = (h: string) => normalizeHeader(h).key;
 export const KNOWN_FORMATS: KnownFormat[] = [
   {
     id: 'dombot',
-    label: 'DomBot export',
+    label: 'Domains.Domains export',
     requires: [
       n('Domain'),
       n('Purchase type'),

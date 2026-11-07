@@ -620,7 +620,7 @@ export default function Activity() {
     try {
       note = await saveRegistration(e);
     } catch (err) {
-      note = `DomBot couldn't get the fee (${feeError(err)}).`;
+      note = `Domains.Domains couldn't get the fee (${feeError(err)}).`;
     } finally {
       setRegistering((current) => {
         const next = new Set(current);

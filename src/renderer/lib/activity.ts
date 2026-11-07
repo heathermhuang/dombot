@@ -141,7 +141,7 @@ export function eventConversion(
   const years = e.years ? ` · ${e.years} yr` : '';
   return c
     ? `${conversionText(original, money(String(c.amount), preferredCurrency), c, e.date)}${years}`
-    : `${original}${years} (DomBot can’t convert ${e.currency})`;
+    : `${original}${years} (Domains.Domains can’t convert ${e.currency})`;
 }
 
 /**

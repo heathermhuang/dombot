@@ -281,7 +281,7 @@ function MarketsMenu({
       )}
       <DropdownMenuSeparator />
       <DropdownMenuLabel className="text-xs text-muted-foreground">
-        Price vs DomBot
+        Price vs Domains.Domains
       </DropdownMenuLabel>
       {PRICE_COMPARISONS.map((c) =>
         checkbox(

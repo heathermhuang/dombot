@@ -359,7 +359,7 @@ export function registerMarketTools(
       {
         title: 'Query market sales',
         description:
-          'Sales recorded from marketplaces, newest first, as last synced: `soldOn`, `status` (completed, in_progress, cancelled), `kind` (buy_now, lease, offer), `price`, `commission`, `net`, `currency`, lease `installments`, `paidOutOn`, `action` (where a sale under way is at: auth_code and payee_details wait on you, transfer and payout on others), and `authCodeSent` (the market has the transfer auth code; null when it hasn’t said). Never includes transfer auth codes. Returns { total, totals, converted, rows }: `totals` sums price, commission and net per currency over every match, not just the page; `converted` is the same sums all in your preferred currency (`currency`), each sale converted at its month’s average exchange rate (ECB) and a sale with no net counted as price less commission (as market_report_get does), with `provisional` when a recent sale uses a recent rate until its month’s average is out and `leftOut` counting sales in a currency DomBot can’t convert.',
+          'Sales recorded from marketplaces, newest first, as last synced: `soldOn`, `status` (completed, in_progress, cancelled), `kind` (buy_now, lease, offer), `price`, `commission`, `net`, `currency`, lease `installments`, `paidOutOn`, `action` (where a sale under way is at: auth_code and payee_details wait on you, transfer and payout on others), and `authCodeSent` (the market has the transfer auth code; null when it hasn’t said). Never includes transfer auth codes. Returns { total, totals, converted, rows }: `totals` sums price, commission and net per currency over every match, not just the page; `converted` is the same sums all in your preferred currency (`currency`), each sale converted at its month’s average exchange rate (ECB) and a sale with no net counted as price less commission (as market_report_get does), with `provisional` when a recent sale uses a recent rate until its month’s average is out and `leftOut` counting sales in a currency Domains.Domains can’t convert.',
         inputSchema: {
           market: marketId,
           accountId,
@@ -669,7 +669,7 @@ export function registerMarketTools(
       {
         title: 'Market report',
         description:
-          'The Markets page’s report, across enabled market accounts: sales by year (completed sales: count, gross, commission, net, average; in-progress and cancelled counted beside), all-time totals, sell-through over the last 12 months (sales ÷ names listed now plus those sold), and account views and leads by month. Amounts are decimal strings in your preferred currency (`currency`): a sale in another is converted at its month’s average exchange rate (ECB); a year is `provisional` when a recent sale uses a recent rate until its month’s average is out, and `leftOut` counts completed sales in a currency DomBot can’t convert, which aren’t in the money.',
+          'The Markets page’s report, across enabled market accounts: sales by year (completed sales: count, gross, commission, net, average; in-progress and cancelled counted beside), all-time totals, sell-through over the last 12 months (sales ÷ names listed now plus those sold), and account views and leads by month. Amounts are decimal strings in your preferred currency (`currency`): a sale in another is converted at its month’s average exchange rate (ECB); a year is `provisional` when a recent sale uses a recent rate until its month’s average is out, and `leftOut` counts completed sales in a currency Domains.Domains can’t convert, which aren’t in the money.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
       },
@@ -767,7 +767,7 @@ const changeShape = {
         .enum(['standard', 'plus'])
         .optional()
         .describe(
-          'For a new listing: Standard (7.5% commission) or Plus (15%). DomBot never adds Premium; that is submitted on atom.com.',
+          'For a new listing: Standard (7.5% commission) or Plus (15%). Domains.Domains never adds Premium; that is submitted on atom.com.',
         ),
       category: z
         .string()
@@ -890,7 +890,7 @@ export function registerMarketWriteTools(
       {
         title: 'List or update a domain on a market',
         description:
-          'List one domain on a market account, or change its listing. Only the fields given change; a name that isn’t listed yet is listed. `accountId` can be left out when the name is listed in one account, or there is only one market account. With `fromAskingPrice: true`, the price, minimum offer and floor come from the asking price set in DomBot (domain_asking_price_set) instead. Returns the result with the listing as saved, and `adjusted`: fields the market saved differently from what was asked (Afternic silently caps lease-to-own payments by price). A new Afternic listing stays pending until Afternic can verify ownership (Afternic nameservers).',
+          'List one domain on a market account, or change its listing. Only the fields given change; a name that isn’t listed yet is listed. `accountId` can be left out when the name is listed in one account, or there is only one market account. With `fromAskingPrice: true`, the price, minimum offer and floor come from the asking price set in Domains.Domains (domain_asking_price_set) instead. Returns the result with the listing as saved, and `adjusted`: fields the market saved differently from what was asked (Afternic silently caps lease-to-own payments by price). A new Afternic listing stays pending until Afternic can verify ownership (Afternic nameservers).',
         inputSchema: {
           domain: z.string().min(1).max(253),
           accountId,
@@ -934,7 +934,7 @@ export function registerMarketWriteTools(
       {
         title: 'List or update many domains',
         description:
-          'List or update any number of names on one market account, in the market’s batch size (500 a call on Afternic). Atom writes one name a call, so more than 10 names there start a market bulk job instead (about a name a second, names already at the asked values skipped): the reply is { job } and market_job_get follows it. Either pass `changes` (each a `name` plus the fields to set, as domain_listing_set), or `domains` with `fromAskingPrice: true` to make the market match the asking prices set in DomBot: names without one, or priced in a currency the market doesn’t take, fail without being sent. Returns { ok, failed, adjusted, results } with one result per name.',
+          'List or update any number of names on one market account, in the market’s batch size (500 a call on Afternic). Atom writes one name a call, so more than 10 names there start a market bulk job instead (about a name a second, names already at the asked values skipped): the reply is { job } and market_job_get follows it. Either pass `changes` (each a `name` plus the fields to set, as domain_listing_set), or `domains` with `fromAskingPrice: true` to make the market match the asking prices set in Domains.Domains: names without one, or priced in a currency the market doesn’t take, fail without being sent. Returns { ok, failed, adjusted, results } with one result per name.',
         inputSchema: {
           accountId: requiredAccount,
           changes: z
@@ -1183,7 +1183,7 @@ export function registerMarketWriteTools(
       {
         title: 'Send a sale its auth code',
         description:
-          'Give a market sale the transfer auth code it is waiting for (market_sales rows with `action: "auth_code"`), or correct one sent before. Leave `authCode` out and DomBot gets it from the registrar account that holds the name, as domain_auth_code_get, and sends that. The code is never returned or stored. The buyer can’t take a locked name: unlock it with domain_set_lock too.',
+          'Give a market sale the transfer auth code it is waiting for (market_sales rows with `action: "auth_code"`), or correct one sent before. Leave `authCode` out and Domains.Domains gets it from the registrar account that holds the name, as domain_auth_code_get, and sends that. The code is never returned or stored. The buyer can’t take a locked name: unlock it with domain_set_lock too.',
         inputSchema: {
           accountId: requiredAccount,
           saleId: z
@@ -1323,7 +1323,7 @@ export function registerMarketWriteTools(
       {
         title: 'Set a market account’s Ownership Verification ID',
         description:
-          'Save a market account’s Ownership Verification ID, which domain_verification_apply and the account’s `verificationNameservers` use: paste the value as the market shows it (Afternic’s Domain Ownership Record, TXT or NS3; Sedo’s Domain Ownership Verification ID; Atom’s TXT Code) and DomBot reads the ID out of it. An empty value clears it. Kept in DomBot; the market isn’t contacted.',
+          'Save a market account’s Ownership Verification ID, which domain_verification_apply and the account’s `verificationNameservers` use: paste the value as the market shows it (Afternic’s Domain Ownership Record, TXT or NS3; Sedo’s Domain Ownership Verification ID; Atom’s TXT Code) and Domains.Domains reads the ID out of it. An empty value clears it. Kept in Domains.Domains; the market isn’t contacted.',
         inputSchema: {
           accountId: requiredAccount,
           value: z.string().max(500),

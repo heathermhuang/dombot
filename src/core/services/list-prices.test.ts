@@ -116,7 +116,7 @@ describe('BIN prices', () => {
     });
     expect(() =>
       setListPrices([price('new.com', '600', { currency: 'TWD' })]),
-    ).toThrow("DomBot can't convert TWD.");
+    ).toThrow("Domains.Domains can't convert TWD.");
   });
 
   it('sets many names in one call and leaves unchanged ones alone', async () => {

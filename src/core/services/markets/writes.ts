@@ -203,7 +203,7 @@ export async function pushAskingPrices(
         failed(
           name,
           'NO_PRICE',
-          'No asking price in DomBot. Set a BIN price or minimum offer first.',
+          'No asking price in Domains.Domains. Set a BIN price or minimum offer first.',
         ),
       );
     } else if (!currencies.includes(price.currency as never)) {
@@ -420,7 +420,7 @@ function registrarHolding(name: string): RegistrarName {
   if (found.length === 1) return found[0];
   throw new Error(
     found.length === 0
-      ? `None of your registrar accounts holds ${name}, so DomBot can't get its auth code. Enter it yourself.`
+      ? `None of your registrar accounts holds ${name}, so Domains.Domains can't get its auth code. Enter it yourself.`
       : `${name} shows in more than one registrar account; sync, or enter the auth code yourself.`,
   );
 }

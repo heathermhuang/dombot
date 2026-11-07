@@ -249,7 +249,7 @@ export function MarketActionDialog({
           {!done && (
             <DialogDescription>
               {action === 'list' &&
-                'Lists each name, or updates its listing, with the BIN price, minimum offer and floor you set in DomBot. Listings you already have keep their other settings, and any that are inactive, rejected or stuck pending get the market’s checks re-run.'}
+                'Lists each name, or updates its listing, with the BIN price, minimum offer and floor you set in Domains.Domains. Listings you already have keep their other settings, and any that are inactive, rejected or stuck pending get the market’s checks re-run.'}
               {action === 'delist' &&
                 'Takes the listings down. The names stay in your registrar accounts, and you can list them again later.'}
             </DialogDescription>
@@ -307,7 +307,8 @@ export function MarketActionDialog({
                 <span className="text-muted-foreground">
                   {' '}
                   {names(keys.length - priced.length)} without an asking price
-                  in DomBot will be skipped; set one with Pricing first.
+                  in Domains.Domains will be skipped; set one with Pricing
+                  first.
                 </span>
               )}
               {action === 'delist' && keys.length > targets.length && (

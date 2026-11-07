@@ -104,9 +104,10 @@ export default function MarketsSettings() {
       <div>
         <h2 className="text-2xl font-bold">Markets</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Connect the marketplaces where you list domains for sale. DomBot syncs
-          each account&apos;s listings, sales and traffic with your registrars.
-          Keys are encrypted at rest and used by the app and the MCP server.
+          Connect the marketplaces where you list domains for sale.
+          Domains.Domains syncs each account&apos;s listings, sales and traffic
+          with your registrars. Keys are encrypted at rest and used by the app
+          and the MCP server.
         </p>
       </div>
 
@@ -794,7 +795,7 @@ function MarketCard({
       {removing && (
         <ConfirmDialog
           title={`Remove ${market.name} · ${title}?`}
-          description={`DomBot forgets this account's key and synced listings. Your listings stay on ${market.name}, and sales DomBot recorded stay in your history.`}
+          description={`Domains.Domains forgets this account's key and synced listings. Your listings stay on ${market.name}, and sales Domains.Domains recorded stay in your history.`}
           actionLabel="Remove account"
           busyLabel="Removing…"
           busy={busy === 'remove'}

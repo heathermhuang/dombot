@@ -143,9 +143,9 @@ export default function ProxySettings() {
         <h2 className="text-2xl font-bold">Proxy</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Some registrars only accept API requests from an address you have
-          whitelisted. If the machine running DomBot doesn&apos;t have a fixed
-          one, send those requests through a proxy that does. Set it up once
-          here, then turn on <strong>Use fixed IP proxy</strong> for each
+          whitelisted. If the machine running Domains.Domains doesn&apos;t have
+          a fixed one, send those requests through a proxy that does. Set it up
+          once here, then turn on <strong>Use fixed IP proxy</strong> for each
           account under Registrars.
         </p>
       </div>
@@ -158,8 +158,8 @@ export default function ProxySettings() {
             <strong className="font-mono text-foreground">
               {settings.managed.egressIp}
             </strong>{' '}
-            to the API whitelist of each registrar. No proxy setup is needed. The
-            settings below are an optional connection you manage yourself.
+            to the API whitelist of each registrar. No proxy setup is needed.
+            The settings below are an optional connection you manage yourself.
           </p>
         </SettingsCard>
       )}

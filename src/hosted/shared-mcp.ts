@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../shared/product-brand';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
@@ -309,7 +310,7 @@ export function sharedMcpRoutes() {
           c.env.SHARED_MCP_MANAGEMENT_ENABLED === 'true'
             ? [...supportedScopes]
             : [scope],
-        resource_name: 'domains.domains',
+        resource_name: PRODUCT_NAME,
       }),
     );
   app.post('/register', async (c) => {

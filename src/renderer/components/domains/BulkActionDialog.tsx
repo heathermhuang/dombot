@@ -319,7 +319,7 @@ export function BulkActionDialog({
         {op.kind === 'authCode' && (
           <InlineWarning>
             Auth codes are transfer secrets. They’re shown once here and never
-            stored by DomBot; export them only if you need a file.
+            stored by Domains.Domains; export them only if you need a file.
           </InlineWarning>
         )}
         <Buckets buckets={buckets} held={held} />

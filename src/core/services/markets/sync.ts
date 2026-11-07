@@ -470,12 +470,12 @@ async function runMarketSync(accountId: string): Promise<void> {
     if (trafficNote) kept.push(trafficNote);
     if (unconfirmed) {
       kept.push(
-        `${UNCONFIRMED_NOTE}: ${unconfirmed} ${unconfirmed === 1 ? 'name' : 'names'} DomBot sent never showed up. The market may have refused ${unconfirmed === 1 ? 'it' : 'them'}; check the account's email.`,
+        `${UNCONFIRMED_NOTE}: ${unconfirmed} ${unconfirmed === 1 ? 'name' : 'names'} Domains.Domains sent never showed up. The market may have refused ${unconfirmed === 1 ? 'it' : 'them'}; check the account's email.`,
       );
     }
     if (verifying) {
       kept.push(
-        `${VERIFYING_NOTE}: ${verifying} ${verifying === 1 ? 'name' : 'names'} DomBot listed ${verifying === 1 ? "isn't" : "aren't"} for sale yet while the market checks that you own ${verifying === 1 ? 'it' : 'them'}. Finish the verification on the market's site (through the registry, or a TXT record it gives you).`,
+        `${VERIFYING_NOTE}: ${verifying} ${verifying === 1 ? 'name' : 'names'} Domains.Domains listed ${verifying === 1 ? "isn't" : "aren't"} for sale yet while the market checks that you own ${verifying === 1 ? 'it' : 'them'}. Finish the verification on the market's site (through the registry, or a TXT record it gives you).`,
       );
     }
     setMarketSyncState(accountId, {

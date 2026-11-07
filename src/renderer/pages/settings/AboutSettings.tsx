@@ -264,7 +264,7 @@ function ProjectAboutSettings() {
     status = `Couldn’t check for updates: ${feed.error}`;
   else if (!feed) status = 'Not checked yet.';
   else if (newer.length === 1)
-    status = `DomBot ${newer[0].version} is available.`;
+    status = `Domains.Domains ${newer[0].version} is available.`;
   else if (newer.length > 1)
     status = `${newer.length} newer releases are available; the latest is ${newer[0].version}.`;
   else if (current && isDevVersion(current))
@@ -276,8 +276,8 @@ function ProjectAboutSettings() {
       <div>
         <h2 className="text-2xl font-bold">About</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your version of DomBot, whether there’s a newer one, and the project
-          behind it.
+          Your version of Domains.Domains, whether there’s a newer one, and the
+          project behind it.
         </p>
       </div>
 
@@ -286,7 +286,7 @@ function ProjectAboutSettings() {
           <div>
             {/* The version reads as code, set apart from the name. */}
             <p className="text-lg font-semibold">
-              DomBot{' '}
+              Domains.Domains{' '}
               <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[15px] font-medium">
                 {current ?? '…'}
               </span>
@@ -368,9 +368,9 @@ function ProjectAboutSettings() {
               Check for updates automatically
             </Label>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
-              Once a week DomBot checks heathermhuang/dombot releases on GitHub
-              and lets you know when there’s a newer fork version. Nothing about
-              you or your portfolio is sent.
+              Once a week Domains.Domains checks heathermhuang/dombot releases
+              on GitHub and lets you know when there’s a newer fork version.
+              Nothing about you or your portfolio is sent.
             </p>
           </div>
           <Switch
@@ -408,9 +408,12 @@ function ProjectAboutSettings() {
         )}
       </SettingsCard>
 
-      <SettingsCard title="About DomBot" contentClassName="flex flex-col gap-3">
+      <SettingsCard
+        title="About Domains.Domains"
+        contentClassName="flex flex-col gap-3"
+      >
         <p className="text-sm text-muted-foreground">
-          DomBot is free and open-source software, released under the{' '}
+          Domains.Domains is free and open-source software, released under the{' '}
           <ExtLink href={`${REPO}/blob/main/LICENSE`} className={SETTINGS_LINK}>
             GNU AGPL v3.0
           </ExtLink>

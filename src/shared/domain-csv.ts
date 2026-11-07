@@ -1,3 +1,4 @@
+import { DOWNLOAD_PREFIX } from './product-brand';
 import { domainKey } from './account-key';
 import { CURRENCIES, isCurrencyCode } from './currencies';
 import { toCsv } from './csv';
@@ -386,7 +387,7 @@ export function domainsToCsv(domains: Domain[], ctx: DomainCsvContext): string {
 
 /** Timestamped default filename, e.g. "dombot-domains-2026-08-30.csv". */
 export function domainsCsvFilename(now: Date = new Date()): string {
-  return `dombot-domains-${now.toISOString().slice(0, 10)}.csv`;
+  return `${DOWNLOAD_PREFIX}-domains-${now.toISOString().slice(0, 10)}.csv`;
 }
 
 /**

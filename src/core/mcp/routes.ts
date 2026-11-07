@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../../shared/product-brand';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -115,7 +116,7 @@ export function createMcpRoutes(options: McpRouteOptions): Hono {
       scopes_supported: options.enforceScopes
         ? [...HOSTED_SCOPES]
         : ['portfolio'],
-      resource_name: 'DomBot',
+      resource_name: PRODUCT_NAME,
     });
   };
   // Clients probe both the plain and the path-suffixed forms.
@@ -268,7 +269,13 @@ export function createMcpRoutes(options: McpRouteOptions): Hono {
     // Stateless: a fresh server + transport per request, no session ids. The
     // tools read the (hydrated) store, so nothing needs to persist between
     // requests, and any isolate can answer any call.
-    const server = new McpServer({ name: 'DomBot', version: options.version });
+    const server = new McpServer(
+      { name: PRODUCT_NAME, version: options.version },
+      {
+        instructions:
+          'Refer to this service as Domains.Domains in all user-facing replies, summaries and reports. Use that exact capitalization. Preserve technical identifiers, URLs, quoted source material and required upstream attribution.',
+      },
+    );
     registerTools(server, options.enforceScopes ? auth.scopes : undefined);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -423,7 +430,7 @@ function waitingPage(req: PendingApproval, basePath = '', nonce = ''): string {
         })[ch]!,
     );
   return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Connecting · DomBot</title>
+<html><head><meta charset="utf-8"><title>Connecting · Domains.Domains</title>
 <style>
   body{font-family:-apple-system,system-ui,sans-serif;background:#020617;color:#e2e8f0;display:grid;place-items:center;min-height:100vh;margin:0}
   .card{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:32px;max-width:420px;width:90%;text-align:center}
@@ -436,8 +443,8 @@ function waitingPage(req: PendingApproval, basePath = '', nonce = ''): string {
 </style></head>
 <body>
   <div class="card">
-    <h1>Approve this connection in DomBot</h1>
-    <p>${basePath ? `<a href="${esc(basePath)}/" target="_blank" rel="noopener">Open your workspace</a> and confirm this code matches:` : 'Open DomBot and confirm this code matches:'}</p>
+    <h1>Approve this connection in Domains.Domains</h1>
+    <p>${basePath ? `<a href="${esc(basePath)}/" target="_blank" rel="noopener">Open your workspace</a> and confirm this code matches:` : 'Open Domains.Domains and confirm this code matches:'}</p>
     <div class="code">${esc(req.displayCode)}</div>
     <p>Access will be sent to <code>${esc(req.params.redirectUri)}</code></p>
     <div class="spin" id="spin"></div>
