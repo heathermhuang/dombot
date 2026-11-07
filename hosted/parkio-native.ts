@@ -307,6 +307,8 @@ function setup(root: HTMLElement) {
         message('');
         return;
       }
+      if (state.kind === 'unqualified')
+        throw Error('provider_contract_required');
       if (n + 1 < (wait ? 30 : 1))
         await new Promise((resolve) => setTimeout(resolve, 1000));
     }
@@ -317,6 +319,8 @@ function setup(root: HTMLElement) {
     const messages: Record<string, string> = {
       account_authentication_required:
         'Confirm your domains.domains account, then reopen the connection proof.',
+      provider_contract_required:
+        'Park.io’s current sign-in page needs qualification. The connection has not been verified yet.',
       daily_browser_budget:
         'The daily sign-in attempt limit has been reached. Return to connection details to check the proof status.',
       authentication_required:

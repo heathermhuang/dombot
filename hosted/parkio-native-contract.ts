@@ -1,5 +1,11 @@
 export interface ParkioNativeSnapshot {
-  kind: 'credentials' | 'verification' | 'candidate' | 'challenge' | 'waiting';
+  kind:
+    | 'credentials'
+    | 'verification'
+    | 'candidate'
+    | 'challenge'
+    | 'waiting'
+    | 'unqualified';
   origin: string;
   path: string;
   rejected: boolean;
@@ -14,7 +20,8 @@ export const parkioNativeSnapshot = `(() => {
   const origin=location.origin,path=location.pathname;
   let nativeAttemptId=null;try{nativeAttemptId=sessionStorage.getItem('domains-native-attempt');}catch{}
   const result={origin,path,rejected:false,active:false,orders:null,activeOrders:null,nativeAttemptId};
-  if(origin!=='https://park.io')return {...result,kind:'challenge'};
+  if(location.href==='about:blank')return {...result,kind:'waiting'};
+  if(origin!=='https://park.io')return {...result,kind:'unqualified'};
   if(globalThis.__domainsNativeLoginPending)return {...result,kind:'waiting'};
   if(document.readyState!=='complete')return {...result,kind:'waiting'};
   const visible=e=>!!e&&!!e.getClientRects().length&&!e.disabled;
@@ -30,12 +37,13 @@ export const parkioNativeSnapshot = `(() => {
   if(verification.length===1)return {...result,kind:'verification'};
   const links=[...document.querySelectorAll('a[href]')];
   const label=e=>(e.textContent||'').trim().replace(/\\s+/g,' ');
-  result.orders=links.find(e=>/^orders$/i.test(label(e)))?.href||null;
-  const active=links.filter(e=>/^active(?: orders)?$/i.test(label(e)));
-  result.activeOrders=active.length===1?active[0].href:null;
+  result.orders=links.find(e=>/^orders(?:\\s*\\(?\\d+\\)?)?$/i.test(label(e)))?.href||null;
+  const active=links.filter(e=>/^active(?: orders)?(?:\\s*\\(?\\d+\\)?)?$/i.test(label(e)));
+  const activeHrefs=[...new Set(active.map(e=>e.href))];
+  result.activeOrders=activeHrefs.length===1?activeHrefs[0]:null;
   result.active=/\\/orders(?:\\/index)?\\/active\\/?$/.test(path)||active.some(e=>e.matches('.active,.selected,[aria-current="page"]')||e.closest('li.active,li.selected,.tab.active'))||[...document.querySelectorAll('h1,h2')].some(e=>/^active orders$/i.test(label(e)));
   if(!document.querySelector('input[type="password"]')&&(/^\\/orders(?:\\/|$)/.test(path)||result.orders))return {...result,kind:'candidate'};
-  return {...result,kind:'challenge'};
+  return {...result,kind:'unqualified'};
 })()`;
 
 /** Uses the original provider form, retaining its CSRF fields and submission behavior. */
