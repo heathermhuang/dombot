@@ -758,7 +758,7 @@ describe('listings a market is still checking', () => {
     const note = marketAccountViews()[0].sync?.notes.find((n) =>
       n.startsWith('Not listed after a week'),
     );
-    expect(note).toMatch(/1 name DomBot sent/);
+    expect(note).toMatch(/1 name Domains\.Domains sent/);
   });
 
   it('replaces the pending row once the market lists the name', async () => {
@@ -789,7 +789,7 @@ describe('listings a market is still checking', () => {
     });
     expect(marketAccountViews()[0].sync?.notes).toContainEqual(
       expect.stringMatching(
-        /^Waiting on ownership checks: 1 name DomBot listed/,
+        /^Waiting on ownership checks: 1 name Domains\.Domains listed/,
       ),
     );
 

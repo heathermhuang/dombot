@@ -236,7 +236,7 @@ export class AtomClient {
     const type = listing.type ?? 'standard';
     if ((type as string) === 'premium') {
       throw new Error(
-        'DomBot doesn’t add Premium listings; submit them on atom.com.',
+        'Domains.Domains doesn’t add Premium listings; submit them on atom.com.',
       );
     }
     return this.write('/add-domain', {

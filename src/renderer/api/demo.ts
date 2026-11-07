@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../../shared/product-brand';
 import { z } from 'zod';
 import type { DombotApi, DomainTarget, RegistrarName } from '../../shared/ipc';
 import {
@@ -80,7 +81,7 @@ const demoMethods: Omit<ApiTable, CoreMethodName> = {
   installUpdate: method(none, async () => {}),
   showLogFile: method(none, async () => {}),
   getAppInfo: method(none, async () => ({
-    name: 'DomBot',
+    name: PRODUCT_NAME,
     version: DEMO_VERSION,
     electron: '',
     chrome: '',

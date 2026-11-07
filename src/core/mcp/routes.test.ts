@@ -70,7 +70,9 @@ async function pair(): Promise<string> {
   });
   const auth = await req('/authorize?' + q);
   expect(auth.status).toBe(200);
-  expect(await auth.text()).toContain('Approve this connection');
+  const approval = await auth.text();
+  expect(approval).toContain('Approve this connection in Domains.Domains');
+  expect(approval).not.toContain('DomBot');
 
   const [pending] = listPendingApprovals();
   const status = await (await req('/oauth/status?id=' + pending.id)).json();
@@ -118,6 +120,7 @@ describe('discovery', () => {
     expect(rs).toMatchObject({
       resource: ORIGIN + '/mcp',
       authorization_servers: [ORIGIN + '/'],
+      resource_name: 'Domains.Domains',
     });
     const res = await req('/.well-known/oauth-authorization-server', {
       method: 'OPTIONS',
@@ -218,12 +221,18 @@ describe('token + mcp', () => {
     });
     expect(init.status).toBe(200);
     const initBody = (await init.json()) as {
-      result: { serverInfo: { name: string; version: string } };
+      result: {
+        serverInfo: { name: string; version: string };
+        instructions: string;
+      };
     };
     expect(initBody.result.serverInfo).toEqual({
-      name: 'DomBot',
+      name: 'Domains.Domains',
       version: '9.9.9',
     });
+    expect(initBody.result.instructions).toContain(
+      'Refer to this service as Domains.Domains',
+    );
     // Stateless: no session id is issued, and the next call needs none.
     expect(init.headers.get('mcp-session-id')).toBeNull();
 
@@ -233,6 +242,8 @@ describe('token + mcp', () => {
       result: { tools: { name: string }[] };
     };
     expect(tools.result.tools.map((t) => t.name)).toContain('registrar_list');
+    expect(JSON.stringify(tools.result.tools)).not.toMatch(/dombot/i);
+    expect(JSON.stringify(tools.result.tools)).toContain('Domains.Domains');
 
     const bad = await req('/mcp', {
       method: 'POST',

@@ -194,11 +194,11 @@ export function ActivityBell() {
                       : null
                   }
                   onDismiss={() => dismissUpdate(update.latest.version)}
-                  dismissLabel={`Dismiss DomBot ${update.latest.version}`}
+                  dismissLabel={`Dismiss Domains.Domains ${update.latest.version}`}
                   dismissTitle="Dismiss until the next release"
                 >
                   <span className="font-medium">
-                    DomBot {update.latest.version}
+                    Domains.Domains {update.latest.version}
                   </span>{' '}
                   <span className="text-muted-foreground">is available</span>
                 </BellRow>
@@ -455,7 +455,7 @@ function UnconvertibleRow({
               {n} amount{n === 1 ? '' : 's'}
             </span>{' '}
             <span className="text-muted-foreground">
-              in currencies DomBot can’t convert
+              in currencies Domains.Domains can’t convert
             </span>
           </span>
           <ChevronDown
@@ -475,8 +475,8 @@ function UnconvertibleRow({
       {open && (
         <div className="pb-1.5">
           <p className="px-3 pb-1.5 pl-[38px] text-xs text-muted-foreground">
-            They stay as recorded, but DomBot can’t convert them into your
-            currency. Change each to one of the 30 it converts.
+            They stay as recorded, but Domains.Domains can’t convert them into
+            your currency. Change each to one of the 30 it converts.
           </p>
           <ul className="max-h-48 overflow-y-auto">
             {items.map((item) => {

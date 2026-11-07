@@ -110,11 +110,11 @@ export function parseBundle(
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new BundleError('Not a DomBot data file (invalid JSON).');
+    throw new BundleError('Not a Domains.Domains data file (invalid JSON).');
   }
   const head = raw as (Partial<DataBundle> & { encrypted?: unknown }) | null;
   if (!head || head.format !== BUNDLE_FORMAT) {
-    throw new BundleError('Not a DomBot data file.');
+    throw new BundleError('Not a Domains.Domains data file.');
   }
   if ('sales' in head && head.sales !== undefined && !hostOptions?.sales) {
     throw new BundleError(
@@ -127,7 +127,7 @@ export function parseBundle(
     )
   ) {
     throw new BundleError(
-      `This file was made by a newer DomBot (format v${String(head.version)}). Update and try again.`,
+      `This file was made by a newer Domains.Domains (format v${String(head.version)}). Update and try again.`,
     );
   }
   if (head.encrypted) {

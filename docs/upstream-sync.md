@@ -13,6 +13,10 @@ A subset of cherry-picked fixes is not full feature parity.
    per-account identity, hosted proxy/scheduler policies, independent quote ages,
    publication boundaries and the current selection/filter behavior. Preserve
    desktop/self-hosted functionality and the hosted release display.
+   Keep the service branding contract in `src/shared/product-brand.ts` and the
+   copy/download regression check in `scripts/product-branding.test.mjs`. Resolve
+   new upstream product copy to Domains.Domains; keep original-project credits
+   and technical identifiers. See [Product branding](product-branding.md).
 4. Update the parity inventory and its test to the released revision. Bump the
    engine version/provenance, build the matched engine/UI artifact, install it,
    and verify the engine boundary and source/archive/installed-package hashes.

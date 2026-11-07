@@ -255,7 +255,7 @@ export function marketColumns({
       const title = [
         describe(l, markets, (a) => money(a, l.currency)),
         diff &&
-          `${money(String(Math.abs(diff)), l.currency)} ${diff > 0 ? 'above' : 'below'} your DomBot BIN price of ${money(mine!.amount!, mine!.currency)}`,
+          `${money(String(Math.abs(diff)), l.currency)} ${diff > 0 ? 'above' : 'below'} your Domains.Domains BIN price of ${money(mine!.amount!, mine!.currency)}`,
       ]
         .filter(Boolean)
         .join('\n');

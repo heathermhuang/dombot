@@ -800,7 +800,7 @@ function AccountCard({
       {removing && (
         <ConfirmDialog
           title={`Remove ${title}?`}
-          description={`DomBot forgets this account's credentials and cached domains. The domains stay at ${provider.displayName}, and you can add the account again later.`}
+          description={`Domains.Domains forgets this account's credentials and cached domains. The domains stay at ${provider.displayName}, and you can add the account again later.`}
           actionLabel="Remove account"
           busyLabel="Removing…"
           busy={saving}

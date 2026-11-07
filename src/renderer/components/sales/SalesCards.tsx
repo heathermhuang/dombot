@@ -128,7 +128,7 @@ export function SalesCards({
           {t.leftOut.length > 0 &&
             ` ${t.leftOut
               .map((o) => `${plural(o.count, 'sale')} in ${o.currency}`)
-              .join(', ')} left out: DomBot can’t convert ${
+              .join(', ')} left out: Domains.Domains can’t convert ${
               t.leftOut.length === 1 ? 'it' : 'them'
             }.`}
         </>

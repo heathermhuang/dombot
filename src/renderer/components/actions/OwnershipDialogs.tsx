@@ -131,7 +131,7 @@ export function DeleteDomainsDialog({
     <ActionDialog
       title="Delete"
       names={domains.map((d) => d.domainName)}
-      description={`This removes everything DomBot holds about ${
+      description={`This removes everything Domains.Domains holds about ${
         domains.length === 1 ? 'the name' : 'these names'
       }: purchases and sales, notes, activity, folder, and price. Nothing changes at any registrar.`}
       actionLabel="Delete"

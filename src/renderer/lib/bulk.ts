@@ -1,3 +1,4 @@
+import { DOWNLOAD_PREFIX } from '../../shared/product-brand';
 // Pure helpers behind the bulk-action dialog: bucketing a selection by
 // eligibility, titling an op, and the results CSV. No React, no IPC.
 
@@ -221,7 +222,7 @@ export function authCodesToTsv(results: readonly DomainOpResult[]): string {
 export function resultsCsvFilename(job: BulkJob): string {
   const label = OP_LABEL[job.op.kind].replace(/\s+/g, '-');
   const date = new Date(job.startedAt).toISOString().slice(0, 10);
-  return `dombot-bulk-${label}-${date}.csv`;
+  return `${DOWNLOAD_PREFIX}-bulk-${label}-${date}.csv`;
 }
 
 /** The boolean ops: the ones whose bulk dialog offers an on/off choice. */

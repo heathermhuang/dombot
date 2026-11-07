@@ -95,7 +95,7 @@ export function ImportedDomainDialog({
           <p className="text-sm text-muted-foreground">
             {domain.marketObservation
               ? 'A marketplace reports this listing. That does not verify registrar holdings or domain control. Details you save here stay private.'
-              : 'No connected registrar account reports this name, so DomBot keeps what you enter here. When a registrar account reports it, sync takes over.'}
+              : 'No connected registrar account reports this name, so Domains.Domains keeps what you enter here. When a registrar account reports it, sync takes over.'}
           </p>
           <div className="flex flex-col gap-2">
             <Label htmlFor="imported-registrar">Registrar</Label>

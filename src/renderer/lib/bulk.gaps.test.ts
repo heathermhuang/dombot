@@ -175,9 +175,9 @@ describe('resultsCsvFilename', () => {
   it('is hyphenated, labeled by op, and dated from startedAt', () => {
     expect(
       resultsCsvFilename(job({ kind: 'autoRenew', enabled: true }, [])),
-    ).toBe('dombot-bulk-auto-renew-2026-09-04.csv');
+    ).toBe('Domains.Domains-bulk-auto-renew-2026-09-04.csv');
     expect(resultsCsvFilename(job({ kind: 'authCode' }, []))).toBe(
-      'dombot-bulk-auth-code-2026-09-04.csv',
+      'Domains.Domains-bulk-auth-code-2026-09-04.csv',
     );
   });
 });

@@ -164,11 +164,11 @@ describe('export → import', () => {
   it('rejects things that are not bundles', () => {
     expect(() => parseBundle('not json')).toThrow(BundleError);
     expect(() => parseBundle('{"format":"x"}')).toThrow(
-      /Not a DomBot data file/,
+      /Not a Domains\.Domains data file/,
     );
     expect(() =>
       parseBundle(JSON.stringify({ format: BUNDLE_FORMAT, version: 99 })),
-    ).toThrow(/newer DomBot/);
+    ).toThrow(/newer Domains\.Domains/);
     expect(() =>
       parseBundle(JSON.stringify({ format: BUNDLE_FORMAT, version: 1 })),
     ).toThrow(/no content/);
@@ -270,7 +270,7 @@ describe('export → import', () => {
     expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
     expect(buildBundle(APP).version).toBe(12);
     expect(() => parseBundle(JSON.stringify({ ...v4, version: 13 }))).toThrow(
-      /newer DomBot/,
+      /newer Domains\.Domains/,
     );
   });
 

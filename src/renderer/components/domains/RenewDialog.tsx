@@ -150,8 +150,8 @@ export function RenewDialog({
         </dd>
       </dl>
       <InlineWarning>
-        The cost is DomBot’s estimate. Your registrar charges its own price,
-        which can differ for premium names.
+        The cost is Domains.Domains’s estimate. Your registrar charges its own
+        price, which can differ for premium names.
       </InlineWarning>
     </ConfirmDialog>
   );

@@ -92,7 +92,7 @@ describe('event helpers', () => {
     expect(eventConversion(event({}), 'us', 'USD', fx)).toBeNull();
     expect(
       eventConversion({ ...bought, currency: 'TWD' }, 'us', 'USD', fx),
-    ).toMatch(/\(DomBot can’t convert TWD\)$/);
+    ).toMatch(/\(Domains\.Domains can’t convert TWD\)$/);
   });
 });
 

@@ -130,7 +130,7 @@ export async function openBundle(
   try {
     head = JSON.parse(text) as SealedBundle | null;
   } catch {
-    throw new SealError('Not a DomBot data file (invalid JSON).');
+    throw new SealError('Not a Domains.Domains data file (invalid JSON).');
   }
   const e = head?.encrypted;
   if (!e) throw new SealError('This file is not sealed.');

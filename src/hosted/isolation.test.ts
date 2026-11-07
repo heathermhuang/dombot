@@ -1042,6 +1042,7 @@ describe('real gateway and isolated Worker instances', () => {
       await (await request('/.well-known/oauth-protected-resource/mcp')).json(),
     ).toMatchObject({
       resource: 'http://localhost/mcp',
+      resource_name: 'Domains.Domains',
       scopes_supported: ['portfolio:read', 'domains:write', 'domains:spend'],
     });
     const invalidScope = new URLSearchParams(params);

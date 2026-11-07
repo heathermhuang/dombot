@@ -80,7 +80,7 @@ export function isRateCurrency(value: unknown): value is RateCurrency {
 
 /** The error for a currency you can't enter. */
 export function notConvertible(code: string): string {
-  return `DomBot can't convert ${code}. Choose one of the 30 currencies it converts, such as USD, EUR or GBP.`;
+  return `Domains.Domains can't convert ${code}. Choose one of the 30 currencies it converts, such as USD, EUR or GBP.`;
 }
 
 /**

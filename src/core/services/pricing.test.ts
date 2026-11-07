@@ -193,7 +193,7 @@ describe('setManualPrice', () => {
     });
     expect(() =>
       pricing.setManualPrice('new.com', { amount: '600', currency: 'TWD' }),
-    ).toThrow("DomBot can't convert TWD.");
+    ).toThrow("Domains.Domains can't convert TWD.");
   });
 
   it('still reads a price stored as a USD number', async () => {

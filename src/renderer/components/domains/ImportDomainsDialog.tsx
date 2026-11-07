@@ -1,3 +1,4 @@
+import { DOWNLOAD_PREFIX } from '../../../shared/product-brand';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleAlert, FileUp, Info, Pencil, Upload } from 'lucide-react';
@@ -382,7 +383,7 @@ export function ImportDomainsDialog({ onClose }: { onClose: () => void }) {
     try {
       await window.api.saveTextFile(
         domainsCsvTemplate(),
-        'dombot-domains-template.csv',
+        `${DOWNLOAD_PREFIX}-domains-template.csv`,
       );
     } catch (err) {
       setError(message(err));
@@ -471,7 +472,7 @@ export function ImportDomainsDialog({ onClose }: { onClose: () => void }) {
     ].sort((a, b) => Number(a[0]) - Number(b[0]));
     await window.api.saveTextFile(
       toCsv([['Row', 'Domain', 'Problem'], ...lines]),
-      'dombot-import-issues.csv',
+      `${DOWNLOAD_PREFIX}-import-issues.csv`,
     );
   }
 
@@ -627,9 +628,9 @@ export function ImportDomainsDialog({ onClose }: { onClose: () => void }) {
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Any spreadsheet with a domain column works: a DomBot export, a
-                  registrar or marketplace export, or your own list. You match
-                  its columns next.{' '}
+                  Any spreadsheet with a domain column works: a Domains.Domains
+                  export, a registrar or marketplace export, or your own list.
+                  You match its columns next.{' '}
                   <button
                     type="button"
                     className="text-brand underline underline-offset-4"
@@ -637,7 +638,7 @@ export function ImportDomainsDialog({ onClose }: { onClose: () => void }) {
                   >
                     Download the template
                   </button>{' '}
-                  for DomBot&apos;s columns and three example rows.
+                  for Domains.Domains&apos;s columns and three example rows.
                 </p>
               </TabsContent>
             </Tabs>
@@ -1811,7 +1812,7 @@ function ReviewTable({
                 ? change.from
                   ? `Replaces ${change.from}`
                   : 'New'
-                : 'Already in DomBot, or kept'
+                : 'Already in Domains.Domains, or kept'
             }
           >
             {c.key === 'folder' && folderIcon(value)}

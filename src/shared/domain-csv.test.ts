@@ -278,7 +278,7 @@ describe('domainsToCsv', () => {
 
   it('names the file by day', () => {
     expect(domainsCsvFilename(new Date(NOW))).toBe(
-      'dombot-domains-2026-06-15.csv',
+      'Domains.Domains-domains-2026-06-15.csv',
     );
   });
 });

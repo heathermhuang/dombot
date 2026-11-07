@@ -81,9 +81,9 @@ export default function SyncSettings() {
       <div>
         <h2 className="text-2xl font-bold">Sync</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          DomBot keeps a copy of your portfolio and refreshes it from your
-          registrars and markets on a schedule, so it opens instantly and their
-          APIs aren&apos;t hit more often than needed.
+          Domains.Domains keeps a copy of your portfolio and refreshes it from
+          your registrars and markets on a schedule, so it opens instantly and
+          their APIs aren&apos;t hit more often than needed.
         </p>
       </div>
 
@@ -96,7 +96,7 @@ export default function SyncSettings() {
         <SettingsField
           label="Sync Frequency"
           htmlFor="auto-sync-interval"
-          description="How often DomBot re-syncs every registrar and market account in the background, registrars first. Larger portfolios may prefer a longer interval or Off."
+          description="How often Domains.Domains re-syncs every registrar and market account in the background, registrars first. Larger portfolios may prefer a longer interval or Off."
         >
           <div className="flex items-center gap-3">
             <Select

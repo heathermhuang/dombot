@@ -1,3 +1,4 @@
+import { DOWNLOAD_PREFIX } from '../../../shared/product-brand';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { FileSpreadsheet, Upload } from 'lucide-react';
@@ -35,7 +36,8 @@ export default function ImportExportSettings() {
         <h2 className="text-2xl font-bold">Import/Export</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Bring domains in from a spreadsheet or export them, and back up
-          everything DomBot stores to keep a copy or move to another DomBot.
+          everything Domains.Domains stores to keep a copy or move to another
+          compatible installation.
         </p>
       </div>
       <SpreadsheetCard />
@@ -67,7 +69,7 @@ function SpreadsheetCard() {
     try {
       const result = await window.api.saveTextFile(
         domainsCsvTemplate(),
-        'dombot-domains-template.csv',
+        `${DOWNLOAD_PREFIX}-domains-template.csv`,
       );
       if (result.saved) toast.success('Template downloaded');
     } catch (err) {
@@ -80,11 +82,11 @@ function SpreadsheetCard() {
   return (
     <SettingsCard title="Spreadsheet" contentClassName="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
-        Import domains from a CSV: a DomBot export, a registrar or marketplace
-        export, or your own list. You match the columns and review every change
-        before anything is saved, and names already here are only added to.
-        Export writes every name, Owned and Archive, one per row, in a file
-        DomBot can import again.
+        Import domains from a CSV: a Domains.Domains export, a registrar or
+        marketplace export, or your own list. You match the columns and review
+        every change before anything is saved, and names already here are only
+        added to. Export writes every name, Owned and Archive, one per row, in a
+        file Domains.Domains can import again.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button className="gap-2" onClick={() => setImporting(true)}>
@@ -137,7 +139,7 @@ function ExportSection() {
       const stamp = new Date().toISOString().slice(0, 10);
       const result = await window.api.saveTextFile(
         text,
-        `dombot-data-${stamp}.json`,
+        `${DOWNLOAD_PREFIX}-data-${stamp}.json`,
       );
       if (result.saved) toast.success('Data exported');
     } catch (err) {
@@ -156,10 +158,10 @@ function ExportSection() {
         Export everything — registrar and market keys, portfolio, imported
         domains, folders, prices, BIN prices, history, settings, and MCP
         pairings — as one JSON file. Use it as a backup or to move to another
-        DomBot. Leave the passphrase blank and anyone who opens the file can
-        read your API keys. Type one and the file is locked: Restore asks for
-        that same passphrase, and DomBot does not keep a copy. If you forget it,
-        the backup cannot be opened.
+        compatible installation. Leave the passphrase blank and anyone who opens
+        the file can read your API keys. Type one and the file is locked:
+        Restore asks for that same passphrase, and Domains.Domains does not keep
+        a copy. If you forget it, the backup cannot be opened.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <SettingsField

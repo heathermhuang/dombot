@@ -46,7 +46,7 @@ export async function registrationFee(
     return { note: `${name} doesn't report a registration fee.` };
   if (!isRateCurrency(quote.currency) && quote.currency !== keep)
     return {
-      note: `${name} quotes the fee in ${quote.currency}, which DomBot can't convert.`,
+      note: `${name} quotes the fee in ${quote.currency}, which Domains.Domains can't convert.`,
     };
   return { amount: quote.amount, currency: quote.currency };
 }

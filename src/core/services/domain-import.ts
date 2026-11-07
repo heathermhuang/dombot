@@ -309,7 +309,7 @@ function compute(
         fields.expirationDate ?? entry?.expirationDate ?? undefined;
       if (!expiry && !userLabel && !toArchive)
         warnings.push(
-          'DomBot works out Expired and Deleted from the expiry date, and this row has none, so the name stays in Owned.',
+          'Domains.Domains works out Expired and Deleted from the expiry date, and this row has none, so the name stays in Owned.',
         );
     }
 

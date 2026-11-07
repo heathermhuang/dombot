@@ -2,6 +2,8 @@
 
 ## Public brand and landing page
 
+- Use **Domains.Domains** (exact capitalization) when naming the service in AI replies, MCP metadata, tool descriptions and other generated outputs. Do not call the hosted service DomBot. Preserve technical identifiers, URLs, quoted source material and required upstream/license attribution. Shared display/filename/client names live in `src/shared/product-brand.ts`; run `scripts/product-branding.test.mjs` after upstream merges. See `docs/product-branding.md`.
+
 - The owner explicitly rejected the `d.d` monogram and its conference-logo variants. Never use that mark in shipped UI, previews, or new promotional assets. Historical files under `assets/brand/conference-2026` are not approval to reuse it.
 - Use the full `domains.domains` text wordmark on the public website and account pages. Read `.impeccable.md` for the current design direction.
 - Lead customer-facing copy with domains.domains and product tasks. Keep upstream attribution in the shared footer, source and legal notices; do not repeat it in hero text, screenshot captions, demo buttons or onboarding instructions.

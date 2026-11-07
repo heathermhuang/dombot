@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../shared/product-brand';
 import { z } from 'zod';
 import {
   coreMethods,
@@ -43,7 +44,7 @@ const webMethods: Omit<ApiTable, CoreMethodName> = {
   showLogFile: method(none, async () => {}),
 
   getAppInfo: method(none, async () => ({
-    name: 'DomBot',
+    name: PRODUCT_NAME,
     version: APP_VERSION,
     electron: '',
     chrome: '',

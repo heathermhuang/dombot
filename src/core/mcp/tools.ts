@@ -182,7 +182,7 @@ function resolveRegistrar(
     const label = row && standingOf(row, o, cachedRegistered().get(key)).label;
     if (label) {
       throw new Error(
-        `"${domainName}" is in Archive (${label}) and none of your accounts reports it, so there's no registrar to act on. Pass "registrar" if it's in an account DomBot doesn't sync. If it just came back to one of your accounts, run portfolio_sync.`,
+        `"${domainName}" is in Archive (${label}) and none of your accounts reports it, so there's no registrar to act on. Pass "registrar" if it's in an account Domains.Domains doesn't sync. If it just came back to one of your accounts, run portfolio_sync.`,
       );
     }
     throw new Error(
@@ -200,9 +200,9 @@ function resolveRegistrar(
 //   portfolio_* → ()                    global / cross-registrar aggregate
 //   registrar_* → (registrar)           one provider (registrar required)
 //   domain_*    → (domain[, registrar]) one domain you own
-//   folder_*    → ([folder])            DomBot's own folders; no registrar calls
+//   folder_*    → ([folder])            Domains.Domains's own folders; no registrar calls
 // For domain_* tools the registrar is optional: omitted, it's resolved from the
-// cached portfolio (you own the domain, so DomBot knows who holds it); pass it
+// cached portfolio (you own the domain, so Domains.Domains knows who holds it); pass it
 // to skip the lookup, or to act on a name not yet in the cache. registrar_*
 // tools still require it — there's no owned domain to resolve from.
 
@@ -211,7 +211,7 @@ const registrar = z
   .describe('Registrar id, e.g. "dynadot" or "godaddy".');
 
 // For domain-scoped tools: the registrar is optional and resolved from the
-// cached portfolio when omitted (you own the domain, so DomBot already knows who
+// cached portfolio when omitted (you own the domain, so Domains.Domains already knows who
 // holds it). Pass it to skip the lookup, or for a domain not yet in the cache.
 const optionalRegistrar = z
   .enum(registrarNames)
@@ -446,7 +446,7 @@ const queryShape = {
     .array(z.enum(['forSale', 'bin', 'minOffer', 'floor', 'none']))
     .optional()
     .describe(
-      'Only names whose asking price (set in DomBot) has any of these: `forSale` (any of a BIN price, minimum offer or floor price), `bin` (a BIN price), `minOffer` (a minimum offer), `floor` (a floor price, never shown to buyers), `none` (none of them, so not for sale).',
+      'Only names whose asking price (set in Domains.Domains) has any of these: `forSale` (any of a BIN price, minimum offer or floor price), `bin` (a BIN price), `minOffer` (a minimum offer), `floor` (a floor price, never shown to buyers), `none` (none of them, so not for sale).',
     ),
   binMin: z
     .number()
@@ -630,7 +630,7 @@ function syncSummary(portfolio: Portfolio) {
 
 // ── folders ──────────────────────────────────────────────────────────────────
 //
-// Folders are DomBot-local (services/folders.ts, the same store Settings →
+// Folders are Domains.Domains-local (services/folders.ts, the same store Settings →
 // Folders and the Domains table write), so these tools never reach a registrar.
 // A folder is named by its name or id. Names are matched case-insensitively,
 // so the tools keep them unique.
@@ -687,7 +687,7 @@ function folderCounts(assignments: Record<string, string>) {
   return counts;
 }
 
-/** A write to DomBot's own data (folders, notes, prices, history). It doesn't
+/** A write to Domains.Domains's own data (folders, notes, prices, history). It doesn't
  *  touch the portfolio cache, but the same event tells an open window to
  *  re-read it all (store/app.ts applyPortfolioCacheUpdate). */
 function localWrite<T>(result: T) {
@@ -695,7 +695,7 @@ function localWrite<T>(result: T) {
   return json(result);
 }
 
-/** The normalized name, or an error when DomBot doesn't know it: not synced,
+/** The normalized name, or an error when Domains.Domains doesn't know it: not synced,
  *  not imported, and with no history. */
 function assertInPortfolio(domain: string): string {
   const key = assertDomainName(domain);
@@ -772,7 +772,7 @@ function syncFailures(): SyncFailure[] {
 
 /** Which currencies an amount may be in, for each tool that takes one. */
 const CURRENCY_HELP =
-  'One of the 30 currencies DomBot converts, the European Central Bank’s reference currencies (USD, EUR, GBP, JPY, CAD, AUD and others); an amount already stored in another currency may keep it.';
+  'One of the 30 currencies Domains.Domains converts, the European Central Bank’s reference currencies (USD, EUR, GBP, JPY, CAD, AUD and others); an amount already stored in another currency may keep it.';
 
 const resolvesParam = z
   .string()
@@ -830,7 +830,7 @@ export function registerTools(
       {
         title: 'Query portfolio',
         description:
-          'List, search, and filter your whole portfolio — every configured registrar plus the names you imported — the primary way to read the portfolio. Covers the names you own by default; pass `ownership` for Archive (names you no longer have) or both. To let a name go, turn its auto-renew off with domain_set_autorenew; nothing you hold goes to Archive by hand. Filter by registrar, source (synced or imported), TLD, folder, name, nameserver, market listing, asking price (for sale or not, BIN price, minimum offer and floor, with ranges), auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort (including by estimated renewal price) and page the results. With no filters it returns every name you own (paged), so use it as a plain list too. Each row says `ownership` (owned/archive), `archiveLabel` (sold, deleted: the lookup says nobody holds it, expired: it left after expiry, dropped: it left early and you marked it dropped, or removed: it left early with no sale, the one to review), `expiring` (owned, auto-renew off, expiring within 30 days), `salePending` (a sale recorded on a name you still hold), `source` (`imported`: no connected account reports it), and `inAccount` (false for an imported name or an Archive name no account reports — the registrar-backed domain_* tools can’t act on those). Rows also carry what DomBot keeps per name: `paid` (date, amount, currency, registered or purchased), `sold`, `notes`, `askingPrice` (BIN price, minimum offer, floor), and `renewalPrice` (DomBot’s yearly estimate, source, observedAt and priceAge, as domain_renewal_price). `inventoryAt` is independent of quote age; fresh inventory does not imply a fresh price. Use `renewalPriceAge` to filter saved quote confidence without refreshing. Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, staleAccounts, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete; `staleAccounts` lists accounts whose own last sync is old even if another synced since (`stale` is true then too — registrar_sync just those, or portfolio_sync). Rows carry only the fields you need — call domain_get for a single domain’s full record.',
+          'List, search, and filter your whole portfolio — every configured registrar plus the names you imported — the primary way to read the portfolio. Covers the names you own by default; pass `ownership` for Archive (names you no longer have) or both. To let a name go, turn its auto-renew off with domain_set_autorenew; nothing you hold goes to Archive by hand. Filter by registrar, source (synced or imported), TLD, folder, name, nameserver, market listing, asking price (for sale or not, BIN price, minimum offer and floor, with ranges), auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort (including by estimated renewal price) and page the results. With no filters it returns every name you own (paged), so use it as a plain list too. Each row says `ownership` (owned/archive), `archiveLabel` (sold, deleted: the lookup says nobody holds it, expired: it left after expiry, dropped: it left early and you marked it dropped, or removed: it left early with no sale, the one to review), `expiring` (owned, auto-renew off, expiring within 30 days), `salePending` (a sale recorded on a name you still hold), `source` (`imported`: no connected account reports it), and `inAccount` (false for an imported name or an Archive name no account reports — the registrar-backed domain_* tools can’t act on those). Rows also carry what Domains.Domains keeps per name: `paid` (date, amount, currency, registered or purchased), `sold`, `notes`, `askingPrice` (BIN price, minimum offer, floor), and `renewalPrice` (Domains.Domains’s yearly estimate, source, observedAt and priceAge, as domain_renewal_price). `inventoryAt` is independent of quote age; fresh inventory does not imply a fresh price. Use `renewalPriceAge` to filter saved quote confidence without refreshing. Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, staleAccounts, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete; `staleAccounts` lists accounts whose own last sync is old even if another synced since (`stale` is true then too — registrar_sync just those, or portfolio_sync). Rows carry only the fields you need — call domain_get for a single domain’s full record.',
         inputSchema: queryShape,
         annotations: { readOnlyHint: true },
       },
@@ -854,7 +854,7 @@ export function registerTools(
       },
     );
 
-  // ── Folders (DomBot-local; no registrar calls) ─────────────────────────────
+  // ── Folders (Domains.Domains-local; no registrar calls) ─────────────────────────────
 
   if (allow('folder_list'))
     server.registerTool(
@@ -862,7 +862,7 @@ export function registerTools(
       {
         title: 'List folders',
         description:
-          'List your folders — DomBot’s own groupings of domains, as in Settings → Folders — with each one’s id, name, description, color, and how many domains it holds. Use a folder’s name or id with folder_rename, folder_delete, domain_set_folder, and portfolio_query’s `folder` filter.',
+          'List your folders — Domains.Domains’s own groupings of domains, as in Settings → Folders — with each one’s id, name, description, color, and how many domains it holds. Use a folder’s name or id with folder_rename, folder_delete, domain_set_folder, and portfolio_query’s `folder` filter.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
       },
@@ -1018,7 +1018,7 @@ export function registerTools(
       {
         title: 'Dismiss alerts',
         description:
-          'Dismiss sync alerts ("added" or "removed") without recording anything, as the app’s Dismiss does, or bring them back with `dismissed: false`. A dismissed alert is no longer new, but stays in Needs review until its money is recorded. With `dropped: true`, instead mark departures dropped, as the app’s Mark dropped does: the name left and no money came back (let go early, or moved to a registrar DomBot doesn’t sync). That answers it for good and gives it Archive’s Dropped label; `dropped: false` undoes it. Takes alert ids (`eventId`) from portfolio_alerts or domain_history; ids that aren’t alerts (or, for `dropped`, departures) are skipped. A sync error can’t be dismissed. Local — no registrar calls. Returns which of the ids are still new.',
+          'Dismiss sync alerts ("added" or "removed") without recording anything, as the app’s Dismiss does, or bring them back with `dismissed: false`. A dismissed alert is no longer new, but stays in Needs review until its money is recorded. With `dropped: true`, instead mark departures dropped, as the app’s Mark dropped does: the name left and no money came back (let go early, or moved to a registrar Domains.Domains doesn’t sync). That answers it for good and gives it Archive’s Dropped label; `dropped: false` undoes it. Takes alert ids (`eventId`) from portfolio_alerts or domain_history; ids that aren’t alerts (or, for `dropped`, departures) are skipped. A sync error can’t be dismissed. Local — no registrar calls. Returns which of the ids are still new.',
         inputSchema: {
           alertIds: z
             .array(z.string().max(40))
@@ -1177,7 +1177,7 @@ export function registerTools(
       {
         title: 'Get TLD pricing',
         description:
-          'At one registrar: look up live registration/renewal/transfer pricing for a TLD (or a specific domain). This is the registrar’s own quote — for DomBot’s estimated renewal price use domain_renewal_price.',
+          'At one registrar: look up live registration/renewal/transfer pricing for a TLD (or a specific domain). This is the registrar’s own quote — for Domains.Domains’s estimated renewal price use domain_renewal_price.',
         inputSchema: {
           accountId,
           registrar,
@@ -1290,7 +1290,7 @@ export function registerTools(
       {
         title: 'Set a domain’s folder',
         description:
-          'For a single domain: put it in a folder (by name or id), or pass `folder: null` to take it out of its folder. A domain is in at most one folder, so this replaces any current one. DomBot-local — no registrar call. The domain must be in your portfolio (owned or Archive); run portfolio_sync if it was added recently.',
+          'For a single domain: put it in a folder (by name or id), or pass `folder: null` to take it out of its folder. A domain is in at most one folder, so this replaces any current one. Domains.Domains-local — no registrar call. The domain must be in your portfolio (owned or Archive); run portfolio_sync if it was added recently.',
         inputSchema: {
           domain,
           folder: folderParam
@@ -1316,7 +1316,7 @@ export function registerTools(
       {
         title: 'Set a domain’s note',
         description:
-          'For a single domain: replace your note on it (the Domains table’s Notes). An empty string deletes it. DomBot-local — no registrar call. Works for synced, imported, and Archive names.',
+          'For a single domain: replace your note on it (the Domains table’s Notes). An empty string deletes it. Domains.Domains-local — no registrar call. Works for synced, imported, and Archive names.',
         inputSchema: {
           domain,
           notes: z
@@ -1341,7 +1341,7 @@ export function registerTools(
       {
         title: 'Set a domain’s asking price',
         description:
-          'For a single domain: replace your asking price — the BIN (buy-it-now) price, the minimum offer you’ll consider, and your floor (the lowest you’d accept, never shown to buyers). Any of the three left out or null is cleared; all three null removes the asking price. Amounts are decimals in `currency`, e.g. "2500". DomBot-local — no registrar or marketplace call.',
+          'For a single domain: replace your asking price — the BIN (buy-it-now) price, the minimum offer you’ll consider, and your floor (the lowest you’d accept, never shown to buyers). Any of the three left out or null is cleared; all three null removes the asking price. Amounts are decimals in `currency`, e.g. "2500". Domains.Domains-local — no registrar or marketplace call.',
         inputSchema: {
           domain,
           amount: z
@@ -1408,7 +1408,7 @@ export function registerTools(
       {
         title: 'Set a domain’s renewal price',
         description:
-          'For a single domain: set your own yearly renewal price, which overrides DomBot’s estimate (domain_renewal_price then reports source "manual"), or pass `amount: null` to go back to the estimate. Use it for a premium name or a registrar DomBot can’t quote. DomBot-local — changes nothing at the registrar.',
+          'For a single domain: set your own yearly renewal price, which overrides Domains.Domains’s estimate (domain_renewal_price then reports source "manual"), or pass `amount: null` to go back to the estimate. Use it for a premium name or a registrar Domains.Domains can’t quote. Domains.Domains-local — changes nothing at the registrar.',
         inputSchema: {
           domain,
           amount: z
@@ -1445,7 +1445,7 @@ export function registerTools(
       {
         title: 'Set what you paid for a domain',
         description:
-          'For a single domain: record or replace what you paid for it — the date, amount, and whether you registered it or bought it. Edits the latest purchase on record; with `resolves` (an open "added" alert) it records the purchase that answers that alert and closes it. Leaving both `date` and `amount` out deletes the purchase. Your note and any sale are kept. DomBot-local — no registrar call; recorded in the history as done by an agent. Returns the name’s `paid` and `sold`.',
+          'For a single domain: record or replace what you paid for it — the date, amount, and whether you registered it or bought it. Edits the latest purchase on record; with `resolves` (an open "added" alert) it records the purchase that answers that alert and closes it. Leaving both `date` and `amount` out deletes the purchase. Your note and any sale are kept. Domains.Domains-local — no registrar call; recorded in the history as done by an agent. Returns the name’s `paid` and `sold`.',
         inputSchema: {
           domain,
           date: z
@@ -1503,7 +1503,7 @@ export function registerTools(
       {
         title: 'Record a domain’s sale',
         description:
-          'For a single domain: record that you sold it, correct the sale on record, or undo it (`remove: true` deletes the sale). A name an account still holds stays in Owned with `salePending` until the buyer takes it, then moves to Archive as Sold with nothing to review; a name no account holds moves to Archive (Sold) at once. With no sale on record — or with `resolves` (an open "removed" alert) — it records a new sale, dated today when `date` is left out, and closes that alert; otherwise it edits the latest sale. Your note and the purchase are kept. DomBot-local — no registrar or marketplace call; recorded in the history as done by an agent. Returns the name’s `paid`, `sold`, `ownership`, `archiveLabel` and `salePending`.',
+          'For a single domain: record that you sold it, correct the sale on record, or undo it (`remove: true` deletes the sale). A name an account still holds stays in Owned with `salePending` until the buyer takes it, then moves to Archive as Sold with nothing to review; a name no account holds moves to Archive (Sold) at once. With no sale on record — or with `resolves` (an open "removed" alert) — it records a new sale, dated today when `date` is left out, and closes that alert; otherwise it edits the latest sale. Your note and the purchase are kept. Domains.Domains-local — no registrar or marketplace call; recorded in the history as done by an agent. Returns the name’s `paid`, `sold`, `ownership`, `archiveLabel` and `salePending`.',
         inputSchema: {
           domain,
           date: z
@@ -1617,7 +1617,7 @@ export function registerTools(
       {
         title: 'Mark a sale handed over',
         description:
-          'For a single domain: mark its latest sale complete — the buyer has the name — though one of your accounts still shows it (a buyer often takes a name at the same registrar, or sync hasn’t run), so the Sales tab stops showing it as awaiting transfer; `transferred: false` undoes that. DomBot-local — no registrar or marketplace call. Returns { domain, transferred }.',
+          'For a single domain: mark its latest sale complete — the buyer has the name — though one of your accounts still shows it (a buyer often takes a name at the same registrar, or sync hasn’t run), so the Sales tab stops showing it as awaiting transfer; `transferred: false` undoes that. Domains.Domains-local — no registrar or marketplace call. Returns { domain, transferred }.',
         inputSchema: {
           domain,
           transferred: z
@@ -1643,7 +1643,7 @@ export function registerTools(
       {
         title: 'Get a domain’s history',
         description:
-          'For a single domain: everything DomBot recorded about it, oldest first — arrivals and departures seen by sync, moves between your accounts, renewals, purchases, sales, and settings changes (`changed`: its `setting` — autoRenew, privacy, lock, nameservers, urlForwarding, emailForwarding, dns, or contacts — with `after`, and `before` when DomBot knew it) — plus its note and its current Owned/Archive state. Each event says who recorded it (`source`: sync, user, import, lookup, agent, or bulk: a bulk job in the app). Sync alerts ("added" and "removed") carry `alert` (open, dismissed, dropped: a departure you marked dropped, or resolved) and `resolvedBy`, the id of the event that answered it. Works for names in Archive and names no account reports. Local — no registrar call.',
+          'For a single domain: everything Domains.Domains recorded about it, oldest first — arrivals and departures seen by sync, moves between your accounts, renewals, purchases, sales, and settings changes (`changed`: its `setting` — autoRenew, privacy, lock, nameservers, urlForwarding, emailForwarding, dns, or contacts — with `after`, and `before` when Domains.Domains knew it) — plus its note and its current Owned/Archive state. Each event says who recorded it (`source`: sync, user, import, lookup, agent, or bulk: a bulk job in the app). Sync alerts ("added" and "removed") carry `alert` (open, dismissed, dropped: a departure you marked dropped, or resolved) and `resolvedBy`, the id of the event that answered it. Works for names in Archive and names no account reports. Local — no registrar call.',
         inputSchema: { domain },
         annotations: { readOnlyHint: true },
       },
@@ -2177,7 +2177,7 @@ export function registerTools(
       {
         title: 'Estimate renewal price',
         description:
-          'For a single domain: DomBot’s estimated annual renewal price, with provenance — a manual override, else a per-name registrar quote where supported, else the account’s own TLD rate captured on Sync, else the base per-TLD database. Distinct from registrar_pricing, which is the registrar’s own live quote.',
+          'For a single domain: Domains.Domains’s estimated annual renewal price, with provenance — a manual override, else a per-name registrar quote where supported, else the account’s own TLD rate captured on Sync, else the base per-TLD database. Distinct from registrar_pricing, which is the registrar’s own live quote.',
         inputSchema: { accountId, registrar: optionalRegistrar, domain },
         annotations: { readOnlyHint: true },
       },
