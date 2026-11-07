@@ -5,6 +5,7 @@ for (const [name, entry] of [
   ['authScript', 'hosted/browser-auth.ts'],
   ['importStartScript', 'hosted/browser-import.ts'],
   ['parkioMobileScript', 'hosted/parkio-mobile.ts'],
+  ['parkioNativeScript', 'hosted/parkio-native.ts'],
 ]) {
   const result = await build({
     entryPoints: [entry],
