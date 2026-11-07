@@ -1,0 +1,96 @@
+{
+  "date": "2026-11-07",
+  "status": "deployed_and_verified",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/189",
+  "checkedHead": "aa151e67e0e976bdf8880ec97a965d9b3cbc2e17",
+  "releaseCommit": "aecf74e21120d7c3fab041bd8d7cb1c64345e7e2",
+  "engine": "2.1.0-hosted.4",
+  "engineSourceSha256": "bb52204d961f8607adfe9b92192f3ca711811a649abfcc1a18a999ad580c4486",
+  "engineArchiveSha256": "1ba1a7d7a0e7edf6b8c1f333aa0d28c2aeafc4df20376cac91b8dcdbc54564f9",
+  "futureTemplateSha256": "647a97eed413ef8205fdfb6412e1a27f813fbc31799fce2ca2e4976c7441c479",
+  "verification": {
+    "at": "2026-11-07T05:06:28.648Z",
+    "engine": "2.1.0-hosted.4",
+    "source": "bb52204d961f8607adfe9b92192f3ca711811a649abfcc1a18a999ad580c4486",
+    "releaseCommit": "aecf74e21120d7c3fab041bd8d7cb1c64345e7e2",
+    "servingTenants": 45,
+    "usersPreserved": 58,
+    "currentUsers": 58,
+    "originalWorkspaceIdentitiesPreserved": 564,
+    "platformMappingsPreserved": 40,
+    "credentialNamespacesPreserved": 45,
+    "publishedSalesPreserved": 2,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 2,
+    "existingActiveHostsVerified": 2,
+    "directoryConflicts": 0,
+    "existingBackfillCompleted": 43,
+    "activeQaRuns": 0,
+    "unfinishedAllocations": 0,
+    "templateHashAgreement": true,
+    "cronPreserved": true,
+    "originalAllocationRestored": true,
+    "sourceOfferCorrect": true,
+    "registrarMutations": 0
+  },
+  "productionMcp": {
+    "name": "Domains.Domains",
+    "instructionsVerified": true,
+    "legacyBrandInDescriptions": false,
+    "tools": 35,
+    "syntheticQueryRows": 1
+  },
+  "browser": {
+    "production": true,
+    "syntheticOnly": true,
+    "settingsSections": ["mcp", "sync", "markets", "import-export"],
+    "downloads": [
+      "Domains.Domains-domains-template.csv",
+      "Domains.Domains-domains-2026-11-07.csv",
+      "Domains.Domains-data-2026-11-07.json"
+    ],
+    "exactServedAssets": 3,
+    "backupFormatPreserved": true,
+    "mobileViewportWidth": 390,
+    "mobileOverflow": false,
+    "pageErrors": 0,
+    "temporaryMcpClientRemoved": true
+  },
+  "productionQa": {
+    "managedImportRetriesReadback": true,
+    "browserLeaseVerified": true,
+    "independentCleanupComplete": true,
+    "temporaryCredentialsScrubbed": true,
+    "activeRuns": 0
+  },
+  "http": {
+    "passed": 38,
+    "total": 38
+  },
+  "recovery": {
+    "method": "Cloudflare D1 Time Travel bookmarks",
+    "providerHostedDatabaseBookmarks": 46,
+    "codeSettingsSnapshots": 47,
+    "databaseContentsDownloaded": false,
+    "rootKeysExported": false
+  },
+  "preservation": {
+    "managedTemplateBindings": 14,
+    "privateProvisionerModuleRetained": true,
+    "gatewayAssetsRetained": true,
+    "cleanupCronRetained": true,
+    "originalAllocationPolicyRestored": true,
+    "schemaMigrations": 0,
+    "registrarMutations": 0
+  },
+  "ci": {
+    "candidate": "https://github.com/heathermhuang/dombot/actions/runs/42339179296",
+    "security": "https://github.com/heathermhuang/dombot/actions/runs/42339179251",
+    "result": "passed"
+  },
+  "operationalReconciliation": {
+    "uncertainWorkerUpload": "Proven not applied; old code/settings verified and original admission restored before checkpointed resumption.",
+    "assetStagingReset": "Occurred before activation; a fresh upload session reconciled missing content hashes.",
+    "blindWriteRetries": 0
+  }
+}
