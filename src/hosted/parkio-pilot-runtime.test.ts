@@ -5,7 +5,15 @@ import { build } from 'esbuild';
 const owner = '11111111-1111-4111-8111-111111111111';
 const root = 'test-only-parkio-pilot-root-'.repeat(3);
 let mf: Miniflare;
-const names = ['normal', 'disabled', 'expired', 'launch-fails', 'close-fails'];
+const names = [
+  'normal',
+  'disabled',
+  'expired',
+  'launch-fails',
+  'close-fails',
+  'native-not-found',
+  'lookup-fails',
+];
 
 beforeAll(async () => {
   const result = await build({
@@ -77,6 +85,7 @@ async function request(
     method?: string;
     origin?: string;
     stale?: boolean;
+    accept?: string;
   } = {},
 ) {
   const worker = await mf.getWorker(name);
@@ -88,6 +97,7 @@ async function request(
         Origin: options.origin ?? 'http://localhost',
         ...(options.identity ? { 'X-Test-Identity': options.identity } : {}),
         ...(options.stale ? { 'X-Test-Stale': '1' } : {}),
+        ...(options.accept ? { Accept: options.accept } : {}),
       },
     }),
   );
@@ -101,6 +111,35 @@ async function state(name: string) {
 }
 
 describe('owner-only Park.io pilot runtime', () => {
+  it('recovers an idle-closed expired browser in one start request when native lookup throws 404', async () => {
+    await action('native-not-found', 'start');
+    const previous = await state('native-not-found');
+    const ns = await mf.getDurableObjectNamespace(
+      'PARKIO_PILOT',
+      'native-not-found',
+    );
+    await ns
+      .get(ns.idFromName('owner/' + owner))
+      .fetch('https://parkio-pilot.internal/fixture-idle', { method: 'POST' });
+    const next = await action('native-not-found', 'start');
+    expect(next.status, await next.clone().text()).toBe(303);
+    const current = await state('native-not-found');
+    expect(current.phase).toBe('login');
+    expect(current.attemptId).not.toBe(previous.attemptId);
+  });
+  it('keeps uncertain provider lookup failures blocked instead of treating every failure as closure', async () => {
+    await action('lookup-fails', 'start');
+    const previous = await state('lookup-fails');
+    const ns = await mf.getDurableObjectNamespace(
+      'PARKIO_PILOT',
+      'lookup-fails',
+    );
+    await ns
+      .get(ns.idFromName('owner/' + owner))
+      .fetch('https://parkio-pilot.internal/fixture-idle', { method: 'POST' });
+    expect((await action('lookup-fails', 'start')).status).toBe(409);
+    expect((await state('lookup-fails')).attemptId).toBe(previous.attemptId);
+  });
   it('fails closed when disabled or expired and does not expose a sign-in view', async () => {
     const response = await action('disabled', 'start');
     expect(response.status, await response.clone().text()).toBe(404);
@@ -129,24 +168,27 @@ describe('owner-only Park.io pilot runtime', () => {
   it('opens a scoped sign-in view and returns safe, idempotent status', async () => {
     const document = await request('normal', '/', { identity: owner });
     expect(document.headers.get('referrer-policy')).toBe('same-origin');
-    expect(await document.text()).not.toContain('rel="noreferrer"');
+    const entry = await document.text();
+    expect(entry).not.toContain('rel="noreferrer"');
+    expect(entry).toContain('Sign in to Park.io');
+    expect(entry).not.toContain('Open mobile sign-in');
+    expect(entry).not.toContain('Open desktop sign-in');
+    expect(entry).not.toContain('target="_blank"');
     const first = await action('normal', 'start');
     expect(first.status).toBe(303);
-    expect(first.headers.get('referrer-policy')).toBe('no-referrer');
-    expect(first.headers.get('location')).toMatch(
-      /^https:\/\/live\.browser\.run\//,
-    );
+    expect(first.headers.get('referrer-policy')).toBe('same-origin');
+    expect(first.headers.get('location')).toBe('/admin/parkio-pilot/sign-in');
     const before = await state('normal');
     expect(before.phase).toBe('login');
     await action('normal', 'start');
     expect((await state('normal')).attemptId).toBe(before.attemptId);
   });
   it('keeps the native keyboard page and connection grant behind owner admission', async () => {
-    expect((await request('normal', '/mobile')).status).toBe(303);
+    expect((await request('normal', '/sign-in')).status).toBe(303);
     expect(
-      (await request('normal', '/mobile', { identity: 'other-user' })).status,
+      (await request('normal', '/sign-in', { identity: 'other-user' })).status,
     ).toBe(403);
-    const page = await request('normal', '/mobile', { identity: owner });
+    const page = await request('normal', '/sign-in', { identity: owner });
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html).toContain('id="parkio-keyboard"');
@@ -228,6 +270,16 @@ describe('owner-only Park.io pilot runtime', () => {
     expect(await failed.text()).not.toContain('raw secret');
     expect((await state('launch-fails')).phase).toBe('cleanup_required');
     expect((await action('launch-fails', 'start')).status).toBe(409);
+    const navigation = await request('launch-fails', '/start', {
+      identity: owner,
+      method: 'POST',
+      accept: 'text/html',
+    });
+    expect(navigation.headers.get('content-type')).toContain('text/html');
+    const html = await navigation.text();
+    expect(html).toContain('Could not open Park.io');
+    expect(html).toContain('Return to Park.io connection');
+    expect(html).not.toContain('"error":');
   });
   it('does not claim portability or allow a Worker read if browser closure fails', async () => {
     await action('close-fails', 'start');

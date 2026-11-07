@@ -10,11 +10,12 @@ portfolio inventory, or change tenant engines.
 
 1. Open the private pilot page while signed in to domains.domains. Complete the
    normal fresh authentication if requested.
-2. On a phone, choose **Open mobile sign-in**. Tap a field in the embedded
-   Park.io browser, then tap **Phone keyboard** below it to open the native
-   keyboard. **Next field**, **Delete** and **Enter** control that same remote
-   form. On a computer, **Open desktop sign-in** opens Cloudflare Live View in
-   a separate tab. Enter credentials/MFA there, not in chat.
+2. Choose **Sign in to Park.io**. The same embedded browser opens on every device.
+   Touch capability is detected automatically, including tablets with desktop
+   user agents. On a phone or tablet, tap a field in Park.io, then tap **Phone
+   keyboard** below it to open the native keyboard. **Next field**, **Delete**
+   and **Enter** control the same form. On a computer, type directly in the
+   embedded browser. Enter credentials/MFA there, not in chat.
 3. For this first contract-qualification run, navigate to **Orders → Active**.
    Return to the original pilot tab and choose **Inspect Active export**.
 4. Choose **Save session and close browser**. The server reads the Active CSV
@@ -66,6 +67,14 @@ the owner attempt, verify the browser resource is gone, then disable/remove the
 feature. Expired/disabled application admission does not replace actual browser
 cleanup. Disabling the gateway route alone does not revoke an already connected
 Live View; the browser must close.
+
+Starting again reconciles an idle-closed or expired browser before acquiring its
+replacement in the same request. The deployed native binding returns an exact
+`BrowserBindingError: Session not found (status=404)` for a closed session,
+despite its nullable type declaration. Only that specific absence response (or a
+normal null/ended result) qualifies as closure; unrelated lookup failures hold.
+Recovery retains the daily acquisition count and cleanup limits. Browser
+navigations receive a branded recovery page rather than raw diagnostic JSON.
 
 ## Private data and read boundaries
 

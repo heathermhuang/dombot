@@ -1,9 +1,13 @@
 import { ParkioPilot, parkioPilotRoutes } from '../parkio-pilot';
 import type { BrowserRun } from '../../../hosted/browser-run-types';
+import { openPilot, sealPilot } from '../parkio-pilot-contract';
 
 const csv = 'Domain,Expires\nalpha.test,2028-02-29\nbeta.test,2029-01-01\n';
 
 export class TestParkioPilot extends ParkioPilot {
+  private idleFixture!: () => void;
+  private testContext: DurableObjectState;
+  private testEnv: HostedEnv;
   constructor(ctx: DurableObjectState, env: HostedEnv) {
     let closed = false;
     const mode = Reflect.get(env, 'TEST_MODE');
@@ -11,6 +15,7 @@ export class TestParkioPilot extends ParkioPilot {
       acquire: async () => {
         if (mode === 'launch-fails')
           throw Error('upstream raw secret must not escape');
+        closed = false;
         return { sessionId: 'synthetic-browser' };
       },
       devtools: { newTarget: async () => ({ id: 'synthetic-page' }) },
@@ -27,8 +32,13 @@ export class TestParkioPilot extends ParkioPilot {
         closed = true;
         return { status: 'closed' };
       },
-      getSession: async () =>
-        closed ? null : { sessionId: 'synthetic-browser' },
+      getSession: async () => {
+        if (closed && mode === 'native-not-found')
+          throw Error('BrowserBindingError: Session not found (status=404)');
+        if (closed && mode === 'lookup-fails')
+          throw Error('BrowserBindingError: Service unavailable (status=503)');
+        return closed ? null : { sessionId: 'synthetic-browser' };
+      },
       connectSession: async () => ({
         webSocket: {
           fetch: async () => {
@@ -94,6 +104,36 @@ export class TestParkioPilot extends ParkioPilot {
       }),
     } as unknown as BrowserRun;
     super(ctx, { ...env, PARKIO_BROWSER: browser });
+    this.testContext = ctx;
+    this.testEnv = env;
+    this.idleFixture = () => {
+      closed = true;
+    };
+  }
+  override async fetch(request: Request): Promise<Response> {
+    if (new URL(request.url).pathname === '/fixture-idle') {
+      const env = this.testEnv;
+      const sealed = await this.testContext.storage.get<string>('sealed');
+      const data = await openPilot<Record<string, unknown>>(
+        env.PARKIO_PILOT_SECRET!,
+        env.PARKIO_PILOT_OWNER_ID!,
+        sealed!,
+      );
+      data.expiresAt = Date.now() - 1;
+      data.phase = 'cleanup_required';
+      data.cleanupAttempts = 3;
+      this.idleFixture();
+      await this.testContext.storage.put(
+        'sealed',
+        await sealPilot(
+          env.PARKIO_PILOT_SECRET!,
+          env.PARKIO_PILOT_OWNER_ID!,
+          data,
+        ),
+      );
+      return new Response('Fixture expired');
+    }
+    return super.fetch(request);
   }
 }
 

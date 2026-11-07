@@ -6,6 +6,14 @@ import {
 
 const root = document.getElementById('parkio-mobile');
 function setup(root: HTMLElement) {
+  const touch =
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia('(any-pointer: coarse)').matches;
+  root.dataset.touch = String(touch);
+  const instructions = root.querySelector<HTMLElement>('#parkio-instructions');
+  if (instructions && touch)
+    instructions.textContent =
+      'Tap a Park.io field, then use the phone keyboard below. Input goes directly to the temporary browser and is not saved here.';
   const keyboard = root.querySelector<HTMLInputElement>('#parkio-keyboard')!;
   const viewer = root.querySelector<HTMLIFrameElement>('#parkio-viewer')!;
   const status = root.querySelector<HTMLElement>('#parkio-keyboard-status')!;
@@ -235,12 +243,13 @@ function setup(root: HTMLElement) {
           900,
           Math.max(320, Math.floor(viewer.clientWidth)),
         );
-        void send('Emulation.setDeviceMetricsOverride', {
-          width,
-          height: 400,
-          deviceScaleFactor: 1,
-          mobile: true,
-        }).catch(() => {});
+        if (touch)
+          void send('Emulation.setDeviceMetricsOverride', {
+            width,
+            height: 400,
+            deviceScaleFactor: 1,
+            mobile: true,
+          }).catch(() => {});
         keyboard.disabled = false;
         root
           .querySelectorAll<HTMLButtonElement>('[data-remote-key]')
@@ -248,7 +257,9 @@ function setup(root: HTMLElement) {
             button.disabled = false;
           });
         say(
-          'Tap Username in Park.io, then tap the keyboard box above to type.',
+          touch
+            ? 'Tap Username in Park.io, then tap the keyboard box above to type.'
+            : 'Sign in using the Park.io browser above.',
         );
       });
       peer.addEventListener('close', () => {
@@ -273,7 +284,7 @@ function setup(root: HTMLElement) {
       });
     } catch {
       say(
-        'Confirm your domains.domains account again, then reopen the mobile sign-in view.',
+        'Could not connect to Park.io. Return to the test and choose Sign in to Park.io to reopen it.',
       );
     } finally {
       busy = false;
