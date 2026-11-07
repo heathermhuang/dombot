@@ -50,6 +50,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-187",
+      "date": "2026-11-07",
+      "layer": "saas",
+      "title": "Add owner-only native Park.io login and automatic session proof",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #187 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #187",
+          "url": "https://github.com/heathermhuang/dombot/pull/187"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-06627875036d6e19cf6b1b81",
       "date": "2026-11-06",
       "layer": "saas",
