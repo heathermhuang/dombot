@@ -66,6 +66,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-191",
+      "date": "2026-11-08",
+      "layer": "saas",
+      "title": "Verify hosted Namefi ownership before DNS reads",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #191 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #191",
+          "url": "https://github.com/heathermhuang/dombot/pull/191"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-10032370e5864b12ba1e15f1",
       "date": "2026-11-07",
       "layer": "saas",
