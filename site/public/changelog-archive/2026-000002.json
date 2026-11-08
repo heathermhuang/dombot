@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-d3d831c2ffd2dd09a397eab22f499ac2aab02552",
+      "date": "2026-11-08",
+      "layer": "core",
+      "title": "Show Unstoppable Domains as Unstoppable",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change d3d831c2ffd2",
+          "url": "https://github.com/aoxborrow/dombot/commit/d3d831c2ffd2dd09a397eab22f499ac2aab02552"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-10032370e5864b12ba1e15f1",
       "date": "2026-11-07",
       "layer": "saas",
