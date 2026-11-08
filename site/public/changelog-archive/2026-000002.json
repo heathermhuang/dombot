@@ -82,6 +82,38 @@
       ]
     },
     {
+      "id": "auto-saas-evidence-e624bc0b1661a4947ca16673",
+      "date": "2026-11-08",
+      "layer": "saas",
+      "title": "Verified hosted release record 2.1.0-hosted.5",
+      "status": "Verified release evidence published · Scope follows the linked record",
+      "changes": [
+        "A verified release record was published. Its linked evidence defines the deployed source, engine and validation scope; the date here is its publication date."
+      ],
+      "links": [
+        {
+          "label": "Verified release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/bc51c1bae6edf67e8ab4f98463232f56b945e977/docs/namefi-dns-ownership-release-20261108.json"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-27c6a880d42cac64f0e8ed6d932efa378e49c071-10",
+      "date": "2026-11-08",
+      "layer": "saas",
+      "title": "Hosted service update observed: Verify hosted Namefi ownership before DNS reads",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/27c6a880d42cac64f0e8ed6d932efa378e49c071"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-191",
       "date": "2026-11-08",
       "layer": "saas",
@@ -94,6 +126,22 @@
         {
           "label": "Change #191",
           "url": "https://github.com/heathermhuang/dombot/pull/191"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-192",
+      "date": "2026-11-08",
+      "layer": "saas",
+      "title": "Record verified Namefi DNS ownership production release",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #192 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #192",
+          "url": "https://github.com/heathermhuang/dombot/pull/192"
         }
       ]
     },
