@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-3902fada66ede31b9943c4876f33b307e3512ac7",
+      "date": "2026-11-08",
+      "layer": "core",
+      "title": "Dynadot marketplace market",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 3902fada66ed",
+          "url": "https://github.com/aoxborrow/dombot/commit/3902fada66ede31b9943c4876f33b307e3512ac7"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-d3d831c2ffd2dd09a397eab22f499ac2aab02552",
       "date": "2026-11-08",
       "layer": "core",
