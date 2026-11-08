@@ -1,13 +1,13 @@
 {
   "version": 3,
-  "totalEntries": 141,
-  "core": 59,
+  "totalEntries": 142,
+  "core": 60,
   "saas": 82,
   "years": [
     {
       "year": "2026",
-      "count": 141,
-      "core": 59,
+      "count": 142,
+      "core": 60,
       "saas": 82,
       "lastPart": 2,
       "oldest": "2026-08-30",
@@ -23,7 +23,7 @@
     {
       "id": "2026-000000",
       "path": "changelog-archive-index/2026-000000.json",
-      "sha256": "4a625ac7ea70a254c7ea8036cf786465917641907852a68a41af44db15db58a4",
+      "sha256": "e90395e516a564ea5231ac75809a81154abd30551b6e88549e131620c1ed2564",
       "year": "2026",
       "firstPart": 1,
       "lastPart": 2
@@ -35,7 +35,7 @@
       "heathermhuang/dombot:releases": "21c94b981c98e89d6e301599c1d12c5d3b928cc7d7c1e469efe30fb6ac74d0f7",
       "pulls": "051a865a39971e75801737520f6defe6edaf067de09bdcf3ac5957b03e187321"
     },
-    "upstreamHead": "561e70fca35c16e6ea2dae74ef5fae18651e65cf",
+    "upstreamHead": "da13c1b235fb65f713343da6d87a789856734d21",
     "mainHead": "27c6a880d42cac64f0e8ed6d932efa378e49c071",
     "gatewaySource": "aecf74e21120d7c3fab041bd8d7cb1c64345e7e2",
     "curationFingerprint": "cbc903f1301dc436abaa0869de5fdc2cba75396170c8d5918e1558f1536206d3",
@@ -52,6 +52,6 @@
       "heathermhuang/dombot:422392606": "saas-desktop-1-5-2",
       "heathermhuang/dombot:422382156": "saas-desktop-1-5-1"
     },
-    "archiveParent": "27c6a880d42cac64f0e8ed6d932efa378e49c071"
+    "archiveParent": "ab9110d1d628b0515da648c403b1139799faa824"
   }
 }

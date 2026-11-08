@@ -66,6 +66,22 @@
       ]
     },
     {
+      "id": "auto-core-source-da13c1b235fb65f713343da6d87a789856734d21",
+      "date": "2026-11-08",
+      "layer": "core",
+      "title": "Spaceship SellerHub market",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change da13c1b235fb",
+          "url": "https://github.com/aoxborrow/dombot/commit/da13c1b235fb65f713343da6d87a789856734d21"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-191",
       "date": "2026-11-08",
       "layer": "saas",
