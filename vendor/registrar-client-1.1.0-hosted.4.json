@@ -1,0 +1,25 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "1.1.0-hosted.4",
+  "base": "vendor/registrar-client-1.1.0-hosted.3.json",
+  "archive": "vendor/aoxborrow-registrar-client-1.1.0-hosted.4.tgz",
+  "sha256": "bac479e0f3ec57134e7f3da24c5cf91e812a17abc84df510e442425d95d696d4",
+  "integrity": "sha512-UQYFJo7cipqg1dnLAQo226lnzJLv4z4JdaRdl/FXXO5PpnqYoXw/cfP+L065Gl6DAOZPgIPFSUo0e58G0AIGIA==",
+  "patches": [
+    {
+      "path": "vendor/registrar-client-1.1.0-hosted.4.namefi-ownership.patch",
+      "sha256": "06deaedfdce5e5d9ab27b75ad8f76e3900ec53e76f87344acc5f683791aecadf"
+    },
+    {
+      "path": "vendor/registrar-client-1.1.0-hosted.4.tests.patch",
+      "sha256": "224eb80f8783913fa2ec8099d96e3b2f9c087e1f446524cee6c9964f2cc2f9a8"
+    }
+  ],
+  "license": "MIT",
+  "upstreamFix": "https://github.com/aoxborrow/registrar-client/commit/692668868af3137a839d4baec80a77f160d11e02",
+  "checks": "653 offline SDK tests, typecheck and ESM/CJS/declaration builds pass. Installed-artifact Namefi and real Worker regressions run in the hosted application.",
+  "changes": [
+    "Confirm exact account ownership before public Namefi DNS reads; unowned domains throw NotFoundError without a DNS request.",
+    "Preserve owned empty zones, MX/SRV mapping, caller cancellation and existing DNS-write behavior."
+  ]
+}

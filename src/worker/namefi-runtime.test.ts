@@ -53,3 +53,62 @@ it('authenticates Namefi in the Worker runtime and refuses redirects without for
     await runtime.dispose();
   }
 }, 20_000);
+
+it('checks Namefi ownership before public DNS reads in the Worker runtime', async () => {
+  const bundle = await build({
+    stdin: {
+      contents: `import {createRegistrar} from '@aoxborrow/registrar-client';
+      export default {async fetch(request) {
+        const calls=[];
+        const mode=new URL(request.url).pathname;
+        const registrar=createRegistrar('namefi',{apiKey:'nfk_synthetic-only'}, {retries:0, fetch:async(input,init)=>{
+          const outgoing=new Request(input,init);
+          const path=new URL(outgoing.url).pathname;
+          calls.push(path);
+          if(path==='/v-next/user/domains')return Response.json(mode==='/owned'?[{
+            normalizedDomainName:'example.com',ledgerType:'email',expirationDate:null,
+            autoRenewEnabled:false,dnsStatus:{nameservers:[]}
+          }]:[]);
+          if(path==='/v-next/dns/records')return Response.json(mode==='/unowned-records'?[{
+            id:'synthetic-record',zoneName:'example.com',name:'@',type:'TXT',rdata:'synthetic',ttl:300,metadata:null
+          }]:[]);
+          throw Error('Unexpected request');
+        }});
+        try{return Response.json({records:await registrar.getDnsRecords('EXAMPLE.COM.'),calls});}
+        catch(error){return Response.json({error:error.name,status:error.status,calls});}
+      }};`,
+      resolveDir: process.cwd(),
+    },
+    bundle: true,
+    platform: 'browser',
+    format: 'esm',
+    write: false,
+  });
+  const runtime = new Miniflare(
+    convertV4MiniflareOptions({
+      cf: false,
+      modules: true,
+      compatibilityDate: '2026-10-01',
+      script: bundle.outputFiles[0].text,
+    }),
+  );
+  try {
+    for (const path of ['/unowned-empty', '/unowned-records']) {
+      const response = await runtime.dispatchFetch(
+        'https://fixture.invalid' + path,
+      );
+      expect(await response.json()).toEqual({
+        error: 'NotFoundError',
+        status: 404,
+        calls: ['/v-next/user/domains'],
+      });
+    }
+    const owned = await runtime.dispatchFetch('https://fixture.invalid/owned');
+    expect(await owned.json()).toEqual({
+      records: [],
+      calls: ['/v-next/user/domains', '/v-next/dns/records'],
+    });
+  } finally {
+    await runtime.dispose();
+  }
+}, 20_000);
