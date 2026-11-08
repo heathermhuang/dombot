@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-08",
+  "status": "deployed_and_verified",
+  "verifiedAt": "2026-11-08T04:43:23.384610+00:00",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/191",
+  "releaseCommit": "27c6a880d42cac64f0e8ed6d932efa378e49c071",
+  "engine": "2.1.0-hosted.5",
+  "registrarSdk": "1.1.0-hosted.4",
+  "engineSourceSha256": "8c979b270ab2b51c0f78744321e54fd39b26915997647607b9c68596e89145ba",
+  "engineArchiveSha256": "6ea1c312e7514f9e568ebf18952e53ff22fb55a7e91243e6a34fea770b890592",
+  "futureTemplateSha256": "cafc7d095b1fd22c3095d324b94be588c5fb5320d14bd6e1909bd3664cded01a",
+  "servingExistingPortfolios": 46,
+  "originalAccountsPreserved": 59,
+  "originalWorkspaceIdentitiesPreserved": 567,
+  "platformMappingsPreserved": 41,
+  "credentialNamespacesPreserved": 46,
+  "publishedSalesPreserved": 2,
+  "publishedProfilesPreserved": 2,
+  "canonicalAndLegacyRoutesVerified": 2,
+  "activeCustomHostsVerified": 2,
+  "managedTemplateBindingsPreserved": 14,
+  "templateHashAgreement": true,
+  "cleanupCronPreserved": true,
+  "originalAllocationPolicyRestored": true,
+  "sourceOfferCorrect": true,
+  "httpChecksPassed": 38,
+  "liveNamefiDnsAcceptance": {
+    "ownedReadPassed": true,
+    "unownedReadRejected": true,
+    "afterGatewayCutover": true,
+    "privateDomainNamesOrRecordsPublished": false
+  },
+  "managedProductionImport": {
+    "passed": true,
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "independentCleanupComplete": true,
+    "remainingQaWorkers": 0,
+    "remainingQaDatabases": 0,
+    "temporaryPasswordScrubbed": true
+  },
+  "activeQaRuns": 0,
+  "unfinishedAllocations": 0,
+  "registrarMutations": 0,
+  "recovery": {
+    "providerHostedD1Bookmarks": 47,
+    "codeSettingsSnapshots": 48,
+    "databaseContentsDownloaded": false,
+    "rootKeysExported": false
+  },
+  "transportReconciliation": {
+    "unappliedUploadsReconciled": 3,
+    "originalAdmissionsRestored": true,
+    "uncertainWritesBlindlyReplayed": false,
+    "immutableAssetsStagedBeforeRemainingActivations": true,
+    "boundedManagementUploadDeadlineSeconds": 120
+  },
+  "validation": {
+    "hostedTestsPassed": 2957,
+    "intentionalSkips": 1,
+    "offlineSdkTestsPassed": 653,
+    "realWorkerFixturesPassed": 2,
+    "namefiAdapterTestsPassed": 33,
+    "securityRegressionsPassed": 4,
+    "relayChecksPassed": 4,
+    "ci": "https://github.com/heathermhuang/dombot/actions/runs/42445096095",
+    "codeql": "https://github.com/heathermhuang/dombot/actions/runs/42445096110"
+  },
+  "upstream": {
+    "sdkPullRequest": "https://github.com/aoxborrow/registrar-client/pull/106",
+    "fixCommit": "692668868af3137a839d4baec80a77f160d11e02",
+    "hostedBackportOnly": true
+  }
+}
