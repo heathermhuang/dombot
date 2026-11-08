@@ -233,7 +233,7 @@ it('uses bounded subindexes even when an archive has more than 1000 pages', asyn
       entry = {
         ...changelogEntries[0],
         id: 'index-growth-' + sequence,
-        date: '2026-11-07',
+        date: baseline.index.parts[0].newest,
         title: 'Index growth ' + sequence,
       };
     const bytes = JSON.stringify({ version: 1, entries: [entry] }) + '\n',
