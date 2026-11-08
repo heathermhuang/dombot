@@ -1,6 +1,25 @@
+# Namefi DNS ownership guard
+
+The current dependency is `@aoxborrow/registrar-client@1.1.0-hosted.4`.
+Start from hosted.3 below, apply `registrar-client-1.1.0-hosted.4.namefi-ownership.patch`,
+set the root package and lockfile version to `1.1.0-hosted.4`, build and pack.
+The adjacent JSON records archive and patch integrity. For the SDK test suite,
+retain the hosted.1 safety tests and apply the hosted.4 test patch, which adds
+Namefi to the exhaustive nameserver-fetch metadata matrix.
+
+DNS reads confirm ownership through the complete account inventory before
+querying the public DNS endpoint. Unowned domains throw `NotFoundError`, even
+when public records exist; owned empty zones return `[]`. Each standalone DNS
+read uses one inventory request and one DNS request. Existing DNS writes keep
+their ownership check and reconciliation behavior. Installed-artifact tests cover
+ownership, normalization, cancellation and MX/SRV mapping; a real Worker fixture
+also verifies rejection before the public DNS lookup. This backports the fix in
+[upstream SDK PR #106](https://github.com/aoxborrow/registrar-client/pull/106)
+without adding its separate registration or DNS-update changes.
+
 # Worker-compatible Namefi requests
 
-The current dependency is `@aoxborrow/registrar-client@1.1.0-hosted.3`.
+The previous dependency is `@aoxborrow/registrar-client@1.1.0-hosted.3`.
 Start from hosted.2 below, apply `registrar-client-1.1.0-hosted.3.worker-redirect.patch`,
 set the version to `1.1.0-hosted.3`, then build and pack. The adjacent JSON pins
 archive and patch integrity. Workers rejects Fetch redirect mode `error` before

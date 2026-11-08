@@ -135,6 +135,7 @@ hosted/generated-auth.ts
 
 # Namefi registrar extension
 !vendor/aoxborrow-registrar-client-1.1.0-hosted.2.tgz
+!vendor/aoxborrow-registrar-client-1.1.0-hosted.4.tgz
 
 # Interrupted atomic archive writes are never publication inputs
 site/public/changelog-archive*/.changelog-write-*.tmp

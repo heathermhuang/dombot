@@ -1,0 +1,10 @@
+--- a/test/client.test.ts
++++ b/test/client.test.ts
+@@ -240,6 +240,7 @@
+     'namebright': true,
+     'namecheap': true,
+     'namecom': false,
++    'namefi': false,
+     'namesilo': false,
+     'porkbun': true,
+     'spaceship': false,

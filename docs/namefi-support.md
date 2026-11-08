@@ -31,3 +31,11 @@ not purchase domains, change DNS or modify auto-renew.
 
 Source and CI qualification do not establish deployment. Runtime and owner
 connection evidence are recorded separately after release.
+
+## DNS ownership
+
+DNS reads first confirm that the configured account owns the requested domain.
+An unowned domain throws `NotFoundError` without querying the public DNS endpoint;
+an owned empty zone returns `[]`. A standalone DNS read costs one inventory
+request and one DNS request. Existing DNS writes retain their ownership guard
+and reconciliation behavior.

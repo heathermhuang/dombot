@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  AbortError,
   ConfigurationError,
   InvalidResponseError,
+  NotFoundError,
   NotImplementedError,
   createRegistrar,
   registrars,
@@ -66,6 +68,14 @@ function responses(...values: unknown[]) {
 }
 function body(mock: ReturnType<typeof responses>, n: number) {
   return JSON.parse(mock.mock.calls[n][1]?.body as string);
+}
+function requestUrl(mock: ReturnType<typeof responses>, n = 0): string {
+  const input = mock.mock.calls[n][0];
+  return typeof input === 'string'
+    ? input
+    : input instanceof URL
+      ? input.href
+      : input.url;
 }
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -268,11 +278,84 @@ describe('packaged Namefi adapter', () => {
     expect(result).toMatchObject({ success: false, status: 401 });
     expect(result.message).not.toMatch(/nfk_|private@example/);
   });
+  it.each([
+    { inventory: [], records: [] },
+    { inventory: [], records: [record()] },
+    { inventory: [{ ...raw, normalizedDomainName: 'other.com' }], records: [] },
+    {
+      inventory: [{ ...raw, normalizedDomainName: 'other.com' }],
+      records: [record()],
+    },
+  ])(
+    'rejects unowned DNS reads before querying public records: %j',
+    async ({ inventory, records }) => {
+      const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        return Promise.resolve(
+          Response.json(url.includes('/user/domains') ? inventory : records),
+        );
+      });
+      vi.stubGlobal('fetch', fetch);
+      await expect(provider().getDnsRecords('example.com')).rejects.toThrow(
+        NotFoundError,
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(requestUrl(fetch)).toBe(
+        'https://api.namefi.io/v-next/user/domains',
+      );
+    },
+  );
+  it('returns empty owned DNS only after checking normalized ownership', async () => {
+    const fetch = responses([raw], []);
+    expect(await provider().getDnsRecords('EXAMPLE.COM.')).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(requestUrl(fetch, 0)).toBe(
+      'https://api.namefi.io/v-next/user/domains',
+    );
+    expect(requestUrl(fetch, 1)).toBe(
+      'https://api.namefi.io/v-next/dns/records?zoneName=example.com',
+    );
+  });
+  it.each(['/user/domains', '/dns/records'])(
+    'honors DNS read cancellation during %s',
+    async (path) => {
+      const controller = new AbortController();
+      let requestSignal: AbortSignal | null | undefined;
+      const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        if (new URL(url).pathname.endsWith(path)) {
+          requestSignal = init?.signal;
+          controller.abort();
+          return Promise.reject(new DOMException('Aborted', 'AbortError'));
+        }
+        return Promise.resolve(Response.json([raw]));
+      });
+      vi.stubGlobal('fetch', fetch);
+      await expect(
+        provider().getDnsRecords('example.com', { signal: controller.signal }),
+      ).rejects.toThrow(AbortError);
+      expect(requestSignal?.aborted).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(path === '/user/domains' ? 1 : 2);
+    },
+  );
   it('round-trips MX and SRV numbers without losing their targets', async () => {
-    responses([
-      record('mx', '@', 'MX', '10 mail.example.com.'),
-      record('srv', '_sip._tcp', 'SRV', '5 10 5060 sip.example.com.'),
-    ]);
+    responses(
+      [raw],
+      [
+        record('mx', '@', 'MX', '10 mail.example.com.'),
+        record('srv', '_sip._tcp', 'SRV', '5 10 5060 sip.example.com.'),
+      ],
+    );
     expect(await provider().getDnsRecords('example.com')).toEqual([
       {
         type: 'MX',
@@ -293,7 +376,7 @@ describe('packaged Namefi adapter', () => {
     ]);
   });
   it('rejects cross-zone DNS records before accepting a read or any writes', async () => {
-    responses([{ ...record(), zoneName: 'other.com' }]);
+    responses([raw], [{ ...record(), zoneName: 'other.com' }]);
     await expect(provider().getDnsRecords('example.com')).rejects.toThrow(
       /identity/,
     );
