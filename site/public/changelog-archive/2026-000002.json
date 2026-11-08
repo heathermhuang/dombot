@@ -18,6 +18,38 @@
       ]
     },
     {
+      "id": "auto-core-source-4e6fd3eba43179c808f3aa0ac4ddc7e648afca97",
+      "date": "2026-11-08",
+      "layer": "core",
+      "title": "Prevent hidden bulk targets after filtering or navigation",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 4e6fd3eba431",
+          "url": "https://github.com/aoxborrow/dombot/commit/4e6fd3eba43179c808f3aa0ac4ddc7e648afca97"
+        }
+      ]
+    },
+    {
+      "id": "auto-core-source-561e70fca35c16e6ea2dae74ef5fae18651e65cf",
+      "date": "2026-11-08",
+      "layer": "core",
+      "title": "Bulk selection follow-ups (stacked on #267)",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 561e70fca35c",
+          "url": "https://github.com/aoxborrow/dombot/commit/561e70fca35c16e6ea2dae74ef5fae18651e65cf"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-d3d831c2ffd2dd09a397eab22f499ac2aab02552",
       "date": "2026-11-08",
       "layer": "core",
