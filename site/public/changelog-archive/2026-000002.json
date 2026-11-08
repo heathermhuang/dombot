@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-1f6796840e0128664cf2a8bfa53702374a2edf7a",
+      "date": "2026-11-08",
+      "layer": "core",
+      "title": "Release 2.2.0",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 1f6796840e01",
+          "url": "https://github.com/aoxborrow/dombot/commit/1f6796840e0128664cf2a8bfa53702374a2edf7a"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-3902fada66ede31b9943c4876f33b307e3512ac7",
       "date": "2026-11-08",
       "layer": "core",
