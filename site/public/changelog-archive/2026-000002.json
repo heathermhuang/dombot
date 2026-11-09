@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-evidence-8e1a492da01b44ea68b4aed4",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Verified hosted release record 2.2.0-hosted.1",
+      "status": "Verified release evidence published · Scope follows the linked record",
+      "changes": [
+        "A verified release record was published. Its linked evidence defines the deployed source, engine and validation scope; the date here is its publication date."
+      ],
+      "links": [
+        {
+          "label": "Verified release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/cd962cc915f95462c712d11aa253e4135267da56/docs/creation-date-release-20261109.json"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-11c5dd714420fafed1e412a73a7a4ceaa095c47f-15",
       "date": "2026-11-09",
       "layer": "saas",
@@ -286,6 +302,22 @@
         {
           "label": "Change #201",
           "url": "https://github.com/heathermhuang/dombot/pull/201"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-202",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Record verified upstream 2.2.0 creation-date release",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #202 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #202",
+          "url": "https://github.com/heathermhuang/dombot/pull/202"
         }
       ]
     },
