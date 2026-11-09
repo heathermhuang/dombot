@@ -194,6 +194,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-199",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Sync upstream 2.2.0 and repair registrar creation dates",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #199 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #199",
+          "url": "https://github.com/heathermhuang/dombot/pull/199"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-200",
       "date": "2026-11-09",
       "layer": "saas",
