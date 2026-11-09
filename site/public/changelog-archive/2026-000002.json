@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-06ef4914a922e907620e2e3705f7ea74e5726dc2",
+      "date": "2026-11-09",
+      "layer": "core",
+      "title": "Build macOS releases on macos-15",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 06ef4914a922",
+          "url": "https://github.com/aoxborrow/dombot/commit/06ef4914a922e907620e2e3705f7ea74e5726dc2"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-8e1a492da01b44ea68b4aed4",
       "date": "2026-11-09",
       "layer": "saas",
