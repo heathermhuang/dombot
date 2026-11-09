@@ -1,9 +1,15 @@
+import { qualifyCreationDate } from '../../shared/creation-date';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { localDay, type DomainEvent } from '../../shared/domain-events';
 import type { ImportedDomain } from '../../shared/ipc';
 
+vi.mock('../services/registry-creation', () => ({
+  recoverCreationDates: async (domains: unknown[]) =>
+    domains.map((d) => qualifyCreationDate(d as never)),
+  withCachedRegistryCreation: (d: unknown) => qualifyCreationDate(d as never),
+}));
 // ── Mock every service the tool handlers reach ───────────────────────────────
 // registrarNames must be a real non-empty array: tools.ts builds z.enum() from
 // it at module load. Everything else is a vi.fn scripted per test.

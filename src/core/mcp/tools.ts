@@ -1,7 +1,5 @@
-import {
-  qualifyCreationDate,
-  mergeDomainDetail,
-} from '../../shared/creation-date';
+import { recoverCreationDates } from '../services/registry-creation';
+import { mergeDomainDetail } from '../../shared/creation-date';
 import { parkioSourceStatus } from '../services/parkio-projection';
 import { missingFeatureReason } from '../../shared/domain-ops';
 import { permitsTool } from './scopes';
@@ -1114,9 +1112,10 @@ export function registerTools(
           registrar,
           account.id,
         ).listDomains();
+        const recovered = await recoverCreationDates(domains);
         return json(
-          domains.map((d) => ({
-            ...qualifyCreationDate(d),
+          recovered.map((d) => ({
+            ...d,
             registrar,
             accountId: account.id,
             accountLabel: account.label,
