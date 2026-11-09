@@ -15,6 +15,18 @@ import {
   notificationUnsubscribeUrl,
 } from './notification-preferences';
 
+/** Persist work for the scheduler, which owns send leases and retry checkpoints. */
+export async function wakeNotificationWorkspace(
+  env: HostedEnv,
+  workspace: string,
+) {
+  await env.CONTROL_DB.prepare(
+    'UPDATE notification_preferences SET next_check_at=0,wake_generation=wake_generation+1 WHERE workspace_id=?',
+  )
+    .bind(workspace)
+    .run();
+}
+
 export async function notificationInternal(
   env: HostedEnv,
   workspace: string,
