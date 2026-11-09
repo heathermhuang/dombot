@@ -2181,6 +2181,7 @@ export async function getDomainDetail(
         if (qualified.createdDateSource)
           patchEntryData<DetailRecord>('detail', key, (prior) => ({
             ...prior,
+            domainName,
             createdDate: qualified.createdDate,
             createdDateSource: qualified.createdDateSource,
             createdDateIssue: undefined,
