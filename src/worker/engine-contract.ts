@@ -1,5 +1,6 @@
 /** Stable host contract for the pinned DomBot Worker/UI artifact. */
 export interface DomBotEnvironment {
+  DOMBOT_PARKIO_ENABLED?: string;
   DB: D1Database;
   ASSETS: Fetcher;
   DOMBOT_AUTH: string;

@@ -9,6 +9,9 @@ import type { DomBotMaintenanceState } from './engine-contract';
 // Presence in any of these tables conservatively preserves the old cadence,
 // including publication drafts and records still subject to retention.
 export const MAINTENANCE_TABLES = [
+  'parkio_sources',
+  'parkio_credentials',
+  'parkio_chunks',
   'publication_change_sets',
   'portfolio_drafts',
   'published_portfolios',

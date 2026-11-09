@@ -1,3 +1,4 @@
+import { parkioProjection } from './parkio-projection';
 import { assertDomainName, toAscii } from '../../shared/domain-name';
 import {
   DomainEventSource,
@@ -327,6 +328,14 @@ export function deleteDomains(
   domainNames: string[],
   held: ReadonlySet<string>,
 ): number {
+  const connected = new Set(
+    parkioProjection().map((d) => toAscii(d.domainName)),
+  );
+  if (domainNames.some((name) => connected.has(toAscii(name))))
+    throw new Error(
+      'Park.io observations are managed by their connected source. Open Settings → Registrars to manage that source.',
+    );
+
   const removable = domainNames
     .map((name) => assertDomainName(name))
     .filter((domain) => !held.has(domain));

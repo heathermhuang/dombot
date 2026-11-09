@@ -1,3 +1,5 @@
+import { parkioBackupSchema } from './parkio-backup';
+import type { ParkioStore } from './parkio-store';
 import { z } from 'zod';
 import { coreMethods, method } from '../core/api';
 import { BundleError, parseBundle } from '../core/storage/bundle';
@@ -21,6 +23,7 @@ export function publicationBackupMethods(
   store: PublicationStore,
   v2WritesEnabled = true,
   sales?: SalesStore,
+  parkio?: ParkioStore,
 ) {
   return {
     exportData: method<'exportData'>(z.tuple([]), async () => {
@@ -31,6 +34,9 @@ export function publicationBackupMethods(
           ...JSON.parse(text),
           publicationDraft: saved.revision ? saved.draft : null,
           ...(sales ? { sales: await exportSales(sales) } : {}),
+          ...(parkio && (await parkio.sources()).length
+            ? { parkio: await parkio.backup() }
+            : {}),
         },
         null,
         2,
@@ -38,12 +44,22 @@ export function publicationBackupMethods(
     }),
     importData: method<'importData'>(z.tuple([z.string()]), async (text) => {
       // Validate all incoming data BEFORE removing an existing public page.
-      const bundle = parseBundle(text, { sales: true }) as ReturnType<
-        typeof parseBundle
-      > & {
+      const bundle = parseBundle(text, {
+        sales: true,
+        parkio: !!parkio,
+      }) as ReturnType<typeof parseBundle> & {
         publicationDraft?: unknown;
         sales?: unknown;
+        parkio?: unknown;
       };
+      const parkioBackup =
+        bundle.parkio === undefined
+          ? null
+          : parkioBackupSchema.parse(bundle.parkio);
+      if (parkio && !parkioBackup && (await parkio.sources()).length)
+        throw new BundleError(
+          'This backup has no Park.io inventory, but this portfolio has a saved Park.io source. Export a complete backup before restoring. Nothing was imported.',
+        );
       let draft: AnyDraft | null = null;
       if (bundle.publicationDraft != null) {
         const parsed = anyDraftSchema.safeParse(bundle.publicationDraft);
@@ -86,6 +102,10 @@ export function publicationBackupMethods(
         throw new BundleError(
           'This backup has no domain inquiry data, but this account already has domain inquiry data. Export a complete backup from the source account before restoring. Nothing was imported.',
         );
+      const parkioRestore =
+        parkio && parkioBackup
+          ? await parkio.prepareRestore(parkioBackup)
+          : null;
       if (sales)
         await restoreSales(
           sales,
@@ -126,9 +146,16 @@ export function publicationBackupMethods(
             },
           ),
         );
-      return coreMethods.importData.handler(
-        JSON.stringify({ ...bundle, namespaces, sales: undefined }),
+      const result = await coreMethods.importData.handler(
+        JSON.stringify({
+          ...bundle,
+          namespaces,
+          sales: undefined,
+          parkio: undefined,
+        }),
       );
+      if (parkioRestore && parkio) await parkio.db.batch(parkioRestore);
+      return result;
     }),
   };
 }

@@ -777,7 +777,11 @@ const COLUMNS: Column[] = [
             variant="outline"
             className="px-1.5 py-0 text-[11px] font-normal text-muted-foreground"
           >
-            {d.marketObservation ? 'Market listing' : 'Imported'}
+            {d.parkio
+              ? 'Park.io · automatic updates'
+              : d.marketObservation
+                ? 'Market listing'
+                : 'Imported'}
           </Badge>
         )}
       </span>
@@ -2451,7 +2455,7 @@ export default function Domains() {
           {d.registrationRegistrar}
         </span>
       );
-    if (d.source === 'imported' && col.key === 'autoRenew')
+    if (d.source === 'imported' && !d.parkio && col.key === 'autoRenew')
       return (
         <span className="text-muted-foreground">
           {d.autoRenewUnknown ? '—' : d.autoRenew ? 'On' : 'Off'}

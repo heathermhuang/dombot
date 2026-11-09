@@ -1,3 +1,4 @@
+import { parkioProjection } from './parkio-projection';
 import { registrars } from '@aoxborrow/registrar-client';
 import type { ImportedDomain, ImportedDomainFields } from '../../shared/ipc';
 import {
@@ -178,6 +179,10 @@ export function updateImportedDomain(
   fields: Partial<ImportedDomainFields>,
 ): ImportedDomain {
   const key = assertDomainName(domainName);
+  if (parkioProjection().some((d) => toAscii(d.domainName) === key))
+    throw new Error(
+      'Park.io observations update from the connected source. Change these fields in Park.io.',
+    );
   const existing = store.get(key);
   if (!existing) throw new Error(`${key} isn't an imported domain.`);
   const now = Date.now();

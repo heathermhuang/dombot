@@ -176,6 +176,7 @@ export interface QueryRow {
   /** Whether an account still reports it. When false, the fields an account
    *  reports are empty and the registrar is the last one it was seen at. */
   inAccount: boolean;
+  parkio?: Domain['parkio'];
   status: string;
   inventoryAt: number | null;
   createdDate: Date | null;
@@ -501,6 +502,7 @@ export function queryPortfolio(
         : (d.accountLabel ?? (registrar ? 'Default' : null)),
       registrarLabel: d.importedRegistrarLabel || null,
       source: d.source,
+      ...(d.parkio ? { parkio: d.parkio } : {}),
       domainName: d.domainName,
       ownership: label ? 'archive' : 'owned',
       archiveLabel: label,
@@ -510,7 +512,13 @@ export function queryPortfolio(
       inAccount,
       status: d.status,
       inventoryAt: observationAt(
-        extras.pricing?.[domainKey(d)]?.inventoryAt,
+        d.parkio
+          ? d.parkio.missingSince !== null
+            ? d.syncedAt instanceof Date
+              ? d.syncedAt.getTime()
+              : null
+            : d.parkio.lastSuccessfulCheckAt
+          : extras.pricing?.[domainKey(d)]?.inventoryAt,
         now,
       ),
       createdDate: d.createdDate,

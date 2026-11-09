@@ -1,3 +1,9 @@
+import { hasParkio } from './parkio-backup';
+import { createParkioRoutes } from './parkio-routes';
+import { ParkioSync } from './parkio-sync';
+import { configureParkioProjection } from '../core/services/parkio-projection';
+import { parkioRows } from '../shared/parkio';
+import { parkioStore } from './parkio-runtime';
 import { connectionResponse } from './connection-response';
 import { CONNECTION_RESULT_HEADER } from '../shared/connection-contract';
 import type { ConnectRegistrarResult } from '../shared/ipc';
@@ -105,6 +111,7 @@ function capturePublicationInputs() {
 function bootFingerprint(env: Env): string {
   return [
     env.DOMBOT_SECRET,
+    env.DOMBOT_PARKIO_ENABLED,
     env.DOMBOT_GATEWAY_SECRET,
     env.DOMBOT_WORKSPACE_ID,
     env.DOMBOT_PASSWORD,
@@ -184,12 +191,26 @@ async function bootOnce(env: Env): Promise<Boot> {
 }
 
 /** Fresh view of the store for this request. */
-async function hydrate(oauthOnly = false): Promise<void> {
+async function hydrate(env: Env, oauthOnly = false): Promise<void> {
   // OAuth emits approval revisions in meta so existing browser tabs can
   // discover a new pairing request without reloading.
   await hydrateStores(
     oauthOnly ? new Set(['settings', 'mcp', 'meta']) : undefined,
   );
+  configureParkioProjection([]);
+  if (!oauthOnly && env.DOMBOT_PARKIO_ENABLED === 'true') {
+    const refresh = async (manual: boolean) => {
+      await new ParkioSync(await parkioStore(env)).due(manual);
+      configureParkioProjection(
+        parkioRows(await (await parkioStore(env)).observations(), []),
+        refresh,
+      );
+    };
+    configureParkioProjection(
+      parkioRows(await (await parkioStore(env)).observations(), []),
+      refresh,
+    );
+  }
   // Idempotent and a no-op once done; its writes flush with the request's.
   if (!oauthOnly) await migrateLegacyProxies();
   if (!oauthOnly) capturePublicationInputs();
@@ -265,7 +286,7 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
             ? c.req.path.startsWith(path.slice(0, -1))
             : path === c.req.path,
         );
-      await hydrate(oauthOnly);
+      await hydrate(c.env, oauthOnly);
       const salesReady = !oauthOnly && (await hasSales(c.env.DB));
       const beforeSales = salesReady
         ? salesControlState(c.env)
@@ -399,6 +420,8 @@ app.route(
   createPublicationRoutes(stateful, publicationReads.read),
 );
 app.route('/sales', createSalesRoutes(stateful));
+app.route('/connectors/parkio', createParkioRoutes(stateful));
+app.route('/internal/parkio', createParkioRoutes(stateful, true));
 
 app.post(
   '/api/:method',
@@ -432,6 +455,7 @@ app.post(
           new PublicationStore(c.env.DB, cipher),
           c.env.DOMBOT_OWNER_SITE_V2 === 'true',
           (await hasSales(c.env.DB)) ? await SalesStore.from(c.env) : undefined,
+          (await hasParkio(c.env.DB)) ? await parkioStore(c.env) : undefined,
         )[name];
       }
       const result = await invoke(name, entry, args);
@@ -537,7 +561,7 @@ export default {
     await withRootLease(env, async () => {
       await withRequestLock(async () => {
         await bootOnce(env);
-        await hydrate();
+        await hydrate(env);
         if (await hasSales(env.DB))
           await reconcileSalesOutcomes(await SalesStore.from(env));
         if (await hasSales(env.DB))
@@ -545,6 +569,12 @@ export default {
             await SalesStore.from(env),
             env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
           ).cleanup();
+        if (env.DOMBOT_PARKIO_ENABLED === 'true') {
+          await new ParkioSync(await parkioStore(env)).due();
+          configureParkioProjection(
+            parkioRows(await (await parkioStore(env)).observations(), []),
+          );
+        }
         const beforeSales = salesControlState(env);
         const minutes = getSettings().autoSyncIntervalMinutes;
         if (minutes <= 0) {

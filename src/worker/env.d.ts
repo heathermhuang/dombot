@@ -36,3 +36,6 @@ interface Env {
   /** cloudflare-access mode: the Access application's audience tag. */
   CF_ACCESS_AUD?: string;
 }
+interface Env {
+  DOMBOT_PARKIO_ENABLED?: string;
+}

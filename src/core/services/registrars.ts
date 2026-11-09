@@ -1,3 +1,7 @@
+import {
+  withParkioProjection,
+  refreshParkioProjection,
+} from './parkio-projection';
 import { readDynadotRateLimit } from '../../shared/dynadot-rate-limit';
 import { protectRegistrar } from './registrar-errors';
 import { API_TIMEOUT_MS } from '../api-timeout';
@@ -1577,11 +1581,12 @@ export async function getPortfolio(
   trigger: SyncTrigger = 'manual',
 ): Promise<Portfolio> {
   if (refresh) {
+    await refreshParkioProjection(trigger === 'manual');
     // Only sync enabled registrars — a disabled one keeps its credentials but is
     // deliberately skipped.
     await syncAccounts(getActiveAccounts(), trigger);
   }
-  return assemblePortfolio();
+  return withParkioProjection(assemblePortfolio());
 }
 
 /**
@@ -1604,7 +1609,7 @@ export async function syncRegistrar(
     // Credentials are gone — drop the stale slice so it can't reappear.
     clearRegistrarData(account.id);
   }
-  return assemblePortfolio();
+  return withParkioProjection(assemblePortfolio());
 }
 
 export async function setRegistrarEnabledCached(
@@ -2192,7 +2197,15 @@ export function getMergedPortfolio(): {
   registrars: string[];
   errors: PortfolioErrorInfo[];
 } {
-  const portfolio = getCachedPortfolio();
+  const portfolio = withParkioProjection(
+    getCachedPortfolio() ?? {
+      domains: [],
+      fetchedAt: null,
+      registrars: [],
+      registrarLabels: {},
+      errors: [],
+    },
+  );
   if (!portfolio)
     return { domains: [], fetchedAt: null, registrars: [], errors: [] };
   const detail = getCachedDetail();
