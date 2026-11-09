@@ -36,6 +36,19 @@ beforeEach(() => {
   } as unknown as Env;
 });
 afterEach(() => sqlite.close());
+
+it('reminder choices and mail ledgers do not restart registrar polling for an empty portfolio', async () => {
+  for (let i = 0; i < 150; i++)
+    sqlite
+      .prepare('INSERT INTO docs(ns,key,value,updated_at) VALUES(?,?,?,0)')
+      .run(
+        'renewal-decisions',
+        `private${i}.example|2026-11-30`,
+        JSON.stringify({ value: 'expire', revision: crypto.randomUUID() }),
+      );
+  const result = await readMaintenanceState(env);
+  expect(result.state).toBe('empty');
+});
 async function doc(ns: string, key: string, value: unknown) {
   const cipher = await aesGcmCipher(
     await deriveEncryptionKey(parseRootSecret(env.DOMBOT_SECRET)),

@@ -17,6 +17,7 @@ export class Accounts {
   constructor(
     private readonly db: D1Database,
     private readonly pepper: string,
+    private readonly securityNotifications = false,
   ) {}
 
   async claimInvite(
@@ -159,6 +160,21 @@ export class Accounts {
           'DELETE FROM password_resets WHERE user_id=?1 AND EXISTS(SELECT 1 FROM users WHERE id=?1 AND password_hash=?2)',
         )
         .bind(user.id, encoded),
+      ...(this.securityNotifications
+        ? [
+            this.db
+              .prepare(
+                "INSERT INTO notification_security_outbox(id,user_id,kind,created_at,due_at) SELECT ?,id,'password-changed',?,? FROM users WHERE id=? AND password_hash=?",
+              )
+              .bind(
+                crypto.randomUUID(),
+                Date.now(),
+                Date.now(),
+                user.id,
+                encoded,
+              ),
+          ]
+        : []),
     ]);
     return results[0].results.length === 1;
   }
@@ -207,6 +223,15 @@ export class Accounts {
           'DELETE FROM mcp_authorizations WHERE user_id IN (SELECT user_id FROM password_resets WHERE consumption_id=?1)',
         )
         .bind(consumption),
+      ...(this.securityNotifications
+        ? [
+            this.db
+              .prepare(
+                "INSERT INTO notification_security_outbox(id,user_id,kind,created_at,due_at) SELECT ?,user_id,'password-reset',?,? FROM password_resets WHERE consumption_id=?",
+              )
+              .bind(crypto.randomUUID(), committedAt, committedAt, consumption),
+          ]
+        : []),
     ]);
     return result[0].results.length === 1;
   }

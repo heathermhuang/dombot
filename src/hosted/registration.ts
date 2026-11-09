@@ -1,3 +1,4 @@
+import { renderEmail } from '../shared/email-layout';
 import { Accounts, AccountError, type VerifiedUser } from './accounts';
 import { ON_DEMAND, onDemandReady } from './on-demand';
 import { opaqueToken, passwordHash, tokenHash } from './crypto';
@@ -184,13 +185,35 @@ export async function sendAccountEmail(
     env.CANONICAL_ORIGIN,
   );
   url.searchParams.set('code', code);
-  return sendAuthEmail(env, email, {
-    subject:
-      kind === 'signup'
-        ? 'Verify your email for domains.domains'
-        : 'Reset your domains.domains password',
-    text: `${kind === 'signup' ? 'Verify your email to start using domains.domains' : 'Set a new password for your domains.domains sign-in'}:\n\n${url.href}\n\nThis link expires in ${kind === 'signup' ? 20 : 15} minutes and can be used once. If you did not request this, ignore this email. Your account has not been changed.\n\ndomains.domains`,
-  });
+  return sendAuthEmail(
+    env,
+    email,
+    renderEmail({
+      subject:
+        kind === 'signup'
+          ? 'Verify your email for domains.domains'
+          : 'Reset your domains.domains password',
+      preheader:
+        kind === 'signup'
+          ? 'Verify your email to create your account.'
+          : 'A single-use link to reset your password.',
+      heading: kind === 'signup' ? 'Verify your email' : 'Reset your password',
+      intro:
+        kind === 'signup'
+          ? 'Verify your email to start using domains.domains.'
+          : 'Set a new password for your domains.domains sign-in.',
+      action: {
+        label: kind === 'signup' ? 'Verify email address' : 'Reset password',
+        url: url.href,
+      },
+      note:
+        'This link expires in ' +
+        (kind === 'signup' ? 20 : 15) +
+        ' minutes and can be used once. Do not share or forward this email.',
+      reason:
+        'You requested this account email. If you did not request this, ignore it. Your account has not been changed.',
+    }),
+  );
 }
 
 /** Reserve before identity lookup in email-first auth, including unknown accounts. */

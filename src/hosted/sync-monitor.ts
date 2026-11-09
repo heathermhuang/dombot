@@ -1,3 +1,4 @@
+import { renderEmail } from '../shared/email-layout';
 import { onDemandSchemaReady } from './on-demand';
 import {
   readWorkspace,
@@ -10,7 +11,6 @@ import {
   SYNC_RETENTION_MS,
   type SyncEvent,
 } from '../shared/sync-monitor';
-import { escapeHtml } from './views';
 
 export const SYNC_ALERT_RECIPIENT = 'heathermhuang@gmail.com';
 const MAX_USERS = 25;
@@ -306,15 +306,42 @@ export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
   const title = test
     ? 'Dynadot monitoring test'
     : `Dynadot sync failures (${claimed.length})`;
-  const text = `${title}\n\n${claimed.map((alert) => `Time: ${new Date(alert.at).toISOString()}\nAlert ID: ${alert.id}\nSanitized diagnostics: ${alert.diagnostic}`).join('\n\n')}\n\nReview: https://domains.domains/admin/sync-monitor\n\nNew failures are grouped into at most one email every 30 minutes. Monitoring availability, recovery and retention-gap notices stay in the dashboard.`;
+  const text = `${title}\n\n${claimed
+    .slice(0, 10)
+    .map(
+      (alert) =>
+        `Time: ${new Date(alert.at).toISOString()}\nAlert ID: ${alert.id}\nSanitized diagnostics: ${alert.diagnostic.slice(0, 2000)}`,
+    )
+    .join(
+      '\n\n',
+    )}\n\nReview: https://domains.domains/admin/sync-monitor\n\nNew failures are grouped into at most one email every 30 minutes. Monitoring availability, recovery and retention-gap notices stay in the dashboard.`;
   let result: EmailSendResult;
   try {
     result = await env.EMAIL.send({
       from: { email: env.EMAIL_FROM, name: 'domains.domains system alerts' },
       to: SYNC_ALERT_RECIPIENT,
-      subject: `[domains.domains] ${title}`,
-      text,
-      html: `<pre style="white-space:pre-wrap">${escapeHtml(text)}</pre>`,
+      ...renderEmail({
+        subject: '[domains.domains] ' + title,
+        preheader: 'Recorded sync incidents need operator review.',
+        heading: title,
+        sections: [
+          {
+            label: 'Recorded incidents',
+            body:
+              text +
+              (claimed.length > 10
+                ? '\n\nShowing 10 of ' +
+                  claimed.length +
+                  ' incidents. Open the dashboard for the complete record.'
+                : ''),
+          },
+        ],
+        action: {
+          label: 'Review sync incidents',
+          url: 'https://domains.domains/admin/sync-monitor',
+        },
+        reason: 'You are the configured platform incident administrator.',
+      }),
       headers: { 'X-DomBot-Alert-ID': batchId },
     });
   } catch {

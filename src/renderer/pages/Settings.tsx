@@ -1,3 +1,5 @@
+import NotificationsSettings from './settings/NotificationsSettings';
+import { supportsNotifications } from '../lib/platform';
 import { useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,6 +28,7 @@ const SECTIONS = [
   { value: 'registrars', label: 'Registrars' },
   { value: 'markets', label: 'Markets' },
   { value: 'sync', label: 'Sync' },
+  { value: 'notifications', label: 'Notifications' },
   { value: 'import-export', label: 'Import/Export' },
   { value: 'folders', label: 'Folders' },
   { value: 'proxy', label: 'Proxy' },
@@ -49,8 +52,13 @@ const PICKER_ITEM_CLASS = cn(
 export default function Settings() {
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab');
+  const sections = SECTIONS.filter(
+    (s) => s.value !== 'notifications' || supportsNotifications(),
+  );
   const tab =
-    requested && TAB_VALUES.includes(requested as (typeof TAB_VALUES)[number])
+    requested &&
+    sections.some((s) => s.value === requested) &&
+    TAB_VALUES.includes(requested as (typeof TAB_VALUES)[number])
       ? requested
       : SECTIONS[0].value;
   const setTab = (v: string) => setParams({ tab: v }, { replace: true });
@@ -75,7 +83,7 @@ export default function Settings() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SECTIONS.map((s) => (
+              {sections.map((s) => (
                 <SelectItem
                   key={s.value}
                   value={s.value}
@@ -87,7 +95,7 @@ export default function Settings() {
             </SelectContent>
           </Select>
           <TabsList className="hidden h-auto w-full flex-col gap-1 bg-transparent p-0 md:-ml-2 md:flex [&_button]:text-[15px]">
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <TabsTrigger
                 key={s.value}
                 value={s.value}
@@ -100,6 +108,9 @@ export default function Settings() {
         </div>
 
         <div className="min-w-0 flex-1">
+          <TabsContent value="notifications">
+            <NotificationsSettings />
+          </TabsContent>
           <TabsContent value="general">
             <GeneralSettings />
           </TabsContent>

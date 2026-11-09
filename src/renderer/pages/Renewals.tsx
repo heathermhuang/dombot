@@ -1,3 +1,4 @@
+import RenewalReminderControls from '../components/RenewalReminderControls';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -357,6 +358,7 @@ export default function Renewals() {
   if (!hasPortfolio) {
     return (
       <div className="mx-auto w-full max-w-[1400px]">
+        <RenewalReminderControls />
         <PageHeader />
         <EmptyState
           boxed
@@ -373,6 +375,7 @@ export default function Renewals() {
   return (
     // 13px between rows and cards, as on Domains, Sales and Activity.
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-[13px] short:gap-[9px]">
+      <RenewalReminderControls />
       <PageHeader
         view={
           renewing === 'auto'

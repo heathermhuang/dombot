@@ -1,3 +1,4 @@
+import { storageLogKey } from './names';
 import { MemoryDocStore, type DocStore } from './doc-store';
 import { sanitizeBundleDiagnostics } from './sanitize-diagnostics';
 
@@ -139,7 +140,7 @@ export class Namespace<T> {
 
   set(key: string, value: T): Promise<void> {
     this.ensure().set(key, value);
-    return enqueue(`${this.name}/${key} put`, () =>
+    return enqueue(`${storageLogKey(this.name, key)} put`, () =>
       store.put(this.name, key, value),
     );
   }
@@ -156,14 +157,14 @@ export class Namespace<T> {
 
   delete(key: string): Promise<void> {
     if (!this.ensure().delete(key)) return Promise.resolve();
-    return enqueue(`${this.name}/${key} delete`, () =>
+    return enqueue(`${storageLogKey(this.name, key)} delete`, () =>
       store.delete(this.name, key),
     );
   }
 
   async take(key: string): Promise<T | undefined> {
     let value: unknown = null;
-    await enqueue(`${this.name}/${key} take`, async () => {
+    await enqueue(`${storageLogKey(this.name, key)} take`, async () => {
       value = await store.take(this.name, key);
       this.ensure().delete(key);
     });
