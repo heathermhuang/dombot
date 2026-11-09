@@ -258,6 +258,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-201",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Persist portfolio notification wake-ups so retries keep their due time",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #201 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #201",
+          "url": "https://github.com/heathermhuang/dombot/pull/201"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-1f6796840e0128664cf2a8bfa53702374a2edf7a",
       "date": "2026-11-08",
       "layer": "core",
