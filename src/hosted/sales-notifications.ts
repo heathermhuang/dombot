@@ -1,3 +1,4 @@
+import { ownerInquiryEmails } from './notification-preferences';
 import { z } from 'zod';
 import { reserveCampaignEmail } from './email-campaign';
 import { createHmac, createHash } from 'node:crypto';
@@ -159,6 +160,18 @@ export async function drainSalesWorkspace(
   if (!response.ok) return;
   const batch = leasedSchema.parse(await response.json());
   for (const item of batch.items) {
+    if (
+      item.kind === 'seller-alert' &&
+      !(await ownerInquiryEmails(env, workspace))
+    ) {
+      await salesInternal(env, workspace, 'ack', {
+        id: item.id,
+        lease: item.lease,
+        state: 'suppressed',
+        receipt: null,
+      });
+      continue;
+    }
     // Recheck suspension before each send; closure never enrolls another recipient.
     if (
       !(await env.CONTROL_DB.prepare(

@@ -11,7 +11,7 @@ import {
   reserveAuthEmail,
 } from './registration';
 import { legalVersion } from './legal';
-import { escapeHtml } from './views';
+import { renderEmail } from '../shared/email-layout';
 import { salesRecipientHash } from './sales-notifications';
 
 interface EmailProof {
@@ -104,13 +104,22 @@ export class EmailAuth {
     const delivery = sendAuthEmail(
       this.env,
       email,
-      {
+      renderEmail({
         subject: user
           ? 'Confirm your domains.domains sign-in'
           : 'Your domains.domains sign-in link and code',
-        text: `${intro}\n\n${url.href}\n\nOr enter this six-digit code in the browser where you requested it: ${code}\n\nThe link and code expire in 10 minutes. Using either invalidates both. Do not share or forward this email. If you did not request this, ignore it.\n\ndomains.domains`,
-        html: `<p>${intro}</p><p><a href="${escapeHtml(url.href)}">Continue to domains.domains</a></p><p>Or enter this six-digit code in your original browser: <strong>${code}</strong></p><p>Expires in 10 minutes. Using the link or code invalidates both. Never share or forward this email. If you did not request this, ignore it.</p>`,
-      },
+        preheader:
+          'Your single-use sign-in link and code expire in 10 minutes.',
+        heading: user ? 'Confirm it’s you' : 'Sign in to domains.domains',
+        intro,
+        code,
+        codeLabel:
+          'Or enter this six-digit code in the browser where you requested it',
+        action: { label: 'Continue to domains.domains', url: url.href },
+        note: 'The link and code expire in 10 minutes. Using either invalidates both. Do not share or forward this email.',
+        reason:
+          'You requested access to domains.domains. If you did not request this, ignore this email.',
+      }),
       true,
     ).then(async (sent) => {
       // Failed sends must not leave a usable proof; responses still match unknown
@@ -278,7 +287,10 @@ export class EmailAuth {
         results[sessionStatementIndex].results.length !== 1
       )
         return null;
-      if (this.env.SALES_MAIL_ENABLED === 'true') {
+      if (
+        this.env.SALES_MAIL_ENABLED === 'true' ||
+        this.env.NOTIFICATION_POLICY_ENABLED === 'true'
+      ) {
         // Sales metadata must never make an otherwise valid auth proof fail.
         try {
           const verifiedUser = await new Accounts(

@@ -4,6 +4,8 @@ import { ParkioSync } from './parkio-sync';
 import { configureParkioProjection } from '../core/services/parkio-projection';
 import { parkioRows, parkioCacheStatus } from '../shared/parkio';
 import { parkioStore } from './parkio-runtime';
+import { heldNames } from '../core/services/domain-import';
+import { toAscii } from '../shared/domain-name';
 import { connectionResponse } from './connection-response';
 import { CONNECTION_RESULT_HEADER } from '../shared/connection-contract';
 import type { ConnectRegistrarResult } from '../shared/ipc';
@@ -68,6 +70,12 @@ import { publicationBackupMethods } from './publication-backup';
 import { createPublicSalesRoutes } from './public-sales';
 import { createSalesInternalRoutes } from './sales-internal';
 import { createSalesRoutes } from './sales-routes';
+import { createNotificationRoutes } from './notification-routes';
+import {
+  NotificationStore,
+  notificationSchemaReady,
+} from './notification-store';
+import { wakePortfolioNotifications } from './notification-wake';
 import { SalesStore } from './sales-store';
 import { hasSales } from './sales-backup';
 import {
@@ -289,6 +297,16 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
             : path === c.req.path,
         );
       await hydrate(c.env, oauthOnly);
+      const beforeNotificationSync =
+        Reflect.get(c.env, 'DOMBOT_NOTIFICATION_V1') === 'true' && !oauthOnly
+          ? JSON.stringify(
+              getRegistrarMetadata().map((a) => [
+                a.accountId,
+                a.sync.lastSyncedAt,
+                a.sync.lastError,
+              ]),
+            )
+          : '';
       const salesReady = !oauthOnly && (await hasSales(c.env.DB));
       const beforeSales = salesReady
         ? salesControlState(c.env)
@@ -299,6 +317,24 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
           await reconcileSalesOutcomes(await SalesStore.from(c.env));
         await flushWrites();
         if (!oauthOnly) capturePublicationInputs();
+        if (
+          Reflect.get(c.env, 'DOMBOT_NOTIFICATION_V1') === 'true' &&
+          !oauthOnly &&
+          beforeNotificationSync !==
+            JSON.stringify(
+              getRegistrarMetadata().map((a) => [
+                a.accountId,
+                a.sync.lastSyncedAt,
+                a.sync.lastError,
+              ]),
+            )
+        ) {
+          try {
+            await wakePortfolioNotifications(c.env);
+          } catch {
+            console.warn('notification-wake-unavailable');
+          }
+        }
         if (c.req.method !== 'GET' && salesReady)
           await (
             await SalesStore.from(c.env)
@@ -357,6 +393,9 @@ app.get('/auth/status', async (c) => {
     authenticated: await isAuthenticated(auth, c.req.raw, c.env.DB),
     version: APP_VERSION,
     sales: c.env.DOMBOT_SALES_V1 === 'true',
+    notifications:
+      Reflect.get(c.env, 'DOMBOT_NOTIFICATION_V1') === 'true' &&
+      (await notificationSchemaReady(c.env.DB)),
   });
 });
 
@@ -422,6 +461,7 @@ app.route(
   createPublicationRoutes(stateful, publicationReads.read),
 );
 app.route('/sales', createSalesRoutes(stateful));
+app.route('/notifications', createNotificationRoutes(stateful));
 
 app.post(
   '/api/:method',
@@ -456,6 +496,7 @@ app.post(
           c.env.DOMBOT_OWNER_SITE_V2 === 'true',
           (await hasSales(c.env.DB)) ? await SalesStore.from(c.env) : undefined,
           (await hasParkio(c.env.DB)) ? await parkioStore(c.env) : undefined,
+          await NotificationStore.from(c.env),
         )[name];
       }
       const result = await invoke(name, entry, args);
@@ -464,8 +505,20 @@ app.post(
           result as ConnectRegistrarResult,
           c.req.header(CONNECTION_RESULT_HEADER),
         );
-      if (name === 'deleteDomains' && (await hasSales(c.env.DB)))
-        await (await SalesStore.from(c.env)).removeNames(args[0] as string[]);
+      if (name === 'deleteDomains') {
+        const held = heldNames();
+        const removed = (args[0] as string[])
+          .map(toAscii)
+          .filter((n) => !held.has(n));
+        if (await hasSales(c.env.DB))
+          await (await SalesStore.from(c.env)).removeNames(removed);
+        if (
+          await c.env.DB.prepare(
+            "SELECT 1 FROM sqlite_master WHERE name='notification_outbox'",
+          ).first()
+        )
+          await (await NotificationStore.from(c.env)).forgetNames(removed);
+      }
       return c.json({ result: result === undefined ? null : result });
     } catch (err) {
       if (err instanceof ApiValidationError || err instanceof BundleError) {
@@ -610,6 +663,13 @@ export default {
         );
         await flushWrites();
         capturePublicationInputs();
+        if (ran) {
+          try {
+            await wakePortfolioNotifications(env);
+          } catch {
+            console.warn('notification-wake-unavailable');
+          }
+        }
       });
       return new Response(null, { status: 204 });
     });

@@ -20,7 +20,7 @@ import {
   sealBundle,
 } from '../../../shared/bundle-seal';
 import { domainsCsvTemplate } from '../../../shared/domain-csv';
-import { isDemo } from '../../lib/platform';
+import { isDemo, supportsNotifications } from '../../lib/platform';
 import { exportAllDomains } from '../../lib/domain-export';
 import { ImportDomainsDialog } from '../../components/domains/ImportDomainsDialog';
 import { SettingsCard, SettingsField } from './SettingsCard';
@@ -234,6 +234,13 @@ function RestoreSection() {
   return (
     <section className="flex flex-col gap-3 border-t pt-5">
       <h3 className="text-sm font-medium">Restore</h3>
+      {supportsNotifications() && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Starting a restore pauses renewal reminders and weekly overviews,
+          including when the restore fails. Review and save email preferences
+          again afterwards. Inquiry replies and security messages stay separate.
+        </p>
+      )}
       <p className="text-sm text-muted-foreground">
         Restore replaces everything stored here with a backup file. It does not
         contact your registrars or markets. The next Sync does. Names in the

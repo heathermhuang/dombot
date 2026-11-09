@@ -1,3 +1,14 @@
+import { drainSecurityNotifications } from './notification-security';
+import { notificationPreferencesSchema } from '../shared/notification-policy';
+import {
+  notificationPreferenceRoutes,
+  getNotificationPreferences,
+  pausePortfolioMailForRestore,
+} from './notification-preferences';
+import {
+  drainNotifications,
+  drainNotificationWorkspace,
+} from './notification-dispatch';
 import {
   parkioConnectorRoutes,
   cancelParkioLogin,
@@ -108,7 +119,11 @@ import {
   page,
   recoveryForm,
 } from './views';
-import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
+import {
+  PROOF_HEADER,
+  signGatewayRequest,
+  verifyGatewayRequest,
+} from '../shared/gateway-proof';
 import { canonicalRedirect, portfolioAlias } from './launch';
 import { workspaceKey, workspaceFor, workspaceService } from './workspaces';
 import { salesPublicPath } from '../shared/sales-admission';
@@ -137,7 +152,11 @@ for (const [path, script] of [
     }),
   );
 const account = (env: HostedEnv) =>
-  new Accounts(env.CONTROL_DB, env.AUTH_PEPPER);
+  new Accounts(
+    env.CONTROL_DB,
+    env.AUTH_PEPPER,
+    env.NOTIFICATION_SECURITY_ENABLED === 'true',
+  );
 const secure = (url: string) => new URL(url).protocol === 'https:';
 const cookieName = (url: string) =>
   secure(url) ? '__Host-dd_session' : 'dd_session';
@@ -483,6 +502,31 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
   c.header('Set-Cookie', sessionCookie(c.req.url, result.token));
   return c.redirect(safeNext(result.next), 303);
 });
+app.post('/internal/notifications/:workspace/wake', async (c) => {
+  if (c.env.NOTIFICATION_POLICY_ENABLED !== 'true')
+    return c.json({ ok: false }, 404);
+  const id = c.req.param('workspace');
+  if (!/^[a-f0-9-]{36}$/.test(id)) return c.json({ ok: false }, 400);
+  const proof = await verifyGatewayRequest(
+    await workspaceKey(c.env, id),
+    id,
+    c.req.raw,
+  );
+  if (
+    proof?.owner !== null ||
+    proof.sales?.purpose !== 'portfolio-notifications'
+  )
+    return c.json({ ok: false }, 403);
+  await c.env.CONTROL_DB.prepare(
+    'UPDATE notification_preferences SET next_check_at=0,wake_generation=wake_generation+1 WHERE workspace_id=?',
+  )
+    .bind(id)
+    .run();
+  return c.json({ ok: true }, 202);
+});
+
+app.route('/', notificationPreferenceRoutes());
+
 app.get('/account/reauth', async (c) => {
   const user = await account(c.env).session(readSession(c.req.raw));
   if (!user) return c.redirect('/login', 303);
@@ -1870,16 +1914,39 @@ app.all('/w/:workspace/*', async (c) => {
           : undefined,
     ),
   );
+  if (user && apiMethod === 'importData')
+    await pausePortfolioMailForRestore(c.env, id);
   const response = await workspaceService(c.env, configured.binding).fetch(
     request,
   );
   if (
     response.ok &&
     user &&
-    ['getAppInfo', 'getMcpInfo', 'listMcpClients'].includes(apiMethod)
+    ['getAppInfo', 'getMcpInfo', 'listMcpClients', 'exportData'].includes(
+      apiMethod,
+    )
   ) {
     const json = (await response.json()) as { result: unknown };
-    if (apiMethod === 'getAppInfo') {
+    if (
+      apiMethod === 'exportData' &&
+      c.env.NOTIFICATION_POLICY_ENABLED === 'true'
+    ) {
+      const saved = await getNotificationPreferences(c.env, id);
+      if (saved && typeof json.result === 'string') {
+        const bundle = z
+          .object({ namespaces: z.record(z.string(), z.unknown()) })
+          .passthrough()
+          .parse(JSON.parse(json.result));
+        bundle.namespaces['notification-preference-drafts'] = {
+          choices: notificationPreferencesSchema.parse(
+            JSON.parse(saved.preferences),
+          ),
+        };
+        json.result = JSON.stringify(bundle);
+      }
+    } else if (apiMethod === 'exportData') {
+      // No optional policy data exists on this gateway.
+    } else if (apiMethod === 'getAppInfo') {
       const engineVersion = response.headers.get('X-DomBot-Engine');
       const engineSource = response.headers.get('X-DomBot-Engine-Source');
       json.result = {
@@ -1916,6 +1983,27 @@ app.all('/w/:workspace/*', async (c) => {
         ),
       )
       .run();
+  if (
+    response.ok &&
+    user &&
+    [
+      'syncAll',
+      'syncRegistrar',
+      'importData',
+      'importDomains',
+      'renewDomain',
+      'stepDomainOpJob',
+    ].includes(apiMethod ?? '') &&
+    c.env.NOTIFICATION_POLICY_ENABLED === 'true'
+  ) {
+    try {
+      c.executionCtx.waitUntil(
+        drainNotificationWorkspace(c.env, id).catch(() => {}),
+      );
+    } catch {
+      /* No execution context in route fixtures. */
+    }
+  }
   const resultHeaders = new Headers(response.headers);
   if (
     c.req.method === 'POST' &&
@@ -1992,6 +2080,8 @@ export default {
     for (const task of [
       monitorDynadotSync,
       drainSales,
+      drainNotifications,
+      drainSecurityNotifications,
       refreshDomainControls,
       refreshSalesHostnames,
       refreshPortfolioDomains,
@@ -2034,6 +2124,21 @@ export default {
         'DELETE FROM password_resets WHERE expires_at<?1',
       ).bind(Date.now()),
     ]);
+    if (env.NOTIFICATION_POLICY_ENABLED === 'true')
+      await env.CONTROL_DB.batch([
+        env.CONTROL_DB.prepare(
+          'DELETE FROM notification_unsubscribe WHERE expires_at<?',
+        ).bind(Date.now()),
+        env.CONTROL_DB.prepare(
+          "DELETE FROM notification_attempts WHERE updated_at<? AND state IN ('acknowledged','failed','suppressed')",
+        ).bind(Date.now() - 30 * 86400_000),
+      ]);
+    if (env.NOTIFICATION_SECURITY_ENABLED === 'true')
+      await env.CONTROL_DB.prepare(
+        "DELETE FROM notification_security_outbox WHERE created_at<? AND state IN ('accepted','failed','suppressed')",
+      )
+        .bind(Date.now() - 30 * 86400_000)
+        .run();
     if (maintenanceFailed) throw Error('Inquiry maintenance needs attention.');
   },
 } satisfies ExportedHandler<HostedEnv>;

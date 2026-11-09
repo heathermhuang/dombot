@@ -632,3 +632,59 @@ it.each([
     expect(JSON.stringify(acks)).not.toContain('Provider text');
   },
 );
+
+it('turns off only owner alerts while verification and buyer replies continue', async () => {
+  const e = await verified();
+  e.NOTIFICATION_POLICY_ENABLED = 'true';
+  await db
+    .prepare(
+      'INSERT INTO notification_preferences(workspace_id,email_hash,revision,preferences,updated_at) VALUES(?,?,?,?,?)',
+    )
+    .bind(
+      workspace,
+      salesRecipientHash(e, 'seller@example.com'),
+      crypto.randomUUID(),
+      JSON.stringify({
+        renewalReminders: false,
+        weeklyOverview: false,
+        inquiryEmails: false,
+        timeZone: 'UTC',
+      }),
+      Date.now(),
+    )
+    .run();
+  const original = e.WORKSPACE_0!;
+  e.WORKSPACE_0 = {
+    fetch: async (r: Request) => {
+      if (new URL(r.url).pathname.endsWith('/lease'))
+        return Response.json({
+          items: ['verification', 'buyer-reply', 'seller-alert'].map(
+            (kind) => ({
+              id: crypto.randomUUID(),
+              kind,
+              leadId: lead,
+              lease,
+              attempts: 1,
+              mail: {
+                recipient: kind === 'seller-alert' ? null : 'buyer@example.com',
+                subject: 'Sample',
+                url: `https://accounts.example/w/${workspace}/i/${'x'.repeat(43)}`,
+                reference: lead,
+              },
+            }),
+          ),
+        });
+      return original.fetch(r);
+    },
+  } as Fetcher;
+  try {
+    await drainSalesWorkspace(e, workspace);
+    expect(sends).toBe(2);
+    expect(acks.filter((a) => a.state === 'suppressed')).toHaveLength(1);
+  } finally {
+    await db
+      .prepare('DELETE FROM notification_preferences WHERE workspace_id=?')
+      .bind(workspace)
+      .run();
+  }
+});
