@@ -82,6 +82,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-bd871293ecd2abe1320dd17c9c720e0569aececd-16",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix(hosted): return Park.io flows to the existing settings tab (#198)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/bd871293ecd2abe1320dd17c9c720e0569aececd"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-193",
       "date": "2026-11-09",
       "layer": "saas",
