@@ -45,9 +45,10 @@ function attributes(tag: string): Record<string, string> {
   for (const m of tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
     if (m[1].toLowerCase() in result)
       throw new PilotError('account_contract_required');
-    result[m[1].toLowerCase()] = (m[2] ?? m[3])
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"');
+    result[m[1].toLowerCase()] = (m[2] ?? m[3]).replace(
+      /&(amp|quot);/g,
+      (_entity, name: string) => (name === 'amp' ? '&' : '"'),
+    );
   }
   return result;
 }
