@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-09",
+  "status": "deployed_and_verified",
+  "verifiedAt": "2026-11-09T13:59:18.147Z",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/199",
+  "releaseCommit": "7ca96b750557049c722f3039098b7ae2bb56e9e0",
+  "upstream": {
+    "repository": "aoxborrow/dombot",
+    "version": "2.2.0",
+    "revision": "1f6796840e0128664cf2a8bfa53702374a2edf7a",
+    "fixPullRequest": "https://github.com/aoxborrow/dombot/pull/276"
+  },
+  "engine": "2.2.0-hosted.1",
+  "registrarSdk": "1.1.1-hosted.1",
+  "engineSourceSha256": "0c28124d3010b2d4863495c46e1af4277d08c71b23012252e5b705e1235b0a1b",
+  "engineArchiveSha256": "f34b5e4239e5e9cb9a4812bb0883be12b5321bdcd199d9f32d8a8f0992fb7f80",
+  "sdkArchiveSha256": "dc03f177ac3cdb3c6edd2f6b52ce54d6878043a41b03469859a651fb94825cd5",
+  "futureTemplateSha256": "1e225d34382e180b346e812964eef0f7c29926fdbc677a291181121a1632d8b2",
+  "servingOriginalPortfolios": 47,
+  "preservation": {
+    "usersPreserved": 61,
+    "originalWorkspaceIdentitiesPreserved": 578,
+    "platformMappingsPreserved": 42,
+    "credentialNamespacesPreserved": 47,
+    "publishedSalesPreserved": 28,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 28,
+    "existingActiveHostsVerified": 2,
+    "directoryConflicts": 0,
+    "cronPreserved": true,
+    "gatewayCronPreserved": true,
+    "originalAllocationRestored": true,
+    "sourceOfferCorrect": true
+  },
+  "templateBindingsPreserved": 16,
+  "notificationChoicesPreserved": true,
+  "liveMcp": {
+    "cachedPortfolioPassed": true,
+    "forcedDetailRefreshPassed": true,
+    "freshNamecheapSyncPassed": true,
+    "fullOwnedPortfolioScanPassed": true,
+    "futureCreationDates": 0,
+    "invalidProviderCreationDateReturnedAsUnknown": true,
+    "issue": "future",
+    "expiryUnchanged": true,
+    "rawDomainNamesPublished": false
+  },
+  "managedImport": {
+    "passed": true,
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "independentWorkerAbsence": true,
+    "independentDatabaseAbsence": true,
+    "setupErased": true,
+    "temporaryCredentialsDestroyed": true,
+    "activeQa": 0,
+    "unfinishedAllocations": 0
+  },
+  "recovery": {
+    "at": "2026-11-09T13:03:48.190Z",
+    "complete": true,
+    "databases": 48,
+    "codeSettingsSnapshots": 49,
+    "databaseContentsDownloaded": false,
+    "rootKeysExported": false
+  },
+  "uploadReconciliation": {
+    "unappliedUploadConfirmed": 1,
+    "originalAdmissionRestoredBeforeRetry": true,
+    "unresolvedUploads": 0
+  },
+  "validation": {
+    "hostedTestFiles": 298,
+    "hostedTestsPassed": 3210,
+    "intentionalSkips": 1,
+    "sdkOfflineTests": 653,
+    "securityRegressions": 4,
+    "relayChecks": 4,
+    "workerDryBundles": 6,
+    "packagedChromeScenarios": 11,
+    "ci": "https://github.com/heathermhuang/dombot/actions/runs/42615516008",
+    "security": "https://github.com/heathermhuang/dombot/actions/runs/42615515992"
+  },
+  "registrarMutations": 0,
+  "newNotificationEnrollmentByThisRelease": false
+}
