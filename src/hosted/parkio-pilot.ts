@@ -89,6 +89,22 @@ interface Attempt {
   }>;
   contractRequestedAt?: number;
   qualificationRequestedAt?: number;
+  qualificationV2?: {
+    startedAt: number;
+    completedAt?: number;
+    error?: string;
+    exportPath: string;
+    reads: {
+      path: string;
+      status?: number;
+      contentType?: string;
+      redirectPath?: string | null;
+    }[];
+    accountPaths?: string[];
+    fields?: string[];
+    userIdCount?: number;
+    accountIdentityHash?: string | null;
+  };
   qualification?: {
     exportPath: string;
     accountPaths: string[];
@@ -177,6 +193,7 @@ export class ParkioPilot {
         'followups',
         'contract',
         'qualify',
+        'qualifyV2',
       ].includes(action)
     )
       return new Response('Not found', { status: 404 });
@@ -197,6 +214,7 @@ export class ParkioPilot {
             | 'followups'
             | 'contract'
             | 'qualify'
+            | 'qualifyV2'
         ](),
       );
     } catch (error) {
@@ -804,6 +822,125 @@ export class ParkioPilot {
   }
   async cancel() {
     return this.#serial(() => this.#clear());
+  }
+  async qualifyV2() {
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (a?.qualificationV2) return a.qualificationV2;
+      if (
+        !a?.cookies ||
+        !a.activeExport ||
+        a.phase !== 'passed' ||
+        !a.browserClosed ||
+        !pilotEnabled(this.env) ||
+        a.expiresAt <= Date.now()
+      )
+        throw new PilotError('proof_not_ready');
+      const parsed = new URL(a.activeExport);
+      const receipt: NonNullable<Attempt['qualificationV2']> = {
+        startedAt: Date.now(),
+        exportPath: parsed.pathname + parsed.search,
+        reads: [],
+      };
+      a.qualificationV2 = receipt;
+      await this.#save(a);
+      const read = async (path: string): Promise<string> => {
+        if (receipt.reads.length >= 4)
+          throw new PilotError('qualification_budget');
+        const url = accountReadUrl(path);
+        const entry: (typeof receipt.reads)[number] = {
+          path: new URL(url).pathname,
+        };
+        receipt.reads.push(entry);
+        await this.#save(a);
+        const response = await fetch(url, {
+          headers: {
+            Cookie: accountReadCookies(a.cookies!, path),
+            Accept: 'text/html',
+          },
+          redirect: 'manual',
+          cache: 'no-store',
+          signal: AbortSignal.timeout(15000),
+        });
+        entry.status = response.status;
+        entry.contentType = (response.headers.get('content-type') ?? '').slice(
+          0,
+          100,
+        );
+        const location = response.headers.get('location');
+        let next: string | null = null;
+        if (location) {
+          try {
+            next = new URL(accountReadUrl(new URL(location, url).href))
+              .pathname;
+          } catch {
+            /* The closed profile never follows sign-in or management redirects. */
+          }
+          entry.redirectPath = next;
+        }
+        await this.#save(a);
+        if (
+          response.headers
+            .getSetCookie()
+            .some((c) => a.cookieNames?.includes(c.slice(0, c.indexOf('='))))
+        ) {
+          await response.body?.cancel();
+          throw new PilotError('rotation_contract_required');
+        }
+        if (response.status >= 300 && response.status < 400) {
+          await response.body?.cancel();
+          if (next) return read(next);
+          throw new PilotError('account_redirect_unqualified');
+        }
+        if (!response.ok || !entry.contentType.includes('text/html')) {
+          await response.body?.cancel();
+          throw new PilotError('account_contract_required');
+        }
+        return readBounded(response, 'html');
+      };
+      try {
+        const orders = inspectAccountHtml(await read('/orders/index'));
+        receipt.accountPaths = orders.accountPaths;
+        const path =
+          orders.accountPaths.find((p) => /^\/users\/edit\/?$/.test(p)) ??
+          orders.accountPaths[0];
+        const profile = path
+          ? inspectAccountHtml(await read(path), true)
+          : null;
+        receipt.fields = profile?.fields ?? [];
+        const ids = new Set(profile?.userIds ?? []);
+        if (path && /^\/users\/(?:edit|view)\/[1-9]\d*\/?$/.test(path))
+          ids.add(path.split('/').filter(Boolean).at(-1)!);
+        receipt.userIdCount = ids.size;
+        if (ids.size === 1) {
+          a.providerAccountId = [...ids][0];
+          receipt.accountIdentityHash = Array.from(
+            new Uint8Array(
+              await crypto.subtle.digest(
+                'SHA-256',
+                new TextEncoder().encode(
+                  'parkio-account/v1/' + a.providerAccountId,
+                ),
+              ),
+            ),
+            (b) => b.toString(16).padStart(2, '0'),
+          ).join('');
+        }
+        receipt.completedAt = Date.now();
+        await this.#save(a);
+        return receipt;
+      } catch (error) {
+        receipt.error =
+          error instanceof PilotError ? error.code : 'qualification_failed';
+        receipt.completedAt = Date.now();
+        if (receipt.error === 'rotation_contract_required') {
+          a.phase = 'blocked';
+          a.error = receipt.error;
+          await this.#schedule(a);
+        } else await this.#save(a);
+        return receipt;
+      }
+    });
   }
   async qualify() {
     return this.#serial(async () => {
