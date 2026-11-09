@@ -162,6 +162,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-198",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Use the existing Registrars settings route in Park.io returns",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #198 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #198",
+          "url": "https://github.com/heathermhuang/dombot/pull/198"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-1f6796840e0128664cf2a8bfa53702374a2edf7a",
       "date": "2026-11-08",
       "layer": "core",
