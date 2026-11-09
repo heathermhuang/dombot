@@ -4,14 +4,25 @@ import { openPilot, sealPilot } from '../parkio-pilot-contract';
 import { parkioNativeSnapshot } from '../../../hosted/parkio-native-contract';
 
 const csv = 'Domain,Expires\nalpha.test,2028-02-29\nbeta.test,2029-01-01\n';
+type CheckJournalFixture = {
+  phase: string;
+  checkedAt?: number;
+  nextCheckAt?: number;
+  firstCheckAt?: number;
+  checks?: number;
+  checkHistory: Array<{ number: number; startedAt: number; outcome: string }>;
+};
 
 export class TestParkioPilot extends ParkioPilot {
   private idleFixture!: () => void;
   private testContext: DurableObjectState;
   private testEnv: HostedEnv;
+  private nativeMarker: { id?: string };
   constructor(ctx: DurableObjectState, env: HostedEnv) {
     let closed = false;
     const mode = Reflect.get(env, 'TEST_MODE');
+    const marker: { id?: string } = {};
+    let closeCalls = 0;
     const browser = {
       acquire: async () => {
         if (mode === 'launch-fails')
@@ -30,6 +41,8 @@ export class TestParkioPilot extends ParkioPilot {
       }),
       closeSession: async () => {
         if (mode === 'close-fails') throw Error('close unavailable');
+        if (mode === 'delayed-close' && ++closeCalls === 1)
+          return { status: 'closing' };
         closed = true;
         return { status: 'closed' };
       },
@@ -90,6 +103,11 @@ export class TestParkioPilot extends ParkioPilot {
                       active: true,
                       orders: null,
                       activeOrders: null,
+                      nativeAttemptId:
+                        String(mode).startsWith('scheduled') ||
+                        mode === 'delayed-close'
+                          ? marker.id
+                          : null,
                     },
                   },
                 };
@@ -124,11 +142,60 @@ export class TestParkioPilot extends ParkioPilot {
     super(ctx, { ...env, PARKIO_BROWSER: browser });
     this.testContext = ctx;
     this.testEnv = env;
+    this.nativeMarker = marker;
     this.idleFixture = () => {
       closed = true;
     };
   }
   override async fetch(request: Request): Promise<Response> {
+    const path = new URL(request.url).pathname;
+    if (
+      [
+        '/fixture-followup-due',
+        '/fixture-interrupted',
+        '/fixture-alarm',
+      ].includes(path)
+    ) {
+      if (path !== '/fixture-alarm') {
+        const env = this.testEnv;
+        const sealed = await this.testContext.storage.get<string>('sealed');
+        const data = await openPilot<CheckJournalFixture>(
+          env.PARKIO_PILOT_SECRET!,
+          env.PARKIO_PILOT_OWNER_ID!,
+          sealed!,
+        );
+        if (path === '/fixture-followup-due') {
+          data.checkedAt = Date.now() - 61000;
+          data.nextCheckAt = Date.now() - 1;
+          if (data.checks === 1) data.firstCheckAt = data.checkedAt;
+        } else {
+          data.phase = 'rechecking';
+          data.checks = (data.checks ?? 0) + 1;
+          data.checkedAt = Date.now();
+          data.nextCheckAt = undefined;
+          data.checkHistory.push({
+            number: data.checks,
+            startedAt: data.checkedAt,
+            outcome: 'pending',
+          });
+        }
+        await this.testContext.storage.put(
+          'sealed',
+          await sealPilot(
+            env.PARKIO_PILOT_SECRET!,
+            env.PARKIO_PILOT_OWNER_ID!,
+            data,
+          ),
+        );
+      }
+      await super.alarm();
+      return super.fetch(
+        new Request('https://parkio-pilot.internal/status', {
+          method: 'POST',
+          headers: { 'X-Pilot-Owner': this.testEnv.PARKIO_PILOT_OWNER_ID! },
+        }),
+      );
+    }
     if (new URL(request.url).pathname === '/fixture-idle') {
       const env = this.testEnv;
       const sealed = await this.testContext.storage.get<string>('sealed');
@@ -151,7 +218,12 @@ export class TestParkioPilot extends ParkioPilot {
       );
       return new Response('Fixture expired');
     }
-    return super.fetch(request);
+    const response = await super.fetch(request);
+    if (path === '/start' && response.ok) {
+      const data = (await response.clone().json()) as { attemptId?: string };
+      this.nativeMarker.id = data.attemptId;
+    }
+    return response;
   }
 }
 

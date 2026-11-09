@@ -4,6 +4,7 @@ import {
   qualifiedCookies,
   cookieHeader,
   parsePilotCsv,
+  inspectPilotCsv,
   readBounded,
   sealPilot,
   openPilot,
@@ -22,6 +23,31 @@ const cookie: PilotCookie = {
 };
 
 describe('Park.io pilot read contract', () => {
+  it('summarizes observed payment/platform columns without assuming ownership or retaining sensitive cells', () => {
+    const summary = inspectPilotCsv(
+      'Domain,Expiration Date,Paid Date,Amount (USD),On park.io\nalpha.test,2028-02-29,2026-01-01,12345,Yes\nbeta.test,2029-01-01,,,No\ngamma.test,,,99999,uncertain\n',
+    );
+    expect(summary).toMatchObject({
+      exportRows: 3,
+      uniqueDomains: 3,
+      datesProvided: 2,
+      paidColumnPresent: true,
+      paidFieldPopulatedRows: 1,
+      onPlatformColumnPresent: true,
+      onPlatform: { trueRows: 1, falseRows: 1, unknownRows: 1 },
+      ownershipQualified: false,
+    });
+    expect(JSON.stringify(summary)).not.toContain('alpha.test');
+    expect(JSON.stringify(summary)).not.toContain('12345');
+    expect(JSON.stringify(summary)).not.toContain('2026-01-01');
+    expect(JSON.stringify(summary)).not.toContain('uncertain');
+    expect(inspectPilotCsv('Domain\nalpha.test\n')).toMatchObject({
+      paidColumnPresent: false,
+      paidFieldPopulatedRows: null,
+      onPlatformColumnPresent: false,
+      onPlatform: null,
+    });
+  });
   it('allows a narrowly scoped discovered export', () => {
     expect(exportUrl('/orders/export/active.csv?status=active')).toBe(
       'https://park.io/orders/export/active.csv?status=active',

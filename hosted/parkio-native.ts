@@ -21,6 +21,7 @@ function setup(root: HTMLElement) {
     epoch = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attemptId: string | undefined;
+  let refreshedDue: number | undefined;
   const pending = new Map<
     number,
     {
@@ -210,6 +211,12 @@ function setup(root: HTMLElement) {
       browserClosed: boolean;
       checkedAt?: number;
       authenticationFlow?: string;
+      nextCheckAt?: number | null;
+      checkHistory?: Array<{
+        startedAt: number;
+        outcome: string;
+        count?: number;
+      }>;
       holdings: { domain: string; expirationDate: string | null }[];
     }>('/native-proof', 'GET');
     if (
@@ -242,18 +249,71 @@ function setup(root: HTMLElement) {
       list.append(note);
     }
     panel('proved');
-    message('Initial session portability proof passed.');
-    const button = root.querySelector<HTMLButtonElement>('#native-retest')!;
-    const delay = Math.max(0, (proof.checkedAt ?? 0) + 60000 - Date.now());
-    button.disabled = delay > 0;
-    root.querySelector<HTMLElement>('#native-retest-note')!.textContent = delay
-      ? 'Another background check is available one minute after the last check.'
-      : 'Up to three bounded background checks are available for this proof.';
+    const history = root.querySelector<HTMLElement>('#native-check-history')!;
+    history.replaceChildren();
+    for (const check of proof.checkHistory ?? []) {
+      const row = document.createElement('p');
+      row.className = 'native-note';
+      row.textContent = `${new Date(check.startedAt).toLocaleString()} · ${check.outcome}${check.count !== undefined ? ` · ${check.count} exported domains` : ''}`;
+      history.append(row);
+    }
+    message('Background verification passed.');
+    root.querySelector<HTMLButtonElement>('#native-retest')!.disabled = false;
+    root.querySelector<HTMLElement>('#native-retest-note')!.textContent =
+      proof.nextCheckAt
+        ? `${proof.nextCheckAt > Date.now() ? 'Next automatic check' : 'Automatic check queued'}: ${new Date(proof.nextCheckAt).toLocaleString()}. It runs even when this page is closed.`
+        : 'The bounded verification checks are complete. Daily reliability and export semantics still require qualification.';
     clearTimeout(timer);
-    if (delay)
-      timer = setTimeout(() => {
-        if (alive) button.disabled = false;
-      }, delay);
+    if (proof.nextCheckAt && refreshedDue !== proof.nextCheckAt) {
+      const due = proof.nextCheckAt;
+      timer = setTimeout(
+        () => {
+          if (alive) {
+            refreshedDue = due;
+            void run(resume);
+          }
+        },
+        Math.max(1500, due - Date.now() + 1500),
+      );
+    }
+  }
+  async function settle() {
+    panel('working');
+    root.querySelector<HTMLElement>('#native-working-refresh')!.hidden = true;
+    root.querySelector<HTMLElement>('#native-heading')!.textContent =
+      'Finishing verification…';
+    root.querySelector<HTMLElement>('#native-progress')!.textContent =
+      'Closing the temporary sign-in and checking background access.';
+    message('Verification continues automatically.');
+    const deadline = Date.now() + 45_000;
+    for (let n = 0; n < 22 && Date.now() < deadline; n++) {
+      if (!alive) return;
+      const state = await api<{ phase: string; error?: string }>(
+        '/status',
+        'GET',
+      );
+      if (state.phase === 'passed') {
+        await showProof();
+        return;
+      }
+      if (state.phase === 'blocked')
+        throw Error(state.error ?? 'proof_not_ready');
+      if (state.phase === 'ready') {
+        const result = await api<{ phase: string }>('/native-complete');
+        if (result.phase === 'passed') {
+          await showProof();
+          return;
+        }
+      } else if (!['closing', 'rechecking'].includes(state.phase))
+        throw Error('proof_not_ready');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    if (alive) {
+      root.querySelector<HTMLElement>('#native-progress')!.textContent =
+        'The saved attempt is still being verified. Refresh its status without signing in again.';
+      root.querySelector<HTMLElement>('#native-working-refresh')!.hidden =
+        false;
+    }
   }
   async function complete() {
     panel('working');
@@ -262,8 +322,15 @@ function setup(root: HTMLElement) {
     root.querySelector<HTMLElement>('#native-progress')!.textContent =
       'Reading your domains and checking background refresh.';
     const result = await api<{ phase: string }>('/native-complete');
-    if (result.phase !== 'passed') throw Error('proof_not_ready');
-    await showProof();
+    if (result.phase === 'passed') {
+      await showProof();
+      return;
+    }
+    if (['ready', 'closing', 'rechecking'].includes(result.phase)) {
+      await settle();
+      return;
+    }
+    throw Error('proof_not_ready');
   }
   async function readySnapshot() {
     const current = epoch;
@@ -338,9 +405,13 @@ function setup(root: HTMLElement) {
       rotation_contract_required:
         'Park.io rotated the session during the background read. Session persistence needs further qualification.',
       holdings_differ:
-        'The background read did not match the browser holdings. No proof has passed.',
+        'The latest export differs from the initial snapshot. Earlier successful checks remain in connection details; the change needs qualification.',
       close_browser_first:
         'The temporary browser has not finished closing. Check the connection again shortly.',
+      check_in_progress:
+        'Background verification is still running. The saved attempt can be resumed without another sign-in.',
+      check_outcome_unknown:
+        'A background verification was interrupted. It has not been marked successful or automatically repeated. Earlier receipts remain in connection details.',
     };
     fail(
       messages[key] ??
@@ -379,6 +450,10 @@ function setup(root: HTMLElement) {
       await complete();
       return;
     }
+    if (state.phase === 'rechecking') {
+      await settle();
+      return;
+    }
     if (state.phase === 'blocked')
       throw Error(state.error ?? 'proof_not_ready');
     if (!['login', 'checking'].includes(state.phase)) {
@@ -408,6 +483,7 @@ function setup(root: HTMLElement) {
         'Signing in to Park.io…';
       root.querySelector<HTMLElement>('#native-progress')!.textContent =
         'Your credentials are being used for this sign-in only.';
+      message('Signing in to Park.io…');
       await connect(true);
       const state = await readySnapshot();
       if (state.kind !== 'credentials') {
@@ -430,6 +506,7 @@ function setup(root: HTMLElement) {
         'Checking verification…';
       root.querySelector<HTMLElement>('#native-progress')!.textContent =
         'The holdings check continues automatically after verification.';
+      message('Checking verification…');
       await connect(false);
       await call(parkioNativeVerification, [value]);
       await observe(true);
@@ -474,15 +551,12 @@ function setup(root: HTMLElement) {
     disconnect();
     void run(resume);
   });
-  root.querySelector('#native-retest')!.addEventListener(
-    'click',
-    () =>
-      void run(async () => {
-        const r = await api<{ phase: string }>('/native-retest');
-        if (r.phase !== 'passed') throw Error('proof_not_ready');
-        await showProof();
-      }),
-  );
+  root
+    .querySelector('#native-retest')!
+    .addEventListener('click', () => void run(resume));
+  root
+    .querySelector('#native-working-refresh')!
+    .addEventListener('click', () => void run(resume));
   window.addEventListener('pagehide', () => {
     alive = false;
     clearTimeout(timer);
