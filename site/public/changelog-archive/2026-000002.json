@@ -98,6 +98,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-7ca96b750557049c722f3039098b7ae2bb56e9e0-18",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Hosted service update observed: Merge upstream 2.2.0 and creation-date qualification",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/7ca96b750557049c722f3039098b7ae2bb56e9e0"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-bd871293ecd2abe1320dd17c9c720e0569aececd-16",
       "date": "2026-11-09",
       "layer": "saas",
