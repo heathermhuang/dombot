@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-11c5dd714420fafed1e412a73a7a4ceaa095c47f-15",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix(hosted): normalize native Park.io cookie expiry precision (#197)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/11c5dd714420fafed1e412a73a7a4ceaa095c47f"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-36bb3f82fdeb7f4c09b9b5fde2ffd5ed15eac8f8-13",
       "date": "2026-11-09",
       "layer": "saas",
