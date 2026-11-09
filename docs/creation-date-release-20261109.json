@@ -90,5 +90,14 @@
     "security": "https://github.com/heathermhuang/dombot/actions/runs/42615515992"
   },
   "registrarMutations": 0,
-  "newNotificationEnrollmentByThisRelease": false
+  "newNotificationEnrollmentByThisRelease": false,
+  "gatewaySourceAtRelease": "7ca96b750557049c722f3039098b7ae2bb56e9e0",
+  "subsequentGatewayFollowup": {
+    "pullRequest": "https://github.com/heathermhuang/dombot/pull/201",
+    "at": "2026-11-09T14:13:12.036Z",
+    "source": "adabbae439981d44f148853ae192021ace437865",
+    "engineTemplateUnchanged": true,
+    "allocationRestored": true,
+    "sourceOfferCorrect": true
+  }
 }

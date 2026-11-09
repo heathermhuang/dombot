@@ -1,9 +1,13 @@
 # Upstream 2.2.0 and registrar creation-date release
 
 Domains.Domains serves engine **2.2.0-hosted.1**, registrar-client
-**1.1.1-hosted.1**, and gateway source
+**1.1.1-hosted.1** from application release
 `7ca96b750557049c722f3039098b7ae2bb56e9e0` across all **47 original admitted
-portfolios** and the qualified future template. [Hosted PR #199](https://github.com/heathermhuang/dombot/pull/199)
+portfolios** and the qualified future template. The gateway subsequently advanced
+to `adabbae439981d44f148853ae192021ace437865` through the gateway-only
+[notification wake-up follow-up #201](https://github.com/heathermhuang/dombot/pull/201).
+Its source offer, allocation policy and unchanged engine-template hash passed
+a fresh readback. [Hosted PR #199](https://github.com/heathermhuang/dombot/pull/199)
 merged after CI and security passed. The complete upstream v2.2.0 tag
 `1f6796840e0128664cf2a8bfa53702374a2edf7a` is retained in merge ancestry.
 
