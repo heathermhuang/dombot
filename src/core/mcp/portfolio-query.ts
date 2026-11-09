@@ -181,6 +181,7 @@ export interface QueryRow {
   status: string;
   inventoryAt: number | null;
   createdDate: Date | null;
+  createdDateIssue?: Domain['createdDateIssue'];
   expirationDate: Date | null;
   renewalDate: Date | null;
   /** null for a name no account reports. */
@@ -524,6 +525,7 @@ export function queryPortfolio(
         now,
       ),
       createdDate: d.createdDate,
+      ...(d.createdDateIssue ? { createdDateIssue: d.createdDateIssue } : {}),
       expirationDate: d.expirationDate,
       renewalDate: d.renewalDate,
       // An imported name's auto-renew is what you told DomBot, if anything.

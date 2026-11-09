@@ -1,3 +1,4 @@
+import { mergeDomainDetail } from '../../shared/creation-date';
 import { domainKey } from '../../shared/account-key';
 import { toAscii } from '../../shared/domain-name';
 import { create } from 'zustand';
@@ -485,7 +486,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const enriched: Record<string, Domain> = {};
     for (const d of portfolio.domains) {
       const key = domainKey(d);
-      if (detail[key]) enriched[key] = { ...d, ...detail[key] };
+      if (detail[key]) enriched[key] = mergeDomainDetail(d, detail[key]);
     }
 
     set({
@@ -543,7 +544,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         const detail = snapshot.detail[key];
         const existing = enriched[key];
         if (existing || detail) {
-          enriched[key] = { ...(existing ?? {}), ...d, ...(detail ?? {}) };
+          enriched[key] = mergeDomainDetail(
+            { ...(existing ?? {}), ...d },
+            detail ?? {},
+          );
         }
       }
       return {
@@ -746,7 +750,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (detail) {
           // detail is a partial — merge it over the list summary.
           set((state) => ({
-            enriched: { ...state.enriched, [key]: { ...d, ...detail } },
+            enriched: {
+              ...state.enriched,
+              [key]: mergeDomainDetail(d, detail),
+            },
           }));
         } else {
           // No detail available (unsupported TLD etc.) — keep the summary and

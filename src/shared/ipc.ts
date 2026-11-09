@@ -77,6 +77,8 @@ export type Domain = ProviderDomain & {
   renewalDateIssue?: 'gandi-updated-at-v1';
   /** Ephemeral marketplace-only table projection; not a saved holding or control proof. */
   marketObservation?: boolean;
+  /** An invalid registrar creation date was suppressed; expiry is unaffected. */
+  createdDateIssue?: 'invalid' | 'future' | 'after-expiration';
   accountId?: string;
   accountLabel?: string;
   /**

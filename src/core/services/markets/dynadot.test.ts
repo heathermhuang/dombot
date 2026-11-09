@@ -264,7 +264,7 @@ describe('what a change sends', () => {
 
   it('won’t touch a listing that takes offers without a minimum in DomBot', () => {
     expect(() => listingFor({ name: 'x.com', price: '3000' }, offers)).toThrow(
-      /Set one in DomBot’s asking price/,
+      /Set one in Domains.Domains’s asking price/,
     );
     expect(() =>
       listingFor({ name: 'x.com', price: '3000' }, offers, '0.50'),

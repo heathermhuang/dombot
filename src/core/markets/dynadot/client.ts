@@ -535,7 +535,7 @@ export class DynadotClient {
     if (parsed === undefined) {
       throw new DynadotError(
         'BAD_RESPONSE',
-        'Dynadot sent an answer DomBot could not read.',
+        'Dynadot sent an answer Domains.Domains could not read.',
         response.status,
       );
     }

@@ -178,7 +178,7 @@ export function checkDynadotChange(change: MarketListingChange): void {
     unsupported('floor', 'Dynadot has no floor price.');
   }
   if (change.leaseToOwn?.enabled) {
-    unsupported('leaseToOwn', 'DomBot doesn’t set Dynadot’s installments yet.');
+    unsupported('leaseToOwn', 'Domains.Domains doesn’t set Dynadot’s installments yet.');
   }
   if (change.currency && !isDynadotCurrency(change.currency)) {
     unsupported('currency', `Dynadot doesn’t list in ${change.currency}.`);
@@ -204,7 +204,7 @@ export function checkDynadotChange(change: MarketListingChange): void {
  * higher", observed), and never shows it back. So a change to a listing
  * that takes offers, without a minimum of its own, sends DomBot's minimum
  * offer for the name (`fallbackMinOffer`, in the listing's currency);
- * with none in DomBot, it's refused. A price alone is Buy Now; a minimum
+ * with none in Domains.Domains, it's refused. A price alone is Buy Now; a minimum
  * offer alone, Make Offer. `currency` is what the listing goes out in.
  */
 export function listingFor(
@@ -222,7 +222,7 @@ export function listingFor(
     if (!fallbackMinOffer) {
       unsupported(
         'minOffer',
-        'This Dynadot listing takes offers, and Dynadot needs a minimum offer with every change. Set one in DomBot’s asking price, or clear it to turn offers off.',
+        'This Dynadot listing takes offers, and Dynadot needs a minimum offer with every change. Set one in Domains.Domains’s asking price, or clear it to turn offers off.',
       );
     }
     minOffer = fallbackMinOffer;

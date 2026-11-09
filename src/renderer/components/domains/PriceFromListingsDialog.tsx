@@ -156,7 +156,7 @@ export function PriceFromListingsDialog({
         <div className="flex flex-col gap-4 text-sm">
           <p className="text-muted-foreground">
             Copies the BIN price, minimum offer and floor from market listings
-            into your asking {one ? 'price' : 'prices'} in DomBot. From then on
+            into your asking {one ? 'price' : 'prices'} in Domains.Domains. From then on
             you can price here and list on every market.
           </p>
           {sources.length > 1 && (

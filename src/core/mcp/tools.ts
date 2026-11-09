@@ -1,3 +1,7 @@
+import {
+  qualifyCreationDate,
+  mergeDomainDetail,
+} from '../../shared/creation-date';
 import { parkioSourceStatus } from '../services/parkio-projection';
 import { missingFeatureReason } from '../../shared/domain-ops';
 import { permitsTool } from './scopes';
@@ -1112,7 +1116,7 @@ export function registerTools(
         ).listDomains();
         return json(
           domains.map((d) => ({
-            ...d,
+            ...qualifyCreationDate(d),
             registrar,
             accountId: account.id,
             accountLabel: account.label,
@@ -1321,9 +1325,11 @@ export function registerTools(
           (d) => d.accountId === account.id && toAscii(d.domainName) === key,
         );
         return json({
-          ...(row ?? {}),
-          ...(detail ??
-            (await getRegistrarClient(r, account.id).getDomain(domain))),
+          ...mergeDomainDetail(
+            row ?? {},
+            detail ??
+              (await getRegistrarClient(r, account.id).getDomain(domain)),
+          ),
           registrar: r,
           accountId: account.id,
           accountLabel: account.label,

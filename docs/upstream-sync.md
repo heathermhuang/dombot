@@ -67,3 +67,26 @@ CI on the PR remains the clean final full-suite gate. These offline and local
 synthetic results do not claim a managed fleet deployment or live provider
 acceptance. Managed production remains on its separately recorded release until
 that engine/UI pair is rolled out and verified.
+
+
+## v2.2.0 sync and creation-date repair, 9 November 2026
+
+The complete upstream release tag is `1f6796840e0128664cf2a8bfa53702374a2edf7a`.
+Engine `2.2.0-hosted.1` uses registrar-client `1.1.1-hosted.1` with the retained
+hosted retry/deadline, unknown-write, date, Gandi/Cloudflare and Namefi ownership
+patches. Dynadot and Spaceship marketplaces, linked registrar accounts, shared
+Dynadot pacing and listing-price import are included. Marketplace sync requires
+management scope because upstream can submit a pending verified listing.
+The hosted public-page preparation still supports only its qualified providers;
+new core marketplace adapters do not automatically enable public commercial links.
+
+Registrar creation dates are qualified on cache reads, sync/detail writes, direct
+MCP reads and UI merges. An impossible date becomes unknown with an optional
+`createdDateIssue` (`invalid`, `future`, `after-expiration`), or falls back to a
+valid known date. One day of date-only timezone ambiguity is tolerated. Valid
+inventory dates reconcile old detail without changing quote age or other accounts.
+Expiry and renewal dates, imported user facts and registrar controls are unchanged.
+No year is inferred from the expiry and no live RDAP request is added to reads.
+
+`upstream-parity-20261109.json` records the complete upstream API/tool inventory.
+Source/CI qualification and managed production rollout are recorded separately.

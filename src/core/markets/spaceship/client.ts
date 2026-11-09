@@ -405,7 +405,7 @@ export class SellerHubClient {
       const code = codeForStatus(response.status);
       const message =
         code === 'SCOPE' && endpoint.startsWith('/v1/sellerhub')
-          ? 'This Spaceship API key has no SellerHub access. In Spaceship’s API Manager, give it sellerhub:read, and sellerhub:write to list from DomBot.'
+          ? 'This Spaceship API key has no SellerHub access. In Spaceship’s API Manager, give it sellerhub:read, and sellerhub:write to list from Domains.Domains.'
           : (messageOf(parsed) ??
             `Spaceship answered HTTP ${response.status}.`);
       throw new SpaceshipError(code, message, response.status, spaceshipCode);
@@ -414,7 +414,7 @@ export class SellerHubClient {
     if (parsed === undefined && response.status !== 204) {
       throw new SpaceshipError(
         'BAD_RESPONSE',
-        'Spaceship sent an answer DomBot could not read.',
+        'Spaceship sent an answer Domains.Domains could not read.',
         response.status,
       );
     }
