@@ -1,6 +1,15 @@
-import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  afterAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { Hono } from 'hono';
+import gateway from './gateway';
 import { readFileSync, readdirSync } from 'node:fs';
 import {
   notificationPreferenceRoutes,
@@ -10,6 +19,7 @@ import {
 import {
   reserveNotificationEmail,
   drainNotificationWorkspace,
+  drainNotifications,
 } from './notification-dispatch';
 import { notificationDefaults } from '../shared/notification-policy';
 import { tokenHash, passwordHash } from './crypto';
@@ -438,4 +448,143 @@ describe('hosted notification preferences and admission', () => {
         .first<{ state: string }>())!.state,
     ).toBe('unknown');
   });
+});
+
+it('persists a late import wake and lets the scheduler retain a provider retry checkpoint', async () => {
+  const now = Date.now(),
+    laterDailyCheck = now + 23 * 3600_000,
+    clock = vi.spyOn(Date, 'now').mockReturnValue(now),
+    NativeRequest = globalThis.Request;
+  vi.stubGlobal(
+    'Request',
+    class extends NativeRequest {
+      constructor(
+        input: ConstructorParameters<typeof NativeRequest>[0],
+        init?: RequestInit,
+      ) {
+        super(input, { ...init, duplex: 'half' } as RequestInit);
+      }
+    },
+  );
+  try {
+    env.NOTIFICATION_MAIL_ENABLED = 'true';
+    env.EMAIL_DELIVERY_VERIFIED = 'true';
+    env.EMAIL_FROM = 'accounts@mail.domains.domains';
+    env.WORKSPACES = JSON.stringify([
+      { id: workspace, binding: 'WORKSPACE_0', label: 'Sample' },
+    ]);
+    env.GATEWAY_KEYS = JSON.stringify({
+      [workspace]: 'synthetic-notification-proof'.repeat(3),
+    });
+    const preferences = { ...notificationDefaults, renewalReminders: true };
+    await db
+      .prepare(
+        'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,?)',
+      )
+      .bind(workspace, salesRecipientHash(env, email), now)
+      .run();
+    await db
+      .prepare(
+        'INSERT INTO notification_preferences(workspace_id,email_hash,revision,preferences,next_check_at,updated_at) VALUES(?,?,?,?,?,?)',
+      )
+      .bind(
+        workspace,
+        salesRecipientHash(env, email),
+        crypto.randomUUID(),
+        JSON.stringify(preferences),
+        laterDailyCheck,
+        now,
+      )
+      .run();
+    const id = crypto.randomUUID(),
+      lease = crypto.randomUUID();
+    const send = vi.fn(async () => {
+      throw Object.assign(new Error('Synthetic rate limit'), {
+        code: 'E_RATE_LIMIT_EXCEEDED',
+      });
+    });
+    env.EMAIL = { send } as unknown as SendEmail;
+    env.WORKSPACE_0 = {
+      fetch: async (r: Request) => {
+        if (new URL(r.url).pathname.endsWith('/lease'))
+          return Response.json({
+            item: {
+              id,
+              lease,
+              mail: {
+                kind: 'urgent',
+                count: 1,
+                at: now,
+                rows: [
+                  {
+                    domain: 'sample.example',
+                    date: new Date(now + 86400_000).toISOString().slice(0, 10),
+                    account: 'Imported',
+                    autoRenew: null,
+                    stale: false,
+                    imported: true,
+                    observedAt: null,
+                    price: null,
+                    failure: null,
+                  },
+                ],
+              },
+            },
+          });
+        return Response.json({ ok: true, result: { counts: { new: 1 } } });
+      },
+    } as Fetcher;
+    const pending: Promise<unknown>[] = [];
+    const response = await gateway.fetch(
+      new Request(origin + '/w/' + workspace + '/api/importDomains', {
+        method: 'POST',
+        headers: {
+          Cookie: '__Host-dd_session=' + session,
+          Origin: origin,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          args: [
+            [{ domainName: 'sample.example' }],
+            { importId: crypto.randomUUID() },
+          ],
+        }),
+      }),
+      env,
+      {
+        waitUntil: (p: Promise<unknown>) => pending.push(p),
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext,
+    );
+    expect(response.status).toBe(200);
+    await response.body?.cancel();
+    await Promise.all(pending);
+    const wake = await db
+      .prepare(
+        'SELECT next_check_at,wake_generation FROM notification_preferences WHERE workspace_id=?',
+      )
+      .bind(workspace)
+      .first();
+    expect(wake).toEqual({ next_check_at: 0, wake_generation: 1 });
+    expect(send).not.toHaveBeenCalled();
+    await drainNotifications(env);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .prepare(
+          'SELECT next_check_at FROM notification_preferences WHERE workspace_id=?',
+        )
+        .bind(workspace)
+        .first(),
+    ).toEqual({ next_check_at: now + 3600_000 });
+    expect(
+      await db
+        .prepare('SELECT state FROM notification_attempts WHERE workspace_id=?')
+        .bind(workspace)
+        .first(),
+    ).toEqual({ state: 'retryable' });
+  } finally {
+    clock.mockRestore();
+    vi.unstubAllGlobals();
+  }
 });

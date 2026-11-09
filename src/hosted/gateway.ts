@@ -7,7 +7,7 @@ import {
 } from './notification-preferences';
 import {
   drainNotifications,
-  drainNotificationWorkspace,
+  wakeNotificationWorkspace,
 } from './notification-dispatch';
 import {
   parkioConnectorRoutes,
@@ -517,11 +517,7 @@ app.post('/internal/notifications/:workspace/wake', async (c) => {
     proof.sales?.purpose !== 'portfolio-notifications'
   )
     return c.json({ ok: false }, 403);
-  await c.env.CONTROL_DB.prepare(
-    'UPDATE notification_preferences SET next_check_at=0,wake_generation=wake_generation+1 WHERE workspace_id=?',
-  )
-    .bind(id)
-    .run();
+  await wakeNotificationWorkspace(c.env, id);
   return c.json({ ok: true }, 202);
 });
 
@@ -1998,7 +1994,9 @@ app.all('/w/:workspace/*', async (c) => {
   ) {
     try {
       c.executionCtx.waitUntil(
-        drainNotificationWorkspace(c.env, id).catch(() => {}),
+        wakeNotificationWorkspace(c.env, id).catch(() => {
+          console.warn('notification-wake-unavailable');
+        }),
       );
     } catch {
       /* No execution context in route fixtures. */
