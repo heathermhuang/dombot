@@ -149,6 +149,13 @@ export class TestParkioPilot extends ParkioPilot {
   }
   override async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
+    if (path === '/fixture-qualify')
+      return super.fetch(
+        new Request('https://parkio-pilot.internal/qualify', {
+          method: 'POST',
+          headers: { 'X-Pilot-Owner': this.testEnv.PARKIO_PILOT_OWNER_ID! },
+        }),
+      );
     if (
       [
         '/fixture-followup-due',
