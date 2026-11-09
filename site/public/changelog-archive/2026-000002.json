@@ -434,6 +434,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-208",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Record the verified registry creation-date recovery release",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #208 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #208",
+          "url": "https://github.com/heathermhuang/dombot/pull/208"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-1f6796840e0128664cf2a8bfa53702374a2edf7a",
       "date": "2026-11-08",
       "layer": "core",
