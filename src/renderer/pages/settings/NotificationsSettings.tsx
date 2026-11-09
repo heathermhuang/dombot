@@ -121,36 +121,42 @@ export default function NotificationsSettings() {
               htmlFor="notify-inquiries"
               description="Email me when an inquiry is confirmed or a buyer sends a message. Your replies still reach the buyer when this is off."
             >
-              <Switch
-                id="notify-inquiries"
-                checked={prefs.inquiryEmails}
-                disabled={busy}
-                onCheckedChange={(v) => change('inquiryEmails', v)}
-              />
+              <div className="flex items-center">
+                <Switch
+                  id="notify-inquiries"
+                  checked={prefs.inquiryEmails}
+                  disabled={busy}
+                  onCheckedChange={(v) => change('inquiryEmails', v)}
+                />
+              </div>
             </SettingsField>
             <SettingsField
               label="Renewal reminders"
               htmlFor="notify-renewals"
               description="Group new renewal reviews into one weekly email. Near deadlines that cannot wait get a separate alert. No daily report."
             >
-              <Switch
-                id="notify-renewals"
-                checked={prefs.renewalReminders}
-                disabled={busy || !saved.verified}
-                onCheckedChange={(v) => change('renewalReminders', v)}
-              />
+              <div className="flex items-center">
+                <Switch
+                  id="notify-renewals"
+                  checked={prefs.renewalReminders}
+                  disabled={busy || !saved.verified}
+                  onCheckedChange={(v) => change('renewalReminders', v)}
+                />
+              </div>
             </SettingsField>
             <SettingsField
               label="Weekly renewal overview"
               htmlFor="notify-overview"
               description="An optional Monday overview of upcoming renewals, including names with auto-renew enabled. Empty overviews are skipped."
             >
-              <Switch
-                id="notify-overview"
-                checked={prefs.weeklyOverview}
-                disabled={busy || !saved.verified}
-                onCheckedChange={(v) => change('weeklyOverview', v)}
-              />
+              <div className="flex items-center">
+                <Switch
+                  id="notify-overview"
+                  checked={prefs.weeklyOverview}
+                  disabled={busy || !saved.verified}
+                  onCheckedChange={(v) => change('weeklyOverview', v)}
+                />
+              </div>
             </SettingsField>
             <SettingsField
               label="Timezone"
