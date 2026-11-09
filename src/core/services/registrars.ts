@@ -1,4 +1,8 @@
 import {
+  qualifyCreationDate,
+  mergeDomainDetail,
+} from '../../shared/creation-date';
+import {
   withParkioProjection,
   refreshParkioProjection,
   parkioProjection,
@@ -56,6 +60,8 @@ import type { SyncTrigger } from '../../shared/sync-monitor';
 import { broadcastPortfolioChanged } from '../events';
 import { isBulkRunning } from './bulk-jobs';
 import { errorSummary } from './error-summary';
+import { dynadotPacedFetch } from '../markets/dynadot';
+import { removeMarketAccountsOf } from './markets/accounts';
 
 import { consentIp } from './consent-ip';
 import { recordsPrivacyConsent } from '../../shared/domain-ops';
@@ -252,7 +258,7 @@ function reviveCachedDomain<T extends Partial<Domain>>(d: T): T {
   if (out.renewalDate != null) out.renewalDate = new Date(out.renewalDate);
   if (Array.isArray(out.nameservers))
     out.nameservers = normalizeNameservers(out.nameservers);
-  return out as T;
+  return qualifyCreationDate(out as T);
 }
 
 function qualifiedDomainDates<T extends Partial<Domain>>(
@@ -548,11 +554,14 @@ function buildProvider(
   const wrapFetch =
     name === 'dynadot'
       ? (send: typeof globalThis.fetch) =>
-          createDynadotFetch(send, {
+          dynadotPacedFetch(
             accountId,
-            apiKey: credentials.apiKey ?? '',
-            routeKey: JSON.stringify(proxy),
-          })
+            createDynadotFetch(send, {
+              accountId,
+              apiKey: credentials.apiKey ?? '',
+              routeKey: JSON.stringify(proxy),
+            }),
+          )
       : undefined;
   return proxy
     ? createProxiedRegistrar(name, credentials, proxy, wrapFetch)
@@ -1001,6 +1010,9 @@ async function performInventorySync(
   const { registrar: name, id: accountId } = account;
   let generation = generations.get(accountId) ?? 0;
   const prev = readRegistrarEntry(accountId);
+  const previousByName = new Map(
+    (prev?.domains ?? []).map((d) => [d.domainName.toLowerCase(), d]),
+  );
   if (name === 'dynadot' && prev?.recovery) {
     if ((prev.recovery.retryAt ?? 0) > Date.now()) return;
     if (prev.recovery.restriction?.state === 'attention_required') return;
@@ -1030,7 +1042,14 @@ async function performInventorySync(
           lastErrorAt: Date.now(),
         }
       : {
-          domains: domains.filter(hasDomainName),
+          domains: domains
+            .filter(hasDomainName)
+            .map((d) =>
+              mergeDomainDetail(
+                previousByName.get(d.domainName.toLowerCase()) ?? d,
+                d,
+              ),
+            ),
           lastSyncedAt: Date.now(),
           lastError: null,
           lastErrorAt: null,
@@ -1136,14 +1155,24 @@ async function performInventorySync(
     // the overlay. Keep detail-only fields, quotes and their age intact; a
     // list that omits a date must not erase a previously known value.
     for (const domain of entry.domains) {
-      if (domain.expirationDate == null && domain.renewalDate == null) continue;
+      if (
+        domain.createdDate == null &&
+        domain.expirationDate == null &&
+        domain.renewalDate == null
+      )
+        continue;
       const cached = readEntry<DetailRecord>(
         'detail',
         detailKey(accountId, domain.domainName),
       )?.data;
+      // Inventory dates do not turn a pricing-only cache entry into a detail read.
+      const reconcileCreation =
+        cached != null && hasDetail(cached) && domain.createdDate != null;
       if (
         !cached ||
-        (sameDate(domain.expirationDate, cached.expirationDate) &&
+        ((!reconcileCreation ||
+          sameDate(domain.createdDate, cached.createdDate)) &&
+          sameDate(domain.expirationDate, cached.expirationDate) &&
           sameDate(domain.renewalDate, cached.renewalDate))
       )
         continue;
@@ -1152,6 +1181,9 @@ async function performInventorySync(
         detailKey(accountId, domain.domainName),
         (detail) => ({
           ...detail,
+          ...(reconcileCreation
+            ? { createdDate: domain.createdDate, createdDateIssue: undefined }
+            : {}),
           ...(domain.expirationDate != null
             ? { expirationDate: domain.expirationDate }
             : {}),
@@ -1627,6 +1659,8 @@ export async function setRegistrarEnabledCached(
 
 export async function removeRegistrarAccount(accountId: string): Promise<void> {
   accountById(accountId);
+  // A market account on this account's key (Dynadot's) goes with it.
+  await removeMarketAccountsOf(accountId);
   invalidateAccount(accountId);
   await setStoredCredentials(accountId, {});
   await clearDynadotPricingCapabilities(accountId);
@@ -2165,14 +2199,30 @@ export async function getDomainDetail(
       'Account changed while loading detail; refresh the portfolio.',
     );
   if (domain) {
-    const result = withoutListOnly(name, {
-      ...domain,
-      registrar: name,
-      accountId,
-      accountLabel: accountById(accountId).label,
-      nameservers,
-      ...(createdDate ? { createdDate } : {}),
-    });
+    const listed = getCachedPortfolio()?.domains.find(
+      (d) =>
+        d.accountId === accountId &&
+        d.domainName.toLowerCase() === domainName.toLowerCase(),
+    );
+    const prior = readEntry<DetailRecord>('detail', key)?.data;
+    const known = mergeDomainDetail(
+      listed ?? {},
+      prior ? withoutQuote(prior) : {},
+    );
+    const result = mergeDomainDetail(
+      {
+        createdDate: known.createdDate,
+        createdDateIssue: known.createdDateIssue,
+      },
+      withoutListOnly(name, {
+        ...domain,
+        registrar: name,
+        accountId,
+        accountLabel: accountById(accountId).label,
+        nameservers,
+        ...(createdDate ? { createdDate } : {}),
+      }),
+    );
     if ((generations.get(accountId) ?? 0) === generation)
       writeEntry('detail', key, withQuote(result));
     return result;
@@ -2225,8 +2275,7 @@ export function getMergedPortfolio(): {
     const extra = detail[domainKey(d)];
     return extra
       ? {
-          ...d,
-          ...extra,
+          ...mergeDomainDetail(d, extra),
           registrar: d.registrar,
           accountId: d.accountId,
           accountLabel: d.accountLabel,

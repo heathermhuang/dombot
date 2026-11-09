@@ -1,4 +1,4 @@
-import type { MarketListing, MarketSyncState } from './markets';
+import type { MarketId, MarketListing, MarketSyncState } from './markets';
 import type { SaleDestination, SaleMoney } from './hosted-sales';
 import { saleMoneySchema } from './hosted-sales';
 import { canonicalDomain } from './publication';
@@ -11,9 +11,14 @@ export const MARKET_PUBLIC_VALIDITY = {
   atom: 3600000,
   sedo: 6 * 3600000,
 } as const;
+export function supportsPublicMarket(
+  market: MarketId,
+): market is keyof typeof MARKET_PUBLIC_VALIDITY {
+  return Object.hasOwn(MARKET_PUBLIC_VALIDITY, market);
+}
 export interface MarketOfferSelection {
   kind: 'market';
-  market: MarketListing['market'];
+  market: keyof typeof MARKET_PUBLIC_VALIDITY;
   accountId: string;
   listingName: string;
   fingerprint: string;
@@ -35,6 +40,10 @@ export interface MarketPublicOffer {
 export function marketPublicDestination(
   listing: Pick<MarketListing, 'market' | 'name'>,
 ) {
+  if (!supportsPublicMarket(listing.market))
+    throw new Error(
+      'This marketplace does not support public-page preparation.',
+    );
   const name = canonicalDomain(listing.name);
   const provider = (
     { afternic: 'Afternic', atom: 'Atom', sedo: 'Sedo' } as const
@@ -80,6 +89,10 @@ export async function publicMarketOffer(
   sync: MarketSyncState | null,
   now = Date.now(),
 ): Promise<MarketPublicOffer> {
+  if (!supportsPublicMarket(listing.market))
+    throw new Error(
+      'This marketplace does not support public-page preparation.',
+    );
   const observedAt = listing.publicObservedAt ?? 0;
   const validUntil = observedAt + MARKET_PUBLIC_VALIDITY[listing.market];
   let reason: string | null =

@@ -77,6 +77,8 @@ export type Domain = ProviderDomain & {
   renewalDateIssue?: 'gandi-updated-at-v1';
   /** Ephemeral marketplace-only table projection; not a saved holding or control proof. */
   marketObservation?: boolean;
+  /** An invalid registrar creation date was suppressed; expiry is unaffected. */
+  createdDateIssue?: 'invalid' | 'future' | 'after-expiration';
   accountId?: string;
   accountLabel?: string;
   /**
@@ -1294,11 +1296,16 @@ export interface DombotApi {
   /** The markets DomBot supports, for Settings → Markets. */
   getMarketCatalog: () => Promise<MarketInfo[]>;
   listMarketAccounts: () => Promise<MarketAccountView[]>;
-  /** Tests the credentials, saves the account, then syncs it. */
+  /**
+   * Tests the credentials, saves the account, then syncs it. A market on a
+   * registrar's API (`MarketInfo.registrar`) takes the registrar account
+   * whose key it uses instead of credentials.
+   */
   connectMarketAccount: (
     market: MarketId,
     credentials: Record<string, string>,
     label?: string,
+    registrarAccountId?: string,
   ) => Promise<MarketAccountView[]>;
   renameMarketAccount: (
     accountId: string,

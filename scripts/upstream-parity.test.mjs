@@ -4,7 +4,7 @@ import { coreMethods } from '../src/core/api';
 import { registerTools } from '../src/core/mcp/tools';
 import { getRegistrarCatalog } from '../src/core/services/registrars';
 const parity = JSON.parse(
-  fs.readFileSync('docs/upstream-parity-20261105.json', 'utf8'),
+  fs.readFileSync('docs/upstream-parity-20261109.json', 'utf8'),
 );
 function tools(scopes) {
   const names = [];

@@ -18,7 +18,9 @@ export const SEDO_CONFIG_FIELDS: MarketConfigField[] = [
     required: true,
   },
 ];
-export const MARKET_CREDENTIAL_FIELDS: Record<MarketId, MarketConfigField[]> = {
+export const MARKET_CREDENTIAL_FIELDS: Partial<
+  Record<MarketId, MarketConfigField[]>
+> = {
   afternic: AFTERNIC_CONFIG_FIELDS,
   atom: ATOM_CONFIG_FIELDS,
   sedo: SEDO_CONFIG_FIELDS,

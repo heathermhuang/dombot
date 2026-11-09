@@ -13,9 +13,10 @@ const getConfiguredRegistrars = vi.fn(() => ['dynadot']);
 const getActiveRegistrars = vi.fn(() => ['dynadot']);
 const setDnsRecords = vi.fn();
 const getDomain = vi.fn();
+const listDomains = vi.fn();
 const getRegistrarClient = vi.fn((name: string) => {
   void name;
-  return { setDnsRecords, getDomain };
+  return { setDnsRecords, getDomain, listDomains };
 });
 const registerDomainCached = vi.fn();
 const getDomainDetail = vi.fn();
@@ -104,9 +105,14 @@ vi.mock('../services/markets/accounts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/markets/accounts')>()),
   marketAccountViews: () => marketAccountViews(),
 }));
+vi.mock('../services/exchange-rates', () => ({
+  exchangeRates: () => undefined,
+}));
+const marketListings = vi.fn((): unknown[] => []);
 vi.mock('../services/markets/sync', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/markets/sync')>()),
   marketSales: () => [],
+  marketListings: () => marketListings(),
 }));
 
 const applyDomainOp = vi.fn();
@@ -262,7 +268,7 @@ const schema = (name: string) => z.object(tools.get(name)!.config.inputSchema);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getRegistrarClient.mockReturnValue({ setDnsRecords, getDomain });
+  getRegistrarClient.mockReturnValue({ setDnsRecords, getDomain, listDomains });
   getConfiguredRegistrars.mockReturnValue(['dynadot']);
   getActiveRegistrars.mockReturnValue(['dynadot']);
   getFolders.mockReturnValue({ folders: [], assignments: {} });
@@ -725,6 +731,80 @@ describe('end-to-end handlers', () => {
     expect(await rows({ ownership: 'all' })).toHaveLength(3);
   });
 
+  it('direct registrar domains suppress future creation without changing expiry', async () => {
+    listDomains.mockResolvedValue([
+      {
+        domainName: 'two-year.example',
+        createdDate: new Date('2099-12-28'),
+        expirationDate: new Date('2100-12-28'),
+      },
+    ]);
+    const out = await call('registrar_domains', { registrar: 'namecheap' });
+    expect(out).toMatchObject([
+      {
+        createdDate: null,
+        createdDateIssue: 'future',
+        expirationDate: '2100-12-28T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('domain_get qualifies the direct provider fallback too', async () => {
+    findRegistrarsForDomain.mockReturnValue(['namecheap']);
+    getDomainDetail.mockResolvedValue(null);
+    getDomain.mockResolvedValue({
+      domainName: 'two-year.example',
+      createdDate: new Date('2099-12-28'),
+      expirationDate: new Date('2100-12-28'),
+    });
+    const out = await call('domain_get', {
+      domain: 'two-year.example',
+      refresh: true,
+    });
+    expect(out).toMatchObject({
+      createdDate: null,
+      createdDateIssue: 'future',
+      expirationDate: '2100-12-28T00:00:00.000Z',
+    });
+  });
+
+  it('direct registrar domains suppress future creation without changing expiry', async () => {
+    listDomains.mockResolvedValue([
+      {
+        domainName: 'two-year.example',
+        createdDate: new Date('2099-12-28'),
+        expirationDate: new Date('2100-12-28'),
+      },
+    ]);
+    const out = await call('registrar_domains', { registrar: 'namecheap' });
+    expect(out).toMatchObject([
+      {
+        createdDate: null,
+        createdDateIssue: 'future',
+        expirationDate: '2100-12-28T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('domain_get qualifies the direct provider fallback too', async () => {
+    findRegistrarsForDomain.mockReturnValue(['namecheap']);
+    getDomainDetail.mockResolvedValue(null);
+    getDomain.mockResolvedValue({
+      domainName: 'two-year.example',
+      createdDate: new Date('2099-12-28'),
+      expirationDate: new Date('2100-12-28'),
+    });
+    const out = await call('domain_get', {
+      domain: 'two-year.example',
+      refresh: true,
+    });
+    expect(out).toMatchObject({
+      createdDate: null,
+      createdDateIssue: 'future',
+      expirationDate: '2100-12-28T00:00:00.000Z',
+    });
+  });
+
   it('domain_get returns cached detail when present', async () => {
     findRegistrarsForDomain.mockReturnValue(['dynadot']);
     getDomainDetail.mockResolvedValue({
@@ -1045,6 +1125,69 @@ describe('local write tools', () => {
         floor: null,
         currency: 'usd',
       },
+    ]);
+  });
+
+  it('portfolio_asking_prices_import copies listed prices, filling gaps, keeping yours', async () => {
+    const listing = (over: Record<string, unknown>) => ({
+      market: 'afternic',
+      accountId: 'x',
+      status: 'active',
+      price: '2500',
+      minOffer: '1000',
+      floor: null,
+      currency: 'USD',
+      ...over,
+    });
+    getMergedPortfolio.mockReturnValue({
+      domains: [{ domainName: 'a.com' }, { domainName: 'b.com' }],
+      fetchedAt: 0,
+      registrars: [],
+      errors: [],
+    });
+    marketListings.mockReturnValue([
+      listing({ name: 'a.com' }),
+      listing({ name: 'a.com', market: 'sedo', price: '3000', minOffer: null }),
+      listing({ name: 'b.com', price: '900' }),
+      // Listed, but no registrar holds it: not in the portfolio.
+      listing({ name: 'elsewhere.com', price: '700' }),
+    ]);
+    getListPrices.mockReturnValue({
+      'b.com': { amount: '500', currency: 'USD', updatedAt: 1 },
+    });
+    const result = (await call('portfolio_asking_prices_import', {})) as {
+      imported: { domain: string; market: string }[];
+      kept: string[];
+      notInPortfolio: number;
+    };
+    expect(setListPrices).toHaveBeenCalledWith([
+      {
+        domainName: 'a.com',
+        amount: '3000',
+        minOffer: '1000',
+        floor: null,
+        currency: 'USD',
+      },
+    ]);
+    expect(result.imported.map((r) => r.market)).toEqual(['sedo']);
+    expect(result.kept).toEqual(['b.com']);
+    expect(result.notInPortfolio).toBe(1);
+    await expect(
+      call('portfolio_asking_prices_import', { domains: ['elsewhere.com'] }),
+    ).rejects.toThrow(/isn't in your portfolio/);
+
+    setListPrices.mockClear();
+    await call('portfolio_asking_prices_import', {
+      source: 'afternic',
+      replace: true,
+    });
+    expect(setListPrices.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        domainName: 'a.com',
+        amount: '2500',
+        minOffer: '1000',
+      }),
+      expect.objectContaining({ domainName: 'b.com', amount: '900' }),
     ]);
   });
 

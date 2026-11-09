@@ -10,7 +10,10 @@ import {
   getMarketSyncState,
   marketAccountViews,
 } from '../core/services/markets/accounts';
-import { publicMarketOffer } from '../shared/market-public-offer';
+import {
+  publicMarketOffer,
+  supportsPublicMarket,
+} from '../shared/market-public-offer';
 import {
   managedControl,
   managedControls,
@@ -288,6 +291,7 @@ export function createVerifiedSaleObserver(env: Env): SaleObserver {
     const listing = cachedListing(source.accountId, draft.domain);
     if (
       !listing ||
+      !supportsPublicMarket(listing.market) ||
       listing.market !== source.market ||
       !activeMarketAccounts().some((a) => a.id === source.accountId)
     )

@@ -88,6 +88,7 @@ import {
 export function BulkActionDialog({
   initialOp,
   domains,
+  retryPool,
   jobId: initialJobId = null,
   onClose,
 }: {
@@ -95,6 +96,9 @@ export function BulkActionDialog({
   initialOp: DomainOp;
   /** The selected domains (merged rows). */
   domains: Domain[];
+  /** Every held row, for Retry failed to find the job's names in.
+   *  Defaults to `domains`. */
+  retryPool?: Domain[];
   jobId?: string | null;
   onClose: () => void;
 }) {
@@ -121,10 +125,14 @@ export function BulkActionDialog({
       ? 'running'
       : 'done';
 
+  // Retry looks the failed names up among every held row: by then the
+  // selection may have been cleared (a filter change, or reopened via View).
   const candidates = useMemo(
     () =>
-      retryOf ? domains.filter((d) => retryOf.has(domainKey(d))) : domains,
-    [domains, retryOf],
+      retryOf
+        ? (retryPool ?? domains).filter((d) => retryOf.has(domainKey(d)))
+        : domains,
+    [domains, retryPool, retryOf],
   );
   const buckets = useMemo(
     () =>

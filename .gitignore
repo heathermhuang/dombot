@@ -140,3 +140,6 @@ hosted/generated-auth.ts
 # Interrupted atomic archive writes are never publication inputs
 site/public/changelog-archive*/.changelog-write-*.tmp
 site/public/.changelog-write-*.tmp
+
+# Reviewed pinned registrar SDK artifact for the upstream 1.1.1 sync.
+!vendor/aoxborrow-registrar-client-1.1.1-hosted.1.tgz
