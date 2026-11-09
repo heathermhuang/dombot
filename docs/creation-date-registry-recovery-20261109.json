@@ -1,0 +1,97 @@
+{
+  "date": "2026-11-09",
+  "status": "deployed_and_verified",
+  "verifiedAt": "2026-11-09T16:35:48.423Z",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/206",
+  "implementationPullRequest": "https://github.com/heathermhuang/dombot/pull/205",
+  "releaseCommit": "c5c82ed2f677f2cff1640113b4f3fbae6e53dc0d",
+  "engine": "2.2.0-hosted.3",
+  "registrarSdk": "1.1.1-hosted.1",
+  "engineSourceSha256": "91fb1993be281627ddbca5a0fb8155e0c59becf2d446845779c3ce2de5ecb81b",
+  "engineArchiveSha256": "a47ab2aea43610180e4bbb107136025cdae94ca1272fc58fbe1f45d2468a68dd",
+  "futureTemplateSha256": "d14142f5aed6f5c6bc795271cdaa7d48c27ef1514a3764527176a41f0cbd2ec8",
+  "upstream": {
+    "repository": "aoxborrow/dombot",
+    "version": "2.2.0",
+    "revision": "1f6796840e0128664cf2a8bfa53702374a2edf7a",
+    "fixPullRequest": "https://github.com/aoxborrow/dombot/pull/276",
+    "fixHead": "544f4c7da129f6ba64106ddcd403a28239abc236"
+  },
+  "servingOriginalPortfolios": 47,
+  "preservation": {
+    "usersPreserved": 61,
+    "originalWorkspaceIdentitiesPreserved": 582,
+    "platformMappingsPreserved": 42,
+    "credentialNamespacesPreserved": 47,
+    "publishedSalesPreserved": 28,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 28,
+    "existingActiveHostsVerified": 2,
+    "directoryConflicts": 0,
+    "cronPreserved": true,
+    "gatewayCronPreserved": true,
+    "originalAllocationRestored": true,
+    "sourceOfferCorrect": true
+  },
+  "templateBindingsPreserved": 16,
+  "notificationChoicesPreserved": true,
+  "liveMcp": {
+    "verifiedRegistryInstantRecovered": true,
+    "createdDateSourceReturned": true,
+    "forcedDetailRefreshPassed": true,
+    "cachedDetailPassed": true,
+    "freshNamecheapSyncPassed": true,
+    "cachedPortfolioPassed": true,
+    "ownedDomains": 943,
+    "uniqueRows": 943,
+    "futureCreationDates": 0,
+    "expiryUnchanged": true,
+    "rawDomainNamesPublished": false
+  },
+  "managedImport": {
+    "at": "2026-11-09T16:35:48.423Z",
+    "passed": true,
+    "production": true,
+    "source": "c5c82ed2f677f2cff1640113b4f3fbae6e53dc0d",
+    "engine": "2.2.0-hosted.3",
+    "engineSource": "91fb1993be281627ddbca5a0fb8155e0c59becf2d446845779c3ce2de5ecb81b",
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "independentWorkerAbsence": true,
+    "independentDatabaseAbsence": true,
+    "setupErased": true,
+    "temporaryCredentialsDestroyed": true,
+    "activeQa": 0,
+    "unfinishedAllocations": 0
+  },
+  "recovery": {
+    "at": "2026-11-09T15:32:16.039Z",
+    "complete": true,
+    "databases": 48,
+    "codeSettingsSnapshots": 49,
+    "databaseContentsDownloaded": false,
+    "rootKeysExported": false
+  },
+  "validation": {
+    "hostedTestFiles": 300,
+    "hostedTestsPassed": 3226,
+    "intentionalSkips": 1,
+    "focusedTests": 173,
+    "securityRegressions": 4,
+    "relayChecks": 4,
+    "workerDryBundles": 6,
+    "remoteWorkerRecoveryPreviewPassed": true,
+    "ci": "https://github.com/heathermhuang/dombot/actions/runs/42645473981",
+    "security": "https://github.com/heathermhuang/dombot/actions/runs/42645473942",
+    "upstreamCi": "https://github.com/aoxborrow/dombot/actions/runs/42645109918"
+  },
+  "registrarMutations": 0
+}
