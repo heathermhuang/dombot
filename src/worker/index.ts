@@ -1,3 +1,9 @@
+import { hasParkio } from './parkio-backup';
+import { parkioFetch } from './parkio-routes';
+import { ParkioSync } from './parkio-sync';
+import { configureParkioProjection } from '../core/services/parkio-projection';
+import { parkioRows, parkioCacheStatus } from '../shared/parkio';
+import { parkioStore } from './parkio-runtime';
 import { connectionResponse } from './connection-response';
 import { CONNECTION_RESULT_HEADER } from '../shared/connection-contract';
 import type { ConnectRegistrarResult } from '../shared/ipc';
@@ -105,6 +111,7 @@ function capturePublicationInputs() {
 function bootFingerprint(env: Env): string {
   return [
     env.DOMBOT_SECRET,
+    env.DOMBOT_PARKIO_ENABLED,
     env.DOMBOT_GATEWAY_SECRET,
     env.DOMBOT_WORKSPACE_ID,
     env.DOMBOT_PASSWORD,
@@ -184,12 +191,28 @@ async function bootOnce(env: Env): Promise<Boot> {
 }
 
 /** Fresh view of the store for this request. */
-async function hydrate(oauthOnly = false): Promise<void> {
+async function hydrate(env: Env, oauthOnly = false): Promise<void> {
   // OAuth emits approval revisions in meta so existing browser tabs can
   // discover a new pairing request without reloading.
   await hydrateStores(
     oauthOnly ? new Set(['settings', 'mcp', 'meta']) : undefined,
   );
+  configureParkioProjection([]);
+  if (!oauthOnly && (await hasParkio(env.DB))) {
+    const install = async (refresher?: (manual: boolean) => Promise<void>) => {
+      const observations = await (await parkioStore(env)).observations();
+      configureParkioProjection(
+        parkioRows(observations, []),
+        refresher,
+        observations.map((o) => parkioCacheStatus(o.source)),
+      );
+    };
+    const refresh = async (manual: boolean) => {
+      await new ParkioSync(await parkioStore(env)).due(manual);
+      await install(refresh);
+    };
+    await install(env.DOMBOT_PARKIO_ENABLED === 'true' ? refresh : undefined);
+  }
   // Idempotent and a no-op once done; its writes flush with the request's.
   if (!oauthOnly) await migrateLegacyProxies();
   if (!oauthOnly) capturePublicationInputs();
@@ -265,7 +288,7 @@ const stateful: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = (
             ? c.req.path.startsWith(path.slice(0, -1))
             : path === c.req.path,
         );
-      await hydrate(oauthOnly);
+      await hydrate(c.env, oauthOnly);
       const salesReady = !oauthOnly && (await hasSales(c.env.DB));
       const beforeSales = salesReady
         ? salesControlState(c.env)
@@ -432,6 +455,7 @@ app.post(
           new PublicationStore(c.env.DB, cipher),
           c.env.DOMBOT_OWNER_SITE_V2 === 'true',
           (await hasSales(c.env.DB)) ? await SalesStore.from(c.env) : undefined,
+          (await hasParkio(c.env.DB)) ? await parkioStore(c.env) : undefined,
         )[name];
       }
       const result = await invoke(name, entry, args);
@@ -511,7 +535,12 @@ export default {
         });
       return withRootLease(
         env,
-        async () => app.fetch(request, env, ctx),
+        async () =>
+          /^\/(?:internal\/parkio|connectors\/parkio)(?:\/|$)/.test(
+            new URL(request.url).pathname,
+          )
+            ? parkioFetch(request, env, ctx)
+            : app.fetch(request, env, ctx),
         request,
       );
     })().catch((error: unknown) => {
@@ -537,7 +566,7 @@ export default {
     await withRootLease(env, async () => {
       await withRequestLock(async () => {
         await bootOnce(env);
-        await hydrate();
+        await hydrate(env);
         if (await hasSales(env.DB))
           await reconcileSalesOutcomes(await SalesStore.from(env));
         if (await hasSales(env.DB))
@@ -545,6 +574,19 @@ export default {
             await SalesStore.from(env),
             env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
           ).cleanup();
+        if (await hasParkio(env.DB)) {
+          await new ParkioSync(await parkioStore(env)).due(
+            false,
+            env.DOMBOT_PARKIO_ENABLED === 'true' &&
+              getSettings().autoSyncIntervalMinutes > 0,
+          );
+          const observations = await (await parkioStore(env)).observations();
+          configureParkioProjection(
+            parkioRows(observations, []),
+            undefined,
+            observations.map((o) => parkioCacheStatus(o.source)),
+          );
+        }
         const beforeSales = salesControlState(env);
         const minutes = getSettings().autoSyncIntervalMinutes;
         if (minutes <= 0) {

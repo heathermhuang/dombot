@@ -1,5 +1,7 @@
 # Park.io owner-only feasibility pilot
 
+The normal inventory connector is documented in [parkio-connector.md](parkio-connector.md). This diagnostic retains its original bounds; qualification alone does not import data or extend session retention.
+
 This is a temporary diagnostic at `/admin/parkio-pilot`, not a customer connector
 or an inventory import. It uses the existing domains.domains account, admin and
 fresh-authentication checks, restricted to one explicitly configured owner ID.

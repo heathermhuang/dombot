@@ -1,3 +1,4 @@
+import type { ParkioCacheStatus } from '../../shared/parkio';
 // Pure query logic for the MCP `portfolio_query` tool — filtering, sorting, and
 // paging over the merged portfolio. Kept free of Electron and the MCP SDK so it
 // can be unit-tested in isolation; tools.ts owns the zod schema and feeds this
@@ -176,6 +177,7 @@ export interface QueryRow {
   /** Whether an account still reports it. When false, the fields an account
    *  reports are empty and the registrar is the last one it was seen at. */
   inAccount: boolean;
+  parkio?: Domain['parkio'];
   status: string;
   inventoryAt: number | null;
   createdDate: Date | null;
@@ -226,6 +228,7 @@ export interface StaleAccount {
 }
 
 export interface QueryResult extends QueryMeta {
+  parkioSources?: ParkioCacheStatus[];
   /** Total matches before paging. */
   total: number;
   /** True when the data is missing, past the staleness threshold, or any
@@ -501,6 +504,7 @@ export function queryPortfolio(
         : (d.accountLabel ?? (registrar ? 'Default' : null)),
       registrarLabel: d.importedRegistrarLabel || null,
       source: d.source,
+      ...(d.parkio ? { parkio: d.parkio } : {}),
       domainName: d.domainName,
       ownership: label ? 'archive' : 'owned',
       archiveLabel: label,
@@ -510,7 +514,13 @@ export function queryPortfolio(
       inAccount,
       status: d.status,
       inventoryAt: observationAt(
-        extras.pricing?.[domainKey(d)]?.inventoryAt,
+        d.parkio
+          ? d.parkio.missingSince !== null
+            ? d.syncedAt instanceof Date
+              ? d.syncedAt.getTime()
+              : null
+            : d.parkio.lastSuccessfulCheckAt
+          : extras.pricing?.[domainKey(d)]?.inventoryAt,
         now,
       ),
       createdDate: d.createdDate,

@@ -137,3 +137,11 @@ export async function timingSafeEqualStrings(
   for (let i = 0; i < da.length; i++) diff |= da[i] ^ db[i];
   return diff === 0;
 }
+
+/** Separate keys for Park.io account metadata, inventory and session material. */
+export function deriveParkioKey(
+  root: Uint8Array,
+  purpose: 'metadata' | 'inventory' | 'credentials' | 'index',
+): Promise<Uint8Array> {
+  return hkdf(root, `dombot/parkio/${purpose}/v1`);
+}

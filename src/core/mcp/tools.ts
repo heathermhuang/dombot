@@ -1,3 +1,4 @@
+import { parkioSourceStatus } from '../services/parkio-projection';
 import { missingFeatureReason } from '../../shared/domain-ops';
 import { permitsTool } from './scopes';
 import { z } from 'zod';
@@ -575,7 +576,7 @@ function runQuery(args: QueryArgs): QueryResult {
   // reports, then names in Archive that neither covers (from the event log).
   const listed = [...domains, ...importedRows(getImportedDomains(), domains)];
   const meta = getRegistrarMetadata();
-  return queryPortfolio(
+  const result = queryPortfolio(
     [...listed, ...archiveRows(ownership, listed, meta)],
     folders,
     assignments,
@@ -591,6 +592,23 @@ function runQuery(args: QueryArgs): QueryResult {
         args.listedOn || args.notListedOn ? listedMarkets() : undefined,
     },
   );
+  const sources = parkioSourceStatus();
+  if (sources.length) {
+    const stale = sources.some(
+      (s) =>
+        s.connection !== 'connected' ||
+        s.lastSuccessfulCheckAt === null ||
+        Date.now() - s.lastSuccessfulCheckAt > 25 * 3600000,
+    );
+    return {
+      ...result,
+      stale:
+        (meta.some((m) => m.configured && m.enabled) ? result.stale : false) ||
+        stale,
+      parkioSources: sources,
+    };
+  }
+  return result;
 }
 
 /** Each listed name's markets, from the last market sync. */
@@ -830,7 +848,7 @@ export function registerTools(
       {
         title: 'Query portfolio',
         description:
-          'List, search, and filter your whole portfolio — every configured registrar plus the names you imported — the primary way to read the portfolio. Covers the names you own by default; pass `ownership` for Archive (names you no longer have) or both. To let a name go, turn its auto-renew off with domain_set_autorenew; nothing you hold goes to Archive by hand. Filter by registrar, source (synced or imported), TLD, folder, name, nameserver, market listing, asking price (for sale or not, BIN price, minimum offer and floor, with ranges), auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort (including by estimated renewal price) and page the results. With no filters it returns every name you own (paged), so use it as a plain list too. Each row says `ownership` (owned/archive), `archiveLabel` (sold, deleted: the lookup says nobody holds it, expired: it left after expiry, dropped: it left early and you marked it dropped, or removed: it left early with no sale, the one to review), `expiring` (owned, auto-renew off, expiring within 30 days), `salePending` (a sale recorded on a name you still hold), `source` (`imported`: no connected account reports it), and `inAccount` (false for an imported name or an Archive name no account reports — the registrar-backed domain_* tools can’t act on those). Rows also carry what Domains.Domains keeps per name: `paid` (date, amount, currency, registered or purchased), `sold`, `notes`, `askingPrice` (BIN price, minimum offer, floor), and `renewalPrice` (Domains.Domains’s yearly estimate, source, observedAt and priceAge, as domain_renewal_price). `inventoryAt` is independent of quote age; fresh inventory does not imply a fresh price. Use `renewalPriceAge` to filter saved quote confidence without refreshing. Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, staleAccounts, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete; `staleAccounts` lists accounts whose own last sync is old even if another synced since (`stale` is true then too — registrar_sync just those, or portfolio_sync). Rows carry only the fields you need — call domain_get for a single domain’s full record.',
+          'List, search, and filter your whole portfolio — every configured registrar plus the names you imported — the primary way to read the portfolio. Covers the names you own by default; pass `ownership` for Archive (names you no longer have) or both. To let a name go, turn its auto-renew off with domain_set_autorenew; nothing you hold goes to Archive by hand. Filter by registrar, source (synced or imported), TLD, folder, name, nameserver, market listing, asking price (for sale or not, BIN price, minimum offer and floor, with ranges), auto-renew/lock/privacy, status, and expiry (before/after a date or within N days); sort (including by estimated renewal price) and page the results. With no filters it returns every name you own (paged), so use it as a plain list too. Each row says `ownership` (owned/archive), `archiveLabel` (sold, deleted: the lookup says nobody holds it, expired: it left after expiry, dropped: it left early and you marked it dropped, or removed: it left early with no sale, the one to review), `expiring` (owned, auto-renew off, expiring within 30 days), `salePending` (a sale recorded on a name you still hold), `source` (`imported`: no connected account reports it), and `inAccount` (false for an imported name or an Archive name no account reports — the registrar-backed domain_* tools can’t act on those). Rows also carry what Domains.Domains keeps per name: `paid` (date, amount, currency, registered or purchased), `sold`, `notes`, `askingPrice` (BIN price, minimum offer, floor), and `renewalPrice` (Domains.Domains’s yearly estimate, source, observedAt and priceAge, as domain_renewal_price). `inventoryAt` is independent of quote age; fresh inventory does not imply a fresh price. Use `renewalPriceAge` to filter saved quote confidence without refreshing. Reads the local cache only — no registrar calls; run portfolio_sync first (or whenever this reports stale:true or an empty result) to refresh it. Returns { total, fetchedAt, stale, staleAccounts, registrars, errors, rows }: `total` is the full match count before paging (page with `limit`/`offset`); `errors` lists any registrar whose sync failed, so a non-empty `errors` means the result may be incomplete; `staleAccounts` lists accounts whose own last sync is old even if another synced since (`stale` is true then too — registrar_sync just those, or portfolio_sync). Park.io observations carry parkio source status and remain read-only; parkioSources reports their connection and freshness. Rows carry only the fields you need — call domain_get for a single domain’s full record.',
         inputSchema: queryShape,
         annotations: { readOnlyHint: true },
       },
@@ -1247,7 +1265,7 @@ export function registerTools(
       {
         title: 'Get domain',
         description:
-          'For a single domain: its full record — status, creation/expiration dates, auto-renew, transfer lock, WHOIS privacy, and nameservers. Served from the local detail cache when fresh; otherwise fetched live and written through. Pass `refresh` to force a live fetch.',
+          'For a single domain: its full record — status, creation/expiration dates, auto-renew, transfer lock, WHOIS privacy, and nameservers. Park.io observations return cached read-only facts with unknown controls as null. Served from the local detail cache when fresh; otherwise fetched live and written through. Pass `refresh` to force a live fetch.',
         inputSchema: {
           accountId,
           registrar: optionalRegistrar,
@@ -1257,6 +1275,27 @@ export function registerTools(
         annotations: { readOnlyHint: true },
       },
       async ({ accountId, registrar, domain, refresh }) => {
+        if (!registrar && !accountId) {
+          const cached = getMergedPortfolio().domains.find(
+            (d) => toAscii(d.domainName) === toAscii(domain),
+          );
+          if (cached?.parkio)
+            return json({
+              ...cached,
+              registrar: null,
+              accountId: null,
+              inAccount: false,
+              readOnly: true,
+              autoRenew: null,
+              locked: null,
+              privacy: null,
+              nameservers: [],
+              inventoryAt:
+                cached.parkio.missingSince === null
+                  ? cached.parkio.lastSuccessfulCheckAt
+                  : (cached.syncedAt?.getTime() ?? null),
+            });
+        }
         const r = resolveRegistrar(domain, registrar, accountId);
         const account = resolveDomainAccount(r, domain, accountId);
         const detail = await getDomainDetail(

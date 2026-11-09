@@ -1,3 +1,7 @@
+import {
+  withParkioProjection,
+  parkioProjection,
+} from '../services/parkio-projection';
 import { z } from 'zod';
 import type { DombotApi, DomainTarget } from '../../shared/ipc';
 import { clearAll, clearRegistrarCaches } from '../services/cache';
@@ -257,10 +261,32 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     if (getConfiguredRegistrars().length === 0) {
       clearRegistrarCaches();
       // Imported names aren't registrar data: their pricing stays.
-      return { portfolio: null, detail: {}, pricing: getPortfolioPricing() };
+      return {
+        portfolio: parkioProjection().length
+          ? withParkioProjection({
+              domains: [],
+              fetchedAt: null,
+              registrars: [],
+              registrarLabels: {},
+              errors: [],
+            })
+          : null,
+        detail: {},
+        pricing: getPortfolioPricing(),
+      };
     }
     return {
-      portfolio: getCachedPortfolio(),
+      portfolio: getCachedPortfolio()
+        ? withParkioProjection(getCachedPortfolio()!)
+        : parkioProjection().length
+          ? withParkioProjection({
+              domains: [],
+              fetchedAt: null,
+              registrars: [],
+              registrarLabels: {},
+              errors: [],
+            })
+          : null,
       detail: getCachedDetail(),
       pricing: getPortfolioPricing(),
     };

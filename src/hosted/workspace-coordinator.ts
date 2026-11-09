@@ -57,6 +57,31 @@ export class WorkspaceCoordinator extends DurableObject<Env> {
         },
       );
     }
+    // Park.io uses independent, revision-fenced SQL state, so status and
+    // lifecycle controls must remain available during another provider's I/O.
+    if (
+      /^\/(?:internal\/parkio|connectors\/parkio)(?:\/|$)/.test(
+        new URL(request.url).pathname,
+      )
+    ) {
+      const mutation = request.method !== 'GET';
+      const marker =
+        this.sleepPolicy && mutation
+          ? await this.maintenance.beginConcurrent()
+          : null;
+      try {
+        return await this.fetchAdmitted(request, admission.owner);
+      } finally {
+        if (marker) {
+          await this.maintenance.endConcurrent(marker);
+          this.ctx.waitUntil(
+            this.maintenance
+              .run(() => this.maintenance.reconcile())
+              .catch(() => {}),
+          );
+        }
+      }
+    }
     // The engine serves authenticated publication reads from detached inventory
     // plus D1. Do not put them behind a long scheduled provider request here.
     const publicationRead =

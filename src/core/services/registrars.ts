@@ -1,3 +1,8 @@
+import {
+  withParkioProjection,
+  refreshParkioProjection,
+  parkioProjection,
+} from './parkio-projection';
 import { readDynadotRateLimit } from '../../shared/dynadot-rate-limit';
 import { protectRegistrar } from './registrar-errors';
 import { API_TIMEOUT_MS } from '../api-timeout';
@@ -1577,11 +1582,12 @@ export async function getPortfolio(
   trigger: SyncTrigger = 'manual',
 ): Promise<Portfolio> {
   if (refresh) {
+    await refreshParkioProjection(trigger === 'manual');
     // Only sync enabled registrars — a disabled one keeps its credentials but is
     // deliberately skipped.
     await syncAccounts(getActiveAccounts(), trigger);
   }
-  return assemblePortfolio();
+  return withParkioProjection(assemblePortfolio());
 }
 
 /**
@@ -1604,7 +1610,7 @@ export async function syncRegistrar(
     // Credentials are gone — drop the stale slice so it can't reappear.
     clearRegistrarData(account.id);
   }
-  return assemblePortfolio();
+  return withParkioProjection(assemblePortfolio());
 }
 
 export async function setRegistrarEnabledCached(
@@ -1706,7 +1712,18 @@ export function getCachedDomainDetail(
  * post-sync refresh.
  */
 export function getPortfolioPricing(): Record<string, RenewalPricing> {
-  const portfolio = getCachedPortfolio();
+  const cached = getCachedPortfolio();
+  const portfolio = cached
+    ? withParkioProjection(cached)
+    : parkioProjection().length
+      ? withParkioProjection({
+          domains: [],
+          fetchedAt: null,
+          registrars: [],
+          registrarLabels: {},
+          errors: [],
+        })
+      : null;
   const out: Record<string, RenewalPricing> = {};
   // Imported names: your price, else the base rate when the registrar is one
   // DomBot knows. Keyed like their rows (`domainKey`).
@@ -2192,7 +2209,15 @@ export function getMergedPortfolio(): {
   registrars: string[];
   errors: PortfolioErrorInfo[];
 } {
-  const portfolio = getCachedPortfolio();
+  const portfolio = withParkioProjection(
+    getCachedPortfolio() ?? {
+      domains: [],
+      fetchedAt: null,
+      registrars: [],
+      registrarLabels: {},
+      errors: [],
+    },
+  );
   if (!portfolio)
     return { domains: [], fetchedAt: null, registrars: [], errors: [] };
   const detail = getCachedDetail();

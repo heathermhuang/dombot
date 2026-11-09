@@ -1,3 +1,12 @@
+import { rotateParkioCookies } from '../shared/parkio-cookies';
+import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
+import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
+import {
+  parkioCredentialSchema,
+  parkioCookieSchema,
+  PARKIO_SESSION_RETENTION,
+} from '../shared/parkio';
+import { parkioExportUrl } from '../shared/parkio-account';
 import type { BrowserRun } from '../../hosted/browser-run-types';
 import {
   accountReadCookies,
@@ -58,6 +67,7 @@ interface Attempt {
   id: string;
   phase: Phase;
   createdAt: number;
+  capturedAt?: number;
   expiresAt: number;
   day: string;
   starts: number;
@@ -88,6 +98,16 @@ interface Attempt {
     error?: string;
   }>;
   contractRequestedAt?: number;
+  tenantCheckRequestedAt?: number;
+  tenantCheckReceipt?: {
+    passed: boolean;
+    accountIdentityMatch: boolean;
+    count: number | null;
+    baselineMatch: boolean;
+    cookieRotationObserved: boolean;
+    error: string | null;
+    checkedAt: number;
+  };
   qualificationRequestedAt?: number;
   qualificationV2?: {
     startedAt: number;
@@ -156,6 +176,7 @@ function safeState(a: Attempt | null) {
     nextCheckAt: a.nextCheckAt ?? null,
     checkHistory: a.checkHistory ?? [],
     contractSummary: a.contractSummary ?? null,
+    tenantCheckReceipt: a.tenantCheckReceipt ?? null,
     exportCompletenessQualified: false,
     // This single-owner feasibility test is not qualification of multi-account identity.
     accountIdentityQualified: false,
@@ -167,6 +188,11 @@ export class ParkioPilot {
   constructor(
     private readonly ctx: DurableObjectState,
     private readonly env: HostedEnv,
+    private readonly policy: {
+      captureRetentionMs?: number;
+      automaticFollowups?: boolean;
+      acceptCookieRotation?: boolean;
+    } = {},
   ) {}
   /** Internal Fetcher boundary keeps storage helpers unexposed and the
    * gateway importable by the existing Node-based regression tests. */
@@ -194,6 +220,8 @@ export class ParkioPilot {
         'contract',
         'qualify',
         'qualifyV2',
+        'connectorCandidate',
+        'qualifyTenant',
       ].includes(action)
     )
       return new Response('Not found', { status: 404 });
@@ -215,6 +243,8 @@ export class ParkioPilot {
             | 'contract'
             | 'qualify'
             | 'qualifyV2'
+            | 'connectorCandidate'
+            | 'qualifyTenant'
         ](),
       );
     } catch (error) {
@@ -653,7 +683,9 @@ export class ParkioPilot {
         a.headers = captured.parsed.headers;
         a.expiryAvailable = captured.parsed.expiryAvailable;
         a.phase = 'closing';
-        a.expiresAt = Date.now() + PILOT_RETENTION_MS;
+        a.capturedAt = Date.now();
+        a.expiresAt =
+          a.capturedAt + (this.policy.captureRetentionMs ?? PILOT_RETENTION_MS);
         await this.#save(a);
         // Browser cleanup is verified before allowing a post-browser HTTP test.
         await this.ctx.storage.setAlarm(Date.now() + 15_000);
@@ -723,6 +755,27 @@ export class ParkioPilot {
       const cookieRotationObserved = response.headers
         .getSetCookie()
         .some((c) => a.cookieNames?.includes(c.slice(0, c.indexOf('='))));
+      if (this.policy.acceptCookieRotation) {
+        a.cookies = rotateParkioCookies(
+          a.cookies.map((c) =>
+            parkioCookieSchema.parse({
+              name: c.name,
+              value: c.value,
+              domain: c.domain,
+              path: c.path,
+              secure: c.secure,
+              httpOnly: c.httpOnly,
+              ...(c.expires === undefined ? {} : { expires: c.expires }),
+              ...(c.session === undefined ? {} : { session: c.session }),
+            }),
+          ),
+          response.headers.getSetCookie(),
+        );
+        a.cookieNames = a.cookies.map((c) => c.name);
+        if (!a.cookies.some((c) => c.name === 'parkio_user_signin'))
+          throw new PilotError('sign_in_required');
+        await this.#save(a);
+      }
       const parsed = parsePilotCsv(await readBounded(response));
       if (a.expiresAt <= Date.now()) throw new PilotError('pilot_expired');
       a.result = {
@@ -736,14 +789,17 @@ export class ParkioPilot {
       };
       // Rotation needs a qualified persistence contract before a second use of this jar.
       a.phase =
-        a.result.namesMatch && a.result.expiriesMatch && !cookieRotationObserved
+        a.result.namesMatch &&
+        a.result.expiriesMatch &&
+        (!cookieRotationObserved || this.policy.acceptCookieRotation)
           ? 'passed'
           : 'blocked';
-      a.error = cookieRotationObserved
-        ? 'rotation_contract_required'
-        : a.phase === 'passed'
-          ? undefined
-          : 'holdings_differ';
+      a.error =
+        cookieRotationObserved && !this.policy.acceptCookieRotation
+          ? 'rotation_contract_required'
+          : a.phase === 'passed'
+            ? undefined
+            : 'holdings_differ';
       Object.assign(entry, {
         completedAt: Date.now(),
         outcome: a.phase === 'passed' ? 'passed' : 'blocked',
@@ -771,6 +827,7 @@ export class ParkioPilot {
     const gateExpiry = Date.parse(this.env.PARKIO_PILOT_EXPIRES_AT ?? '');
     if (
       a.phase === 'passed' &&
+      this.policy.automaticFollowups !== false &&
       a.authenticationFlow === 'native_credentials' &&
       (a.checks ?? 0) < 3
     ) {
@@ -818,6 +875,164 @@ export class ParkioPilot {
         ];
       await this.#schedule(a);
       return safeState(a);
+    });
+  }
+  /** Called only by the private login broker; never a browser-facing action. */
+  async qualifyTenant() {
+    const candidate = await this.candidate();
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (!a || a.id !== candidate.attemptId || a.phase !== 'passed')
+        throw new PilotError('proof_not_ready');
+      if (a.tenantCheckReceipt) return a.tenantCheckReceipt;
+      if (a.tenantCheckRequestedAt)
+        throw new PilotError('tenant_check_outcome_unknown');
+      const user = await this.env.CONTROL_DB.prepare(
+        'SELECT u.workspace_id FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.id=? AND w.enabled=1',
+      )
+        .bind(this.env.PARKIO_PILOT_OWNER_ID)
+        .first<{ workspace_id: string }>();
+      if (!user) throw new PilotError('portfolio_unavailable');
+      const workspace = await workspaceFor(this.env, user.workspace_id);
+      if (!workspace) throw new PilotError('portfolio_unavailable');
+      a.tenantCheckRequestedAt = Date.now();
+      await this.#save(a);
+      const request = new Request(
+        'https://domains.domains/internal/parkio/qualify',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Origin: 'https://domains.domains',
+          },
+          body: JSON.stringify({
+            credential: candidate.credential,
+            baselineDigest: candidate.baselineDigest,
+          }),
+        },
+      );
+      request.headers.set(
+        PROOF_HEADER,
+        await signGatewayRequest(
+          await workspaceKey(this.env, user.workspace_id),
+          user.workspace_id,
+          this.env.PARKIO_PILOT_OWNER_ID!,
+          request,
+        ),
+      );
+      try {
+        const response = await workspaceService(
+          this.env,
+          workspace.binding,
+        ).fetch(request);
+        if (!response.ok) throw new PilotError('receiving_worker_unavailable');
+        const payload = (await response.json()) as {
+          receipt: NonNullable<Attempt['tenantCheckReceipt']>;
+          credential: unknown;
+        };
+        const current = parkioCredentialSchema.parse(payload.credential);
+        if (
+          current.accountId !== candidate.credential.accountId ||
+          current.exportPath !== candidate.credential.exportPath
+        )
+          throw new PilotError('account_mismatch');
+        a.tenantCheckReceipt = payload.receipt;
+        if (payload.receipt.passed) {
+          a.cookies = current.cookies;
+          a.cookieNames = current.cookies.map((c) => c.name);
+          await this.#save(a);
+        } else {
+          a.phase = 'blocked';
+          a.error = payload.receipt.error ?? 'tenant_check_failed';
+          await this.#schedule(a);
+        }
+        return payload.receipt;
+      } catch (error) {
+        a.phase = 'blocked';
+        a.error =
+          error instanceof PilotError
+            ? error.code
+            : 'tenant_check_outcome_unknown';
+        await this.#schedule(a);
+        throw new PilotError(a.error);
+      }
+    });
+  }
+  async connectorCandidate() {
+    return this.candidate();
+  }
+  async candidate() {
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (
+        !a?.cookies ||
+        !a.activeExport ||
+        a.phase !== 'passed' ||
+        !a.browserClosed ||
+        !pilotEnabled(this.env) ||
+        a.expiresAt <= Date.now()
+      )
+        throw new PilotError('proof_not_ready');
+      let path: string;
+      try {
+        path = new URL(parkioExportUrl(a.activeExport)).pathname;
+      } catch {
+        throw new PilotError('export_contract_required');
+      }
+      const accountId = path.match(/\/([1-9]\d*)\.csv$/)![1];
+      const cookies = a.cookies.map((c) =>
+        parkioCookieSchema.parse({
+          name: c.name,
+          value: c.value,
+          domain: c.domain,
+          path: c.path,
+          secure: c.secure,
+          httpOnly: c.httpOnly,
+          ...(c.expires === undefined ? {} : { expires: c.expires }),
+          ...(c.session === undefined ? {} : { session: c.session }),
+        }),
+      );
+      const capturedAt = a.capturedAt ?? a.expiresAt - PILOT_RETENTION_MS;
+      const expiresAt = Math.min(
+        capturedAt + PARKIO_SESSION_RETENTION,
+        ...cookies
+          .filter(
+            (c) =>
+              c.name === 'parkio_user_signin' &&
+              c.expires !== undefined &&
+              c.expires > 0,
+          )
+          .map((c) => c.expires! * 1000),
+      );
+      const credential = parkioCredentialSchema.parse({
+        version: 1,
+        accountId,
+        cookies,
+        capturedAt,
+        expiresAt,
+        accountPath: '/orders/index',
+        exportPath: path,
+      });
+      if (
+        !cookies.some((c) => c.name === 'parkio_user_signin') ||
+        expiresAt <= Date.now()
+      )
+        throw new PilotError('sign_in_required');
+      const baselineDigest = Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(JSON.stringify(a.baseline)),
+          ),
+        ),
+        (b) => b.toString(16).padStart(2, '0'),
+      ).join('');
+      return {
+        credential,
+        nextCheckAt: a.nextCheckAt ?? null,
+        baselineDigest,
+        attemptId: a.id,
+      };
     });
   }
   async cancel() {

@@ -54,7 +54,7 @@ export function qualifiedCookies(cookies: PilotCookie[]): PilotCookie[] {
       (c.domain === 'park.io' || c.domain === '.park.io') &&
       (c.httpOnly ||
         c.session ||
-        /session|auth|token|remember|cake|php|^sid$|cf_clearance/i.test(
+        /session|auth|token|remember|cake|php|^sid$|^parkio_user_signin$|^flashId$|cf_clearance/i.test(
           c.name,
         )) &&
       !/^_(?:ga|gid|gat)/i.test(c.name),

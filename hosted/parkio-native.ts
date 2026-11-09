@@ -9,7 +9,9 @@ import {
 const root = document.getElementById('parkio-native');
 if (root) setup(root);
 function setup(root: HTMLElement) {
-  const base = '/admin/parkio-pilot';
+  const customer = root.dataset.nativeMode === 'connector';
+  const connectionIntent = root.dataset.nativeIntent;
+  const base = customer ? '/connectors/parkio' : '/admin/parkio-pilot';
   const username = root.querySelector<HTMLInputElement>('#native-username')!;
   const password = root.querySelector<HTMLInputElement>('#native-password')!;
   const code = root.querySelector<HTMLInputElement>('#native-code')!;
@@ -22,6 +24,7 @@ function setup(root: HTMLElement) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attemptId: string | undefined;
   let refreshedDue: number | undefined;
+  let activationPolls = 0;
   const pending = new Map<
     number,
     {
@@ -67,6 +70,9 @@ function setup(root: HTMLElement) {
       redirect: 'manual',
       headers: {
         Accept: 'application/json',
+        ...(customer && connectionIntent
+          ? { 'X-Parkio-Intent': connectionIntent }
+          : {}),
         ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
       },
       body: method === 'POST' ? '{}' : undefined,
@@ -206,6 +212,56 @@ function setup(root: HTMLElement) {
     });
   }
   async function showProof() {
+    if (customer) {
+      panel('working');
+      message('Saving the verified connection…');
+      const saved = await api<{
+        pending?: boolean;
+        connected?: boolean;
+        source?: { count: number; sync: string; nextAttemptAt: number | null };
+        portfolio?: string;
+      }>('/native-activate');
+      clearSecrets();
+      disconnect();
+      if (saved.pending) {
+        message('Your connection is still being saved.');
+        root.querySelector<HTMLButtonElement>(
+          '#native-working-refresh',
+        )!.hidden = false;
+        if (++activationPolls <= 20)
+          timer = setTimeout(() => {
+            if (alive) void run(resume);
+          }, 1500);
+        return;
+      }
+      if (
+        !saved.connected ||
+        !saved.source ||
+        !saved.portfolio ||
+        !/^\/w\/[a-f0-9-]{36}\/$/.test(saved.portfolio)
+      )
+        throw Error('connection_unavailable');
+      root.querySelector<HTMLElement>('#native-summary')!.textContent =
+        saved.source.sync === 'review_required'
+          ? 'Your connection is saved. Review the inventory changes in Registrars before applying them.'
+          : `${saved.source.count.toLocaleString()} domains are ready in your portfolio.`;
+      const list = root.querySelector<HTMLElement>('#native-holdings')!;
+      list.replaceChildren();
+      const link = document.createElement('a');
+      link.className = 'button';
+      link.href = saved.portfolio;
+      link.textContent = 'Open your portfolio →';
+      list.append(link);
+      root.querySelector<HTMLElement>('#native-check-history')!.textContent =
+        saved.source.nextAttemptAt
+          ? `Next background update: ${new Date(saved.source.nextAttemptAt).toLocaleString()}.`
+          : 'Open Registrars to review the connection.';
+      root.querySelector<HTMLButtonElement>('#native-retest')!.hidden = true;
+      panel('proved');
+      message('Park.io connected.');
+      return;
+    }
+
     const proof = await api<{
       phase: string;
       browserClosed: boolean;
@@ -292,7 +348,10 @@ function setup(root: HTMLElement) {
         '/status',
         'GET',
       );
-      if (state.phase === 'passed') {
+      if (
+        state.phase === 'passed' ||
+        (customer && state.phase === 'connected')
+      ) {
         await showProof();
         return;
       }
@@ -406,6 +465,19 @@ function setup(root: HTMLElement) {
         'Park.io rotated the session during the background read. Session persistence needs further qualification.',
       holdings_differ:
         'The latest export differs from the initial snapshot. Earlier successful checks remain in connection details; the change needs qualification.',
+      account_mismatch:
+        'This is a different Park.io account. Return to Registrars and add it as a separate connection.',
+      account_already_connected:
+        'This Park.io account is already connected. Open Registrars to see its saved domains.',
+      connection_replaced:
+        'A newer sign-in replaced this tab. Continue in the newer tab or return to Registrars.',
+      session_changed:
+        'Your Domains.Domains session changed. Return to Registrars and start this connection again.',
+      connection_changed:
+        'This connection changed. Open Registrars to see its current status.',
+      source_limit: 'This portfolio has reached its Park.io source limit.',
+      inventory_limit:
+        'This portfolio has reached its saved-inventory limit. Your existing domains are kept.',
       close_browser_first:
         'The temporary browser has not finished closing. Check the connection again shortly.',
       check_in_progress:
@@ -442,7 +514,7 @@ function setup(root: HTMLElement) {
       attemptId?: string;
     }>('/status', 'GET');
     attemptId = state.attemptId;
-    if (state.phase === 'passed') {
+    if (state.phase === 'passed' || (customer && state.phase === 'connected')) {
       await showProof();
       return;
     }

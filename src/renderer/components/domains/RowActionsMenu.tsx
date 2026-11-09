@@ -303,7 +303,18 @@ export function RowActionsMenu({
             </>
           ) : (
             <>
-              {imported ? (
+              {domain.parkio ? (
+                <DropdownMenuItem asChild>
+                  <a
+                    href="https://park.io/orders/index/active"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Link2 className={icon} />
+                    Open in Park.io
+                  </a>
+                </DropdownMenuItem>
+              ) : imported ? (
                 <DropdownMenuItem onSelect={onEditDetails}>
                   <PencilLine className={icon} />
                   Edit details{dots}
@@ -408,7 +419,7 @@ export function RowActionsMenu({
           )}
           {/* Only for names no connected account holds: a name you hold
               leaves when you turn its auto-renew off. */}
-          {removable && (
+          {removable && !domain.parkio && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={onDelete}>

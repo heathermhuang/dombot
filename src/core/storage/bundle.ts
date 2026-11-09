@@ -67,11 +67,13 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // Older hosted builds must reject it instead of dropping unknown namespaces.
 // v11 adds exact decimal public-offer money and marketplace source bindings.
 // v12 retains hosted source bindings, explicit sale evidence references and journey counts.
-export const BUNDLE_VERSION = 12;
+// v13 retains read-only Park.io observations; session cookies never travel.
+export const BUNDLE_VERSION = 13;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | typeof BUNDLE_VERSION;
+  version:
+    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -104,7 +106,7 @@ export class BundleError extends Error {}
 /** Parses plain bundle text. Throws BundleError. */
 export function parseBundle(
   text: string,
-  hostOptions?: { sales: boolean },
+  hostOptions?: { sales: boolean; parkio?: boolean },
 ): DataBundle {
   let raw: unknown;
   try {
@@ -116,13 +118,17 @@ export function parseBundle(
   if (!head || head.format !== BUNDLE_FORMAT) {
     throw new BundleError('Not a Domains.Domains data file.');
   }
+  if ('parkio' in head && head.parkio !== undefined && !hostOptions?.parkio)
+    throw new BundleError(
+      'This backup includes Park.io inventory. Restore it on a compatible hosted account.',
+    );
   if ('sales' in head && head.sales !== undefined && !hostOptions?.sales) {
     throw new BundleError(
       'This backup includes hosted sales data. Restore it on a compatible hosted account so conversations are not lost.',
     );
   }
   if (
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, BUNDLE_VERSION].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, BUNDLE_VERSION].includes(
       head.version as number,
     )
   ) {

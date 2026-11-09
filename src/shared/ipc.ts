@@ -62,6 +62,17 @@ export type ConnectRegistrarResult =
 export type DomainSource = 'registrar' | 'imported';
 
 export type Domain = ProviderDomain & {
+  /** Read-only connector observation; never an API registrar action target. */
+  parkio?: {
+    sourceId: string;
+    label: string;
+    lastSuccessfulCheckAt: number | null;
+    missingSince: number | null;
+    connection: 'connected' | 'reconnect_required' | 'disconnected';
+    paused: boolean;
+    error: string | null;
+    nextCheckAt: number | null;
+  };
   /** Read-only qualification of a legacy cached date; never a registrar status. */
   renewalDateIssue?: 'gandi-updated-at-v1';
   /** Ephemeral marketplace-only table projection; not a saved holding or control proof. */

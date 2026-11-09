@@ -46,7 +46,11 @@ describe('applyOverrides', () => {
     expect(out.name).toBe('dombot-me');
     expect(out.d1_databases[0].database_id).toBe('abc');
     expect(out.d1_databases[0].binding).toBe('DB');
-    expect(out.vars).toEqual({ DOMBOT_AUTH: 'password', CF_ACCESS_AUD: 'x' });
+    expect(out.vars).toEqual({
+      DOMBOT_AUTH: 'password',
+      DOMBOT_PARKIO_ENABLED: 'false',
+      CF_ACCESS_AUD: 'x',
+    });
     expect(out.routes).toHaveLength(1);
     expect(out.assets).toEqual(template.assets);
     expect(template.name).toBe('dombot');

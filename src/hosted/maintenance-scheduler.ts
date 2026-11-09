@@ -4,6 +4,7 @@ import type { DombotApi } from '../shared/ipc';
 const KEY = 'maintenance:v1';
 const INTERVAL = 300_000;
 interface State {
+  concurrent?: string[];
   generation: number;
   dirty: boolean;
   paused: boolean;
@@ -44,6 +45,31 @@ export class MaintenanceScheduler {
       }
     );
   }
+  async beginConcurrent(): Promise<string> {
+    const id = crypto.randomUUID();
+    await this.storage.transaction(async (tx) => {
+      const s = await this.state(tx);
+      s.generation++;
+      s.dirty = true;
+      s.concurrent = [...(s.concurrent ?? []), id];
+      await tx.put(KEY, s);
+      if (!s.paused && !(await tx.getAlarm()))
+        await tx.setAlarm(Date.now() + INTERVAL);
+    });
+    return id;
+  }
+  async endConcurrent(id: string) {
+    await this.storage.transaction(async (tx) => {
+      const s = await this.state(tx);
+      s.generation++;
+      s.dirty = true;
+      s.concurrent = (s.concurrent ?? []).filter((v) => v !== id);
+      if (!s.concurrent.length) delete s.concurrent;
+      await tx.put(KEY, s);
+      if (!s.paused && !(await tx.getAlarm()))
+        await tx.setAlarm(Date.now() + INTERVAL);
+    });
+  }
   async prepare(): Promise<number> {
     return this.storage.transaction(async (tx) => {
       const s = await this.state(tx);
@@ -60,6 +86,8 @@ export class MaintenanceScheduler {
     let inspection: DomBotMaintenanceState;
     try {
       inspection = await this.inspect();
+      if (before.concurrent?.length && inspection.state === 'empty')
+        inspection = unknown();
       if (
         inspection.version !== 1 ||
         !['empty', 'work', 'unknown'].includes(inspection.state)

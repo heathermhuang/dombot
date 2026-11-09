@@ -17,6 +17,12 @@ vi.mock('./sales-backup', async (original) => ({
   ...(await original<typeof import('./sales-backup')>()),
   hasSales: async () => false,
 }));
+// This fixture uses MemoryDocStore rather than a SQL database and has no
+// connector tables. Keep its existing publication/provider-lock assertion.
+vi.mock('./parkio-backup', async (original) => ({
+  ...(await original<typeof import('./parkio-backup')>()),
+  hasParkio: async () => false,
+}));
 vi.mock('./publication-store', async (original) => ({
   ...(await original<typeof import('./publication-store')>()),
   PublicationStore: class {

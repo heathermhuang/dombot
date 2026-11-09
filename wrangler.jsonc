@@ -50,6 +50,7 @@
   "vars": {
     // "password" (built-in login, default) | "cloudflare-access" | "external".
     // See docs/web-deployment.md → Auth modes.
+    "DOMBOT_PARKIO_ENABLED": "false",
     "DOMBOT_AUTH": "password",
     // cloudflare-access mode only:
     // "CF_ACCESS_TEAM_DOMAIN": "https://<team>.cloudflareaccess.com",
