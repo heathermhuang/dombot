@@ -68,6 +68,7 @@ interface Attempt {
   phase: Phase;
   createdAt: number;
   capturedAt?: number;
+  candidateIssues?: string[];
   expiresAt: number;
   day: string;
   starts: number;
@@ -177,6 +178,7 @@ function safeState(a: Attempt | null) {
     checkHistory: a.checkHistory ?? [],
     contractSummary: a.contractSummary ?? null,
     tenantCheckReceipt: a.tenantCheckReceipt ?? null,
+    candidateIssues: a.candidateIssues ?? [],
     exportCompletenessQualified: false,
     // This single-owner feasibility test is not qualification of multi-account identity.
     accountIdentityQualified: false,
@@ -980,31 +982,40 @@ export class ParkioPilot {
         throw new PilotError('export_contract_required');
       }
       const accountId = path.match(/\/([1-9]\d*)\.csv$/)![1];
-      const cookies = a.cookies.map((c) =>
-        parkioCookieSchema.parse({
-          name: c.name,
-          value: c.value,
-          domain: c.domain,
-          path: c.path,
-          secure: c.secure,
-          httpOnly: c.httpOnly,
-          ...(c.expires === undefined ? {} : { expires: c.expires }),
-          ...(c.session === undefined ? {} : { session: c.session }),
-        }),
-      );
+      const cookieInput = a.cookies.map((c) => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        secure: c.secure,
+        httpOnly: c.httpOnly,
+        ...(c.expires === undefined ? {} : { expires: c.expires }),
+        ...(c.session === undefined ? {} : { session: c.session }),
+      }));
+      const cookieResult = parkioCookieSchema.array().safeParse(cookieInput);
+      if (!cookieResult.success) {
+        a.candidateIssues = cookieResult.error.issues
+          .slice(0, 10)
+          .map((i) => 'cookies.' + i.path.join('.'));
+        await this.#save(a);
+        throw new PilotError('cookie_contract_required');
+      }
+      const cookies = cookieResult.data;
       const capturedAt = a.capturedAt ?? a.expiresAt - PILOT_RETENTION_MS;
-      const expiresAt = Math.min(
-        capturedAt + PARKIO_SESSION_RETENTION,
-        ...cookies
-          .filter(
-            (c) =>
-              c.name === 'parkio_user_signin' &&
-              c.expires !== undefined &&
-              c.expires > 0,
-          )
-          .map((c) => c.expires! * 1000),
+      const expiresAt = Math.floor(
+        Math.min(
+          capturedAt + PARKIO_SESSION_RETENTION,
+          ...cookies
+            .filter(
+              (c) =>
+                c.name === 'parkio_user_signin' &&
+                c.expires !== undefined &&
+                c.expires > 0,
+            )
+            .map((c) => c.expires! * 1000),
+        ),
       );
-      const credential = parkioCredentialSchema.parse({
+      const credentialResult = parkioCredentialSchema.safeParse({
         version: 1,
         accountId,
         cookies,
@@ -1013,6 +1024,15 @@ export class ParkioPilot {
         accountPath: '/orders/index',
         exportPath: path,
       });
+      if (!credentialResult.success) {
+        a.candidateIssues = credentialResult.error.issues
+          .slice(0, 10)
+          .map((i) => i.path.join('.'));
+        await this.#save(a);
+        throw new PilotError('candidate_contract_required');
+      }
+      delete a.candidateIssues;
+      const credential = credentialResult.data;
       if (
         !cookies.some((c) => c.name === 'parkio_user_signin') ||
         expiresAt <= Date.now()
