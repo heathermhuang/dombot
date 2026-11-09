@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-core-source-33295cf44428476d889d853583d18b68c5d68f38",
+      "date": "2026-11-09",
+      "layer": "core",
+      "title": "Release 2.2.1",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 33295cf44428",
+          "url": "https://github.com/aoxborrow/dombot/commit/33295cf44428476d889d853583d18b68c5d68f38"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-353564c59f022a9a094bb87f5ba34592b85d2a8e",
       "date": "2026-11-09",
       "layer": "core",
@@ -46,6 +62,22 @@
         {
           "label": "Source change 353564c59f02",
           "url": "https://github.com/aoxborrow/dombot/commit/353564c59f022a9a094bb87f5ba34592b85d2a8e"
+        }
+      ]
+    },
+    {
+      "id": "auto-core-source-4b70c59a39e14c3822d1324318841b539bde1e3e",
+      "date": "2026-11-09",
+      "layer": "core",
+      "title": "Name the account a Sync is on; no sales count for markets without sales",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 4b70c59a39e1",
+          "url": "https://github.com/aoxborrow/dombot/commit/4b70c59a39e14c3822d1324318841b539bde1e3e"
         }
       ]
     },
