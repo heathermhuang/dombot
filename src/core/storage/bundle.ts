@@ -79,7 +79,20 @@ export const BUNDLE_VERSION = 14;
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
   version:
-    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | typeof BUNDLE_VERSION;
+    | 1
+    | 2
+    | 3
+    | 4
+    | 5
+    | 6
+    | 7
+    | 8
+    | 9
+    | 10
+    | 11
+    | 12
+    | 13
+    | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };

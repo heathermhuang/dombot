@@ -1,3 +1,5 @@
+import { withParkioProjection } from './parkio-projection';
+import { PARKIO_INTERVAL } from '../../shared/parkio';
 import { marketSales } from './markets/sync';
 import { currencyInfo } from '../../shared/money';
 import {
@@ -26,7 +28,15 @@ export {
 
 /** Cached reads only. A source's status and freshness are never inferred from send time. */
 export function renewalNotificationRows(now = Date.now()): RenewalNoticeRow[] {
-  const cached = getCachedPortfolio()?.domains ?? [];
+  const cached = withParkioProjection(
+    getCachedPortfolio() ?? {
+      domains: [],
+      fetchedAt: null,
+      registrars: [],
+      registrarLabels: {},
+      errors: [],
+    },
+  ).domains;
   const input = [...cached, ...importedRows(getImportedDomains(), cached)];
   const metadata = new Map(
     getRegistrarMetadata().map((a) => [a.accountId ?? a.name, a]),
@@ -41,20 +51,28 @@ export function renewalNotificationRows(now = Date.now()): RenewalNoticeRow[] {
     marketSales(),
   ).renewing.flatMap((original) => {
     const d = qualifyRenewalDate(original);
+    if (d.parkio?.missingSince != null) return [];
     const raw = d.renewalDate ?? d.expirationDate;
     if (!raw) return [];
     const parsed = new Date(raw);
     if (!Number.isFinite(parsed.getTime())) return [];
     const account = metadata.get(d.accountId ?? d.registrar);
-    const at = account?.sync.lastSyncedAt ?? null;
-    const imported = d.source === 'imported';
-    const stale =
-      !imported &&
-      (at === null ||
+    const at =
+      d.parkio?.lastSuccessfulCheckAt ?? account?.sync.lastSyncedAt ?? null;
+    const imported = d.source === 'imported' && !d.parkio;
+    const stale = d.parkio
+      ? at === null ||
         at > now + 5000 ||
-        interval <= 0 ||
-        now - at > Math.max(interval * 2, 86400_000) ||
-        !!account?.sync.lastError);
+        now - at > 2 * PARKIO_INTERVAL ||
+        d.parkio.connection !== 'connected' ||
+        d.parkio.paused ||
+        !!d.parkio.error
+      : !imported &&
+        (at === null ||
+          at > now + 5000 ||
+          interval <= 0 ||
+          now - at > Math.max(interval * 2, 86400_000) ||
+          !!account?.sync.lastError);
     const price = pricing[domainKey(d)];
     const currency = price ? currencyInfo(price.currency) : null;
     const knownPrice =
@@ -78,7 +96,7 @@ export function renewalNotificationRows(now = Date.now()): RenewalNoticeRow[] {
       {
         domain: toAscii(d.domainName),
         account:
-          account?.accountLabel ||
+          (d.parkio ? 'Park.io · ' + d.parkio.label : account?.accountLabel) ||
           d.importedRegistrarLabel ||
           d.registrar ||
           'Imported',
