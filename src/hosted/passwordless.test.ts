@@ -715,6 +715,20 @@ describe('one email flow for sign-in and signup', () => {
     ).toBe(200);
     expect((await request('getProxySettings', [true])).status).toBe(200);
     expect(forwarded).toHaveBeenCalledTimes(2);
+    expect(
+      (await request('linkMarketAccount', ['market-id', 'registrar-id']))
+        .status,
+    ).toBe(428);
+    expect(
+      (
+        await request(
+          'linkMarketAccount',
+          ['market-id', 'registrar-id'],
+          'https://elsewhere.test',
+        )
+      ).status,
+    ).toBe(403);
+    expect(forwarded).toHaveBeenCalledTimes(2);
     expect((await request('getProxySettings', [])).status).toBe(428);
     expect((await request('getProxySettings', [false])).status).toBe(428);
     for (const args of [

@@ -74,7 +74,8 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // v12 retains hosted source bindings, explicit sale evidence references and journey counts.
 // v13 retains read-only Park.io observations; session cookies never travel.
 // v14 preserves explicit renewal-notification decisions and preference drafts.
-export const BUNDLE_VERSION = 14;
+// v15 retains independent marketplace keys and proxy routing; older builds must not ignore that routing.
+export const BUNDLE_VERSION = 15;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
@@ -92,6 +93,7 @@ export interface DataBundle {
     | 11
     | 12
     | 13
+    | 14
     | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
@@ -147,7 +149,7 @@ export function parseBundle(
     );
   }
   if (
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, BUNDLE_VERSION].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, BUNDLE_VERSION].includes(
       head.version as number,
     )
   ) {

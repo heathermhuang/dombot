@@ -1,7 +1,7 @@
 {
   "name": "dombot",
   "productName": "DomBot",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Cross-platform desktop app built with Electron, React, TypeScript, and Vite.",
   "main": ".vite/build/index.js",
   "private": true,
@@ -98,8 +98,8 @@
     "wrangler": "^4.154.0"
   },
   "dependencies": {
-    "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-1.1.1-hosted.1.tgz",
-    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.2.0-hosted.4.tgz",
+    "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-1.2.1-hosted.1.tgz",
+    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.2.1-hosted.1.tgz",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.2",

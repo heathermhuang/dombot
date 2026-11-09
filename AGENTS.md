@@ -80,6 +80,8 @@
 
 ## Upstream feature parity
 
+- The 10 November 2026 Namefi source-sync candidate merges upstream `v2.2.1` (`a688173c7e5099cec99d2f2721f040ef48f25fa7`) with SDK `1.2.1-hosted.1` and engine `2.2.1-hosted.1`. Upstream SDK #106 and former draft app #268 are merged; upstream #110 deliberately removes inventory-before-DNS/auto-renew. Hosted fresh authentication protects the new `linkMarketAccount` API; connection forms request public proxy metadata only. Backup format 15 retains independent marketplace key/proxy routing and imports supported older formats. This is source/build qualification, not a managed rollout; see `docs/namefi-upstream-sync-20261110.md`.
+
 - For upstream releases, fully merge the released tag into current hosted main in an isolated checkout, rebase retained registrar-client safety patches onto the matching SDK, update the parity inventory and pinned engine/UI artifact, and verify SaaS regressions before landing. Follow `docs/upstream-sync.md`. A source sync is distinct from rolling that engine out to the managed tenant fleet.
 
 - domains.domains provides the complete upstream DomBot feature set as a hosted service, plus hosted capabilities upstream lacks. Full upstream integration is the default; a selective patch release must never be described as full upstream sync.

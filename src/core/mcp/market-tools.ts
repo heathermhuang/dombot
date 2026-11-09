@@ -139,7 +139,7 @@ export function registerMarketTools(
       {
         title: 'List market accounts',
         description:
-          'List every connected marketplace account (Afternic, Atom, Dynadot, Sedo, Spaceship SellerHub) with its `accountId`, `market`, `label`, whether it is `configured` and `enabled`, `registrarAccountId` (for Dynadot and Spaceship: the registrar account whose API key it uses, so the registrar tools reach the same names), its last `sync` (when, listing and sale counts, any error), its `verificationId` (the saved Ownership Verification ID, null until set) and `verificationNameservers` (the nameservers to point a name at for this market, with Afternic’s or Dynadot’s NS3 once the ID is saved; set them with domain_nameservers_set), and what its market supports (`capabilities`). No secrets. Start here before the other market_* tools.',
+          'List every connected marketplace account (Afternic, Atom, Dynadot, Sedo, Spaceship SellerHub) with its `accountId`, `market`, `label`, whether it is `configured` and `enabled`, `registrarAccountId` (for Dynadot and Spaceship: the registrar account whose API key it uses, so the registrar tools reach the same names; null when the account has its own key), its last `sync` (when, listing and sale counts, any error), its `verificationId` (the saved Ownership Verification ID, null until set) and `verificationNameservers` (the nameservers to point a name at for this market, with Afternic’s or Dynadot’s NS3 once the ID is saved; set them with domain_nameservers_set), and what its market supports (`capabilities`). No secrets. Start here before the other market_* tools.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
       },
@@ -220,7 +220,7 @@ export function registerMarketTools(
       {
         title: 'Sync market accounts',
         description:
-          'Re-read listings, sales and account stats from one market account (`accountId`) or every enabled one, and store them for market_listings, market_sales and market_stats_get. A live network pass; reads only, changes nothing on the market. Completed sales become `sold` events in domain history. Returns each account’s sync result.',
+          'Re-read listings, sales and account stats from one market account (`accountId`) or every enabled one, and store them for market_listings, market_sales and market_stats_get. A live network pass that can submit a pending Dynadot listing after verification. Completed sales become `sold` events in domain history. Returns each account’s sync result.',
         inputSchema: { accountId },
         annotations: {
           readOnlyHint: false,

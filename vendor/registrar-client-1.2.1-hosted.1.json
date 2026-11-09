@@ -1,0 +1,26 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "1.2.1-hosted.1",
+  "upstreamVersion": "1.2.1",
+  "upstreamRevision": "7f8b5a5f59edb8b91f0e29e65162de2f49d75324",
+  "archive": "vendor/aoxborrow-registrar-client-1.2.1-hosted.1.tgz",
+  "sha256": "1d497bc4b93d1edd48105f8c29d5c0e7784ae87c8da7b4497c234ec52235f27e",
+  "integrity": "sha512-tFhpR4pD7IHPQSbnOb9AQi43vD6/a4xoMoTNqj162ulHf3KKb8A+bDCyleSPjCjY7L8+4DfDqAhMYP4LFn+oWA==",
+  "patches": [
+    {
+      "path": "vendor/registrar-client-1.2.1-hosted.1.patch",
+      "sha256": "5d5d6b093038a5a3dfb89b7377019eaa4826fc0c2d46b2edf6a85a90ceac1454"
+    },
+    {
+      "path": "vendor/registrar-client-1.2.1-hosted.1.tests.patch",
+      "sha256": "b7d524f9c7033890d837649a1ff3427d6c850d8e27c887c07938bf48a079d33e"
+    }
+  ],
+  "license": "MIT",
+  "checks": "695 offline SDK tests, typecheck and ESM/CJS/declaration builds pass.",
+  "changes": [
+    "Full upstream 1.2.1 with upstream Namefi registration, DNS reconciliation and direct DNS/auto-renew requests.",
+    "Retains hosted request deadline, retry budget, Gandi path validation, Cloudflare expression escaping and provider date safety patches.",
+    "The former hosted Namefi implementation and inventory-before-DNS/auto-renew checks are superseded by upstream; redirect refusal and secret-safe errors remain upstream."
+  ]
+}

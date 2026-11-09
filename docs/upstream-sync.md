@@ -68,7 +68,6 @@ synthetic results do not claim a managed fleet deployment or live provider
 acceptance. Managed production remains on its separately recorded release until
 that engine/UI pair is rolled out and verified.
 
-
 ## v2.2.0 sync and creation-date repair, 9 November 2026
 
 The complete upstream release tag is `1f6796840e0128664cf2a8bfa53702374a2edf7a`.
@@ -90,3 +89,25 @@ No year is inferred from the expiry and no live RDAP request is added to reads.
 
 `upstream-parity-20261109.json` records the complete upstream API/tool inventory.
 Source/CI qualification and managed production rollout are recorded separately.
+
+## v2.2.1 / Namefi sync, 10 November 2026
+
+The complete upstream release tag is `a688173c7e5099cec99d2f2721f040ef48f25fa7`.
+Engine `2.2.1-hosted.1` uses SDK `1.2.1-hosted.1`, based on upstream SDK
+`7f8b5a5f59edb8b91f0e29e65162de2f49d75324`. SDK #106 and former draft app
+#268 have both merged. Upstream's subsequent DNS/auto-renew optimization #110
+supersedes the hosted inventory guard. Hosted transport deadline/retry, provider
+date, Gandi path and Cloudflare expression patches are retained; Namefi redirect
+refusal and secret-safe errors are now upstream implementation.
+
+Independent market keys/proxies and account switching, sync progress, Namefi
+capabilities and the complete released app history are merged. Managed egress,
+OAuth scopes, fresh authentication, quote ages, registry date recovery,
+notifications, Park.io and explicit publication boundaries are retained.
+Market linking requires fresh identity; backup format 15 preserves independent
+market routing and imports v14 and earlier supported formats. Existing tenant
+records are not rewritten by this source change.
+
+SDK qualification: 695 offline tests, typecheck and ESM/CJS/declarations pass.
+App, installed engine/UI, security and managed release evidence are recorded
+separately. No registrar purchase, DNS or auto-renew write is used for qualification.

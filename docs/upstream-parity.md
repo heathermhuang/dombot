@@ -1,7 +1,7 @@
 # Full upstream DomBot integration
 
 This integration merges all upstream main history through
-`1f6796840e0128664cf2a8bfa53702374a2edf7a` (9 November 2026, DomBot 2.2.0).
+`a688173c7e5099cec99d2f2721f040ef48f25fa7` (10 November 2026 sync, upstream DomBot 2.2.1).
 It supersedes the selective 1.5.2-hosted.34 sync. The hosted engine records that
 exact upstream revision; its additional code supplies hosted account, tenancy,
 operations and compatibility capabilities.
@@ -15,8 +15,8 @@ upstream and appears when a marketplace is connected. Owners supply their own
 marketplace credentials; this release does not create provider accounts or
 publish/list domains automatically.
 
-`upstream-parity-20261109.json` pins the upstream inventory. Regression checks
-require every one of its 91 core API methods and 74 named MCP tools, stock routes
+`upstream-parity-20261110.json` pins the upstream inventory. Regression checks
+require every one of its 92 core API methods and 74 named MCP tools, stock routes
 and settings sections. All normal upstream and hosted behavioral suites remain
 in scope. The merge ancestry must contain the pinned upstream head.
 
@@ -51,9 +51,9 @@ and public pages are preserved; integration itself does not perform registrar wr
   historical events and folder intent are retained in encrypted, exportable
   `hosted-legacy-events` and `hosted-legacy-folders`; they do not override current
   upstream ownership or expose domains publicly. Migration copies before deletion.
-- Backup envelope 12 includes the complete upstream data plus hosted extensions
+- Backup envelope 15 includes the complete upstream data plus hosted extensions
   and retained history. It imports upstream v9 and older supported bundles. Older
-  hosted binaries must reject v12 before mutation instead of dropping data.
+  hosted binaries must reject v15 before mutation instead of dropping data.
 - Upstream's sale-record model owns `src/shared/sales.ts`. Existing hosted public
   selling terms/inquiries use `hosted-sales.ts`, without changing their persisted
   schema or existing anonymous URLs. Root `/sales` is upstream Sales. Old owner
@@ -76,10 +76,9 @@ other tenants, the future template and registry. Restore the allocation policy
 and verify actual serving coordinator provenance. Local/CI checks are not evidence
 of customer marketplace credentials, live provider acceptance, sales or adoption.
 
-After a schema-5/backup-12 write the rollback floor must understand that storage;
+After a schema-5/backup-15 write the rollback floor must understand that storage;
 use the compatible source and a reviewed recovery/revert rather than installing
 an older binary over migrated data.
-
 
 The 2.2.0 sync adds the complete Dynadot and Spaceship marketplace adapters,
 linked registrar credentials, shared Dynadot request pacing and price import.
@@ -88,3 +87,12 @@ pending listing after verification. Public-page preparation remains limited to
 its existing qualified sources; connecting a new core market does not publish it.
 The accompanying creation-date repair qualifies cached and fresh registrar values
 and reconciles old detail without changing expiry, controls or quote ages.
+
+The 2.2.1 sync includes Namefi SDK 1.2.1, independent marketplace keys and proxy
+routing, linked-account switching, account-specific sync progress and upstream
+Namefi privacy/lock reporting. The new `linkMarketAccount` API requires the same
+hosted fresh authentication as credential changes. Managed Dynadot egress stays
+the default for linked and independent keys, with customer overrides retained.
+Backup format 15 prevents older hosted binaries silently ignoring market proxy
+routing; supported v14 and earlier bundles remain importable. No new namespace,
+control migration or provider write is introduced by the source sync.

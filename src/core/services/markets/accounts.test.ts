@@ -5,12 +5,19 @@ import {
   flushWrites,
   hydrateStores,
 } from '../../storage/namespace';
+import { configureManagedProxy } from '../managed-proxy';
 import { createAccount } from '../accounts';
 import { removeRegistrarAccount } from '../registrars';
+import {
+  getProxySettings,
+  removeProxyProfile,
+  saveProxyProfile,
+} from '../proxies';
 import { getStoredCredentials, setStoredCredentials } from '../credentials';
 import {
   connectMarketAccount,
   getMarketCredentials,
+  linkMarketAccount,
   marketAccountViews,
   marketAdapter,
   removeMarketAccount,
@@ -31,6 +38,7 @@ beforeEach(async () => {
   await flushWrites().catch(() => {});
   configureStore(new MemoryDocStore());
   await hydrateStores();
+  configureManagedProxy();
   built.length = 0;
   configureMarketFactory((market, accountId, credentials) => {
     built.push({ market, credentials });
@@ -44,6 +52,110 @@ beforeEach(async () => {
       writeListings: async () => [],
       deleteListings: async () => [],
     };
+  });
+});
+
+describe('a registrar’s market on its own key', () => {
+  const own = { apiKey: 'own-k', apiSecret: 'own-s' };
+
+  it('connects with no registrar account and keeps its key', async () => {
+    const view = await connectMarketAccount('spaceship', own, undefined, 'mkt');
+    expect(view).toMatchObject({ configured: true });
+    expect(view.registrarAccountId).toBeUndefined();
+    expect(view.keyRegistrarAccountId).toBeNull();
+    expect(built.at(-1)?.credentials).toEqual(own);
+    expect(getMarketCredentials('mkt')).toEqual(own);
+  });
+
+  it('advertises the managed Dynadot egress without exposing connection credentials', () => {
+    configureManagedProxy(
+      'https://host-user:host-secret@8.8.8.8:8080/',
+      '8.8.4.4',
+    );
+    try {
+      const catalog = marketCatalog();
+      expect(catalog.find((m) => m.id === 'dynadot')).toMatchObject({
+        managedProxyEgressIp: '8.8.4.4',
+      });
+      expect(
+        catalog.find((m) => m.id === 'spaceship')?.managedProxyEgressIp,
+      ).toBeUndefined();
+      expect(JSON.stringify(catalog)).not.toMatch(/host-user|host-secret/);
+    } finally {
+      configureManagedProxy();
+    }
+  });
+  it('finds a registrar account on the same key, whichever came first', async () => {
+    await connectMarketAccount('dynadot', own, undefined, 'mkt');
+    const reg = await createAccount('dynadot', 'Company');
+    await setStoredCredentials(reg.id, own);
+    const view = marketAccountViews().find((a) => a.id === 'mkt');
+    expect(view?.keyRegistrarAccountId).toBe(reg.id);
+  });
+
+  it('moves between a registrar’s key and its own', async () => {
+    const reg = await createAccount('dynadot', 'Company');
+    await setStoredCredentials(reg.id, { apiKey: 'k', apiSecret: 's' });
+    await connectMarketAccount('dynadot', {}, undefined, 'mkt', reg.id);
+
+    await saveMarketCredentials('mkt', own);
+    expect(marketAccountViews()[0].registrarAccountId).toBeUndefined();
+    expect(getMarketCredentials('mkt')).toEqual(own);
+
+    await linkMarketAccount('mkt', reg.id);
+    expect(marketAccountViews()[0].registrarAccountId).toBe(reg.id);
+    expect(getMarketCredentials('mkt')).toEqual({});
+    expect(built.at(-1)?.credentials).toEqual({ apiKey: 'k', apiSecret: 's' });
+  });
+
+  it('stays when a registrar account on the same key is removed', async () => {
+    const reg = await createAccount('dynadot', 'Company');
+    await setStoredCredentials(reg.id, own);
+    await connectMarketAccount('dynadot', own, undefined, 'mkt');
+    await removeRegistrarAccount(reg.id);
+    expect(marketAccountViews().map((a) => a.id)).toEqual(['mkt']);
+  });
+
+  it('needs a key or a registrar account', async () => {
+    await expect(connectMarketAccount('spaceship', {})).rejects.toThrow(
+      /or enter a separate key/,
+    );
+    await expect(
+      connectMarketAccount('spaceship', { apiKey: 'k' }),
+    ).rejects.toThrow(/API Secret is required/);
+  });
+
+  it('won’t use the proxy before one is set up', async () => {
+    await expect(
+      connectMarketAccount(
+        'sedo',
+        {
+          partnerId: 'p',
+          signKey: 's',
+          username: 'u',
+          password: 'x',
+        },
+        undefined,
+        'mkt',
+        null,
+        true,
+      ),
+    ).rejects.toThrow(/no proxy is configured/);
+    expect(marketAccountViews()).toEqual([]);
+  });
+
+  it('lists as a proxy user and goes direct when the proxy is removed', async () => {
+    await saveProxyProfile({
+      url: 'https://u:p@8.8.8.8:8080',
+      egressIp: '8.8.4.4',
+    });
+    await connectMarketAccount('spaceship', own, 'Mine', 'mkt', null, true);
+    expect(getProxySettings().marketUsers).toEqual([
+      { accountId: 'mkt', market: 'spaceship', label: 'Mine' },
+    ]);
+    await removeProxyProfile();
+    expect(marketAccountViews()[0].proxyId).toBeNull();
+    expect(getProxySettings().marketUsers).toEqual([]);
   });
 });
 
@@ -69,10 +181,6 @@ describe('a market on a registrar’s key', () => {
     });
     // Nothing of the key is handed out through the market account.
     expect(getMarketCredentials('mkt')).toEqual({});
-    await expect(
-      saveMarketCredentials('mkt', { apiKey: 'k2' }),
-    ).rejects.toThrow(/Settings → Registrars/);
-
     // Rotating the key on the registrar account reaches the market at once.
     await setStoredCredentials(reg.id, { apiKey: 'k3', apiSecret: 's3' });
     marketAdapter('mkt');

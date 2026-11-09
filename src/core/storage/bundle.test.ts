@@ -57,7 +57,7 @@ describe('buildBundle', () => {
     );
     expect(b.namespaces.meta).toBeUndefined();
     expect(b.namespaces.auth).toBeUndefined();
-    expect(b.version).toBe(14);
+    expect(b.version).toBe(15);
     expect(b.namespaces['registrar-credentials'].godaddy).toEqual({
       apiToken: 'k',
     });
@@ -263,14 +263,61 @@ describe('export → import', () => {
       expect(await store.list(old)).toEqual({});
   });
 
-  it('imports a v4 file (no history yet) and refuses one newer than v14', async () => {
+  it('imports a v4 file (no history yet) and refuses one newer than v15', async () => {
     await seed();
     const v4 = { ...buildBundle(APP), version: 4 };
     await importBundle(JSON.stringify(v4));
     expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
-    expect(buildBundle(APP).version).toBe(14);
-    expect(() => parseBundle(JSON.stringify({ ...v4, version: 15 }))).toThrow(
+    expect(buildBundle(APP).version).toBe(15);
+    expect(() => parseBundle(JSON.stringify({ ...v4, version: 16 }))).toThrow(
       /newer Domains\.Domains/,
+    );
+  });
+
+  it('retains v14 imports and round-trips separate marketplace keys and proxy routing', async () => {
+    const bundle = {
+      ...buildBundle(APP),
+      version: 14,
+      namespaces: {
+        'market-accounts': {
+          market: {
+            id: 'market',
+            market: 'sedo',
+            label: 'Separate',
+            enabled: true,
+            createdAt: 1,
+            proxyId: 'default',
+          },
+        },
+        'market-credentials': {
+          market: {
+            partnerId: 'synthetic',
+            signKey: 'synthetic',
+            username: 'fixture',
+            password: 'synthetic-only',
+          },
+        },
+        'registrar-proxies': {
+          default: {
+            id: 'default',
+            label: 'Fixed IP proxy',
+            url: 'https://fixture:password@8.8.8.8:8080/',
+            egressIp: '8.8.4.4',
+          },
+        },
+      },
+    };
+    await importBundle(JSON.stringify(bundle));
+    const restored = buildBundle(APP);
+    expect(restored.version).toBe(15);
+    expect(restored.namespaces['market-accounts']).toEqual(
+      bundle.namespaces['market-accounts'],
+    );
+    expect(restored.namespaces['market-credentials']).toEqual(
+      bundle.namespaces['market-credentials'],
+    );
+    expect(restored.namespaces['registrar-proxies']).toEqual(
+      bundle.namespaces['registrar-proxies'],
     );
   });
 
