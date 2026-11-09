@@ -213,6 +213,11 @@ describe('owner-only Park.io pilot runtime', () => {
     const second = await state('scheduled');
     expect(reads.get('scheduled')).toBe(2);
     expect(second.expiresAt).toBe(first.expiresAt);
+    await fixture('scheduled', 'fixture-close-budget-used');
+    expect((await state('scheduled')).phase).toBe('passed');
+    expect(
+      (await request('scheduled', '/native-proof', { identity: owner })).status,
+    ).toBe(200);
     expect(second.nextCheckAt).toBeGreaterThan(Date.now() + 22 * 3600000);
     expect(
       second.checkHistory.map((c: { outcome: string }) => c.outcome),

@@ -923,7 +923,7 @@ export class ParkioPilot {
       Date.now() >= a.expiresAt ||
       !pilotEnabled(this.env) ||
       a.phase === 'cleanup_required' ||
-      (a.cleanupAttempts ?? 0) >= 3
+      ((a.cleanupAttempts ?? 0) >= 3 && !a.browserClosed)
     )
       await this.#clear();
     else

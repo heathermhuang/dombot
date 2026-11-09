@@ -154,6 +154,7 @@ export class TestParkioPilot extends ParkioPilot {
         '/fixture-followup-due',
         '/fixture-interrupted',
         '/fixture-alarm',
+        '/fixture-close-budget-used',
       ].includes(path)
     ) {
       if (path !== '/fixture-alarm') {
@@ -164,7 +165,9 @@ export class TestParkioPilot extends ParkioPilot {
           env.PARKIO_PILOT_OWNER_ID!,
           sealed!,
         );
-        if (path === '/fixture-followup-due') {
+        if (path === '/fixture-close-budget-used') {
+          Object.assign(data, { cleanupAttempts: 3, browserClosed: true });
+        } else if (path === '/fixture-followup-due') {
           data.checkedAt = Date.now() - 61000;
           data.nextCheckAt = Date.now() - 1;
           if (data.checks === 1) data.firstCheckAt = data.checkedAt;
