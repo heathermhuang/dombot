@@ -162,6 +162,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-ea4c0cd22873cf90cd3978000939024c3c1ff823-20",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix: retain notification retries across later portfolio changes (#203)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/ea4c0cd22873cf90cd3978000939024c3c1ff823"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-193",
       "date": "2026-11-09",
       "layer": "saas",
@@ -318,6 +334,38 @@
         {
           "label": "Change #202",
           "url": "https://github.com/heathermhuang/dombot/pull/202"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-203",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Retain notification retry deadlines across later portfolio updates",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #203 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #203",
+          "url": "https://github.com/heathermhuang/dombot/pull/203"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-204",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Record notification rollout, delivery evidence and qualification limits",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #204 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #204",
+          "url": "https://github.com/heathermhuang/dombot/pull/204"
         }
       ]
     },
