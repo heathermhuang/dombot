@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-12f22e338b930a2bc76fd868b10d292c894b6e9d-17",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Hosted service update observed: Add quiet portfolio notifications and consistent email templates (#200)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/12f22e338b930a2bc76fd868b10d292c894b6e9d"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-36bb3f82fdeb7f4c09b9b5fde2ffd5ed15eac8f8-13",
       "date": "2026-11-09",
       "layer": "saas",
