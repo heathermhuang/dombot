@@ -162,6 +162,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-c5c82ed2f677f2cff1640113b4f3fbae6e53dc0d-21",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Hosted service update observed: Make verified creation-date recovery work in Cloudflare Workers",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/c5c82ed2f677f2cff1640113b4f3fbae6e53dc0d"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-ea4c0cd22873cf90cd3978000939024c3c1ff823-20",
       "date": "2026-11-09",
       "layer": "saas",
@@ -398,6 +414,22 @@
         {
           "label": "Change #206",
           "url": "https://github.com/heathermhuang/dombot/pull/206"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-207",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Keep notification preference switches compact in settings cards",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #207 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #207",
+          "url": "https://github.com/heathermhuang/dombot/pull/207"
         }
       ]
     },
