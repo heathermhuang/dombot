@@ -1,0 +1,24 @@
+{
+  "package": "@aoxborrow/registrar-client",
+  "version": "1.1.1-hosted.1",
+  "upstreamVersion": "1.1.1",
+  "upstreamRevision": "923e5c4eaeb48f3f76e26e4b37e550cdac11270b",
+  "archive": "vendor/aoxborrow-registrar-client-1.1.1-hosted.1.tgz",
+  "sha256": "dc03f177ac3cdb3c6edd2f6b52ce54d6878043a41b03469859a651fb94825cd5",
+  "integrity": "sha512-Zdu0Rs1hdV+/cxs9ydtA5npIg/LeTJyRpOW4Y5Oc37zEoksH2CIPXgzBgIJ3VDNF0Dg30o6dqhIygI3xN3kXiA==",
+  "patches": [
+    {
+      "path": "vendor/registrar-client-1.1.1-hosted.1.patch",
+      "sha256": "554bd66d3a5d074b1658c7a0e232e2c2b16d184ef5d53aa4588d4cfc4dfeefa2"
+    },
+    {
+      "path": "vendor/registrar-client-1.1.1-hosted.1.tests.patch",
+      "sha256": "c87304a124f6d2ca72b10fdae858cbea869fdf253dfc636e64eae8192b439932"
+    }
+  ],
+  "license": "MIT",
+  "checks": "653 offline SDK tests, typecheck and ESM/CJS/declaration builds pass.",
+  "changes": [
+    "Full upstream 1.1.1 with retained hosted retry/deadline, unknown-write, Gandi/Cloudflare/date safety and Namefi ownership patches."
+  ]
+}

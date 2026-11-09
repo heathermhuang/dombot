@@ -56,6 +56,8 @@ import type { SyncTrigger } from '../../shared/sync-monitor';
 import { broadcastPortfolioChanged } from '../events';
 import { isBulkRunning } from './bulk-jobs';
 import { errorSummary } from './error-summary';
+import { dynadotPacedFetch } from '../markets/dynadot';
+import { removeMarketAccountsOf } from './markets/accounts';
 
 import { consentIp } from './consent-ip';
 import { recordsPrivacyConsent } from '../../shared/domain-ops';
@@ -548,11 +550,14 @@ function buildProvider(
   const wrapFetch =
     name === 'dynadot'
       ? (send: typeof globalThis.fetch) =>
-          createDynadotFetch(send, {
+          dynadotPacedFetch(
             accountId,
-            apiKey: credentials.apiKey ?? '',
-            routeKey: JSON.stringify(proxy),
-          })
+            createDynadotFetch(send, {
+              accountId,
+              apiKey: credentials.apiKey ?? '',
+              routeKey: JSON.stringify(proxy),
+            }),
+          )
       : undefined;
   return proxy
     ? createProxiedRegistrar(name, credentials, proxy, wrapFetch)
@@ -1627,6 +1632,8 @@ export async function setRegistrarEnabledCached(
 
 export async function removeRegistrarAccount(accountId: string): Promise<void> {
   accountById(accountId);
+  // A market account on this account's key (Dynadot's) goes with it.
+  await removeMarketAccountsOf(accountId);
   invalidateAccount(accountId);
   await setStoredCredentials(accountId, {});
   await clearDynadotPricingCapabilities(accountId);

@@ -8,14 +8,20 @@ import { MARKET_CREDENTIAL_FIELDS } from '../shared/market-credentials';
 import { marketCatalog } from '../core/services/markets/registry';
 describe('hosted marketplace onboarding', () => {
   it('shares the upstream credential catalog instead of accepting arbitrary fields or providers', () => {
-    for (const market of marketCatalog())
-      expect(MARKET_CREDENTIAL_FIELDS[market.id]).toEqual(market.configFields);
+    for (const market of marketCatalog()) {
+      if (market.registrar)
+        expect(MARKET_CREDENTIAL_FIELDS[market.id]).toBeUndefined();
+      else
+        expect(MARKET_CREDENTIAL_FIELDS[market.id]).toEqual(
+          market.configFields,
+        );
+    }
   });
   it.each(['afternic', 'atom', 'sedo'] as const)(
     'accepts complete %s credentials and rejects incomplete or oversized requests',
     (market) => {
       const creds = Object.fromEntries(
-        MARKET_CREDENTIAL_FIELDS[market].map((f) => [f.name, 'synthetic']),
+        MARKET_CREDENTIAL_FIELDS[market]!.map((f) => [f.name, 'synthetic']),
       );
       expect(validFirstMarketConnection({ args: [market, creds] })).toBe(true);
       expect(validFirstMarketConnection({ args: [market, {}] })).toBe(false);

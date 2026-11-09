@@ -5,6 +5,7 @@ import {
 } from '../core/services/markets/accounts';
 import {
   publicMarketOffer,
+  supportsPublicMarket,
   type MarketPublicOffer,
 } from '../shared/market-public-offer';
 import { emptySale } from '../shared/hosted-sales';
@@ -20,7 +21,12 @@ export async function marketOffersFor(
   const active = new Set(accounts.map((a) => a.id));
   return Promise.all(
     marketListings()
-      .filter((l) => l.name === domain && active.has(l.accountId))
+      .filter(
+        (l) =>
+          l.name === domain &&
+          active.has(l.accountId) &&
+          supportsPublicMarket(l.market),
+      )
       .map(async (l) => ({
         ...(await publicMarketOffer(l, getMarketSyncState(l.accountId))),
         accountLabel: accounts.find((a) => a.id === l.accountId)?.label,

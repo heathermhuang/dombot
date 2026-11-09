@@ -110,10 +110,13 @@ export function validFirstMarketConnection(value: unknown): boolean {
     Object.values(creds).some((v) => typeof v !== 'string' || v.length > 4096)
   )
     return false;
-  return fields.every(
-    (field) =>
-      !field.required ||
-      (typeof creds[field.name] === 'string' &&
-        creds[field.name].trim().length > 0),
+  return (
+    !!fields &&
+    fields.every(
+      (field) =>
+        !field.required ||
+        (typeof creds[field.name] === 'string' &&
+          creds[field.name].trim().length > 0),
+    )
   );
 }

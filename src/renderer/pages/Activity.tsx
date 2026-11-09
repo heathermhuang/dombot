@@ -464,6 +464,7 @@ export default function Activity() {
     setPage(0);
   };
 
+  const rowIds = useMemo(() => rows.map((row) => row.event.id), [rows]);
   const {
     selected,
     toggle,
@@ -482,7 +483,7 @@ export default function Activity() {
       accounts,
       days,
     ]),
-    rows.map((row) => row.event.id),
+    rowIds,
   );
   useEffect(
     () => setDialog(null),
