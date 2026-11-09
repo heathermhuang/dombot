@@ -358,6 +358,9 @@ describe('Park.io gateway-to-private-tenant handoff', () => {
   it('requires same-origin consent and starts no browser on opening the connection page', async () => {
     const response = await gateway('integration', '');
     expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.clone().text()).toContain(
+      '/#/settings?tab=registrars',
+    );
     expect(
       (
         await gateway(
