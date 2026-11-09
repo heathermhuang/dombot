@@ -1,5 +1,8 @@
 # Upstream 2.2.0 and registrar creation-date release
 
+This historical null-only guard was incomplete for recovery and is superseded by
+the [verified registry recovery](creation-date-registry-recovery-20261109.md).
+
 Domains.Domains serves engine **2.2.0-hosted.1**, registrar-client
 **1.1.1-hosted.1** from application release
 `7ca96b750557049c722f3039098b7ae2bb56e9e0` across all **47 original admitted
