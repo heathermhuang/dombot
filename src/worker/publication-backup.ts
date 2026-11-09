@@ -1,6 +1,7 @@
 import { parkioBackupSchema } from './parkio-backup';
 import type { ParkioStore } from './parkio-store';
 import { z } from 'zod';
+import type { NotificationStore } from './notification-store';
 import { coreMethods, method } from '../core/api';
 import { BundleError, parseBundle } from '../core/storage/bundle';
 import {
@@ -24,6 +25,7 @@ export function publicationBackupMethods(
   v2WritesEnabled = true,
   sales?: SalesStore,
   parkio?: ParkioStore,
+  notifications?: NotificationStore,
 ) {
   return {
     exportData: method<'exportData'>(z.tuple([]), async () => {
@@ -155,6 +157,15 @@ export function publicationBackupMethods(
         }),
       );
       if (parkioRestore && parkio) await parkio.db.batch(parkioRestore);
+      if (
+        notifications &&
+        (await notifications.db
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notification_outbox'",
+          )
+          .first())
+      )
+        await notifications.baselineAfterRestore();
       return result;
     }),
   };

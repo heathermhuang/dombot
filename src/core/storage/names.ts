@@ -14,3 +14,12 @@ export const MARKET_SALES_NAMESPACE = 'market-sales';
 export const MARKET_STATS_NAMESPACE = 'market-stats';
 export const MARKET_DOMAIN_STATS_NAMESPACE = 'market-domain-stats';
 export const MARKET_SEARCH_SNAPSHOTS_NAMESPACE = 'market-search-snapshots';
+
+/** Private reminder choices may use domain keys; diagnostics never print those keys. */
+export function storageLogKey(namespace: string, key: string): string {
+  return (
+    namespace +
+    '/' +
+    (namespace === 'renewal-decisions' ? '[private-choice]' : key)
+  );
+}

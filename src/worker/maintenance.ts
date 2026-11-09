@@ -37,6 +37,9 @@ export const MAINTENANCE_TABLES = [
   'sales_control_leases',
 ] as const;
 const infrastructure = new Set([
+  // Gateway notification dispatch owns these records; they must not wake registrar polling.
+  'notification_outbox',
+  'notification_events',
   // Historical aggregate counters do not schedule background work.
   'sales_journey_daily',
   'sales_journey_receipts',
@@ -49,7 +52,14 @@ const infrastructure = new Set([
   'retired_roots',
   'root_request_leases',
 ]);
-const noMaintenance = new Set(['settings', 'folders', 'mcp', 'sync-monitor']);
+const noMaintenance = new Set([
+  'settings',
+  'folders',
+  'mcp',
+  'sync-monitor',
+  'renewal-decisions',
+  'notification-preference-drafts',
+]);
 const workNamespaces = new Set([
   'market-accounts',
   'market-credentials',
@@ -114,7 +124,7 @@ export async function readMaintenanceState(
       return unknownMaintenance();
     const result = await env.DB.batch([
       env.DB.prepare(
-        "SELECT ns,key,value FROM docs WHERE ns NOT IN ('settings','folders','mcp','sync-monitor') ORDER BY ns,key LIMIT 101",
+        "SELECT ns,key,value FROM docs WHERE ns NOT IN ('settings','folders','mcp','sync-monitor','renewal-decisions','notification-preference-drafts') ORDER BY ns,key LIMIT 101",
       ),
       env.DB.prepare(
         'SELECT ' +

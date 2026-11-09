@@ -1,3 +1,4 @@
+import { storageLogKey } from './names';
 import type { DocStore } from './doc-store';
 
 // Encryption-at-rest decorator for a DocStore. Values in the chosen namespaces
@@ -72,7 +73,7 @@ export class EncryptedDocStore implements DocStore {
       return JSON.parse(await this.cipher.open(value.ct)) as unknown;
     } catch (err) {
       console.warn(
-        `[storage] can't open sealed value ${ns}/${key}; skipping it`,
+        `[storage] can't open sealed value ${storageLogKey(ns, key)}; skipping it`,
         err instanceof Error ? err.message : err,
       );
       return undefined;

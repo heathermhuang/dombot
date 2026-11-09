@@ -1,4 +1,5 @@
 import { parkioProjection } from './parkio-projection';
+import { forgetRenewalDecisions } from './renewal-decisions';
 import { assertDomainName, toAscii } from '../../shared/domain-name';
 import {
   DomainEventSource,
@@ -346,6 +347,7 @@ export function deleteDomains(
         : 'Every one of these is in one of your accounts; turn off auto-renew to let them go.',
     );
   }
+  forgetRenewalDecisions(removable);
   for (const domain of removable) {
     deleteDomainEvents(
       eventsFor(domain).map((e) => e.id),

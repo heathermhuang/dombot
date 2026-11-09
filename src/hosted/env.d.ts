@@ -3,6 +3,12 @@ interface HostedEnv {
   PARKIO_LOGIN_SECRET?: string;
   PARKIO_CONNECTOR_ENABLED?: string;
   PARKIO_CONNECTOR_WORKSPACES?: string;
+  NOTIFICATION_POLICY_ENABLED?: string;
+  NOTIFICATION_MAIL_ENABLED?: string;
+  NOTIFICATION_MAIL_DAILY_LIMIT?: string;
+  NOTIFICATION_MAIL_MONTHLY_LIMIT?: string;
+  NOTIFICATION_MAIL_HEADROOM?: string;
+  NOTIFICATION_SECURITY_ENABLED?: string;
   /** Temporary owner-only Park.io feasibility harness; absent/false is closed. */
   PARKIO_PILOT_ENABLED?: string;
   PARKIO_PILOT_OWNER_ID?: string;

@@ -246,6 +246,22 @@ export class Passkeys {
               consumption,
             ),
         );
+        if (this.env.NOTIFICATION_SECURITY_ENABLED === 'true')
+          statements.push(
+            db
+              .prepare(
+                "INSERT INTO notification_security_outbox(id,user_id,kind,created_at,due_at) SELECT ?,?,'passkey-added',?,? WHERE EXISTS(SELECT 1 FROM passkeys WHERE id=? AND user_id=?) AND EXISTS(SELECT 1 FROM webauthn_challenges WHERE consumption_id=?)",
+              )
+              .bind(
+                crypto.randomUUID(),
+                owner,
+                now,
+                now,
+                c.id,
+                owner,
+                consumption,
+              ),
+          );
       } else {
         key =
           (await db
@@ -378,6 +394,13 @@ export class Passkeys {
       this.env.CONTROL_DB.prepare(
         "DELETE FROM passkeys WHERE id=?1 AND user_id=?2 AND EXISTS(SELECT 1 FROM sessions WHERE token_hash=?3 AND user_id=?2 AND expires_at>?4 AND authenticated_at>?5 AND auth_method='passkey') RETURNING id",
       ).bind(id, user.id, hash, Date.now(), Date.now() - 300_000),
+      ...(this.env.NOTIFICATION_SECURITY_ENABLED === 'true'
+        ? [
+            this.env.CONTROL_DB.prepare(
+              "INSERT INTO notification_security_outbox(id,user_id,kind,created_at,due_at) SELECT ?,?,'passkey-removed',?,? WHERE changes()>0",
+            ).bind(crypto.randomUUID(), user.id, Date.now(), Date.now()),
+          ]
+        : []),
       this.env.CONTROL_DB.prepare(
         'DELETE FROM sessions WHERE user_id=?1 AND token_hash<>?2 AND changes()>0',
       ).bind(user.id, hash),

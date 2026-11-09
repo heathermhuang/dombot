@@ -1,6 +1,10 @@
 import { z } from 'zod';
-import { publishedSaleSchema, saleMoneySchema, salePriceLabel } from './hosted-sales';
-import { salesEscape as e } from './render-sales-lander';
+import {
+  publishedSaleSchema,
+  saleMoneySchema,
+  salePriceLabel,
+} from './hosted-sales';
+import { renderEmail } from './email-layout';
 
 /** Only public terms and conversation content; never owner notes or portfolio data. */
 export const salesEmailContextSchema = z
@@ -96,22 +100,22 @@ export function renderSalesEmail(
       : options.replyByEmail
         ? 'Reply to this email to continue. Your new reply text is saved to this conversation and sent to the other participant. This private reply address expires in seven days. Do not forward it. Send text without attachments; inline signature images are omitted.'
         : 'Keep this email for the inquiry details. The conversation link gives access only to this inquiry; do not forward it.';
-  const text = [
-    heading,
-    c?.snapshot.domain,
-    '',
-    ...details.map(([k, v]) => `${k}: ${v}`),
-    '',
-    ...blocks.flatMap((b) => [b.label, b.body, '']),
+  return renderEmail({
+    subject,
+    preheader:
+      kind === 'verification'
+        ? 'Confirm your email to continue this inquiry.'
+        : 'Your domain conversation has an update.',
+    heading: c?.snapshot.domain ?? heading,
+    intro: heading,
+    details: details as [string, string][],
+    sections: blocks,
     note,
-    '',
-    `${action}: ${mail.url}`,
-    '',
-    `Reference: ${mail.reference}`,
-    'domains.domains',
-  ]
-    .filter((v) => v !== undefined)
-    .join('\n');
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(subject)}</title></head><body style="margin:0;background:#f7f8f4;color:#172e25;font-family:Arial,sans-serif"><table role="presentation" style="width:100%;border-collapse:collapse"><tr><td style="padding:32px 16px"><table role="presentation" style="max-width:600px;width:100%;margin:auto;border-collapse:collapse"><tr><td style="padding:0 0 24px;font-size:22px;font-weight:700">domains.domains</td></tr><tr><td style="background:white;border:1px solid #cbd6cd;padding:28px"><p style="font-size:13px;color:#54675c;margin:0 0 8px">${e(heading)}</p><h1 style="font-size:28px;line-height:1.2;margin:0 0 24px;overflow-wrap:anywhere">${e(c?.snapshot.domain ?? heading)}</h1><table role="presentation" style="width:100%;border-collapse:collapse">${details.map(([k, v]) => `<tr><td style="vertical-align:top;padding:7px 16px 7px 0;color:#54675c;font-size:13px">${e(k)}</td><td style="padding:7px 0;overflow-wrap:anywhere;font-size:14px">${e(v)}</td></tr>`).join('')}</table>${blocks.map((b) => `<h2 style="font-size:16px;margin:24px 0 8px">${e(b.label)}</h2><div style="white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6">${e(b.body)}</div>`).join('')}<p style="line-height:1.6;margin:24px 0">${e(note)}</p><a href="${e(mail.url)}" style="display:inline-block;background:#234f3d;color:white;padding:12px 20px;text-decoration:none;border-radius:4px">${e(action)}</a></td></tr><tr><td style="padding:20px 0;color:#54675c;font-size:12px;line-height:1.6">Reference: ${e(mail.reference)}<br>domains.domains · <a href="https://domains.domains/privacy" style="color:#234f3d">Privacy</a></td></tr></table></td></tr></table></body></html>`;
-  return { subject, text, html };
+    action: { label: action, url: mail.url },
+    reference: mail.reference,
+    reason:
+      kind === 'verification'
+        ? 'You submitted a domain inquiry using this email address.'
+        : 'You are a participant in this domain conversation.',
+  });
 }

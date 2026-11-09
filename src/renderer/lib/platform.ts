@@ -10,11 +10,17 @@ let web = false;
 let demo = false;
 let authMode: AuthMode | null = null;
 let sales = false;
+let notifications = false;
 
-export function markWeb(mode: AuthMode, salesEnabled = false): void {
+export function markWeb(
+  mode: AuthMode,
+  salesEnabled = false,
+  notificationsEnabled = false,
+): void {
   web = true;
   authMode = mode;
   sales = salesEnabled;
+  notifications = notificationsEnabled;
 }
 
 /** The demo build: a browser host (downloads, no stdio) with a few controls
@@ -82,4 +88,8 @@ export function supportsPublishing(): boolean {
 }
 export function supportsSales(): boolean {
   return web && !demo && sales;
+}
+
+export function supportsNotifications(): boolean {
+  return web && !demo && authMode === 'gateway' && notifications;
 }

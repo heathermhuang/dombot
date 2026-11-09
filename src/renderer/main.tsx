@@ -70,8 +70,9 @@ if (window.api) {
       mode: AuthMode;
       authenticated: boolean;
       sales?: boolean;
+      notifications?: boolean;
     };
-    markWeb(status.mode, status.sales === true);
+    markWeb(status.mode, status.sales === true, status.notifications === true);
     const start = () => {
       setSessionActive(true);
       render(app);

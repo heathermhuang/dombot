@@ -1,3 +1,8 @@
+import '../services/renewal-decisions';
+import {
+  notificationPreferencesSchema,
+  renewalDecisionSchema,
+} from '../../shared/notification-policy';
 import { validateAccountRecords } from '../services/accounts';
 import {
   broadcastApprovalsChanged,
@@ -68,12 +73,26 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // v11 adds exact decimal public-offer money and marketplace source bindings.
 // v12 retains hosted source bindings, explicit sale evidence references and journey counts.
 // v13 retains read-only Park.io observations; session cookies never travel.
-export const BUNDLE_VERSION = 13;
+// v14 preserves explicit renewal-notification decisions and preference drafts.
+export const BUNDLE_VERSION = 14;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
   version:
-    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | typeof BUNDLE_VERSION;
+    | 1
+    | 2
+    | 3
+    | 4
+    | 5
+    | 6
+    | 7
+    | 8
+    | 9
+    | 10
+    | 11
+    | 12
+    | 13
+    | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
   app: { version: string; platform: string };
@@ -128,7 +147,7 @@ export function parseBundle(
     );
   }
   if (
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, BUNDLE_VERSION].includes(
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, BUNDLE_VERSION].includes(
       head.version as number,
     )
   ) {
@@ -195,6 +214,25 @@ export function parseBundle(
       ...legacyImported,
       ...head.namespaces[IMPORTED_DOMAINS_NAMESPACE],
     };
+  }
+  for (const [key, value] of Object.entries(
+    head.namespaces['renewal-decisions'] ?? {},
+  )) {
+    if (key.length > 600 || !renewalDecisionSchema.safeParse(value).success)
+      throw new BundleError(
+        'Invalid renewal reminder decisions. Nothing was imported.',
+      );
+  }
+  for (const [key, value] of Object.entries(
+    head.namespaces['notification-preference-drafts'] ?? {},
+  )) {
+    if (
+      key !== 'choices' ||
+      !notificationPreferencesSchema.safeParse(value).success
+    )
+      throw new BundleError(
+        'Invalid notification preference draft. Nothing was imported.',
+      );
   }
   head.version = BUNDLE_VERSION;
   try {
