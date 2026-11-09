@@ -322,6 +322,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-203",
+      "date": "2026-11-09",
+      "layer": "saas",
+      "title": "Retain notification retry deadlines across later portfolio updates",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #203 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #203",
+          "url": "https://github.com/heathermhuang/dombot/pull/203"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-1f6796840e0128664cf2a8bfa53702374a2edf7a",
       "date": "2026-11-08",
       "layer": "core",
