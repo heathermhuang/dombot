@@ -400,10 +400,24 @@ export async function drainNotifications(env: HostedEnv) {
     const prefs = notificationPreferencesSchema.parse(
       JSON.parse(row.preferences),
     );
-    let nextAt = nextDailySlot(Date.now(), prefs.timeZone);
+    // Recover cached work even if a source wake was lost. This does not poll registrars.
+    let nextAt = Math.min(
+      nextDailySlot(Date.now(), prefs.timeZone),
+      Date.now() + 15 * 60_000,
+    );
     try {
       const result = await drainNotificationWorkspace(env, row.workspace_id);
       if (result?.nextAt) nextAt = result.nextAt;
+      else {
+        // A wake during tenant backoff can return no due item. Keep its known retry.
+        const retry = await env.CONTROL_DB.prepare(
+          "SELECT MIN(updated_at+?) AS next_at FROM notification_attempts WHERE workspace_id=? AND state='retryable' AND updated_at>?",
+        )
+          .bind(3600_000, row.workspace_id, Date.now() - 3600_000)
+          .first<{ next_at: number | null }>();
+        if (typeof retry?.next_at === 'number')
+          nextAt = Math.min(nextAt, retry.next_at);
+      }
     } catch {
       failed = true;
       nextAt = Date.now() + 600_000;

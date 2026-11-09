@@ -496,8 +496,8 @@ it('persists a late import wake and lets the scheduler retain a provider retry c
         now,
       )
       .run();
-    const id = crypto.randomUUID(),
-      lease = crypto.randomUUID();
+    const id = crypto.randomUUID();
+    let dueAt = now;
     const send = vi.fn(async () => {
       throw Object.assign(new Error('Synthetic rate limit'), {
         code: 'E_RATE_LIMIT_EXCEEDED',
@@ -506,11 +506,16 @@ it('persists a late import wake and lets the scheduler retain a provider retry c
     env.EMAIL = { send } as unknown as SendEmail;
     env.WORKSPACE_0 = {
       fetch: async (r: Request) => {
-        if (new URL(r.url).pathname.endsWith('/lease'))
+        if (new URL(r.url).pathname.endsWith('/ack')) {
+          const ack = (await r.json()) as { state: string };
+          if (ack.state === 'retryable') dueAt = Date.now() + 3600_000;
+        }
+        if (new URL(r.url).pathname.endsWith('/lease')) {
+          if (Date.now() < dueAt) return Response.json({ item: null });
           return Response.json({
             item: {
               id,
-              lease,
+              lease: crypto.randomUUID(),
               mail: {
                 kind: 'urgent',
                 count: 1,
@@ -531,34 +536,38 @@ it('persists a late import wake and lets the scheduler retain a provider retry c
               },
             },
           });
+        }
         return Response.json({ ok: true, result: { counts: { new: 1 } } });
       },
     } as Fetcher;
-    const pending: Promise<unknown>[] = [];
-    const response = await gateway.fetch(
-      new Request(origin + '/w/' + workspace + '/api/importDomains', {
-        method: 'POST',
-        headers: {
-          Cookie: '__Host-dd_session=' + session,
-          Origin: origin,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          args: [
-            [{ domainName: 'sample.example' }],
-            { importId: crypto.randomUUID() },
-          ],
+    const importOnce = async () => {
+      const pending: Promise<unknown>[] = [];
+      const response = await gateway.fetch(
+        new Request(origin + '/w/' + workspace + '/api/importDomains', {
+          method: 'POST',
+          headers: {
+            Cookie: '__Host-dd_session=' + session,
+            Origin: origin,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            args: [
+              [{ domainName: 'sample.example' }],
+              { importId: crypto.randomUUID() },
+            ],
+          }),
         }),
-      }),
-      env,
-      {
-        waitUntil: (p: Promise<unknown>) => pending.push(p),
-        passThroughOnException: () => {},
-      } as unknown as ExecutionContext,
-    );
-    expect(response.status).toBe(200);
-    await response.body?.cancel();
-    await Promise.all(pending);
+        env,
+        {
+          waitUntil: (p: Promise<unknown>) => pending.push(p),
+          passThroughOnException: () => {},
+        } as unknown as ExecutionContext,
+      );
+      expect(response.status).toBe(200);
+      await response.body?.cancel();
+      await Promise.all(pending);
+    };
+    await importOnce();
     const wake = await db
       .prepare(
         'SELECT next_check_at,wake_generation FROM notification_preferences WHERE workspace_id=?',
@@ -583,6 +592,32 @@ it('persists a late import wake and lets the scheduler retain a provider retry c
         .bind(workspace)
         .first(),
     ).toEqual({ state: 'retryable' });
+    // A new mutation while the tenant outbox is backing off must not lose its due time.
+    clock.mockReturnValue(now + 5 * 60_000);
+    await importOnce();
+    for (const minutes of [5, 20, 35, 50]) {
+      clock.mockReturnValue(now + minutes * 60_000);
+      await drainNotifications(env);
+      const checkpoint = await db
+        .prepare(
+          'SELECT next_check_at FROM notification_preferences WHERE workspace_id=?',
+        )
+        .bind(workspace)
+        .first<{ next_check_at: number }>();
+      expect(checkpoint!.next_check_at).toBeLessThanOrEqual(now + 3600_000);
+      expect(send).toHaveBeenCalledTimes(1);
+    }
+    clock.mockReturnValue(now + 3600_000);
+    await drainNotifications(env);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(
+      await db
+        .prepare(
+          'SELECT next_check_at FROM notification_preferences WHERE workspace_id=?',
+        )
+        .bind(workspace)
+        .first(),
+    ).toEqual({ next_check_at: now + 2 * 3600_000 });
   } finally {
     clock.mockRestore();
     vi.unstubAllGlobals();
