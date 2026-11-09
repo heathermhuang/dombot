@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-core-source-353564c59f022a9a094bb87f5ba34592b85d2a8e",
+      "date": "2026-11-09",
+      "layer": "core",
+      "title": "Prepare Namefi registrar UI for SDK provider",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 353564c59f02",
+          "url": "https://github.com/aoxborrow/dombot/commit/353564c59f022a9a094bb87f5ba34592b85d2a8e"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-8e1a492da01b44ea68b4aed4",
       "date": "2026-11-09",
       "layer": "saas",
