@@ -494,7 +494,11 @@ describe('real gateway and isolated Worker instances', () => {
     const body = (await response.json()) as {
       result: { version: string; hosted: unknown };
     };
-    expect(body.result.version).toBe('2.1.0');
+    expect(body.result.version).toBe(
+      JSON.parse(
+        readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+      ).version,
+    );
     expect(body.result.hosted).toEqual({
       engineVersion: response.headers.get('X-DomBot-Engine'),
       engineSource: response.headers.get('X-DomBot-Engine-Source'),

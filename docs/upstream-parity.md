@@ -1,7 +1,7 @@
 # Full upstream DomBot integration
 
 This integration merges all upstream main history through
-`ccb918deed20f8d01009970064027fcb021bac97` (4 November 2026, DomBot 2.0.0).
+`1f6796840e0128664cf2a8bfa53702374a2edf7a` (9 November 2026, DomBot 2.2.0).
 It supersedes the selective 1.5.2-hosted.34 sync. The hosted engine records that
 exact upstream revision; its additional code supplies hosted account, tenancy,
 operations and compatibility capabilities.
@@ -15,8 +15,8 @@ upstream and appears when a marketplace is connected. Owners supply their own
 marketplace credentials; this release does not create provider accounts or
 publish/list domains automatically.
 
-`upstream-parity-20261104.json` pins the upstream inventory. Regression checks
-require every one of its 91 core API methods and 73 named MCP tools, stock routes
+`upstream-parity-20261109.json` pins the upstream inventory. Regression checks
+require every one of its 91 core API methods and 74 named MCP tools, stock routes
 and settings sections. All normal upstream and hosted behavioral suites remain
 in scope. The merge ancestry must contain the pinned upstream head.
 
@@ -79,3 +79,12 @@ of customer marketplace credentials, live provider acceptance, sales or adoption
 After a schema-5/backup-12 write the rollback floor must understand that storage;
 use the compatible source and a reviewed recovery/revert rather than installing
 an older binary over migrated data.
+
+
+The 2.2.0 sync adds the complete Dynadot and Spaceship marketplace adapters,
+linked registrar credentials, shared Dynadot request pacing and price import.
+Hosted marketplace sync uses management scope because it can release an approved
+pending listing after verification. Public-page preparation remains limited to
+its existing qualified sources; connecting a new core market does not publish it.
+The accompanying creation-date repair qualifies cached and fresh registrar values
+and reconciles old detail without changing expiry, controls or quote ages.

@@ -1,13 +1,10 @@
+import { createAccount } from './accounts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRegistrar } from '@aoxborrow/registrar-client';
 import { createDynadotFetch } from './dynadot-transport';
 import { MemoryDocStore } from '../storage/doc-store';
 import { configureStore, hydrateStores } from '../storage/namespace';
-import {
-  getRegistrarClient,
-  resetRegistrarClients,
-  saveRegistrarCredentials,
-} from './registrars';
+import { getRegistrarClient, resetRegistrarClients } from './registrars';
 import {
   configureProxyTransport,
   createProxiedRegistrar,
@@ -52,7 +49,7 @@ describe('Dynadot request pacing', () => {
         return listed();
       }),
     );
-    await saveRegistrarCredentials('dynadot', creds);
+    await createAccount('dynadot', 'Pacing fixture', creds);
     const client = getRegistrarClient('dynadot');
     const calls = Promise.all([client.listDomains(), client.listDomains()]);
     await signed(() => starts.length > 0);
@@ -93,7 +90,7 @@ describe('Dynadot request pacing', () => {
         );
       } else {
         vi.stubGlobal('fetch', send);
-        await saveRegistrarCredentials('dynadot', creds);
+        await createAccount('dynadot', 'Pacing fixture', creds);
         provider = getRegistrarClient('dynadot');
       }
       const result = provider.listDomains({ timeout });

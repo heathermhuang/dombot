@@ -8,7 +8,7 @@
   "cloudflare": {
     "bindings": {
       "DOMBOT_SECRET": {
-        "description": "Root key that encrypts private data in your database. Generate one with `openssl rand -base64 32` and keep it in your password manager \u2014 if it's lost, the instance's data is unreadable."
+        "description": "Root key that encrypts private data in your database. Generate one with `openssl rand -base64 32` and keep it in your password manager — if it's lost, the instance's data is unreadable."
       },
       "DOMBOT_PASSWORD": {
         "description": "The password you'll sign in with. Generate one with `openssl rand -base64 32` (or choose your own long one). Rotate later with `npm run web:rotate-password`."
@@ -99,7 +99,7 @@
   },
   "dependencies": {
     "@aoxborrow/registrar-client": "file:vendor/aoxborrow-registrar-client-1.1.1-hosted.1.tgz",
-    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.1.0-hosted.6.tgz",
+    "@domains-domains/dombot-engine": "file:vendor/domains-domains-dombot-engine-2.2.0-hosted.1.tgz",
     "@heroicons/react": "^2.2.0",
     "@hono/node-server": "^2.1.5",
     "@modelcontextprotocol/sdk": "^1.32.2",
