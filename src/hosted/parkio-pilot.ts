@@ -1,5 +1,10 @@
 import type { BrowserRun } from '../../hosted/browser-run-types';
 import {
+  accountReadCookies,
+  accountReadUrl,
+  inspectAccountHtml,
+} from './parkio-account-contract';
+import {
   parkioMobileConnection,
   type ParkioMobileConnection,
 } from '../../hosted/parkio-mobile-contract';
@@ -83,6 +88,17 @@ interface Attempt {
     error?: string;
   }>;
   contractRequestedAt?: number;
+  qualificationRequestedAt?: number;
+  qualification?: {
+    exportPath: string;
+    accountPaths: string[];
+    fields: string[];
+    accountPage: string | null;
+    userIdCount: number;
+    accountIdentityHash: string | null;
+    checkedAt: number;
+  };
+  providerAccountId?: string;
   contractSummary?: ReturnType<typeof inspectPilotCsv> & {
     checkedAt: number;
     cookieRotationObserved: boolean;
@@ -160,6 +176,7 @@ export class ParkioPilot {
         'proof',
         'followups',
         'contract',
+        'qualify',
       ].includes(action)
     )
       return new Response('Not found', { status: 404 });
@@ -179,6 +196,7 @@ export class ParkioPilot {
             | 'proof'
             | 'followups'
             | 'contract'
+            | 'qualify'
         ](),
       );
     } catch (error) {
@@ -787,6 +805,96 @@ export class ParkioPilot {
   async cancel() {
     return this.#serial(() => this.#clear());
   }
+  async qualify() {
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (a?.qualification) return a.qualification;
+      if (a?.qualificationRequestedAt)
+        throw new PilotError('qualification_outcome_unknown');
+      if (
+        !a?.cookies ||
+        !a.activeExport ||
+        a.phase !== 'passed' ||
+        !a.browserClosed ||
+        !pilotEnabled(this.env) ||
+        a.expiresAt <= Date.now()
+      )
+        throw new PilotError('proof_not_ready');
+      a.qualificationRequestedAt = Date.now();
+      await this.#save(a);
+      const read = async (path: string) => {
+        const response = await fetch(accountReadUrl(path), {
+          headers: {
+            Cookie: accountReadCookies(a.cookies!, path),
+            Accept: 'text/html',
+          },
+          redirect: 'manual',
+          cache: 'no-store',
+          signal: AbortSignal.timeout(15000),
+        });
+        if (
+          !response.ok ||
+          !response.headers.get('content-type')?.includes('text/html')
+        )
+          throw new PilotError('account_contract_required');
+        if (
+          response.headers
+            .getSetCookie()
+            .some((c) => a.cookieNames?.includes(c.slice(0, c.indexOf('='))))
+        )
+          throw new PilotError('rotation_contract_required');
+        return readBounded(response, 'html');
+      };
+      try {
+        const orders = inspectAccountHtml(await read('/orders'));
+        const path =
+          orders.accountPaths.find((p) => /^\/users\/edit\/?$/.test(p)) ??
+          orders.accountPaths[0] ??
+          null;
+        const profile = path
+          ? inspectAccountHtml(await read(path), true)
+          : null;
+        const ids = new Set(profile?.userIds ?? []);
+        if (path && /^\/users\/(?:edit|view)\/[1-9]\d*\/?$/.test(path))
+          ids.add(path.split('/').filter(Boolean).at(-1)!);
+        if (ids.size === 1) a.providerAccountId = [...ids][0];
+        const hash = a.providerAccountId
+          ? Array.from(
+              new Uint8Array(
+                await crypto.subtle.digest(
+                  'SHA-256',
+                  new TextEncoder().encode(
+                    'parkio-account/v1/' + a.providerAccountId,
+                  ),
+                ),
+              ),
+              (b) => b.toString(16).padStart(2, '0'),
+            ).join('')
+          : null;
+        const url = new URL(a.activeExport);
+        a.qualification = {
+          exportPath: url.pathname + url.search,
+          accountPaths: orders.accountPaths,
+          fields: profile?.fields ?? [],
+          accountPage: path,
+          userIdCount: ids.size,
+          accountIdentityHash: hash,
+          checkedAt: Date.now(),
+        };
+        await this.#save(a);
+        return a.qualification;
+      } catch (error) {
+        const code =
+          error instanceof PilotError ? error.code : 'qualification_failed';
+        if (code === 'rotation_contract_required') {
+          a.phase = 'blocked';
+          a.error = code;
+          await this.#schedule(a);
+        }
+        throw new PilotError(code);
+      }
+    });
+  }
   async contract() {
     return this.#serial(async () => {
       const a = await this.#load();
@@ -850,6 +958,7 @@ export class ParkioPilot {
     delete a.cookies;
     delete a.baseline;
     delete a.activeExport;
+    delete a.providerAccountId;
     delete a.nextCheckAt;
     await this.#save(a);
     try {

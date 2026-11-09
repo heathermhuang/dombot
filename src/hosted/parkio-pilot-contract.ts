@@ -247,10 +247,16 @@ export function inspectPilotCsv(text: string) {
   };
 }
 
-export async function readBounded(response: Response): Promise<string> {
+export async function readBounded(
+  response: Response,
+  kind: 'csv' | 'html' = 'csv',
+): Promise<string> {
   if (
     !response.ok ||
-    /text\/html/i.test(response.headers.get('content-type') ?? '')
+    (kind === 'csv' &&
+      /text\/html/i.test(response.headers.get('content-type') ?? '')) ||
+    (kind === 'html' &&
+      !/text\/html/i.test(response.headers.get('content-type') ?? ''))
   ) {
     await response.body?.cancel();
     throw new PilotError(

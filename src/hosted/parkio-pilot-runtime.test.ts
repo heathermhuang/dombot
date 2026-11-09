@@ -20,6 +20,7 @@ const names = [
   'scheduled-uncertain',
   'delayed-close',
   'scheduled-contract-fails',
+  'scheduled-identity',
 ];
 const reads = new Map<string, number>();
 let releaseRead: (() => void) | undefined;
@@ -62,6 +63,17 @@ beforeAll(async () => {
         outboundService: async (request) => {
           const call = (reads.get(name) ?? 0) + 1;
           reads.set(name, call);
+          if (
+            name === 'scheduled-identity' &&
+            ['/orders', '/users/edit'].includes(new URL(request.url).pathname)
+          )
+            return new Response(
+              new URL(request.url).pathname === '/orders'
+                ? '<!doctype html><html><a href="/users/edit">Account</a></html>'
+                : '<!doctype html><html><form method="post" action="/users/edit"><input type="hidden" name="data[User][id]" value="123"></form></html>',
+              { headers: { 'Content-Type': 'text/html' } },
+            );
+
           if (name === 'scheduled' && call === 2 && pausedRead)
             await pausedRead;
           if (
@@ -139,6 +151,24 @@ async function fixture(name: string, path: string) {
 }
 
 describe('owner-only Park.io pilot runtime', () => {
+  it('qualifies one account with two bounded reads and caches only safe structural results', async () => {
+    await action('scheduled-identity', 'start');
+    await action('scheduled-identity', 'native-complete');
+    const result = await (
+      await fixture('scheduled-identity', 'fixture-qualify')
+    ).json();
+    expect(result).toMatchObject({
+      accountPaths: ['/users/edit'],
+      userIdCount: 1,
+    });
+    expect(result.accountIdentityHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(result)).not.toContain('"123"');
+    expect(reads.get('scheduled-identity')).toBe(3);
+    await fixture('scheduled-identity', 'fixture-qualify');
+    expect(reads.get('scheduled-identity')).toBe(3);
+    expect((await state('scheduled-identity')).phase).toBe('passed');
+  });
+
   it('does not repeat a failed contract read or continue its automatic schedule', async () => {
     await action('scheduled-contract-fails', 'start');
     await action('scheduled-contract-fails', 'native-complete');
