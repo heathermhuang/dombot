@@ -357,6 +357,8 @@ export interface MarketTestResult {
 
 /** A market DomBot supports, for the Settings catalog. */
 export interface MarketInfo {
+  /** Public egress address only; host connection credentials never travel. */
+  managedProxyEgressIp?: string;
   id: MarketId;
   name: string;
   website: string;
@@ -438,11 +440,16 @@ export interface MarketAccount {
   /** Off: kept, but not synced and not shown. */
   enabled: boolean;
   /**
-   * The registrar account whose key this market account uses, for a market
+   * The registrar account whose key this market account uses, on a market
    * that runs on a registrar's API (`MarketInfo.registrar`). It has no
-   * credentials of its own then.
+   * credentials of its own then. Unset: it has its own key.
    */
   registrarAccountId?: string | null;
+  /**
+   * The fixed IP proxy this account's calls go through, for an account with
+   * its own credentials. A linked account follows its registrar account's.
+   */
+  proxyId?: string | null;
   /** The account's Ownership Verification ID, as read out of what was pasted. */
   verificationId?: string | null;
   createdAt: number;
@@ -473,6 +480,11 @@ export interface MarketSyncState {
 
 /** A market account with what Settings needs to draw its card. */
 export interface MarketAccountView extends MarketAccount {
+  /**
+   * The registrar account on this account's key: the linked one, or a saved
+   * one with the same key as its own. The names it holds are the market's own.
+   */
+  keyRegistrarAccountId: string | null;
   /** Credentials are saved. */
   configured: boolean;
   sync: MarketSyncState | null;

@@ -54,7 +54,7 @@ it('authenticates Namefi in the Worker runtime and refuses redirects without for
   }
 }, 20_000);
 
-it('checks Namefi ownership before public DNS reads in the Worker runtime', async () => {
+it('reads Namefi public DNS directly in the Worker runtime', async () => {
   const bundle = await build({
     stdin: {
       contents: `import {createRegistrar} from '@aoxborrow/registrar-client';
@@ -98,15 +98,17 @@ it('checks Namefi ownership before public DNS reads in the Worker runtime', asyn
         'https://fixture.invalid' + path,
       );
       expect(await response.json()).toEqual({
-        error: 'NotFoundError',
-        status: 404,
-        calls: ['/v-next/user/domains'],
+        records:
+          path === '/unowned-records'
+            ? [{ type: 'TXT', name: '@', value: 'synthetic', ttl: 300 }]
+            : [],
+        calls: ['/v-next/dns/records'],
       });
     }
     const owned = await runtime.dispatchFetch('https://fixture.invalid/owned');
     expect(await owned.json()).toEqual({
       records: [],
-      calls: ['/v-next/user/domains', '/v-next/dns/records'],
+      calls: ['/v-next/dns/records'],
     });
   } finally {
     await runtime.dispose();

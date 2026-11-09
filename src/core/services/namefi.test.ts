@@ -3,7 +3,6 @@ import {
   AbortError,
   ConfigurationError,
   InvalidResponseError,
-  NotFoundError,
   NotImplementedError,
   createRegistrar,
   registrars,
@@ -219,7 +218,7 @@ describe('packaged Namefi adapter', () => {
       (await provider().getPricing('example.com')).renewal,
     ).toBeUndefined();
     await expect(provider().getPricing('.com')).rejects.toThrow(
-      /full ASCII domain/,
+      NotImplementedError,
     );
   });
   it('rejects mismatched availability identity and unsafe domain input', async () => {
@@ -232,30 +231,31 @@ describe('packaged Namefi adapter', () => {
     );
     expect(fetch).toHaveBeenCalledTimes(1);
   });
-  it('writes auto-renew only after ownership is confirmed and reads exactly the requested body', async () => {
-    const fetch = responses([raw], { success: true });
-    expect(await provider().setAutoRenew('example.com', false)).toMatchObject({
+  it('writes auto-renew directly without an inventory request', async () => {
+    const fetch = responses({ success: true });
+    expect(await provider().setAutoRenew('EXAMPLE.COM.', false)).toMatchObject({
       success: true,
     });
-    expect(body(fetch, 1)).toEqual({
+    expect(body(fetch, 0)).toEqual({
       normalizedDomainName: 'example.com',
       enableAutoRenew: false,
     });
-    expect(fetch.mock.calls[1][1]?.method).toBe('PUT');
+    expect(fetch.mock.calls[0][1]?.method).toBe('PUT');
+    expect(requestUrl(fetch)).toBe(
+      'https://api.namefi.io/v-next/domain-config/auto-renew',
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
-  it('does not mutate an unowned domain', async () => {
-    const fetch = responses([]);
-    expect(await provider().setAutoRenew('example.com', false)).toMatchObject({
-      success: false,
-      status: 404,
-    });
+  it('retains provider rejection without replaying an auto-renew write', async () => {
+    const fetch = responses(new Response(null, { status: 403 }));
+    expect(
+      await provider({ retries: 3 }).setAutoRenew('example.com', false),
+    ).toMatchObject({ success: false, status: 403 });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
   it('does not retry a write after a 5xx or claim malformed acknowledgement succeeded', async () => {
     const fetch = responses(
-      [raw],
       new Response('private upstream contents', { status: 500 }),
-      [raw],
       {},
     );
     expect(
@@ -265,7 +265,7 @@ describe('packaged Namefi adapter', () => {
       success: false,
       outcome: 'unknown',
     });
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it('hides credentials, upstream error bodies and contact details while retaining status', async () => {
     responses(
@@ -278,84 +278,41 @@ describe('packaged Namefi adapter', () => {
     expect(result).toMatchObject({ success: false, status: 401 });
     expect(result.message).not.toMatch(/nfk_|private@example/);
   });
-  it.each([
-    { inventory: [], records: [] },
-    { inventory: [], records: [record()] },
-    { inventory: [{ ...raw, normalizedDomainName: 'other.com' }], records: [] },
-    {
-      inventory: [{ ...raw, normalizedDomainName: 'other.com' }],
-      records: [record()],
-    },
-  ])(
-    'rejects unowned DNS reads before querying public records: %j',
-    async ({ inventory, records }) => {
-      const fetch = vi.fn<typeof globalThis.fetch>((input) => {
-        const url =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        return Promise.resolve(
-          Response.json(url.includes('/user/domains') ? inventory : records),
-        );
-      });
-      vi.stubGlobal('fetch', fetch);
-      await expect(provider().getDnsRecords('example.com')).rejects.toThrow(
-        NotFoundError,
+  it.each([{ records: [] }, { records: [record()] }])(
+    'reads public DNS directly without inventory: %j',
+    async ({ records }) => {
+      const fetch = responses(records);
+      expect(await provider().getDnsRecords('EXAMPLE.COM.')).toEqual(
+        records.length
+          ? [{ type: 'TXT', name: '@', value: 'verification', ttl: 300 }]
+          : [],
       );
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(requestUrl(fetch)).toBe(
-        'https://api.namefi.io/v-next/user/domains',
+        'https://api.namefi.io/v-next/dns/records?zoneName=example.com',
       );
     },
   );
-  it('returns empty owned DNS only after checking normalized ownership', async () => {
-    const fetch = responses([raw], []);
-    expect(await provider().getDnsRecords('EXAMPLE.COM.')).toEqual([]);
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(requestUrl(fetch, 0)).toBe(
-      'https://api.namefi.io/v-next/user/domains',
-    );
-    expect(requestUrl(fetch, 1)).toBe(
-      'https://api.namefi.io/v-next/dns/records?zoneName=example.com',
-    );
+  it('honors cancellation of the direct DNS read', async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | null | undefined;
+    const fetch = vi.fn<typeof globalThis.fetch>((_input, init) => {
+      requestSignal = init?.signal;
+      controller.abort();
+      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    });
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      provider().getDnsRecords('example.com', { signal: controller.signal }),
+    ).rejects.toThrow(AbortError);
+    expect(requestSignal?.aborted).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
-  it.each(['/user/domains', '/dns/records'])(
-    'honors DNS read cancellation during %s',
-    async (path) => {
-      const controller = new AbortController();
-      let requestSignal: AbortSignal | null | undefined;
-      const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
-        const url =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        if (new URL(url).pathname.endsWith(path)) {
-          requestSignal = init?.signal;
-          controller.abort();
-          return Promise.reject(new DOMException('Aborted', 'AbortError'));
-        }
-        return Promise.resolve(Response.json([raw]));
-      });
-      vi.stubGlobal('fetch', fetch);
-      await expect(
-        provider().getDnsRecords('example.com', { signal: controller.signal }),
-      ).rejects.toThrow(AbortError);
-      expect(requestSignal?.aborted).toBe(true);
-      expect(fetch).toHaveBeenCalledTimes(path === '/user/domains' ? 1 : 2);
-    },
-  );
   it('round-trips MX and SRV numbers without losing their targets', async () => {
-    responses(
-      [raw],
-      [
-        record('mx', '@', 'MX', '10 mail.example.com.'),
-        record('srv', '_sip._tcp', 'SRV', '5 10 5060 sip.example.com.'),
-      ],
-    );
+    responses([
+      record('mx', '@', 'MX', '10 mail.example.com.'),
+      record('srv', '_sip._tcp', 'SRV', '5 10 5060 sip.example.com.'),
+    ]);
     expect(await provider().getDnsRecords('example.com')).toEqual([
       {
         type: 'MX',
@@ -376,7 +333,7 @@ describe('packaged Namefi adapter', () => {
     ]);
   });
   it('rejects cross-zone DNS records before accepting a read or any writes', async () => {
-    responses([raw], [{ ...record(), zoneName: 'other.com' }]);
+    responses([{ ...record(), zoneName: 'other.com' }]);
     await expect(provider().getDnsRecords('example.com')).rejects.toThrow(
       /identity/,
     );
@@ -385,7 +342,7 @@ describe('packaged Namefi adapter', () => {
     const existing = record();
     const stale = record('stale', 'old');
     const addition = record('new', 'new', 'TXT', 'new value');
-    const fetch = responses([raw], [existing, stale], [addition], {
+    const fetch = responses([existing, stale], [addition], {
       success: true,
     });
     expect(
@@ -394,42 +351,89 @@ describe('packaged Namefi adapter', () => {
         { type: 'TXT', name: 'new', value: 'new value', ttl: 300 },
       ]),
     ).toMatchObject({ success: true });
-    expect(body(fetch, 2)).toEqual({
+    expect(body(fetch, 1)).toEqual({
       zoneName: 'example.com',
       records: [{ type: 'TXT', name: 'new', rdata: 'new value', ttl: 300 }],
     });
-    expect(body(fetch, 3)).toEqual({
+    expect(body(fetch, 2)).toEqual({
       zoneName: 'example.com',
       recordsIds: ['stale'],
     });
   });
   it('performs no DNS writes for unchanged content', async () => {
-    const fetch = responses([raw], [record()]);
+    const fetch = responses([record()]);
     expect(
       await provider().setDnsRecords('example.com', [
         { type: 'TXT', name: '@', value: 'verification', ttl: 300 },
       ]),
     ).toMatchObject({ success: true });
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it('holds changes to managed records before the first write', async () => {
-    const fetch = responses(
-      [raw],
-      [{ ...record(), metadata: { source: 'auto-ens' } }],
-    );
+    const fetch = responses([
+      { ...record(), metadata: { source: 'auto-ens' } },
+    ]);
     expect(await provider().setDnsRecords('example.com', [])).toMatchObject({
       success: false,
     });
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it('never deletes stale records after a failed or unconfirmed creation', async () => {
-    const fetch = responses([raw], [record('stale')], {});
+    const fetch = responses([record('stale')], {});
     expect(
       await provider().setDnsRecords('example.com', [
         { type: 'TXT', name: 'new', value: 'new', ttl: 300 },
       ]),
     ).toMatchObject({ success: false, outcome: 'unknown' });
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('updates a changed DNS owner/type by ID instead of creating a duplicate', async () => {
+    const fetch = responses(
+      [record('same-id')],
+      [record('same-id', '@', 'TXT', 'updated')],
+    );
+    expect(
+      await provider().setDnsRecords('example.com', [
+        { type: 'TXT', name: '@', value: 'updated', ttl: 300 },
+      ]),
+    ).toMatchObject({ success: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][1]?.method).toBe('PUT');
+    expect(body(fetch, 1)).toEqual({
+      zoneName: 'example.com',
+      records: [
+        { id: 'same-id', type: 'TXT', name: '@', rdata: 'updated', ttl: 300 },
+      ],
+    });
+  });
+  it('reports an accepted registration as pending and never replays an uncertain order', async () => {
+    const fetch = responses(
+      {
+        id: 'synthetic-order',
+        items: [
+          {
+            normalizedDomainName: 'example.com',
+            durationInYears: 1,
+            type: 'REGISTER',
+            status: 'CREATED',
+          },
+        ],
+      },
+      new Response(null, { status: 500 }),
+    );
+    expect(
+      await provider().registerDomain('example.com', { contacts: {} }),
+    ).toMatchObject({ success: true, pending: true });
+    expect(
+      await provider({ retries: 3 }).registerDomain('example.com', {
+        contacts: {},
+      }),
+    ).toMatchObject({ success: false, outcome: 'unknown' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(body(fetch, 0)).toEqual({
+      normalizedDomainName: 'example.com',
+      durationInYears: 1,
+    });
   });
   it('exposes unsupported operations as unsupported without any provider request', async () => {
     const fetch = responses();

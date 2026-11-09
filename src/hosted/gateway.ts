@@ -1620,6 +1620,7 @@ app.all('/w/:workspace/*', async (c) => {
     'requestMarketVerification',
     'getMarketCredentials',
     'saveMarketCredentials',
+    'linkMarketAccount',
     'removeMarketAccount',
     'getRegistrarCredentials',
     'saveRegistrarCredentials',

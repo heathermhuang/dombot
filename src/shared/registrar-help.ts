@@ -33,6 +33,20 @@ export interface RegistrarHelp {
   optional?: { title: string; summary: string };
 }
 
+/**
+ * A connection test's failure message, with a hint where the registrar's error
+ * misleads. Namefi answers an invalid API key with a server error, not a 401.
+ */
+export function connectFailureMessage(
+  registrar: RegistrarName,
+  message: string,
+  status?: number,
+): string {
+  return registrar === 'namefi' && status !== undefined && status >= 500
+    ? `${message}. Namefi also returns this for an invalid API key, so check the key first.`
+    : message;
+}
+
 // Exhaustive over RegistrarName so adding a registrar to the library forces a
 // help entry here (the build fails until one is written).
 export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
@@ -184,9 +198,8 @@ export const REGISTRAR_HELP: Record<RegistrarName, RegistrarHelp> = {
 
   namefi: {
     summary:
-      'Create a Plain API Key in your Namefi account. Both email-held and NFT-held domains are included. Keys can spend your NFSC balance and charge your saved card, so keep the key private.',
-    hostedNotice:
-      'Inventory, expiry dates, nameservers, DNS records, auto-renew and domain pricing are supported. Use Namefi for registration, manual renewals, transfers, contacts, nameserver changes and transfer locks. Privacy and lock status are not reported by this API.',
+      'Create a Plain API Key in your Namefi account. Both email-held and NFT-held domains are included. Keys can spend your NFSC balance and charge your saved card. Privacy and transfer-lock state are not reported. Use Namefi for manual renewal, transfers and nameserver changes.',
+
     links: [
       { label: 'Create an API key', url: 'https://namefi.io/api-keys' },
       {

@@ -9,6 +9,7 @@ import {
   configureProxyTransport,
   sendThroughProxy,
   createProxiedRegistrar,
+  pinnedProxyFetch,
   ProxyStageError,
   type ProxyFetch,
 } from './proxy-transport';
@@ -642,6 +643,33 @@ describe('host-managed registrar defaults', () => {
   });
 });
 
+describe('pinned proxy fetch', () => {
+  const route = { url: 'https://u:p@8.8.8.8:8080', ip: '8.8.4.4' };
+  const pinned = () =>
+    pinnedProxyFetch(route, () => 'https://api.sedo.com', 'Sedo');
+
+  it('refuses any other host and never reaches the tunnel', async () => {
+    await expect(pinned()('https://evil.example/x')).rejects.toThrow(
+      /restricted to the Sedo API/,
+    );
+    await expect(pinned()('http://api.sedo.com/x')).rejects.toThrow(
+      /restricted/,
+    );
+  });
+
+  it('asks for an uncompressed answer and follows no redirects', async () => {
+    const send = vi.fn<ProxyFetch>(async () => new Response('ok'));
+    configureProxyTransport(send);
+    await pinned()('https://api.sedo.com/api/v1/x', { method: 'POST' });
+    configureProxyTransport();
+    const [proxy, url, init] = send.mock.calls[0];
+    expect(proxy).toBe(route);
+    expect(url).toBe('https://api.sedo.com/api/v1/x');
+    expect(init.redirect).toBe('manual');
+    expect(new Headers(init.headers).get('accept-encoding')).toBe('identity');
+  });
+});
+
 describe('central proxy settings', () => {
   it('validates before saving and switches the proxy off for its accounts on removal', async () => {
     await expect(
@@ -653,6 +681,7 @@ describe('central proxy settings', () => {
       proxy: profile,
       managed: null,
       users: [],
+      marketUsers: [],
     });
 
     await saveRegistrarCredentials('namecheap', credentials, undefined, true);
@@ -782,7 +811,7 @@ describe('account persistence and routing', () => {
       'proxy-secret',
     );
     const bundle = exportBundle({ version: 'test', platform: 'web' });
-    expect(JSON.parse(bundle).version).toBe(14);
+    expect(JSON.parse(bundle).version).toBe(15);
 
     configureStore(new MemoryDocStore());
     await hydrateStores();

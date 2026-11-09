@@ -510,6 +510,7 @@ export function createHttpApi(): DombotApi {
     listMarketAccounts: m('listMarketAccounts'),
     connectMarketAccount: m('connectMarketAccount'),
     renameMarketAccount: m('renameMarketAccount'),
+    linkMarketAccount: m('linkMarketAccount'),
     setMarketVerification: m('setMarketVerification'),
     setMarketAccountEnabled: m('setMarketAccountEnabled'),
     getMarketCredentials: m('getMarketCredentials'),

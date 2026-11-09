@@ -69,9 +69,12 @@ export function reportsPrivacy(registrar: string): boolean {
   return !PRIVACY_UNREPORTED.has(registrar);
 }
 
-/** Whether the API reports the transfer lock rather than a default value. */
+// Likewise for the transfer lock.
+const LOCK_UNREPORTED = new Set<string>(['namefi']);
+
+/** Whether `registrar` reports a domain's transfer lock at all. */
 export function reportsLock(registrar: string): boolean {
-  return registrar !== 'namefi';
+  return !LOCK_UNREPORTED.has(registrar);
 }
 
 // Registrars that record the user's agreement, with their IP address, when
