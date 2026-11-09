@@ -1,7 +1,8 @@
 import {
-  qualifyCreationDate,
-  mergeDomainDetail,
-} from '../../shared/creation-date';
+  recoverCreationDates,
+  withCachedRegistryCreation,
+} from './registry-creation';
+import { mergeDomainDetail } from '../../shared/creation-date';
 import {
   withParkioProjection,
   refreshParkioProjection,
@@ -258,7 +259,7 @@ function reviveCachedDomain<T extends Partial<Domain>>(d: T): T {
   if (out.renewalDate != null) out.renewalDate = new Date(out.renewalDate);
   if (Array.isArray(out.nameservers))
     out.nameservers = normalizeNameservers(out.nameservers);
-  return qualifyCreationDate(out as T);
+  return withCachedRegistryCreation(out as T);
 }
 
 function qualifiedDomainDates<T extends Partial<Domain>>(
@@ -1032,6 +1033,9 @@ async function performInventorySync(
       [client],
       name === 'dynadot' ? { retries: 0 } : undefined,
     );
+    const recovered = errors[0]?.error
+      ? []
+      : await recoverCreationDates(domains.filter(hasDomainName));
     const error = errors[0]?.error;
     syncError = error;
     entry = error
@@ -1042,14 +1046,12 @@ async function performInventorySync(
           lastErrorAt: Date.now(),
         }
       : {
-          domains: domains
-            .filter(hasDomainName)
-            .map((d) =>
-              mergeDomainDetail(
-                previousByName.get(d.domainName.toLowerCase()) ?? d,
-                d,
-              ),
+          domains: recovered.map((d) =>
+            mergeDomainDetail(
+              previousByName.get(d.domainName.toLowerCase()) ?? d,
+              d,
             ),
+          ),
           lastSyncedAt: Date.now(),
           lastError: null,
           lastErrorAt: null,
@@ -1182,7 +1184,11 @@ async function performInventorySync(
         (detail) => ({
           ...detail,
           ...(reconcileCreation
-            ? { createdDate: domain.createdDate, createdDateIssue: undefined }
+            ? {
+                createdDate: domain.createdDate,
+                createdDateIssue: undefined,
+                createdDateSource: domain.createdDateSource,
+              }
             : {}),
           ...(domain.expirationDate != null
             ? { expirationDate: domain.expirationDate }
@@ -2113,8 +2119,8 @@ export async function saveRegistrarCredentials(
  *    or one on the registrar's own DNS, e.g. Dynadot's `ns*.dyna-ns.net`). It
  *    runs even when `getDomain` fails (e.g. Dynadot's detail API rejects some
  *    TLDs its list still returns).
- * Creation date is taken only from the registrar; providers that don't report
- * one (e.g. NameBright) leave it blank rather than triggering an extra lookup.
+ * Impossible registrar creation dates are recovered from verified registry RDAP.
+ * Healthy/missing dates do not trigger an additional lookup.
  * Returns null only when nothing could be resolved. `cacheOnly` serves the
  * fresh cached partial or null, never calling out: the renderer asks that
  * first so a cache hit doesn't wait its turn behind a registrar's pacing.
@@ -2149,8 +2155,39 @@ export async function getDomainDetail(
     const view =
       cached && !isStale(cached) ? detailView(name, cached.data) : null;
     if (view) {
+      const summary = getCachedPortfolio()?.domains.find(
+        (d) =>
+          d.accountId === accountId &&
+          d.domainName.toLowerCase() === domainName.toLowerCase(),
+      );
+      let qualified = qualifiedDomainDates(view, name);
+      if (summary?.createdDateIssue || summary?.createdDateSource)
+        qualified = mergeDomainDetail(
+          {
+            createdDate: summary.createdDate,
+            createdDateSource: summary.createdDateSource,
+            createdDateIssue: summary.createdDateIssue,
+          },
+          qualified,
+        );
+      if (!cacheOnly && qualified.createdDateIssue) {
+        [qualified] = await recoverCreationDates([
+          { ...qualified, domainName },
+        ]);
+        if ((generations.get(accountId) ?? 0) !== generation)
+          throw new Error(
+            'Account changed while loading detail; refresh the portfolio.',
+          );
+        if (qualified.createdDateSource)
+          patchEntryData<DetailRecord>('detail', key, (prior) => ({
+            ...prior,
+            createdDate: qualified.createdDate,
+            createdDateSource: qualified.createdDateSource,
+            createdDateIssue: undefined,
+          }));
+      }
       return {
-        ...qualifiedDomainDates(view, name),
+        ...qualified,
 
         registrar: name,
         accountId,
@@ -2199,6 +2236,11 @@ export async function getDomainDetail(
       'Account changed while loading detail; refresh the portfolio.',
     );
   if (domain) {
+    [domain] = await recoverCreationDates([domain], refresh);
+    if ((generations.get(accountId) ?? 0) !== generation)
+      throw new Error(
+        'Account changed while loading detail; refresh the portfolio.',
+      );
     const listed = getCachedPortfolio()?.domains.find(
       (d) =>
         d.accountId === accountId &&
@@ -2212,6 +2254,7 @@ export async function getDomainDetail(
     const result = mergeDomainDetail(
       {
         createdDate: known.createdDate,
+        createdDateSource: known.createdDateSource,
         createdDateIssue: known.createdDateIssue,
       },
       withoutListOnly(name, {
@@ -2220,7 +2263,6 @@ export async function getDomainDetail(
         accountId,
         accountLabel: accountById(accountId).label,
         nameservers,
-        ...(createdDate ? { createdDate } : {}),
       }),
     );
     if ((generations.get(accountId) ?? 0) === generation)

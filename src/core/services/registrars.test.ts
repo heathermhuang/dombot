@@ -1,3 +1,4 @@
+import { qualifyCreationDate } from '../../shared/creation-date';
 import { configureSyncDiagnostics } from './sync-diagnostics';
 import { syncDiagnosticsSchema } from '../../shared/sync-monitor';
 import {
@@ -9,6 +10,11 @@ import {
 import { MemoryDocStore } from '../storage/doc-store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('./registry-creation', () => ({
+  recoverCreationDates: async (domains: unknown[]) =>
+    domains.map((d) => qualifyCreationDate(d as never)),
+  withCachedRegistryCreation: (d: unknown) => qualifyCreationDate(d as never),
+}));
 // ── Boundary mocks ───────────────────────────────────────────────────────────
 // registrars.ts sits on top of registrar-client, the on-disk cache, credentials,
 // registrar-state, pricing, and node:dns. Mock all of them so the module's own
