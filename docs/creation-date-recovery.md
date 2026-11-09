@@ -22,3 +22,8 @@ A quote-only entry is still not a detail read.
 The same provenance is returned by `portfolio_query` and `domain_get`. Clearing
 cache drops re-fetchable registry data along with the registrar caches. No registry
 contact records, registrar secrets or complete RDAP responses are stored.
+
+Authoritative requests use `redirect: "manual"` and reject redirect responses.
+Cloudflare Workers does not support fetch with `redirect: "error"`; using it
+prevents both the bootstrap and registry requests from being sent. The recovery
+implementation is also exercised in a remote Worker preview before release.
