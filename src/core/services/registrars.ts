@@ -1165,9 +1165,13 @@ async function performInventorySync(
         'detail',
         detailKey(accountId, domain.domainName),
       )?.data;
+      // Inventory dates do not turn a pricing-only cache entry into a detail read.
+      const reconcileCreation =
+        cached != null && hasDetail(cached) && domain.createdDate != null;
       if (
         !cached ||
-        (sameDate(domain.createdDate, cached.createdDate) &&
+        ((!reconcileCreation ||
+          sameDate(domain.createdDate, cached.createdDate)) &&
           sameDate(domain.expirationDate, cached.expirationDate) &&
           sameDate(domain.renewalDate, cached.renewalDate))
       )
@@ -1177,7 +1181,7 @@ async function performInventorySync(
         detailKey(accountId, domain.domainName),
         (detail) => ({
           ...detail,
-          ...(domain.createdDate != null
+          ...(reconcileCreation
             ? { createdDate: domain.createdDate, createdDateIssue: undefined }
             : {}),
           ...(domain.expirationDate != null
