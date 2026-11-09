@@ -15,5 +15,6 @@ export default defineConfig({
     // Live API tests need credentials: `npm run test:live` (vitest.live.config.ts).
     exclude: [...configDefaults.exclude, 'src/**/*.live.test.ts'],
     environment: 'node',
+    setupFiles: ['scripts/ownership-clock.setup.ts'],
   },
 });

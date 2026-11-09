@@ -220,12 +220,8 @@ describe('standingOf', () => {
 
   it('shows Expiring for auto-renew off within 30 days only', () => {
     const at = (days: number, autoRenew = false) =>
-      standingOf(
-        row({ expirationDate: inDays(days), autoRenew }),
-        undefined,
-        undefined,
-        NOW,
-      ).expiring;
+      standingOf(row({ expirationDate: inDays(days), autoRenew }), undefined)
+        .expiring;
     expect(at(10)).toBe(true);
     expect(at(29)).toBe(true);
     expect(at(90)).toBe(false);
