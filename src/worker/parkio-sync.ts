@@ -29,6 +29,7 @@ export class ParkioSync {
     credential: ParkioCredential,
     expected: string | null,
     operationId: string,
+    initialCheckAt?: number,
   ) {
     const now = this.clock();
     parkioCredentialSchema.parse(credential);
@@ -134,7 +135,10 @@ export class ParkioSync {
             lastSuccessfulCheckAt: now,
             lastContentChangedAt:
               hash === base.contentHash ? base.lastContentChangedAt : now,
-            nextAttemptAt: now + PARKIO_INTERVAL,
+            nextAttemptAt: Math.max(
+              now + 60000,
+              Math.min(now + PARKIO_INTERVAL, initialCheckAt ?? Infinity),
+            ),
           }),
     };
     const saved = await this.store.save(next, current);
@@ -212,6 +216,13 @@ export class ParkioSync {
           result.credential,
         );
     }
+    // Credential rotation is committed before snapshot parsing/staging. A
+    // later inventory failure cannot strand the only usable session version.
+    if (credentialRevision !== s.credentialRevision) {
+      current = await this.store.save({ ...s, credentialRevision }, current);
+      s = current.source;
+      await this.store.discardCredentials(id);
+    }
     if (result.error || !result.records) {
       const code = result.error ?? 'export_rejected';
       const auth = reconnect.has(code) || code === 'credential_unavailable';
@@ -230,49 +241,67 @@ export class ParkioSync {
       await this.store.discardCredentials(id);
       return saved;
     }
-    const merged = mergeParkio(
-        await this.store.records(s),
-        result.records,
-        now,
-      ),
-      hash = await parkioContentHash(merged.records);
-    const review = merged.reviewRequired;
-    let generation = s.generation;
-    if (hash !== s.contentHash)
-      generation = await this.store.stage(id, merged.records, now);
-    const saved = await this.store.save(
-      {
-        ...s,
-        credentialRevision,
-        sync: review ? 'review_required' : 'idle',
-        error: null,
-        run: null,
-        pending: review
-          ? {
-              generation: generation!,
-              hash,
-              createdAt: now,
-              summary: merged.summary,
-            }
-          : null,
-        ...(review
-          ? { nextAttemptAt: null }
-          : {
-              generation,
-              previousGeneration:
-                hash === s.contentHash ? s.previousGeneration : s.generation,
-              count: merged.records.length,
-              contentHash: hash,
-              lastSuccessfulCheckAt: now,
-              lastContentChangedAt:
-                hash === s.contentHash ? s.lastContentChangedAt : now,
-              nextAttemptAt: now + PARKIO_INTERVAL,
-            }),
-      },
-      current,
-    );
-    await this.store.discardCredentials(id);
-    return saved;
+    try {
+      const merged = mergeParkio(
+          await this.store.records(s),
+          result.records,
+          now,
+        ),
+        hash = await parkioContentHash(merged.records);
+      const review = merged.reviewRequired;
+      let generation = s.generation;
+      if (hash !== s.contentHash)
+        generation = await this.store.stage(id, merged.records, now);
+      const saved = await this.store.save(
+        {
+          ...s,
+          credentialRevision,
+          sync: review ? 'review_required' : 'idle',
+          error: null,
+          run: null,
+          pending: review
+            ? {
+                generation: generation!,
+                hash,
+                createdAt: now,
+                summary: merged.summary,
+              }
+            : null,
+          ...(review
+            ? { nextAttemptAt: null }
+            : {
+                generation,
+                previousGeneration:
+                  hash === s.contentHash ? s.previousGeneration : s.generation,
+                count: merged.records.length,
+                contentHash: hash,
+                lastSuccessfulCheckAt: now,
+                lastContentChangedAt:
+                  hash === s.contentHash ? s.lastContentChangedAt : now,
+                nextAttemptAt: now + PARKIO_INTERVAL,
+              }),
+        },
+        current,
+      );
+      await this.store.discardCredentials(id);
+      return saved;
+    } catch (error) {
+      const fresh = await this.store.source(id);
+      if (!fresh || fresh.source.epoch !== s.epoch)
+        throw new ParkioError('conflict');
+      // A lost final-save response is reconciled from the authoritative pointer.
+      if (fresh.revision !== current.revision) {
+        if (!fresh.source.run && fresh.source.lastAttemptAt === now)
+          return fresh;
+        throw new ParkioError('conflict');
+      }
+      const code =
+        error instanceof ParkioError ? error.code : 'storage_unavailable';
+      return this.store.save(
+        { ...s, sync: 'blocked', error: code, run: null, nextAttemptAt: null },
+        current,
+      );
+    }
   }
   async update(
     id: string,
@@ -341,17 +370,19 @@ export class ParkioSync {
         count: records.length,
         contentHash: s.pending.hash,
         lastSuccessfulCheckAt: s.pending.createdAt,
-        lastContentChangedAt: s.pending.createdAt,
+        lastContentChangedAt: now,
         pending: null,
         sync: 'idle',
-        nextAttemptAt: s.paused ? null : now + PARKIO_INTERVAL,
+        nextAttemptAt: s.paused
+          ? null
+          : Math.max(now + 60000, s.pending.createdAt + PARKIO_INTERVAL),
       };
     }
     const saved = await this.store.save(next, current);
     if (action === 'disconnect') await this.store.discardCredentials(id);
     return saved;
   }
-  async due(manual = false) {
+  async due(manual = false, allowReads = true) {
     const sources = await this.store.sources();
     let checked = 0;
     for (const { source: s } of sources) {
@@ -388,7 +419,7 @@ export class ParkioSync {
         }
       }
 
-      if (checked >= 2) break;
+      if (!allowReads || checked >= 2) continue;
       if (
         (s.run && s.run.expiresAt <= this.clock()) ||
         (s.connection === 'connected' &&

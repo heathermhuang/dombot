@@ -69,6 +69,9 @@ export type Domain = ProviderDomain & {
     lastSuccessfulCheckAt: number | null;
     missingSince: number | null;
     connection: 'connected' | 'reconnect_required' | 'disconnected';
+    paused: boolean;
+    error: string | null;
+    nextCheckAt: number | null;
   };
   /** Read-only qualification of a legacy cached date; never a registrar status. */
   renewalDateIssue?: 'gandi-updated-at-v1';

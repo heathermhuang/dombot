@@ -174,3 +174,42 @@ it('does not activate on portfolio reads, discovery or assets; unknown writes re
     ),
   ).toBe(true);
 });
+
+it('keeps recovery armed while an independent connector write is in flight', async () => {
+  const marker = await scheduler.beginConcurrent();
+  expect((await scheduler.reconcile()).state).toBe('unknown');
+  expect(alarm).not.toBeNull();
+  await scheduler.endConcurrent(marker);
+  inspect.mockResolvedValue(active);
+  await scheduler.reconcile();
+  expect((await scheduler.status()).inspection.state).toBe('work');
+  expect(alarm).not.toBeNull();
+});
+it('does not let an earlier empty inspection erase a concurrent write alarm', async () => {
+  let release!: (value: DomBotMaintenanceState) => void;
+  let entered!: () => void;
+  const gate = new Promise<void>((r) => {
+    entered = r;
+  });
+  inspect.mockImplementationOnce(() => {
+    entered();
+    return new Promise((r) => {
+      release = r;
+    });
+  });
+  const checking = scheduler.reconcile();
+  await gate;
+  const marker = await scheduler.beginConcurrent();
+  release(empty);
+  await checking;
+  expect(alarm).not.toBeNull();
+  await scheduler.endConcurrent(marker);
+  await scheduler.reconcile();
+  expect(alarm).toBeNull();
+});
+it('preserves an unresolved concurrent marker after a runtime restart', async () => {
+  await scheduler.beginConcurrent();
+  scheduler = new MaintenanceScheduler(storage, inspect);
+  expect((await scheduler.reconcile()).state).toBe('unknown');
+  expect(alarm).not.toBeNull();
+});

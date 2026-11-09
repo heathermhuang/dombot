@@ -141,7 +141,7 @@ export async function timingSafeEqualStrings(
 /** Separate keys for Park.io account metadata, inventory and session material. */
 export function deriveParkioKey(
   root: Uint8Array,
-  purpose: 'metadata' | 'inventory' | 'credentials',
+  purpose: 'metadata' | 'inventory' | 'credentials' | 'index',
 ): Promise<Uint8Array> {
   return hkdf(root, `dombot/parkio/${purpose}/v1`);
 }

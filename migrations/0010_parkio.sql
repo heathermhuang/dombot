@@ -1,6 +1,6 @@
 -- Private connector state; all identity, session and inventory payloads are encrypted.
 CREATE TABLE IF NOT EXISTS parkio_sources (
- id TEXT PRIMARY KEY, revision TEXT NOT NULL, epoch INTEGER NOT NULL,
+ id TEXT PRIMARY KEY, account_key TEXT NOT NULL UNIQUE, revision TEXT NOT NULL, epoch INTEGER NOT NULL,
  record_count INTEGER NOT NULL DEFAULT 0, credential_revision TEXT, generation TEXT,
  previous_generation TEXT, pending_generation TEXT, sealed TEXT NOT NULL
 );

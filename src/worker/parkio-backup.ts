@@ -22,6 +22,8 @@ export const parkioBackupSchema = z
   .superRefine((b, c) => {
     if (
       new Set(b.sources.map((s) => s.source.id)).size !== b.sources.length ||
+      new Set(b.sources.map((s) => s.source.accountId)).size !==
+        b.sources.length ||
       b.sources.reduce((n, s) => n + s.records.length, 0) > PARKIO_MAX_RETAINED
     )
       c.addIssue({ code: 'custom', message: 'Invalid Park.io source limits' });

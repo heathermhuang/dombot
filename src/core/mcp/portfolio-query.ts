@@ -1,3 +1,4 @@
+import type { ParkioCacheStatus } from '../../shared/parkio';
 // Pure query logic for the MCP `portfolio_query` tool — filtering, sorting, and
 // paging over the merged portfolio. Kept free of Electron and the MCP SDK so it
 // can be unit-tested in isolation; tools.ts owns the zod schema and feeds this
@@ -227,6 +228,7 @@ export interface StaleAccount {
 }
 
 export interface QueryResult extends QueryMeta {
+  parkioSources?: ParkioCacheStatus[];
   /** Total matches before paging. */
   total: number;
   /** True when the data is missing, past the staleness threshold, or any

@@ -129,3 +129,23 @@ describe('bounded Park.io transport', () => {
     expect(calls).toBe(0);
   });
 });
+
+describe('session expiry during a multi-request read', () => {
+  it('does not send the next request after the app retention deadline', async () => {
+    let now = 2000,
+      calls = 0;
+    const c = credential();
+    c.expiresAt = 2500;
+    const result = await readParkio(
+      c,
+      async () => {
+        calls++;
+        now = 3000;
+        return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+      },
+      () => now,
+    );
+    expect(calls).toBe(1);
+    expect(result.error).toBe('sign_in_required');
+  });
+});

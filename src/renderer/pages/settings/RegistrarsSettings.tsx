@@ -1,3 +1,4 @@
+import { ParkioSources } from '../../components/ParkioSources';
 import {
   connectRegistrarWithActivationWait,
   DYNADOT_ACTIVATION_NOTICE,
@@ -180,6 +181,7 @@ export default function RegistrarsSettings() {
           syncs that account&apos;s domains automatically.
         </p>
       </div>
+      <ParkioSources />
 
       <div className="flex flex-col gap-3">
         {/* Above the cards: Sync all on the left (it acts on the cards

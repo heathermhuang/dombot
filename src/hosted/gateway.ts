@@ -1,4 +1,9 @@
 import {
+  parkioConnectorRoutes,
+  cancelParkioLogin,
+  parkioEnabled,
+} from './parkio-connector';
+import {
   PublicDomainDirectory,
   routeClaimSchema,
   DirectoryConflict,
@@ -31,6 +36,7 @@ import { canonicalDomain } from '../shared/publication';
 import { adminRoutes, isAdmin } from './admin';
 import { parkioPilotRoutes } from './parkio-pilot';
 export { ParkioPilot } from './parkio-pilot';
+export { ParkioLogin } from './parkio-login';
 import { receiveSalesReply } from './sales-relay';
 import {
   domainControlRequest,
@@ -152,6 +158,7 @@ const safeNext = (value: unknown) =>
   !/[\r\n\\]/.test(value)
     ? value
     : value === '/admin' ||
+        value === '/connectors/parkio' ||
         value === '/admin/parkio-pilot' ||
         value === '/account' ||
         value === '/account/close' ||
@@ -958,6 +965,13 @@ app.get('/health', async (c) => {
   }
 });
 app.route(
+  '/connectors/parkio',
+  parkioConnectorRoutes(
+    (request, env) => account(env).session(readSession(request)),
+    readSession,
+  ),
+);
+app.route(
   '/admin/parkio-pilot',
   parkioPilotRoutes((request, env) =>
     account(env).session(readSession(request)),
@@ -1051,7 +1065,18 @@ app.post('/session/:kind', bodyLimit({ maxSize: 16_384 }), async (c) => {
   // Signing out must remain available after login throttling, including when
   // several customers share a public IP. Revoke durably before clearing cookies.
   if (kind === 'logout') {
+    const token = readSession(c.req.raw);
+    const user = token ? await accounts.session(token) : null;
     await accounts.logout(readSession(c.req.raw));
+    if (user && token && c.env.PARKIO_LOGIN) {
+      try {
+        c.executionCtx.waitUntil(
+          cancelParkioLogin(c.env, user, token).catch(() => {}),
+        );
+      } catch {
+        /* Unit hosts have no execution context. */
+      }
+    }
     c.header('Set-Cookie', sessionCookie(c.req.url, ''));
     return c.redirect('/login', 303);
   }
@@ -1282,7 +1307,12 @@ app.all('/w/:workspace/*', async (c) => {
       return c.html(
         path === '/import'
           ? importStart(id)
-          : portfolioStart(id, '', c.env.DOMBOT_MANAGED_PROXY_IP ?? ''),
+          : portfolioStart(
+              id,
+              '',
+              c.env.DOMBOT_MANAGED_PROXY_IP ?? '',
+              parkioEnabled(c.env, id),
+            ),
       );
     }
     const marketConnection = path === '/api/connectMarketAccount';
@@ -1378,6 +1408,14 @@ app.all('/w/:workspace/*', async (c) => {
   if (!workspace) return c.json({ error: 'Portfolio not found' }, 404);
   const url = new URL(c.req.url);
   const base = `/w/${id}`;
+  if (url.pathname.slice(base.length).startsWith('/internal/parkio'))
+    return c.json({ error: 'Forbidden' }, 403);
+  if (
+    url.pathname.slice(base.length).startsWith('/connectors/parkio') &&
+    c.req.method !== 'GET' &&
+    !sameOrigin(c.req.raw)
+  )
+    return c.json({ error: 'Bad origin' }, 403);
   const path = url.pathname.slice(base.length) || '/';
   const publicRequest =
     mcpPath(path) ||
@@ -1426,6 +1464,27 @@ app.all('/w/:workspace/*', async (c) => {
       { error: user ? 'Account access denied' : 'Not signed in' },
       user ? 403 : 401,
     );
+  }
+  if (path.startsWith('/connectors/parkio/') && c.req.method !== 'GET') {
+    if (!user) return c.json({ error: 'Not signed in' }, 401);
+    if (
+      path.endsWith('/disconnect') &&
+      !(await new Passkeys(c.env).fresh(user))
+    )
+      return c.json(
+        {
+          error: 'Confirm your identity before disconnecting.',
+          reauth:
+            '/account/reauth?next=' +
+            encodeURIComponent(base + '/#/settings/registrars'),
+        },
+        428,
+      );
+    if (
+      path.endsWith('/refresh') &&
+      !(await account(c.env).rateLimit(`provider:${id}`, 20))
+    )
+      return c.json({ error: 'Provider refresh limit reached' }, 429);
   }
   if (path === '/site-domains' || path.startsWith('/site-domains/')) {
     if (!user || user.workspace_id !== id)
@@ -1710,7 +1769,17 @@ app.all('/w/:workspace/*', async (c) => {
   }
   if (path === '/auth/logout' && c.req.method === 'POST') {
     if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
+    const token = readSession(c.req.raw);
     await account(c.env).logout(readSession(c.req.raw));
+    if (user && token && c.env.PARKIO_LOGIN) {
+      try {
+        c.executionCtx.waitUntil(
+          cancelParkioLogin(c.env, user, token).catch(() => {}),
+        );
+      } catch {
+        /* Unit hosts have no execution context. */
+      }
+    }
     c.header('Set-Cookie', sessionCookie(c.req.url, ''));
     return c.json({ ok: true });
   }

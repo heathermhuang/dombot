@@ -778,7 +778,9 @@ const COLUMNS: Column[] = [
             className="px-1.5 py-0 text-[11px] font-normal text-muted-foreground"
           >
             {d.parkio
-              ? 'Park.io · automatic updates'
+              ? d.parkio.missingSince !== null
+                ? 'Park.io · not in latest export'
+                : 'Park.io'
               : d.marketObservation
                 ? 'Market listing'
                 : 'Imported'}

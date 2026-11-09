@@ -55,11 +55,15 @@ beforeAll(async () => {
       .filter((s) => s.trim())
       .map((s) => db.prepare(s)),
   );
-  store = new ParkioStore(db, {
-    metadata: await aesGcmCipher(new Uint8Array(32).fill(1)),
-    inventory: await aesGcmCipher(new Uint8Array(32).fill(2)),
-    credentials: await aesGcmCipher(new Uint8Array(32).fill(3)),
-  });
+  store = new ParkioStore(
+    db,
+    {
+      metadata: await aesGcmCipher(new Uint8Array(32).fill(1)),
+      inventory: await aesGcmCipher(new Uint8Array(32).fill(2)),
+      credentials: await aesGcmCipher(new Uint8Array(32).fill(3)),
+    },
+    async (value) => 'fixture-account-' + value,
+  );
 });
 beforeEach(async () => {
   await db.batch(
@@ -123,7 +127,7 @@ describe('private Park.io storage', () => {
       .bind(s.id)
       .first<{ sealed: string }>();
     expect(raw!.sealed).not.toContain('test-only-secret');
-    const other = source();
+    const other = { ...source(), accountId: '999' };
     other.credentialRevision = revision;
     await store.save(other, null);
     await db
@@ -335,5 +339,123 @@ describe('Park.io lifecycle and scheduled merge', () => {
     const held = (await store.source(active.source.id))!;
     expect(held.source.error).toBe('check_outcome_unknown');
     expect(reads).toBe(1);
+  });
+});
+
+describe('Park.io backup and account uniqueness', () => {
+  it('rejects a duplicate account before a second source can become visible', async () => {
+    await store.save(source(), null);
+    await expect(store.save(source(), null)).rejects.toThrow(
+      'account_already_connected',
+    );
+    expect((await store.sources()).length).toBe(1);
+  });
+  it('restores retained observations without cookies and fences the old generation', async () => {
+    const c: ParkioCredential = {
+      version: 1,
+      accountId: '123',
+      cookies: [
+        {
+          name: 'parkio_user_signin',
+          value: 'never-export-this-cookie',
+          domain: 'park.io',
+          path: '/',
+          secure: true,
+          httpOnly: true,
+        },
+      ],
+      capturedAt: 1000,
+      expiresAt: 100000000,
+      exportPath: '/orders/export/active/123.csv',
+      accountPath: '/orders/index',
+    };
+    const sync = new ParkioSync(
+      store,
+      async (credential) => ({ credential, records: [record] }),
+      () => 2000,
+    );
+    const active = await sync.activate(
+      crypto.randomUUID(),
+      c,
+      null,
+      crypto.randomUUID(),
+    );
+    const backup = await store.backup();
+    expect(JSON.stringify(backup)).not.toContain('never-export-this-cookie');
+    expect(backup.sources[0].source.credentialRevision).toBeNull();
+    const writes = await store.prepareRestore(backup);
+    await db.batch(writes);
+    const restored = (await store.sources())[0];
+    expect(restored.source.connection).toBe('reconnect_required');
+    expect(restored.source.epoch).toBeGreaterThan(active.source.epoch);
+    expect(restored.revision).not.toBe(active.revision);
+    expect(await store.records(restored.source)).toEqual([record]);
+    expect(await store.credential(restored.source)).toBeNull();
+  });
+});
+
+describe('inventory persistence failures', () => {
+  it('keeps a rotated credential and the previous snapshot when snapshot staging fails', async () => {
+    let now = 2000,
+      change = false;
+    const sync = new ParkioSync(
+      store,
+      async (credential) => ({
+        credential: change
+          ? {
+              ...credential,
+              cookies: credential.cookies.map((c) => ({
+                ...c,
+                value: 'rotation-before-local-failure',
+              })),
+            }
+          : credential,
+        records: change
+          ? [{ ...record, expirationDate: '2029-01-01' }]
+          : [record],
+      }),
+      () => now,
+    );
+    const c: ParkioCredential = {
+      version: 1,
+      accountId: '123',
+      cookies: [
+        {
+          name: 'parkio_user_signin',
+          value: 'old-cookie',
+          domain: 'park.io',
+          path: '/',
+          secure: true,
+          httpOnly: true,
+        },
+      ],
+      capturedAt: 1000,
+      expiresAt: 100000000,
+      accountPath: '/orders/index',
+      exportPath: '/orders/export/active/123.csv',
+    };
+    const active = await sync.activate(
+      crypto.randomUUID(),
+      c,
+      null,
+      crypto.randomUUID(),
+    );
+    change = true;
+    now += 3600001;
+    const original = store.stage.bind(store);
+    store.stage = async () => {
+      throw Error('local staging unavailable');
+    };
+    try {
+      const held = await sync.refresh(active.source.id, true);
+      expect(held.source.error).toBe('storage_unavailable');
+      expect(held.source.lastSuccessfulCheckAt).toBe(2000);
+      expect((await store.credential(held.source))?.cookies[0].value).toBe(
+        'rotation-before-local-failure',
+      );
+      expect(await store.records(held.source)).toEqual([record]);
+    } finally {
+      store.stage = original;
+    }
   });
 });

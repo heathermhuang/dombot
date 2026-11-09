@@ -1,8 +1,8 @@
 import { hasParkio } from './parkio-backup';
-import { createParkioRoutes } from './parkio-routes';
+import { parkioFetch } from './parkio-routes';
 import { ParkioSync } from './parkio-sync';
 import { configureParkioProjection } from '../core/services/parkio-projection';
-import { parkioRows } from '../shared/parkio';
+import { parkioRows, parkioCacheStatus } from '../shared/parkio';
 import { parkioStore } from './parkio-runtime';
 import { connectionResponse } from './connection-response';
 import { CONNECTION_RESULT_HEADER } from '../shared/connection-contract';
@@ -198,18 +198,20 @@ async function hydrate(env: Env, oauthOnly = false): Promise<void> {
     oauthOnly ? new Set(['settings', 'mcp', 'meta']) : undefined,
   );
   configureParkioProjection([]);
-  if (!oauthOnly && env.DOMBOT_PARKIO_ENABLED === 'true') {
-    const refresh = async (manual: boolean) => {
-      await new ParkioSync(await parkioStore(env)).due(manual);
+  if (!oauthOnly && (await hasParkio(env.DB))) {
+    const install = async (refresher?: (manual: boolean) => Promise<void>) => {
+      const observations = await (await parkioStore(env)).observations();
       configureParkioProjection(
-        parkioRows(await (await parkioStore(env)).observations(), []),
-        refresh,
+        parkioRows(observations, []),
+        refresher,
+        observations.map((o) => parkioCacheStatus(o.source)),
       );
     };
-    configureParkioProjection(
-      parkioRows(await (await parkioStore(env)).observations(), []),
-      refresh,
-    );
+    const refresh = async (manual: boolean) => {
+      await new ParkioSync(await parkioStore(env)).due(manual);
+      await install(refresh);
+    };
+    await install(env.DOMBOT_PARKIO_ENABLED === 'true' ? refresh : undefined);
   }
   // Idempotent and a no-op once done; its writes flush with the request's.
   if (!oauthOnly) await migrateLegacyProxies();
@@ -420,8 +422,6 @@ app.route(
   createPublicationRoutes(stateful, publicationReads.read),
 );
 app.route('/sales', createSalesRoutes(stateful));
-app.route('/connectors/parkio', createParkioRoutes(stateful));
-app.route('/internal/parkio', createParkioRoutes(stateful, true));
 
 app.post(
   '/api/:method',
@@ -535,7 +535,12 @@ export default {
         });
       return withRootLease(
         env,
-        async () => app.fetch(request, env, ctx),
+        async () =>
+          /^\/(?:internal\/parkio|connectors\/parkio)(?:\/|$)/.test(
+            new URL(request.url).pathname,
+          )
+            ? parkioFetch(request, env, ctx)
+            : app.fetch(request, env, ctx),
         request,
       );
     })().catch((error: unknown) => {
@@ -569,10 +574,17 @@ export default {
             await SalesStore.from(env),
             env.DOMBOT_SALES_ORIGIN ?? 'https://unconfigured.invalid',
           ).cleanup();
-        if (env.DOMBOT_PARKIO_ENABLED === 'true') {
-          await new ParkioSync(await parkioStore(env)).due();
+        if (await hasParkio(env.DB)) {
+          await new ParkioSync(await parkioStore(env)).due(
+            false,
+            env.DOMBOT_PARKIO_ENABLED === 'true' &&
+              getSettings().autoSyncIntervalMinutes > 0,
+          );
+          const observations = await (await parkioStore(env)).observations();
           configureParkioProjection(
-            parkioRows(await (await parkioStore(env)).observations(), []),
+            parkioRows(observations, []),
+            undefined,
+            observations.map((o) => parkioCacheStatus(o.source)),
           );
         }
         const beforeSales = salesControlState(env);

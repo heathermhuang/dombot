@@ -21,6 +21,7 @@ export class ParkioStore {
       inventory: Cipher;
       credentials: Cipher;
     },
+    private readonly accountIndex: (id: string) => Promise<string>,
   ) {}
   private async seal(
     kind: keyof ParkioStore['ciphers'],
@@ -48,6 +49,7 @@ export class ParkioStore {
       .bind(id)
       .first<{
         id: string;
+        account_key: string;
         revision: string;
         epoch: number;
         record_count: number;
@@ -63,6 +65,7 @@ export class ParkioStore {
     );
     if (
       s.id !== row.id ||
+      row.account_key !== (await this.accountIndex(s.accountId)) ||
       s.epoch !== row.epoch ||
       s.count !== row.record_count ||
       s.credentialRevision !== row.credential_revision ||
@@ -90,6 +93,9 @@ export class ParkioStore {
       (next.id !== expected.source.id || next.epoch < expected.source.epoch)
     )
       throw new ParkioError('conflict');
+    if (expected && next.accountId !== expected.source.accountId)
+      throw new ParkioError('account_mismatch');
+    const accountKey = await this.accountIndex(next.accountId);
     const revision = crypto.randomUUID(),
       sealed = await this.seal('metadata', 'source/' + next.id, next);
     const columns = [
@@ -117,10 +123,29 @@ export class ParkioStore {
           )
       : this.db
           .prepare(
-            `INSERT INTO parkio_sources(id,revision,epoch,record_count,credential_revision,generation,previous_generation,pending_generation,sealed) SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM parkio_sources)<10 AND (SELECT COALESCE(SUM(record_count),0) FROM parkio_sources)+?<=? ON CONFLICT(id) DO NOTHING RETURNING id`,
+            `INSERT INTO parkio_sources(id,account_key,revision,epoch,record_count,credential_revision,generation,previous_generation,pending_generation,sealed) SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM parkio_sources)<10 AND (SELECT COALESCE(SUM(record_count),0) FROM parkio_sources)+?<=? ON CONFLICT(id) DO NOTHING RETURNING id`,
           )
-          .bind(next.id, ...columns, next.count, PARKIO_MAX_RETAINED);
-    if (!(await query.first())) throw new ParkioError('conflict');
+          .bind(
+            next.id,
+            accountKey,
+            ...columns,
+            next.count,
+            PARKIO_MAX_RETAINED,
+          );
+    try {
+      if (!(await query.first())) throw new ParkioError('conflict');
+    } catch (error) {
+      if (error instanceof ParkioError) throw error;
+      throw new ParkioError(
+        !expected &&
+          error instanceof Error &&
+          /UNIQUE constraint failed: parkio_sources.account_key/.test(
+            error.message,
+          )
+          ? 'account_already_connected'
+          : 'storage_unavailable',
+      );
+    }
     return { source: next, revision };
   }
   async records(
@@ -177,18 +202,23 @@ export class ParkioStore {
     records.forEach((r) => parkioRecordSchema.parse(r));
     const generation = crypto.randomUUID();
     const chunks: ParkioRecord[][] = [];
-    let current: ParkioRecord[] = [];
+    let current: ParkioRecord[] = [],
+      bytes = 2;
     for (const r of records) {
+      const size = new TextEncoder().encode(JSON.stringify(r)).length;
       if (
         current.length >= 500 ||
-        new TextEncoder().encode(JSON.stringify([...current, r])).length > 24000
+        bytes + size + (current.length ? 1 : 0) > 24000
       ) {
         chunks.push(current);
         current = [];
+        bytes = 2;
       }
+      bytes += size + (current.length ? 1 : 0);
       current.push(r);
     }
     chunks.push(current);
+    let writes: D1PreparedStatement[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const sealed = await this.seal(
         'inventory',
@@ -197,13 +227,19 @@ export class ParkioStore {
       );
       if (new TextEncoder().encode(sealed).length > 65536)
         throw new ParkioError('inventory_limit');
-      await this.db
-        .prepare(
-          'INSERT INTO parkio_chunks(source_id,generation,chunk_index,created_at,sealed) VALUES(?,?,?,?,?)',
-        )
-        .bind(id, generation, i, now, sealed)
-        .run();
+      writes.push(
+        this.db
+          .prepare(
+            'INSERT INTO parkio_chunks(source_id,generation,chunk_index,created_at,sealed) VALUES(?,?,?,?,?)',
+          )
+          .bind(id, generation, i, now, sealed),
+      );
+      if (writes.length === 10) {
+        await this.db.batch(writes);
+        writes = [];
+      }
     }
+    if (writes.length) await this.db.batch(writes);
     return generation;
   }
   async credential(source: ParkioSource): Promise<ParkioCredential | null> {
@@ -269,7 +305,7 @@ export class ParkioStore {
         .prepare(
           `DELETE FROM parkio_credentials WHERE rowid IN (SELECT c.rowid FROM parkio_credentials c LEFT JOIN parkio_sources s ON s.id=c.source_id WHERE c.created_at<? AND c.revision<>COALESCE(s.credential_revision,'') LIMIT 100)`,
         )
-        .bind(now - 86400000),
+        .bind(now - 15 * 60000),
     ]);
   }
   async backup(): Promise<ParkioBackup> {
@@ -311,10 +347,11 @@ export class ParkioStore {
       statements.push(
         this.db
           .prepare(
-            'INSERT INTO parkio_sources(id,revision,epoch,record_count,credential_revision,generation,previous_generation,pending_generation,sealed) VALUES(?,?,?,?,NULL,?,NULL,NULL,?)',
+            'INSERT INTO parkio_sources(id,account_key,revision,epoch,record_count,credential_revision,generation,previous_generation,pending_generation,sealed) VALUES(?,?,?,?,?,NULL,?,NULL,NULL,?)',
           )
           .bind(
             source.id,
+            await this.accountIndex(source.accountId),
             crypto.randomUUID(),
             source.epoch,
             source.count,

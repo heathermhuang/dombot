@@ -1,6 +1,7 @@
 import {
   withParkioProjection,
   refreshParkioProjection,
+  parkioProjection,
 } from './parkio-projection';
 import { readDynadotRateLimit } from '../../shared/dynadot-rate-limit';
 import { protectRegistrar } from './registrar-errors';
@@ -1711,7 +1712,18 @@ export function getCachedDomainDetail(
  * post-sync refresh.
  */
 export function getPortfolioPricing(): Record<string, RenewalPricing> {
-  const portfolio = getCachedPortfolio();
+  const cached = getCachedPortfolio();
+  const portfolio = cached
+    ? withParkioProjection(cached)
+    : parkioProjection().length
+      ? withParkioProjection({
+          domains: [],
+          fetchedAt: null,
+          registrars: [],
+          registrarLabels: {},
+          errors: [],
+        })
+      : null;
   const out: Record<string, RenewalPricing> = {};
   // Imported names: your price, else the base rate when the registrar is one
   // DomBot knows. Keyed like their rows (`domainKey`).

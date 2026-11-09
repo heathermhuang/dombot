@@ -8,10 +8,14 @@
   "preview_urls": false,
   "browser": { "binding": "PARKIO_BROWSER" },
   "durable_objects": {
-    "bindings": [{ "name": "PARKIO_PILOT", "class_name": "ParkioPilot" }],
+    "bindings": [
+      { "name": "PARKIO_PILOT", "class_name": "ParkioPilot" },
+      { "name": "PARKIO_LOGIN", "class_name": "ParkioLogin" },
+    ],
   },
   "migrations": [
     { "tag": "parkio-pilot-v1", "new_sqlite_classes": ["ParkioPilot"] },
+    { "tag": "parkio-login-v1", "new_sqlite_classes": ["ParkioLogin"] },
   ],
   "assets": {
     "directory": "../site/public",
@@ -50,6 +54,8 @@
   ],
   "vars": {
     "PARKIO_PILOT_ENABLED": "false",
+    "PARKIO_CONNECTOR_ENABLED": "false",
+    "PARKIO_CONNECTOR_WORKSPACES": "[]",
     "PARKIO_PILOT_OWNER_ID": "",
     "PARKIO_PILOT_EXPIRES_AT": "",
     "SHARED_MCP_MANAGEMENT_ENABLED": "false",

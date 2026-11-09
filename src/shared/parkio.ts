@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { parseCsv } from './csv';
-import { assertDomainName } from './domain-name';
+import { assertDomainName, toAscii } from './domain-name';
 import { importedRow } from './imported-domains';
 import type { Domain } from './ipc';
 
@@ -47,7 +47,15 @@ export const parkioCookieSchema = z
       .string()
       .min(1)
       .max(8192)
-      .regex(/^[^\x00-\x20\x7f;,]+$/),
+      .refine((v) =>
+        [...v].every(
+          (c) =>
+            c.charCodeAt(0) > 32 &&
+            c.charCodeAt(0) !== 127 &&
+            c !== ';' &&
+            c !== ',',
+        ),
+      ),
     domain: z.enum(['park.io', '.park.io']),
     path: z
       .string()
@@ -135,16 +143,24 @@ export function parkioSourceView(
   s: ParkioSource,
   revision: string,
 ): ParkioSourceView {
-  const {
-    accountId: _a,
-    credentialRevision: _c,
-    generation: _g,
-    previousGeneration: _p,
-    contentHash: _h,
-    run: _r,
-    ...safe
-  } = s;
-  return { ...safe, revision };
+  return {
+    version: s.version,
+    id: s.id,
+    epoch: s.epoch,
+    label: s.label,
+    connection: s.connection,
+    paused: s.paused,
+    sync: s.sync,
+    count: s.count,
+    lastSuccessfulCheckAt: s.lastSuccessfulCheckAt,
+    lastAttemptAt: s.lastAttemptAt,
+    activationId: s.activationId,
+    lastContentChangedAt: s.lastContentChangedAt,
+    nextAttemptAt: s.nextAttemptAt,
+    error: s.error,
+    pending: s.pending,
+    revision,
+  };
 }
 const headers = [
   'Order ID',
@@ -298,33 +314,64 @@ export function parkioRows(
   sources: { source: ParkioSource; records: ParkioRecord[] }[],
   registrarRows: Domain[],
 ): Domain[] {
-  const held = new Set(registrarRows.map((r) => r.domainName.toLowerCase()));
+  const held = new Set(registrarRows.map((r) => toAscii(r.domainName)));
   const seen = new Set<string>();
   const result: Domain[] = [];
-  for (const { source: s, records } of sources)
-    for (const r of records) {
-      if (held.has(r.domain) || seen.has(r.domain)) continue;
-      seen.add(r.domain);
-      result.push({
-        ...importedRow(r.domain, {
-          registrar: null,
-          registrarLabel: 'Park.io',
-          expirationDate: r.expirationDate,
-          autoRenew: null,
-          addedAt:
-            r.missingSince === null
-              ? (s.lastSuccessfulCheckAt ?? r.lastSeenAt)
-              : r.lastSeenAt,
-          updatedAt: null,
-        }),
-        parkio: {
-          sourceId: s.id,
-          label: s.label,
-          lastSuccessfulCheckAt: s.lastSuccessfulCheckAt,
-          missingSince: r.missingSince,
-          connection: s.connection,
-        },
-      });
-    }
+  const candidates = sources
+    .flatMap(({ source: s, records }) => records.map((r) => ({ s, r })))
+    .sort(
+      (a, b) =>
+        Number(a.r.missingSince !== null) - Number(b.r.missingSince !== null) ||
+        ((b.r.missingSince === null ? b.s.lastSuccessfulCheckAt : null) ??
+          b.r.lastSeenAt) -
+          ((a.r.missingSince === null ? a.s.lastSuccessfulCheckAt : null) ??
+            a.r.lastSeenAt) ||
+        a.s.id.localeCompare(b.s.id),
+    );
+  for (const { s, r } of candidates) {
+    if (held.has(r.domain) || seen.has(r.domain)) continue;
+    seen.add(r.domain);
+    result.push({
+      ...importedRow(r.domain, {
+        registrar: null,
+        registrarLabel: 'Park.io',
+        expirationDate: r.expirationDate,
+        autoRenew: null,
+        addedAt:
+          r.missingSince === null
+            ? (s.lastSuccessfulCheckAt ?? r.lastSeenAt)
+            : r.lastSeenAt,
+        updatedAt: null,
+      }),
+      parkio: {
+        sourceId: s.id,
+        label: s.label,
+        lastSuccessfulCheckAt: s.lastSuccessfulCheckAt,
+        missingSince: r.missingSince,
+        connection: s.connection,
+        paused: s.paused,
+        error: s.error,
+        nextCheckAt: s.nextAttemptAt,
+      },
+    });
+  }
   return result;
+}
+
+export type ParkioCacheStatus = Omit<
+  NonNullable<Domain['parkio']>,
+  'missingSince'
+> & { count: number; sync: ParkioSource['sync'] };
+export function parkioCacheStatus(s: ParkioSource): ParkioCacheStatus {
+  return {
+    sourceId: s.id,
+    label: s.label,
+    lastSuccessfulCheckAt: s.lastSuccessfulCheckAt,
+    connection: s.connection,
+    paused: s.paused,
+    error: s.error,
+    nextCheckAt: s.nextAttemptAt,
+    count: s.count,
+    sync: s.sync,
+  };
 }

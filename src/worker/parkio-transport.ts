@@ -1,11 +1,13 @@
 import {
+  parkioCookieHeader,
+  rotateParkioCookies,
+} from '../shared/parkio-cookies';
+import {
   ParkioError,
   PARKIO_MAX_BYTES,
-  parkioCookieSchema,
   parkioCredentialSchema,
   parseParkioExport,
   type ParkioCredential,
-  type ParkioCookie,
   type ParkioRecord,
 } from '../shared/parkio';
 import {
@@ -13,85 +15,10 @@ import {
   parkioExportUrl,
   parseParkioAccount,
 } from '../shared/parkio-account';
-export function parkioCookieHeader(
-  cookies: ParkioCookie[],
-  target: string,
-  now = Date.now(),
-) {
-  const url = new URL(target);
-  if (url.origin !== 'https://park.io')
-    throw new ParkioError('unsafe_destination');
-  return cookies
-    .filter(
-      (c) =>
-        (c.expires === undefined || c.expires <= 0 || c.expires * 1000 > now) &&
-        (url.pathname === c.path ||
-          url.pathname.startsWith(
-            c.path.endsWith('/') ? c.path : c.path + '/',
-          )),
-    )
-    .sort((a, b) => b.path.length - a.path.length)
-    .map((c) => `${c.name}=${c.value}`)
-    .join('; ');
-}
-export function rotateParkioCookies(
-  cookies: ParkioCookie[],
-  headers: string[],
-  now = Date.now(),
-): ParkioCookie[] {
-  const next = [...cookies];
-  for (const line of headers) {
-    if (line.length > 16384 || /[\r\n]/.test(line))
-      throw new ParkioError('cookie_contract_required');
-    const [first, ...parts] = line.split(';');
-    const at = first.indexOf('=');
-    const name = first.slice(0, at).trim();
-    if (!['parkio_user_signin', 'flashId'].includes(name)) continue;
-    const attrs = new Map<string, string>();
-    for (const part of parts) {
-      const index = part.indexOf('=');
-      attrs.set(
-        (index < 0 ? part : part.slice(0, index)).trim().toLowerCase(),
-        index < 0 ? '' : part.slice(index + 1).trim(),
-      );
-    }
-    if (attrs.has('partitioned'))
-      throw new ParkioError('cookie_contract_required');
-    const domain = (attrs.get('domain') ?? 'park.io').toLowerCase(),
-      path = attrs.get('path') ?? '/';
-    const rawMax = attrs.get('max-age');
-    let expires = attrs.has('expires')
-      ? Date.parse(attrs.get('expires')!) / 1000
-      : undefined;
-    if (rawMax !== undefined) {
-      if (!/^-?\d{1,10}$/.test(rawMax))
-        throw new ParkioError('cookie_contract_required');
-      expires = now / 1000 + Number(rawMax);
-    }
-    if (expires !== undefined && !Number.isFinite(expires))
-      throw new ParkioError('cookie_contract_required');
-    const cookie = parkioCookieSchema.parse({
-      name,
-      value:
-        first.slice(at + 1) ||
-        (expires !== undefined && expires * 1000 <= now ? 'deleted' : ''),
-      domain,
-      path,
-      secure: attrs.has('secure'),
-      httpOnly: attrs.has('httponly'),
-      ...(expires === undefined ? { session: true } : { expires }),
-    });
-    const index = next.findIndex(
-      (c) =>
-        c.name === name &&
-        c.domain.replace(/^\./, '') === domain.replace(/^\./, '') &&
-        c.path === path,
-    );
-    if (index >= 0) next.splice(index, 1);
-    if (expires === undefined || expires * 1000 > now) next.push(cookie);
-  }
-  return next;
-}
+export {
+  parkioCookieHeader,
+  rotateParkioCookies,
+} from '../shared/parkio-cookies';
 async function bounded(response: Response) {
   const reader = response.body?.getReader();
   if (!reader) throw new ParkioError('empty_response');
@@ -120,6 +47,7 @@ async function bounded(response: Response) {
 }
 export type ParkioReadResult = {
   credential: ParkioCredential | null;
+  accountIdentityVerified?: boolean;
   records?: ParkioRecord[];
   error?: string;
 };
@@ -127,20 +55,23 @@ export type ParkioReadResult = {
 export async function readParkio(
   saved: ParkioCredential,
   request: typeof fetch = fetch,
-  now = Date.now(),
+  now: number | (() => number) = Date.now,
 ): Promise<ParkioReadResult> {
   let credential = parkioCredentialSchema.parse(structuredClone(saved));
+  let accountIdentityVerified = false;
+  const clock = typeof now === 'number' ? () => now : now;
   const get = async (url: string, kind: 'html' | 'csv') => {
-    const cookie = parkioCookieHeader(credential.cookies, url, now);
+    const at = clock();
+    const cookie = parkioCookieHeader(credential.cookies, url, at);
     if (!cookie.split('; ').some((v) => v.startsWith('parkio_user_signin=')))
       throw new ParkioError('sign_in_required');
     if (
       !credential.cookies.some(
         (c) =>
           c.name === 'parkio_user_signin' &&
-          (c.expires === undefined || c.expires <= 0 || c.expires * 1000 > now),
+          (c.expires === undefined || c.expires <= 0 || c.expires * 1000 > at),
       ) ||
-      credential.expiresAt <= now
+      credential.expiresAt <= at
     )
       throw new ParkioError('sign_in_required');
     const response = await request(url, {
@@ -159,7 +90,7 @@ export async function readParkio(
         cookies: rotateParkioCookies(
           credential.cookies,
           response.headers.getSetCookie(),
-          now,
+          clock(),
         ),
       };
     } catch {
@@ -192,19 +123,25 @@ export async function readParkio(
       credential.accountId
     )
       throw new ParkioError('account_mismatch');
-    const records = parseParkioExport(await get(exportUrl, 'csv'), now);
+    accountIdentityVerified = true;
+    const records = parseParkioExport(await get(exportUrl, 'csv'), clock());
     if (
       !credential.cookies.some(
         (c) =>
           c.name === 'parkio_user_signin' &&
-          (c.expires === undefined || c.expires <= 0 || c.expires * 1000 > now),
+          (c.expires === undefined ||
+            c.expires <= 0 ||
+            c.expires * 1000 > clock()),
       )
     )
       throw new ParkioError('sign_in_required');
-    return { credential, records };
+    if (credential.expiresAt <= clock())
+      throw new ParkioError('sign_in_required');
+    return { credential, records, accountIdentityVerified };
   } catch (error) {
     return {
       credential,
+      accountIdentityVerified,
       error:
         error instanceof ParkioError ? error.code : 'session_outcome_unknown',
     };

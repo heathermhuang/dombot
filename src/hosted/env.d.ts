@@ -1,4 +1,8 @@
 interface HostedEnv {
+  PARKIO_LOGIN?: DurableObjectNamespace;
+  PARKIO_LOGIN_SECRET?: string;
+  PARKIO_CONNECTOR_ENABLED?: string;
+  PARKIO_CONNECTOR_WORKSPACES?: string;
   /** Temporary owner-only Park.io feasibility harness; absent/false is closed. */
   PARKIO_PILOT_ENABLED?: string;
   PARKIO_PILOT_OWNER_ID?: string;

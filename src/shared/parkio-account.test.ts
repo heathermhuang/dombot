@@ -12,17 +12,24 @@ describe('qualified account-scoped Park.io contract', () => {
       '123',
     );
   });
-  it('rejects mismatches, ambiguity, sign-in pages, foreign references and inactive exports', () => {
+  it('rejects mismatches, ambiguity, sign-in pages, foreign references', () => {
     for (const text of [
       html.replace('/users/edit/123', '/users/edit/999'),
       html.replace('</html>', '<a href="/users/edit/999">Other</a></html>'),
       '<html><input type="password"></html>',
       html.replace('href="/users', 'href="https://other.test/users'),
-      html.replace('/export/active', '/export/all'),
     ])
       expect(() =>
         parseParkioAccount(text, '/orders/export/active/123.csv'),
       ).toThrow();
+  });
+  it('accepts the All Orders navigation while retaining the server-captured Active-export identity', () => {
+    expect(
+      parseParkioAccount(
+        html.replace('/export/active', '/export/all'),
+        '/orders/export/active/123.csv',
+      ),
+    ).toBe('123');
   });
   it('restricts all reads to exact qualified endpoints', () => {
     expect(parkioAccountUrl('/orders/index')).toBe(
