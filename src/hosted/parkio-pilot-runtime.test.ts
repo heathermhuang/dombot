@@ -21,6 +21,7 @@ const names = [
   'delayed-close',
   'scheduled-contract-fails',
   'scheduled-identity',
+  'scheduled-identity-v2',
 ];
 const reads = new Map<string, number>();
 let releaseRead: (() => void) | undefined;
@@ -64,11 +65,13 @@ beforeAll(async () => {
           const call = (reads.get(name) ?? 0) + 1;
           reads.set(name, call);
           if (
-            name === 'scheduled-identity' &&
-            ['/orders', '/users/edit'].includes(new URL(request.url).pathname)
+            ['scheduled-identity', 'scheduled-identity-v2'].includes(name) &&
+            ['/orders', '/orders/index', '/users/edit'].includes(
+              new URL(request.url).pathname,
+            )
           )
             return new Response(
-              new URL(request.url).pathname === '/orders'
+              new URL(request.url).pathname.startsWith('/orders')
                 ? '<!doctype html><html><a href="/users/edit">Account</a></html>'
                 : '<!doctype html><html><form method="post" action="/users/edit"><input type="hidden" name="data[User][id]" value="123"></form></html>',
               { headers: { 'Content-Type': 'text/html' } },
@@ -151,6 +154,34 @@ async function fixture(name: string, path: string) {
 }
 
 describe('owner-only Park.io pilot runtime', () => {
+  it('retains bounded HTTP qualification receipts and never repeats them', async () => {
+    await action('scheduled-identity-v2', 'start');
+    await action('scheduled-identity-v2', 'native-complete');
+    const ns = await mf.getDurableObjectNamespace(
+      'PARKIO_PILOT',
+      'scheduled-identity-v2',
+    );
+    const run = () =>
+      ns
+        .get(ns.idFromName('owner/' + owner))
+        .fetch('https://parkio-pilot.internal/qualifyV2', {
+          method: 'POST',
+          headers: { 'X-Pilot-Owner': owner },
+        });
+    const result = await (await run()).json();
+    expect(result).toMatchObject({
+      userIdCount: 1,
+      reads: [
+        { path: '/orders/index', status: 200 },
+        { path: '/users/edit', status: 200 },
+      ],
+    });
+    expect(result.accountIdentityHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(reads.get('scheduled-identity-v2')).toBe(3);
+    await run();
+    expect(reads.get('scheduled-identity-v2')).toBe(3);
+  });
+
   it('qualifies one account with two bounded reads and caches only safe structural results', async () => {
     await action('scheduled-identity', 'start');
     await action('scheduled-identity', 'native-complete');
