@@ -210,6 +210,43 @@ export function parsePilotCsv(text: string): {
   };
 }
 
+/** Qualification counters only: never returns domains, prices, payment dates or arbitrary cell values. */
+export function inspectPilotCsv(text: string) {
+  const parsed = parsePilotCsv(text);
+  const [, ...raw] = parseCsv(text.replace(/^\uFEFF/, ''));
+  const rows = raw.filter((cells) => cells.some((c) => c.trim()));
+  const keys = parsed.headers.map((h) =>
+    h.toLowerCase().replace(/[^a-z0-9]/g, ''),
+  );
+  const paid = keys.indexOf('paiddate'),
+    platform = keys.indexOf('onparkio');
+  const onPlatform = { trueRows: 0, falseRows: 0, unknownRows: 0 };
+  if (platform >= 0)
+    for (const cells of rows) {
+      const value = cells[platform].trim().toLowerCase();
+      if (['true', 'yes', '1'].includes(value)) onPlatform.trueRows++;
+      else if (['false', 'no', '0'].includes(value)) onPlatform.falseRows++;
+      else onPlatform.unknownRows++;
+    }
+  return {
+    headers: parsed.headers,
+    exportRows: rows.length,
+    uniqueDomains: parsed.holdings.length,
+    datesProvided: parsed.holdings.filter((h) => h.expirationDate !== null)
+      .length,
+    paidColumnPresent: paid >= 0,
+    paidFieldPopulatedRows:
+      paid >= 0
+        ? rows.filter(
+            (c) => c[paid].trim() && !/^(?:-|n\/a|null)$/i.test(c[paid].trim()),
+          ).length
+        : null,
+    onPlatformColumnPresent: platform >= 0,
+    onPlatform: platform >= 0 ? onPlatform : null,
+    ownershipQualified: false as const,
+  };
+}
+
 export async function readBounded(response: Response): Promise<string> {
   if (
     !response.ok ||

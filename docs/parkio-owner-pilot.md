@@ -201,3 +201,45 @@ POST Origin headers without allowing null-origin requests through CSRF admission
 The browser reproduction then reaches the synthetic sign-in view with HTTP 303;
 the runtime regression checks both policies and rejects an explicit null Origin.
 This check uses synthetic data and no real Park.io login.
+
+## Resumed real-account qualification, 9 November 2026
+
+The owner completed native credential entry. A real export was captured, its
+browser closure was verified, and independent Worker reads immediately and after
+a delay matched the normalized domain set and available expiration dates without
+observed session-cookie rotation. Private receipts retain timestamps and
+aggregate results; private domain names and cookie values are not committed.
+This does not establish permanent session lifetime, export completeness or a
+stable provider-account identifier.
+
+The observed export includes `Order ID`, `Domain`, `Created Date`, `Paid Date`,
+`Amount (USD)`, `Expiration Date` and `On park.io`. Only domain and available ISO
+expiration dates are part of the proof baseline. Payment and platform flags must
+be qualified before interpreting the entire export as currently owned holdings.
+The bounded contract inspector returns counters for those columns, never domain
+names, amounts, payment dates or arbitrary cell values. It allows one cached
+qualification read per captured session, separately from the three comparison
+reads; a failed or uncertain qualification read is held rather than replayed.
+
+Browser Run may return `closing` before the resource actually ends. Native
+completion now returns that pending state, waits for durable cleanup, and
+continues the initial Worker comparison automatically after verified closure.
+The UI polls the saved attempt with a bounded wait and offers status refresh
+without another credential submission; it does not show a pending close as a
+failed login.
+
+After a successful native proof, Durable Object alarms schedule the remaining
+comparison slots: one after the one-minute cooldown, and the final slot roughly
+23 hours after the first check, only when both enrollment and cookie retention
+still permit it. Actual intervals are retained in receipts; a 23-hour check is
+not described as proof of permanent or guaranteed daily access. Alarms execute
+without an open page or a model. Manual checks share the same three-check budget.
+Cancellation, expiry, rotation, failure or an uncertain outcome stops the schedule.
+The original 24-hour credential retention is never extended.
+
+Each check journals `pending` before its request, then `passed`, `blocked` or
+`failed` after its result. A recovered interrupted request becomes `unknown` and
+is not replayed. The proof endpoint refuses pending results, preventing the
+previous successful comparison from appearing to be a newly completed read.
+Metadata receipts survive ordinary credential cleanup, while cookies, the export
+URL and holdings payload are removed as before.

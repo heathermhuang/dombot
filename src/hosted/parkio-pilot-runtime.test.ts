@@ -15,7 +15,15 @@ const names = [
   'lookup-fails',
   'automatic',
   'not-authenticated',
+  'scheduled',
+  'scheduled-fails',
+  'scheduled-uncertain',
+  'delayed-close',
+  'scheduled-contract-fails',
 ];
+const reads = new Map<string, number>();
+let releaseRead: (() => void) | undefined;
+let pausedRead: Promise<void> | undefined;
 
 beforeAll(async () => {
   const result = await build({
@@ -52,6 +60,15 @@ beforeAll(async () => {
           TEST_MODE: name,
         },
         outboundService: async (request) => {
+          const call = (reads.get(name) ?? 0) + 1;
+          reads.set(name, call);
+          if (name === 'scheduled' && call === 2 && pausedRead)
+            await pausedRead;
+          if (
+            ['scheduled-fails', 'scheduled-contract-fails'].includes(name) &&
+            call > 1
+          )
+            return new Response('Unavailable', { status: 503 });
           const url = new URL(request.url);
           if (
             url.origin !== 'https://park.io' ||
@@ -114,8 +131,127 @@ async function state(name: string) {
   expect(res.status).toBe(200);
   return res.json();
 }
+async function fixture(name: string, path: string) {
+  const ns = await mf.getDurableObjectNamespace('PARKIO_PILOT', name);
+  return ns
+    .get(ns.idFromName('owner/' + owner))
+    .fetch('https://parkio-pilot.internal/' + path, { method: 'POST' });
+}
 
 describe('owner-only Park.io pilot runtime', () => {
+  it('does not repeat a failed contract read or continue its automatic schedule', async () => {
+    await action('scheduled-contract-fails', 'start');
+    await action('scheduled-contract-fails', 'native-complete');
+    expect(
+      (await state('scheduled-contract-fails')).nextCheckAt,
+    ).not.toBeNull();
+    expect(
+      (await action('scheduled-contract-fails', 'native-contract')).status,
+    ).toBe(409);
+    const repeated = await action(
+      'scheduled-contract-fails',
+      'native-contract',
+    );
+    expect(await repeated.json()).toEqual({
+      error: 'contract_outcome_unknown',
+    });
+    await fixture('scheduled-contract-fails', 'fixture-alarm');
+    expect(reads.get('scheduled-contract-fails')).toBe(2);
+    expect(await state('scheduled-contract-fails')).toMatchObject({
+      phase: 'blocked',
+      nextCheckAt: null,
+    });
+  });
+  it('completes an asynchronous browser close through its alarm without another login or duplicate Worker read', async () => {
+    await action('delayed-close', 'start');
+    const pending = await action('delayed-close', 'native-complete');
+    expect(pending.status).toBe(200);
+    expect(await pending.json()).toMatchObject({
+      phase: 'closing',
+      browserClosed: false,
+    });
+    expect(reads.get('delayed-close') ?? 0).toBe(0);
+    const result = await fixture('delayed-close', 'fixture-alarm');
+    expect(await result.json()).toMatchObject({
+      phase: 'passed',
+      browserClosed: true,
+      authenticationFlow: 'native_credentials',
+    });
+    expect((await action('delayed-close', 'native-complete')).status).toBe(200);
+    expect(reads.get('delayed-close')).toBe(1);
+  });
+  it('journals pending checks, executes bounded scheduled reads once, and preserves the original retention', async () => {
+    await action('scheduled', 'start');
+    await action('scheduled', 'native-complete');
+    const first = await state('scheduled');
+    expect(first.authenticationFlow).toBe('native_credentials');
+    expect(first.nextCheckAt).toBe(first.checkedAt + 60000);
+    expect(
+      first.checkHistory.map((c: { outcome: string }) => c.outcome),
+    ).toEqual(['passed']);
+    pausedRead = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const followup = fixture('scheduled', 'fixture-followup-due');
+    try {
+      await expect
+        .poll(async () => (await state('scheduled')).phase)
+        .toBe('rechecking');
+      expect(
+        (await request('scheduled', '/native-proof', { identity: owner }))
+          .status,
+      ).toBe(409);
+      expect((await state('scheduled')).checkHistory.at(-1).outcome).toBe(
+        'pending',
+      );
+    } finally {
+      releaseRead?.();
+      pausedRead = undefined;
+    }
+    await followup;
+    await fixture('scheduled', 'fixture-alarm');
+    const second = await state('scheduled');
+    expect(reads.get('scheduled')).toBe(2);
+    expect(second.expiresAt).toBe(first.expiresAt);
+    await fixture('scheduled', 'fixture-close-budget-used');
+    expect((await state('scheduled')).phase).toBe('passed');
+    expect(
+      (await request('scheduled', '/native-proof', { identity: owner })).status,
+    ).toBe(200);
+    expect(second.nextCheckAt).toBeGreaterThan(Date.now() + 22 * 3600000);
+    expect(
+      second.checkHistory.map((c: { outcome: string }) => c.outcome),
+    ).toEqual(['passed', 'passed']);
+    await fixture('scheduled', 'fixture-followup-due');
+    await fixture('scheduled', 'fixture-alarm');
+    const third = await state('scheduled');
+    expect(reads.get('scheduled')).toBe(3);
+    expect(third.nextCheckAt).toBeNull();
+    expect(third.checkHistory).toHaveLength(3);
+  });
+  it('holds failed and uncertain scheduled outcomes instead of retrying or claiming success', async () => {
+    await action('scheduled-fails', 'start');
+    await action('scheduled-fails', 'native-complete');
+    await fixture('scheduled-fails', 'fixture-followup-due');
+    await fixture('scheduled-fails', 'fixture-alarm');
+    const failed = await state('scheduled-fails');
+    expect(failed.phase).toBe('blocked');
+    expect(failed.checkHistory.at(-1).outcome).toBe('failed');
+    expect(failed.nextCheckAt).toBeNull();
+    expect(reads.get('scheduled-fails')).toBe(2);
+    await action('scheduled-uncertain', 'start');
+    await action('scheduled-uncertain', 'native-complete');
+    await fixture('scheduled-uncertain', 'fixture-interrupted');
+    await fixture('scheduled-uncertain', 'fixture-alarm');
+    const unknown = await state('scheduled-uncertain');
+    expect(unknown).toMatchObject({
+      phase: 'blocked',
+      error: 'check_outcome_unknown',
+      nextCheckAt: null,
+    });
+    expect(unknown.checkHistory.at(-1).outcome).toBe('unknown');
+    expect(reads.get('scheduled-uncertain')).toBe(1);
+  });
   it('automatically captures, closes and independently compares holdings once for concurrent completion requests', async () => {
     expect((await action('automatic', 'start')).status).toBe(303);
     expect(
@@ -144,6 +280,16 @@ describe('owner-only Park.io pilot runtime', () => {
     });
     expect((await action('automatic', 'native-complete')).status).toBe(200);
     expect((await action('automatic', 'native-retest')).status).toBe(409);
+    const before = reads.get('automatic');
+    const contract = await action('automatic', 'native-contract');
+    expect(contract.status).toBe(200);
+    expect(await contract.json()).toMatchObject({
+      exportRows: 2,
+      uniqueDomains: 2,
+      ownershipQualified: false,
+    });
+    expect((await action('automatic', 'native-contract')).status).toBe(200);
+    expect(reads.get('automatic')).toBe((before ?? 0) + 1);
   });
   it('does not treat an unauthenticated page as a completed proof', async () => {
     await action('not-authenticated', 'start');

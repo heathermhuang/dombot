@@ -30,6 +30,7 @@ import {
   qualifiedCookies,
   cookieHeader,
   parsePilotCsv,
+  inspectPilotCsv,
   readBounded,
   sealPilot,
   openPilot,
@@ -43,6 +44,7 @@ type Phase =
   | 'checking'
   | 'closing'
   | 'ready'
+  | 'rechecking'
   | 'passed'
   | 'blocked'
   | 'cancelled'
@@ -68,6 +70,23 @@ interface Attempt {
   checks?: number;
   cleanupAttempts?: number;
   authenticationFlow?: 'native_credentials' | 'resumed_session';
+  nextCheckAt?: number;
+  firstCheckAt?: number;
+  checkHistory?: Array<{
+    number: number;
+    startedAt: number;
+    completedAt?: number;
+    outcome: 'pending' | 'passed' | 'blocked' | 'failed' | 'unknown';
+    count?: number;
+    namesMatch?: boolean;
+    expiriesMatch?: boolean;
+    error?: string;
+  }>;
+  contractRequestedAt?: number;
+  contractSummary?: ReturnType<typeof inspectPilotCsv> & {
+    checkedAt: number;
+    cookieRotationObserved: boolean;
+  };
   result?: {
     count: number;
     namesMatch: boolean;
@@ -102,6 +121,9 @@ function safeState(a: Attempt | null) {
     checkedAt: a.checkedAt ?? null,
     result: a.result ?? null,
     authenticationFlow: a.authenticationFlow ?? 'unqualified',
+    nextCheckAt: a.nextCheckAt ?? null,
+    checkHistory: a.checkHistory ?? [],
+    contractSummary: a.contractSummary ?? null,
     exportCompletenessQualified: false,
     // This single-owner feasibility test is not qualification of multi-account identity.
     accountIdentityQualified: false,
@@ -136,6 +158,8 @@ export class ParkioPilot {
         'mobile',
         'complete',
         'proof',
+        'followups',
+        'contract',
       ].includes(action)
     )
       return new Response('Not found', { status: 404 });
@@ -153,6 +177,8 @@ export class ParkioPilot {
             | 'mobile'
             | 'complete'
             | 'proof'
+            | 'followups'
+            | 'contract'
         ](),
       );
     } catch (error) {
@@ -381,12 +407,31 @@ export class ParkioPilot {
       });
       state = await this.status();
     }
-    if (state.phase === 'ready') return this.retest();
+    if (state.phase === 'ready') return this.#initialRead();
+    if (state.phase === 'closing' || state.phase === 'rechecking') return state;
+    if (state.phase === 'blocked')
+      throw new PilotError(
+        'error' in state && state.error ? state.error : 'proof_not_ready',
+      );
     await this.#prepareActive();
     await this.inspect();
     const captured = await this.capture();
-    if (!captured.browserClosed) throw new PilotError('close_browser_first');
-    return this.retest();
+    if (!captured.browserClosed) return captured;
+    return this.#initialRead();
+  }
+  async #initialRead() {
+    return this.#serial(async () => {
+      const current = await this.status();
+      if (current.phase === 'passed' || current.phase === 'rechecking')
+        return current;
+      if (current.phase === 'blocked')
+        throw new PilotError(
+          'error' in current && current.error
+            ? current.error
+            : 'proof_not_ready',
+        );
+      return this.#retest();
+    });
   }
   async #prepareActive() {
     return this.#serial(async () => {
@@ -594,25 +639,170 @@ export class ParkioPilot {
     });
   }
   async retest() {
+    return this.#serial(() => this.#retest());
+  }
+  async #retest() {
+    const a = await this.#load();
+    if (a?.phase === 'rechecking') throw new PilotError('check_in_progress');
+    if (
+      !a?.cookies ||
+      !a.baseline ||
+      !a.activeExport ||
+      !a.browserClosed ||
+      !['ready', 'passed'].includes(a.phase)
+    )
+      throw new PilotError('close_browser_first');
+    if (!pilotEnabled(this.env) || a.expiresAt <= Date.now())
+      throw new PilotError('pilot_expired');
+    if (
+      (a.checks ?? 0) >= 3 ||
+      (a.checkedAt && Date.now() - a.checkedAt < 60_000)
+    )
+      throw new PilotError('check_budget');
+    a.checks = (a.checks ?? 0) + 1;
+    a.checkedAt = Date.now();
+    a.firstCheckAt ??= a.checkedAt;
+    a.phase = 'rechecking';
+    delete a.nextCheckAt;
+    const entry: NonNullable<Attempt['checkHistory']>[number] = {
+      number: a.checks,
+      startedAt: a.checkedAt,
+      outcome: 'pending',
+    };
+    a.checkHistory = [...(a.checkHistory ?? []), entry].slice(-3);
+    await this.#save(a);
+    // Recovery must observe this journal instead of replaying an uncertain read.
+    await this.ctx.storage.setAlarm(Math.min(a.expiresAt, Date.now() + 30_000));
+    try {
+      const response = await fetch(exportUrl(a.activeExport), {
+        method: 'GET',
+        headers: {
+          Cookie: cookieHeader(a.cookies, a.activeExport),
+          Accept: 'text/csv',
+        },
+        redirect: 'manual',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(15_000),
+      });
+      const cookieRotationObserved = response.headers
+        .getSetCookie()
+        .some((c) => a.cookieNames?.includes(c.slice(0, c.indexOf('='))));
+      const parsed = parsePilotCsv(await readBounded(response));
+      if (a.expiresAt <= Date.now()) throw new PilotError('pilot_expired');
+      a.result = {
+        count: parsed.holdings.length,
+        namesMatch:
+          JSON.stringify(parsed.holdings.map((h) => h.domain)) ===
+          JSON.stringify(a.baseline.map((h) => h.domain)),
+        expiriesMatch:
+          JSON.stringify(parsed.holdings) === JSON.stringify(a.baseline),
+        cookieRotationObserved,
+      };
+      // Rotation needs a qualified persistence contract before a second use of this jar.
+      a.phase =
+        a.result.namesMatch && a.result.expiriesMatch && !cookieRotationObserved
+          ? 'passed'
+          : 'blocked';
+      a.error = cookieRotationObserved
+        ? 'rotation_contract_required'
+        : a.phase === 'passed'
+          ? undefined
+          : 'holdings_differ';
+      Object.assign(entry, {
+        completedAt: Date.now(),
+        outcome: a.phase === 'passed' ? 'passed' : 'blocked',
+        count: a.result.count,
+        namesMatch: a.result.namesMatch,
+        expiriesMatch: a.result.expiriesMatch,
+        error: a.error,
+      });
+      await this.#schedule(a);
+      return safeState(a);
+    } catch (error) {
+      a.phase = 'blocked';
+      a.error = error instanceof PilotError ? error.code : 'worker_read_failed';
+      Object.assign(entry, {
+        completedAt: Date.now(),
+        outcome: 'failed',
+        error: a.error,
+      });
+      await this.#schedule(a);
+      throw new PilotError(a.error);
+    }
+  }
+  async #schedule(a: Attempt) {
+    delete a.nextCheckAt;
+    const gateExpiry = Date.parse(this.env.PARKIO_PILOT_EXPIRES_AT ?? '');
+    if (
+      a.phase === 'passed' &&
+      a.authenticationFlow === 'native_credentials' &&
+      (a.checks ?? 0) < 3
+    ) {
+      const due =
+        (a.checks ?? 0) === 1
+          ? (a.checkedAt ?? Date.now()) + 60_000
+          : (a.firstCheckAt ?? a.checkedAt ?? Date.now()) + 23 * 3600_000;
+      if (due < a.expiresAt && due < gateExpiry) a.nextCheckAt = due;
+    }
+    await this.#save(a);
+    await this.ctx.storage.setAlarm(
+      Math.min(
+        a.expiresAt,
+        Number.isFinite(gateExpiry) ? gateExpiry : a.expiresAt,
+        a.nextCheckAt ?? a.expiresAt,
+      ),
+    );
+  }
+  async followups() {
     return this.#serial(async () => {
       const a = await this.#load();
       if (
+        !a ||
+        a.phase !== 'passed' ||
+        !a.browserClosed ||
+        !a.result?.namesMatch ||
+        !a.result.expiriesMatch ||
+        !pilotEnabled(this.env) ||
+        a.expiresAt <= Date.now()
+      )
+        throw new PilotError('proof_not_ready');
+      // Older completed proofs can opt into the same bounded schedule without a new login.
+      a.firstCheckAt ??= a.checkedAt;
+      if (!a.checkHistory?.length && a.checkedAt)
+        a.checkHistory = [
+          {
+            number: a.checks ?? 1,
+            startedAt: a.checkedAt,
+            completedAt: a.checkedAt,
+            outcome: 'passed',
+            count: a.result.count,
+            namesMatch: true,
+            expiriesMatch: true,
+          },
+        ];
+      await this.#schedule(a);
+      return safeState(a);
+    });
+  }
+  async cancel() {
+    return this.#serial(() => this.#clear());
+  }
+  async contract() {
+    return this.#serial(async () => {
+      const a = await this.#load();
+      if (a?.contractSummary) return a.contractSummary;
+      if (a?.contractRequestedAt)
+        throw new PilotError('contract_outcome_unknown');
+      if (
         !a?.cookies ||
-        !a.baseline ||
         !a.activeExport ||
         !a.browserClosed ||
-        !['ready', 'passed'].includes(a.phase)
+        a.phase !== 'passed' ||
+        !pilotEnabled(this.env) ||
+        a.expiresAt <= Date.now()
       )
-        throw new PilotError('close_browser_first');
-      if (!pilotEnabled(this.env) || a.expiresAt <= Date.now())
-        throw new PilotError('pilot_expired');
-      if (
-        (a.checks ?? 0) >= 3 ||
-        (a.checkedAt && Date.now() - a.checkedAt < 60_000)
-      )
-        throw new PilotError('check_budget');
-      a.checks = (a.checks ?? 0) + 1;
-      a.checkedAt = Date.now();
+        throw new PilotError('proof_not_ready');
+      a.contractRequestedAt = Date.now();
       await this.#save(a);
       try {
         const response = await fetch(exportUrl(a.activeExport), {
@@ -623,46 +813,35 @@ export class ParkioPilot {
           },
           redirect: 'manual',
           cache: 'no-store',
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(15000),
         });
-        const cookieRotationObserved = response.headers
+        const rotation = response.headers
           .getSetCookie()
           .some((c) => a.cookieNames?.includes(c.slice(0, c.indexOf('='))));
-        const parsed = parsePilotCsv(await readBounded(response));
-        a.result = {
-          count: parsed.holdings.length,
-          namesMatch:
-            JSON.stringify(parsed.holdings.map((h) => h.domain)) ===
-            JSON.stringify(a.baseline.map((h) => h.domain)),
-          expiriesMatch:
-            JSON.stringify(parsed.holdings) === JSON.stringify(a.baseline),
-          cookieRotationObserved,
+        if (rotation) {
+          a.phase = 'blocked';
+          a.error = 'rotation_contract_required';
+          await this.#schedule(a);
+        }
+        a.contractSummary = {
+          ...inspectPilotCsv(await readBounded(response)),
+          checkedAt: Date.now(),
+          cookieRotationObserved: rotation,
         };
-        // Rotation needs a qualified persistence contract before a second use of this jar.
-        a.phase =
-          a.result.namesMatch &&
-          a.result.expiriesMatch &&
-          !cookieRotationObserved
-            ? 'passed'
-            : 'blocked';
-        a.error = cookieRotationObserved
-          ? 'rotation_contract_required'
-          : a.phase === 'passed'
-            ? undefined
-            : 'holdings_differ';
-        await this.#save(a);
-        return safeState(a);
+        if (rotation) {
+          a.phase = 'blocked';
+          a.error = 'rotation_contract_required';
+          await this.#schedule(a);
+        } else await this.#save(a);
+        return a.contractSummary;
       } catch (error) {
         a.phase = 'blocked';
         a.error =
-          error instanceof PilotError ? error.code : 'worker_read_failed';
-        await this.#save(a);
+          error instanceof PilotError ? error.code : 'contract_read_failed';
+        await this.#schedule(a);
         throw new PilotError(a.error);
       }
     });
-  }
-  async cancel() {
-    return this.#serial(() => this.#clear());
   }
   async #clear() {
     const a = await this.#load();
@@ -671,6 +850,7 @@ export class ParkioPilot {
     delete a.cookies;
     delete a.baseline;
     delete a.activeExport;
+    delete a.nextCheckAt;
     await this.#save(a);
     try {
       if (!(await this.#close(a))) a.phase = 'cleanup_required';
@@ -689,6 +869,34 @@ export class ParkioPilot {
   async #expire() {
     const a = await this.#load();
     if (!a) return;
+    if (Date.now() >= a.expiresAt || !pilotEnabled(this.env))
+      return this.#clear();
+    if (a.phase === 'rechecking') {
+      a.phase = 'blocked';
+      a.error = 'check_outcome_unknown';
+      delete a.nextCheckAt;
+      const pending = a.checkHistory?.find((e) => e.outcome === 'pending');
+      if (pending)
+        Object.assign(pending, {
+          outcome: 'unknown',
+          completedAt: Date.now(),
+          error: a.error,
+        });
+      await this.#schedule(a);
+      return;
+    }
+    if (
+      a.phase === 'passed' &&
+      a.nextCheckAt !== undefined &&
+      a.nextCheckAt <= Date.now()
+    ) {
+      try {
+        await this.#retest();
+      } catch {
+        /* The durable failed/unknown receipt holds further scheduled checks. */
+      }
+      return;
+    }
     if (
       a.phase === 'closing' &&
       Date.now() < a.expiresAt &&
@@ -698,7 +906,13 @@ export class ParkioPilot {
         if (await this.#close(a)) {
           a.phase = 'ready';
           await this.#save(a);
-          await this.ctx.storage.setAlarm(a.expiresAt);
+          if (a.authenticationFlow === 'native_credentials') {
+            try {
+              await this.#retest();
+            } catch {
+              /* The stored read receipt explains qualification failures. */
+            }
+          } else await this.ctx.storage.setAlarm(a.expiresAt);
         } else await this.ctx.storage.setAlarm(Date.now() + 30_000);
       } catch {
         await this.ctx.storage.setAlarm(Date.now() + 30_000);
@@ -709,10 +923,13 @@ export class ParkioPilot {
       Date.now() >= a.expiresAt ||
       !pilotEnabled(this.env) ||
       a.phase === 'cleanup_required' ||
-      (a.cleanupAttempts ?? 0) >= 3
+      ((a.cleanupAttempts ?? 0) >= 3 && !a.browserClosed)
     )
       await this.#clear();
-    else await this.ctx.storage.setAlarm(a.expiresAt);
+    else
+      await this.ctx.storage.setAlarm(
+        Math.min(a.expiresAt, a.nextCheckAt ?? a.expiresAt),
+      );
   }
 }
 
@@ -771,6 +988,8 @@ export function parkioPilotRoutes(
       mobile: () => run<ParkioMobileConnection>('mobile'),
       complete: () => run<ReturnType<typeof safeState>>('complete'),
       proof: () => run<{ holdings: PilotHolding[] }>('proof'),
+      followups: () => run<ReturnType<typeof safeState>>('followups'),
+      contract: () => run<ReturnType<typeof inspectPilotCsv>>('contract'),
       inspect: () => run('inspect'),
       capture: () => run('capture'),
       retest: () => run('retest'),
@@ -810,6 +1029,8 @@ export function parkioPilotRoutes(
     '/native-connection',
     '/native-complete',
     '/native-retest',
+    '/native-followups',
+    '/native-contract',
   ])
     app.use(path, async (c, next) => {
       if (
@@ -833,6 +1054,12 @@ export function parkioPilotRoutes(
   );
   app.post('/native-retest', async (c) =>
     c.json(await stub(c.env, c.get('owner')).retest()),
+  );
+  app.post('/native-followups', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).followups()),
+  );
+  app.post('/native-contract', async (c) =>
+    c.json(await stub(c.env, c.get('owner')).contract()),
   );
   app.get('/mobile', (c) => c.redirect(base + '/sign-in', 303));
   app.get('/sign-in', (c) => {
