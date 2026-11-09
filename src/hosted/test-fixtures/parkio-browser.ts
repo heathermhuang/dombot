@@ -61,7 +61,10 @@ export function fixtureBrowser(
                     path: '/',
                     secure: true,
                     httpOnly: true,
-                    expires: -1,
+                    expires:
+                      mode === 'fractional-expiry'
+                        ? Date.now() / 1000 + 3600.00025
+                        : -1,
                   },
                 ],
               };

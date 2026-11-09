@@ -22,6 +22,7 @@ const cases = [
   'unknown-close',
   'revoked',
   'rotating',
+  'fractional-expiry',
 ];
 const csv =
   'Order ID,Domain,Created Date,Paid Date,Amount (USD),Expiration Date,On park.io\n12,alpha.test,2025-01-01,2025-01-02,100,2028-02-29,Yes\n13,beta.test,2025-01-01,2025-01-02,100,2029-01-01,Yes\n';
@@ -56,7 +57,12 @@ beforeAll(async () => {
         },
         bindings: {
           PARKIO_LOGIN_SECRET: 'test-only-root-'.repeat(4),
-          TEST_MODE: name === 'unknown-close' ? 'close-fails' : 'scheduled',
+          TEST_MODE:
+            name === 'unknown-close'
+              ? 'close-fails'
+              : name === 'fractional-expiry'
+                ? 'fractional-expiry'
+                : 'scheduled',
           PARKIO_CONNECTOR_ENABLED: 'true',
           PARKIO_CONNECTOR_WORKSPACES: JSON.stringify([workspace]),
           AUTH_PEPPER: 'test-auth-pepper-'.repeat(4),
@@ -519,5 +525,21 @@ describe('qualified connection-cookie rotation', () => {
       await call('rotating', 'candidate', { intent })
     ).json();
     expect(captured.credential.cookies[0].value).toBe('rotated-in-producer');
+  });
+});
+
+describe('native cookie expiration precision', () => {
+  it('preserves a fractional CDP expiry without rejecting the portable candidate', async () => {
+    const opened = await start('fractional-expiry'),
+      intent = opened.data.intentId;
+    expect(
+      (await call('fractional-expiry', 'complete', { intent })).status,
+    ).toBe(200);
+    const response = await call('fractional-expiry', 'candidate', { intent });
+    expect(response.status).toBe(200);
+    const c = (await response.json()).credential;
+    expect(Number.isInteger(c.expiresAt)).toBe(true);
+    expect(c.expiresAt).toBeLessThanOrEqual(c.cookies[0].expires * 1000);
+    expect(c.expiresAt).toBeGreaterThan(Date.now());
   });
 });
