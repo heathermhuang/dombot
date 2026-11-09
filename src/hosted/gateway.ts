@@ -1476,7 +1476,7 @@ app.all('/w/:workspace/*', async (c) => {
           error: 'Confirm your identity before disconnecting.',
           reauth:
             '/account/reauth?next=' +
-            encodeURIComponent(base + '/#/settings/registrars'),
+            encodeURIComponent(base + '/#/settings?tab=registrars'),
         },
         428,
       );
