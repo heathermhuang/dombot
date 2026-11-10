@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-core-source-4b468b752e1b8faf6e2a1fbe9e76874a522f3add",
+      "date": "2026-11-10",
+      "layer": "core",
+      "title": "Drop per-folder settings",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 4b468b752e1b",
+          "url": "https://github.com/aoxborrow/dombot/commit/4b468b752e1b8faf6e2a1fbe9e76874a522f3add"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-6d96ee9995daf959dfd2b9b60762bdd60bccc53b",
       "date": "2026-11-10",
       "layer": "core",
