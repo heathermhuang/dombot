@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-release-440875159",
+      "date": "2026-11-10",
+      "layer": "core",
+      "title": "DomBot 2.2.2",
+      "status": "Released upstream · Hosted rollout tracked separately",
+      "changes": [
+        "Published release notes and downloads are available in the linked project release. This publication does not infer a managed tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Published release",
+          "url": "https://github.com/aoxborrow/dombot/releases/tag/v2.2.2"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-6d96ee9995daf959dfd2b9b60762bdd60bccc53b",
       "date": "2026-11-10",
       "layer": "core",
@@ -14,6 +30,22 @@
         {
           "label": "Source change 6d96ee9995da",
           "url": "https://github.com/aoxborrow/dombot/commit/6d96ee9995daf959dfd2b9b60762bdd60bccc53b"
+        }
+      ]
+    },
+    {
+      "id": "auto-core-source-83b18e834fdb9007970c6c39e355321d98a5455e",
+      "date": "2026-11-10",
+      "layer": "core",
+      "title": "site: v2.2.2 download links",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 83b18e834fdb",
+          "url": "https://github.com/aoxborrow/dombot/commit/83b18e834fdb9007970c6c39e355321d98a5455e"
         }
       ]
     },
