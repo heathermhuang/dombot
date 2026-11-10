@@ -66,6 +66,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-212",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Date the updated inquiry privacy notice accurately",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #212 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #212",
+          "url": "https://github.com/heathermhuang/dombot/pull/212"
+        }
+      ]
+    },
+    {
       "id": "auto-core-release-438096189",
       "date": "2026-11-09",
       "layer": "core",
