@@ -60,7 +60,7 @@ type SalesEnv = {
 };
 const revision = z.string().uuid();
 // Inventory grants draft selection, never publication authority.
-const salesInventoryNames = async (env: Env) => {
+export const salesInventoryNames = async (env: Env) => {
   const { draft } = await new PublicationStore(
     env.DB,
     await aesGcmCipher(

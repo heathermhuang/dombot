@@ -23,6 +23,7 @@ import {
 } from './shared';
 import BulkActions from './BulkActions';
 import BulkJobs from './BulkJobs';
+import UseLander from './UseLander';
 import { InventoryPicker } from '../../components/owner-site/InventoryPicker';
 
 export default function Listings() {
@@ -353,6 +354,22 @@ export default function Listings() {
           </button>
         </div>
       )}
+      <UseLander
+        selection={
+          picked.length
+            ? { kind: 'listings', ids: picked.map((i) => i.draft.id) }
+            : null
+        }
+        matching={{
+          kind: 'matching-listings',
+          q: searchQ,
+          mode,
+          state: filter,
+        }}
+        onChange={() => {
+          void rows.reload();
+        }}
+      />
       {!!picked.length && (
         <BulkActions
           items={picked}

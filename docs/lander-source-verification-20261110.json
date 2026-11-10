@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "observedAt": "2026-11-10T14:21:36.039Z",
+  "engine": {
+    "version": "2.2.1-hosted.3",
+    "sourceSha256": "4c0cab0f63028bc9e12f04f28595ad4ae70770024d823caf1f2a58e4a4666d1c",
+    "archiveSha256": "7482c3f7228c2a6e90f6899ea48bd0daf999c23965871e46b16f7dad4c38c499"
+  },
+  "checks": {
+    "hostedAuthInstalledAndBuilt": true,
+    "typechecks": "passed",
+    "lint": "passed",
+    "engineBoundaryAndArtifact": "passed",
+    "changelog": "passed",
+    "fullSuite": {
+      "files": 305,
+      "passed": 3297,
+      "skipped": 1,
+      "note": "Full suite before the final Unicode fixture; exact affected job suite subsequently passed 18/18. PR CI runs the complete final source."
+    },
+    "security": {
+      "passed": 4
+    },
+    "relay": {
+      "passed": 4
+    },
+    "builds": [
+      {
+        "name": "gateway",
+        "status": 0
+      },
+      {
+        "name": "lander",
+        "status": 0
+      },
+      {
+        "name": "tenant",
+        "status": 0
+      },
+      {
+        "name": "prepare",
+        "status": 0
+      },
+      {
+        "name": "provisioner",
+        "status": 0
+      },
+      {
+        "name": "proxy-scheduler",
+        "status": 0
+      },
+      {
+        "name": "worker",
+        "status": 0
+      },
+      {
+        "name": "demo",
+        "status": 0
+      },
+      {
+        "name": "site",
+        "status": 0
+      }
+    ],
+    "exactFinalTenantProvisionerWorkerDryRuns": "passed",
+    "browser": {
+      "synthetic": true,
+      "providerWrites": 0,
+      "approved": 1,
+      "results": [
+        "reauthentication return retains selection and idempotency key",
+        "60 selected across pages; exact neutral review; one keyboard confirmation",
+        "job reopened after tab closure",
+        "mobile all-matching review without horizontal overflow"
+      ]
+    }
+  },
+  "live": {
+    "settings": {
+      "observedAt": "2026-11-10T13:55:34.181Z",
+      "customHostsEnabled": "true",
+      "qualifiedHostCount": 2,
+      "hasSalesProviderToken": false,
+      "hasSalesProviderZone": false,
+      "hasCnameTarget": false,
+      "automaticConnectionsEnabled": "unset",
+      "edgeKeysConfigured": false,
+      "bindingCount": 88
+    },
+    "provider": {
+      "observedAt": "2026-11-10T14:20:41.827Z",
+      "zoneReadStatus": 200,
+      "matchingZones": 1,
+      "customHostnameReadStatus": 403,
+      "customHostnameApiAvailable": false,
+      "fallbackReadStatus": 403,
+      "fallbackStatus": null,
+      "hasFallbackOrigin": false
+    },
+    "productionDnsWrites": 0,
+    "productionNameserverWrites": 0,
+    "productionDeployment": false,
+    "ownerFixtureSelected": false
+  },
+  "release": "Held for provider access/configuration and an exact owner-authorized unused fixture; feature defaults disabled."
+}

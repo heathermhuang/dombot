@@ -139,6 +139,7 @@ import {
 } from './sales-notifications';
 import { salesHostRequest } from './sales-host-routes';
 import { refreshSalesHostnames } from './sales-hostnames';
+import { landerRequest, drainLanderConnections } from './lander-connections';
 import {
   legacySalesFormScript,
   legacySalesFormScriptPath,
@@ -1585,6 +1586,7 @@ app.all('/w/:workspace/*', async (c) => {
   )
     return c.json(await salesRecipient(c.env, id, user.email));
   if (
+    path.startsWith('/sales/lander/') ||
     path === '/sales/hosts' ||
     path.startsWith('/sales/hosts/') ||
     path === '/sales/domain-control' ||
@@ -1607,6 +1609,19 @@ app.all('/w/:workspace/*', async (c) => {
           { error: 'Domain setup request limit reached. Try later.' },
           429,
         );
+    }
+    if (path.startsWith('/sales/lander/')) {
+      try {
+        return await landerRequest(c.env, id, user.email, path, c.req.raw);
+      } catch {
+        return c.json(
+          {
+            error:
+              'The lander connection request could not be admitted. Check qualification and request fields.',
+          },
+          409,
+        );
+      }
     }
     return path.startsWith('/sales/domain-control')
       ? domainControlRequest(c.env, id, user.id, c.req.raw)
@@ -2094,6 +2109,7 @@ export default {
       refreshDomainControls,
       refreshSalesHostnames,
       refreshPortfolioDomains,
+      drainLanderConnections,
       continueRenewalPricing,
     ]) {
       try {

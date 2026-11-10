@@ -1,0 +1,483 @@
+import {
+  beforeAll,
+  beforeEach,
+  afterAll,
+  describe,
+  it,
+  expect,
+  vi,
+} from 'vitest';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { readFileSync, readdirSync } from 'node:fs';
+import { MemoryDocStore } from '../core/storage/doc-store';
+import { configureStore, hydrateStores } from '../core/storage/namespace';
+import { createAccount } from '../core/services/accounts';
+import { LanderCloudflare } from '../core/services/lander-cloudflare';
+import { SalesStore } from './sales-store';
+import { LanderJobs } from './lander-jobs';
+import { emptySale } from '../shared/hosted-sales';
+import type {
+  NativeDnsRecord,
+  LanderHostingPlan,
+} from '../shared/lander-connection';
+import { exportSales, restoreSales } from './sales-backup';
+import { signGatewayRequest } from '../shared/gateway-proof';
+import { Hono } from 'hono';
+import { createLanderRoutes } from './lander-routes';
+
+let mf: Miniflare, db: D1Database, store: SalesStore, jobs: LanderJobs;
+const account = 'a'.repeat(32),
+  zone = 'b'.repeat(32),
+  domain = 'fixture.example';
+let records: NativeDnsRecord[],
+  writes: number,
+  fail: 'none' | 'before' | 'after',
+  nameservers: string[],
+  wrongAccount: boolean,
+  malformed: boolean,
+  proxy: boolean;
+const observation = () => ({
+  price: null,
+  available: true,
+  reason: null,
+  ownershipFingerprint: 'exact-owner',
+  controlExpiresAt: Date.now() + 86400000,
+});
+const hosts = (name = domain): LanderHostingPlan[] =>
+  [name, `www.${name}`].map((hostname) => ({
+    hostname,
+    epoch: 1,
+    challenge: 'c'.repeat(32),
+    records: [
+      {
+        type: 'TXT',
+        name: `_domains-sales.${hostname}`,
+        value: 'domains-sales=' + 'c'.repeat(32),
+      },
+    ],
+    target: 'fallback.example',
+  }));
+const fetcher: typeof fetch = async (input, init) => {
+  const request = input instanceof Request ? input : new Request(input, init),
+    url = new URL(request.url),
+    path = url.pathname;
+  if (url.hostname === 'cloudflare-dns.com')
+    return Response.json({
+      Status: 0,
+      Answer: nameservers.map((data) => ({ type: 2, data })),
+    });
+  const result = (value: unknown, info?: unknown) =>
+    Response.json({
+      success: true,
+      result: value,
+      ...(info ? { result_info: info } : {}),
+    });
+  if (path === '/client/v4/zones')
+    return result(
+      [
+        {
+          id: zone,
+          name: domain,
+          status: 'active',
+          type: 'full',
+          account: { id: wrongAccount ? 'e'.repeat(32) : account },
+          name_servers: ['a.ns.cloudflare.com', 'b.ns.cloudflare.com'],
+        },
+      ],
+      { page: 1, per_page: 50, total_pages: 1, total_count: 1 },
+    );
+  if (path === `/client/v4/zones/${zone}`)
+    return result({
+      id: zone,
+      name: domain,
+      status: 'active',
+      type: 'full',
+      account: { id: wrongAccount ? 'e'.repeat(32) : account },
+      name_servers: ['a.ns.cloudflare.com', 'b.ns.cloudflare.com'],
+    });
+  if (path.endsWith('/dns_records') && request.method === 'GET') {
+    if (malformed) return new Response('broken');
+    const page = Number(url.searchParams.get('page'));
+    return result(records.slice((page - 1) * 100, page * 100), {
+      page,
+      per_page: 100,
+      total_pages: Math.max(1, Math.ceil(records.length / 100)),
+      total_count: records.length,
+    });
+  }
+  if (path.includes('/dns_records') && request.method !== 'GET') {
+    writes++;
+    if (fail === 'before') {
+      fail = 'none';
+      throw Error('timeout');
+    }
+    const body =
+      request.method === 'DELETE'
+        ? null
+        : ((await request.json()) as NativeDnsRecord);
+    if (request.method === 'POST')
+      records.push({ ...body!, id: crypto.randomUUID().replaceAll('-', '') });
+    if (request.method === 'PATCH')
+      records = records.map((r) =>
+        r.id === path.split('/').at(-1) ? { ...r, ...body } : r,
+      );
+    if (request.method === 'DELETE')
+      records = records.filter((r) => r.id !== path.split('/').at(-1));
+    if (fail === 'after') {
+      fail = 'none';
+      throw Error('timeout after apply');
+    }
+    return result(body ?? {});
+  }
+  if (path.endsWith('/rulesets') || path.endsWith('/pagerules'))
+    return result([]);
+  if (path.endsWith('/dnssec')) return result({ status: 'active' });
+  if (path.endsWith('/settings/cname_flattening'))
+    return result({ value: proxy ? 'flatten_none' : 'flatten_at_root' });
+  throw Error('Unexpected fixture call ' + path);
+};
+beforeAll(async () => {
+  mf = new Miniflare(
+    convertV4MiniflareOptions({
+      workers: [
+        {
+          name: 'lander-jobs-test',
+          modules: true,
+          script: 'export default {fetch(){return new Response("ok")}}',
+          compatibilityDate: '2026-10-08',
+          d1Databases: ['DB'],
+        },
+      ],
+    }),
+  );
+  db = await mf.getD1Database('DB');
+  for (const f of readdirSync('migrations').sort())
+    await db.exec(
+      readFileSync('migrations/' + f, 'utf8')
+        .replace(/^--.*$/gm, '')
+        .replace(/\n/g, ' '),
+    );
+  store = await SalesStore.from({
+    DB: db,
+    DOMBOT_SECRET: btoa(String.fromCharCode(...new Uint8Array(32).fill(8))),
+  });
+}, 30000);
+afterAll(async () => mf?.dispose());
+beforeEach(async () => {
+  vi.restoreAllMocks();
+  configureStore(new MemoryDocStore());
+  await hydrateStores();
+  for (const table of [
+    'lander_domain_locks',
+    'lander_jobs',
+    'lander_recovery_archive',
+    'sales_events',
+    'sales_reviews',
+    'sales_shop',
+    'sale_drafts',
+  ])
+    await db.prepare(`DELETE FROM ${table}`).run();
+  await createAccount(
+    'cloudflare',
+    'DNS only',
+    { apiToken: 'fixture-secret', accountId: account },
+    undefined,
+    'cloudflare',
+  );
+  records = [
+    {
+      id: 'd'.repeat(32),
+      type: 'A',
+      name: domain,
+      content: '192.0.2.1',
+      ttl: 3600,
+      proxied: false,
+      comment: 'keep',
+      tags: ['owner:test'],
+      settings: { ipv4_only: false },
+    },
+  ];
+  writes = 0;
+  fail = 'none';
+  nameservers = ['a.ns.cloudflare.com.', 'b.ns.cloudflare.com.'];
+  wrongAccount = false;
+  malformed = false;
+  proxy = false;
+  jobs = new LanderJobs(store, observation, fetcher);
+});
+async function prepared() {
+  const id = crypto.randomUUID();
+  await jobs.create({ kind: 'domains', domains: [domain] }, id, async () => [
+    domain,
+  ]);
+  const work = (await jobs.work())!;
+  await jobs.step(work, hosts());
+  const review = await jobs.get(id);
+  expect(review.state).toBe('awaiting-review');
+  expect(review.counts).toEqual([{ state: 'ready', count: 1 }]);
+  return { id, work, review };
+}
+async function tick(state = 'tls-ready') {
+  await db.prepare('UPDATE lander_items SET due_at=0').run();
+  const work = await jobs.work();
+  if (work) await jobs.step(work, undefined, state);
+  return work;
+}
+describe('native Cloudflare qualification', () => {
+  it('enumerates multiple DNS pages with all metadata intact', async () => {
+    records = Array.from({ length: 205 }, (_, i) => ({
+      id: i.toString(16).padStart(32, '0'),
+      type: 'TXT',
+      name: `s${i}.${domain}`,
+      content: 'proof ' + i,
+      ttl: 3600,
+      comment: 'private note',
+      tags: ['owner:record'],
+    }));
+    const result = await new LanderCloudflare('cloudflare', fetcher).snapshot(
+      domain,
+    );
+    expect(result.records).toEqual(records);
+    expect(writes).toBe(0);
+  });
+  it.each(['empty', 'wrong-account', 'no-apex', 'malformed'] as const)(
+    'fails closed for %s',
+    async (mode) => {
+      if (mode === 'empty') nameservers = [];
+      if (mode === 'wrong-account') wrongAccount = true;
+      if (mode === 'no-apex') proxy = true;
+      if (mode === 'malformed') malformed = true;
+      await expect(
+        new LanderCloudflare('cloudflare', fetcher).snapshot(domain),
+      ).rejects.toThrow();
+      expect(writes).toBe(0);
+    },
+  );
+});
+describe('durable exact lander manifests and recovery', () => {
+  it('matches Unicode search through the shared Worker-safe domain normalizer', async () => {
+    await store.save(emptySale('xn--fiqs8s.example', 'none'), null);
+    const view = await jobs.create(
+      { kind: 'matching-listings', q: '中国', mode: '', state: 'All' },
+      crypto.randomUUID(),
+      async () => ['xn--fiqs8s.example'],
+    );
+    expect(view.total).toBe(1);
+    expect(view.items[0].domain).toBe('xn--fiqs8s.example');
+  });
+  it('freezes 521 all-matching listings across server pages and internal inserts', async () => {
+    for (let i = 0; i < 521; i++) {
+      const d = emptySale(`selected-${i}.example`, 'none');
+      d.priceSource = null;
+      await store.save(d, null);
+    }
+    const id = crypto.randomUUID(),
+      view = await jobs.create(
+        { kind: 'matching-listings', q: '', mode: '', state: 'All' },
+        id,
+        async () => [],
+      );
+    expect(view.total).toBe(521);
+    expect(view.items).toHaveLength(100);
+    expect(view.cursor).toBe(99);
+    await store.save(emptySale('later.example', 'none'), null);
+    expect((await jobs.get(id)).total).toBe(521);
+    expect((await jobs.get(id, 499)).items).toHaveLength(21);
+  }, 30000);
+  it('requires the exact combined digest, keeps neutral publication private before approval and survives controller recreation', async () => {
+    const { id, work, review } = await prepared();
+    expect((await store.get(work.listing)).published).toBeNull();
+    expect(review.items[0].publication?.publicPrice).toBeNull();
+    expect(writes).toBe(0);
+    await expect(jobs.approve(id, '0'.repeat(64))).rejects.toThrow(/manifest/);
+    await jobs.approve(id, review.digest!);
+    jobs = new LanderJobs(store, observation, fetcher);
+    await tick();
+    expect((await store.get(work.listing)).published?.revision).toBe(
+      review.items[0].publication?.revision,
+    );
+    expect(writes).toBe(1);
+    for (let n = 0; n < 5; n++) await tick('live');
+    expect((await jobs.get(id)).counts).toEqual([{ state: 'live', count: 1 }]);
+    expect(records.find((r) => r.id === 'd'.repeat(32))).toMatchObject({
+      type: 'CNAME',
+      comment: 'keep',
+      tags: ['owner:test'],
+      ttl: 3600,
+    });
+    expect(records.filter((r) => r.type === 'CNAME')).toHaveLength(2);
+  });
+  it('reconciles a timeout after submission without duplicate writes', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    fail = 'after';
+    await tick();
+    expect(writes).toBe(1);
+    await tick();
+    expect(writes).toBe(1);
+    expect((await jobs.get(id)).items[0].state).toBe('dns');
+  });
+  it('never blindly retries an unknown write that is not yet observable', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    fail = 'before';
+    await tick();
+    await tick();
+    expect(writes).toBe(1);
+    expect((await jobs.get(id)).items[0]).toMatchObject({ state: 'held' });
+  });
+  it('prepares HTTPS before changing root/www routing', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    await tick('waiting');
+    await tick('waiting');
+    await tick('waiting');
+    expect(writes).toBe(2);
+    expect(records.some((r) => r.type === 'CNAME')).toBe(false);
+    expect((await jobs.get(id)).items[0].state).toBe('pending-tls');
+  });
+  it('holds a publication race without DNS writes', async () => {
+    const { id, review, work } = await prepared();
+    const saved = await store.get(work.listing);
+    await store.save(
+      { ...saved.draft, description: 'new private terms' },
+      saved.revision,
+    );
+    await jobs.approve(id, review.digest!);
+    await tick();
+    expect(writes).toBe(0);
+    expect((await jobs.get(id)).items[0].state).toBe('held');
+  });
+  it('rejects a stale generation and an active second worker lease', async () => {
+    const { id, review, work } = await prepared();
+    await jobs.approve(id, review.digest!);
+    await jobs.step(
+      { ...work, generation: crypto.randomUUID() },
+      undefined,
+      'live',
+    );
+    expect(writes).toBe(0);
+    await db
+      .prepare('UPDATE lander_items SET lease=?,lease_until=? WHERE job_id=?')
+      .bind(crypto.randomUUID(), Date.now() + 60000, id)
+      .run();
+    await jobs.step(work, undefined, 'live');
+    expect(writes).toBe(0);
+  });
+  it('guards complete parent digest and duplicate request payloads', async () => {
+    const { id, review } = await prepared();
+    await expect(
+      jobs.create(
+        { kind: 'domains', domains: ['other.example'] },
+        id,
+        async () => ['other.example'],
+      ),
+    ).rejects.toThrow(/another selection/);
+    await db
+      .prepare('UPDATE lander_items SET digest=? WHERE job_id=?')
+      .bind('0'.repeat(64), id)
+      .run();
+    await expect(jobs.approve(id, review.digest!)).rejects.toThrow(/manifest/);
+    expect(writes).toBe(0);
+  });
+  it('restores exact changed web routing while preserving unrelated later edits', async () => {
+    const { id, review } = await prepared(),
+      original = structuredClone(records);
+    await jobs.approve(id, review.digest!);
+    for (let n = 0; n < 6; n++) await tick('live');
+    records.push({
+      id: 'e'.repeat(32),
+      type: 'TXT',
+      name: 'later.fixture.example',
+      content: 'later-owner-edit',
+      ttl: 1800,
+    });
+    await jobs.restore(id);
+    for (let n = 0; n < 6; n++) await tick('detached');
+    expect(records).toEqual([
+      ...original,
+      {
+        id: 'e'.repeat(32),
+        type: 'TXT',
+        name: 'later.fixture.example',
+        content: 'later-owner-edit',
+        ttl: 1800,
+      },
+    ]);
+    expect((await jobs.get(id)).items[0].state).toBe('restored');
+  });
+  it('preserves conflicting newer web records during restore', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    for (let n = 0; n < 6; n++) await tick('live');
+    records.find((r) => r.name === domain)!.content = 'later.example';
+    const before = writes;
+    await jobs.restore(id);
+    for (let n = 0; n < 6; n++) await tick();
+    expect(records.find((r) => r.name === domain)?.content).toBe(
+      'later.example',
+    );
+    expect((await jobs.get(id)).items[0].state).toBe('conflict');
+    expect(writes).toBeLessThanOrEqual(before + 1);
+  });
+  it('cancels future work and imports DNS snapshots only as private recovery data', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    await tick();
+    await jobs.cancel(id);
+    await tick();
+    expect(writes).toBe(1);
+    const backup = await exportSales(store);
+    expect(backup.version).toBe(5);
+    expect(backup.dnsRecovery).toHaveLength(1);
+    expect(JSON.stringify(backup)).not.toContain('fixture-secret');
+    await restoreSales(store, { ...backup, version: 4, dnsRecovery: [] });
+    expect(await jobs.work()).toBeNull();
+    expect(
+      await db
+        .prepare('SELECT count(*) AS n FROM lander_recovery_archive')
+        .first(),
+    ).toEqual({ n: 1 });
+    expect(
+      (await store.get(review.items[0].publication!.id)).published,
+    ).toBeNull();
+    expect(writes).toBe(1);
+  });
+  it('never accepts owner/public or cross-tenant proof on internal DNS routes', async () => {
+    const secret = 'fixture-gateway-secret'.repeat(3),
+      workspace = '11111111-1111-4111-8111-111111111111';
+    const app = new Hono<{ Bindings: Env }>();
+    app.route(
+      '/sales-internal/lander',
+      createLanderRoutes(async (_c, next) => {
+        await next();
+      }),
+    );
+    for (const [purpose, target] of [
+      ['sales-hostnames', workspace],
+      ['sales-connections', '22222222-2222-4222-8222-222222222222'],
+    ] as const) {
+      const request = new Request(
+        'https://fixture.example/sales-internal/lander/work',
+      );
+      request.headers.set(
+        'X-DomBot-Gateway-Proof',
+        await signGatewayRequest(
+          secret,
+          target,
+          null,
+          request,
+          purpose === 'sales-connections'
+            ? { purpose, recipientVerified: true }
+            : { purpose },
+        ),
+      );
+      const response = await app.fetch(request, {
+        DB: db,
+        DOMBOT_GATEWAY_SECRET: secret,
+        DOMBOT_WORKSPACE_ID: workspace,
+      } as Env);
+      expect(response.status).toBe(403);
+    }
+  });
+});

@@ -19,6 +19,12 @@ export const salesAdmissionSchema = z.discriminatedUnion('purpose', [
     .strict(),
   z.object({ purpose: z.literal('sales-notifications') }).strict(),
   z.object({ purpose: z.literal('sales-hostnames') }).strict(),
+  z
+    .object({
+      purpose: z.literal('sales-connections'),
+      recipientVerified: z.boolean(),
+    })
+    .strict(),
   z.object({ purpose: z.literal('portfolio-notifications') }).strict(),
 ]);
 export type SalesAdmission = z.infer<typeof salesAdmissionSchema>;

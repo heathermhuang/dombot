@@ -1,5 +1,10 @@
 import { journeyRowSchema } from '../shared/sales-journey';
 import { journeyReady } from './sales-journey';
+import {
+  landerRecoverySchema,
+  landerTables,
+  exportLanderRecovery,
+} from './lander-backup';
 import { z } from 'zod';
 import {
   saleDraftSchema,
@@ -20,7 +25,14 @@ const privateRow = z
   .strict();
 export const salesBackupSchema = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    version: z.union([
+      z.literal(1),
+      z.literal(2),
+      z.literal(3),
+      z.literal(4),
+      z.literal(5),
+    ]),
+    dnsRecovery: z.array(landerRecoverySchema).max(100000).default([]),
     journey: z.array(journeyRowSchema).max(100000).default([]),
     drafts: z.array(saleDraftSchema).max(20_000),
     destinations: z.array(destinationSchema).max(100),
@@ -138,6 +150,9 @@ export async function hasSales(db: D1Database): Promise<boolean> {
 export async function hasSalesData(db: D1Database): Promise<boolean> {
   // These identifiers are fixed schema names, never caller-controlled input.
   const tables = [
+    ...((await landerTables(db))
+      ? ['lander_jobs', 'lander_recovery_archive']
+      : []),
     'sale_drafts',
     'sale_destinations',
     'published_sales',
@@ -183,7 +198,8 @@ export async function exportSales(
   const open = async (r: Record<string, unknown>) =>
     JSON.parse(await store.cipher.open(String(r.sealed)));
   return salesBackupSchema.parse({
-    version: 4,
+    version: 5,
+    dnsRecovery: await exportLanderRecovery(store),
     journey: (await journeyReady(store.db))
       ? (await read('sales_journey_daily')).map((r) => ({
           day: r.day,
@@ -280,6 +296,27 @@ export async function restoreSales(
 ): Promise<void> {
   const v = salesBackupSchema.parse(raw),
     writes: D1PreparedStatement[] = [];
+  const connectionsReady = await landerTables(store.db);
+  if (v.dnsRecovery.length && !connectionsReady)
+    throw Error(
+      'Install the lander recovery migration before importing this backup. Nothing was restored.',
+    );
+  // Import never resumes authority, but current DNS recovery must remain
+  // available even when restoring a backup from before connections existed.
+  const retainedRecovery = connectionsReady
+    ? await exportLanderRecovery(store)
+    : [];
+  const recovery = new Map(
+    [...v.dnsRecovery, ...retainedRecovery].map((entry) => [entry.id, entry]),
+  );
+  for (const entry of recovery.values())
+    writes.push(
+      store.db
+        .prepare(
+          'INSERT INTO lander_recovery_archive(id,sealed,restored_at) VALUES(?,?,?)',
+        )
+        .bind(entry.id, await store.seal(entry.payload), Date.now()),
+    );
   const drafts: (string | number | null)[][] = [];
   for (const d of v.drafts)
     drafts.push([
@@ -463,6 +500,11 @@ export async function restoreSales(
     );
   // Every payload and row is validated and resealed before the one atomic replacement.
   await store.db.batch([
+    ...(connectionsReady
+      ? ['lander_domain_locks', 'lander_jobs', 'lander_recovery_archive'].map(
+          (table) => store.db.prepare(`DELETE FROM ${table}`),
+        )
+      : []),
     ...[
       'sales_events',
       ...((await journeyReady(store.db))

@@ -18,6 +18,7 @@ import { domainKey } from '../../shared/account-key';
 import { importedRows } from '../../shared/imported-domains';
 const HIDDEN_FOLDER_ID = '__hidden__';
 import LegacyDomains from './Domains';
+import UseLander from './sales/UseLander';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -1513,6 +1514,11 @@ function PublicPortfolioWorkspace({ area }: { area: 'domains' | 'page' }) {
                 )}
               </div>
             )}
+            <UseLander
+              selection={
+                picked.size ? { kind: 'domains', domains: [...picked] } : null
+              }
+            />
             {collectionAction && picked.size > 0 && (
               <div className="pf-bulk-form">
                 <label className="pf-field">

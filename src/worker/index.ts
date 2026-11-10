@@ -70,6 +70,7 @@ import { publicationBackupMethods } from './publication-backup';
 import { createPublicSalesRoutes } from './public-sales';
 import { createSalesInternalRoutes } from './sales-internal';
 import { createSalesRoutes } from './sales-routes';
+import { createLanderRoutes } from './lander-routes';
 import { createNotificationRoutes } from './notification-routes';
 import {
   NotificationStore,
@@ -246,7 +247,6 @@ function retainRequestWork(c: Context, work: Promise<unknown>): void {
 // private store or decrypt credentials to serve these pages.
 app.route('/', createPublicPortfolioRoutes());
 app.route('/', createPublicSalesRoutes());
-app.route('/sales-internal', createSalesInternalRoutes());
 // The user's IP address for the stateful request being handled, which
 // Cloudflare sets as CF-Connecting-IP at the edge. Registrar agreements that
 // record it read it through configureConsentIp (see bootOnce). Stateful
@@ -461,6 +461,8 @@ app.route(
   createPublicationRoutes(stateful, publicationReads.read),
 );
 app.route('/sales', createSalesRoutes(stateful));
+app.route('/sales-internal/lander', createLanderRoutes(stateful));
+app.route('/sales-internal', createSalesInternalRoutes());
 app.route('/notifications', createNotificationRoutes(stateful));
 
 app.post(

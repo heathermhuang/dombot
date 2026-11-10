@@ -37,6 +37,12 @@ export const MAINTENANCE_TABLES = [
   'sales_control_leases',
 ] as const;
 const infrastructure = new Set([
+  // The gateway's deterministic connection drain owns these records. They
+  // must not wake registrar polling or make an otherwise empty tenant unknown.
+  'lander_jobs',
+  'lander_items',
+  'lander_domain_locks',
+  'lander_recovery_archive',
   // Gateway notification dispatch owns these records; they must not wake registrar polling.
   'notification_outbox',
   'notification_events',
