@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "observedAt": "2026-11-10T14:21:36.039Z",
+  "observedAt": "2026-11-10T14:25:18.287Z",
   "engine": {
     "version": "2.2.1-hosted.3",
-    "sourceSha256": "4c0cab0f63028bc9e12f04f28595ad4ae70770024d823caf1f2a58e4a4666d1c",
-    "archiveSha256": "7482c3f7228c2a6e90f6899ea48bd0daf999c23965871e46b16f7dad4c38c499"
+    "sourceSha256": "d45348ab2757109485a0e532c491ceb6996812b1805cd6feaa967bd732e4d219",
+    "archiveSha256": "b61dc4045e399e746b20fd22923fc8845d41a24c2818f5d9d3db973c07beed8b"
   },
   "checks": {
     "hostedAuthInstalledAndBuilt": true,
@@ -16,7 +16,7 @@
       "files": 305,
       "passed": 3297,
       "skipped": 1,
-      "note": "Full suite before the final Unicode fixture; exact affected job suite subsequently passed 18/18. PR CI runs the complete final source."
+      "note": "Full suite before the final focused pagination contract assertions. Exact affected job suite subsequently passed 18/18; PR CI runs and rebuilds the complete final source."
     },
     "security": {
       "passed": 4

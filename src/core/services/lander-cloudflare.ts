@@ -167,14 +167,15 @@ export class LanderCloudflare {
       total: number | undefined;
     for (;;) {
       const r = await this.call(
-          `/zones/${zoneId}/dns_records?per_page=100&page=${page}&order=id&direction=asc`,
+          `/zones/${zoneId}/dns_records?per_page=100&page=${page}&order=name&direction=asc`,
         ),
         info = r.result_info;
       if (
         !info ||
         info.page !== page ||
         info.per_page !== 100 ||
-        info.total_pages < 1 ||
+        (info.total_pages < 1 &&
+          !(page === 1 && info.total_count === 0 && info.total_pages === 0)) ||
         (total !== undefined && total !== info.total_count)
       )
         throw new LanderDnsError(
@@ -183,6 +184,7 @@ export class LanderCloudflare {
         );
       total = info.total_count;
       const part = z.array(dnsRecordSchema).max(100).parse(r.result);
+      if (page === 1 && info.total_count === 0 && !part.length) return [];
       bytes += new TextEncoder().encode(JSON.stringify(part)).length;
       if (bytes > 500000)
         throw new LanderDnsError(
@@ -263,9 +265,7 @@ export class LanderCloudflare {
     // Complete provider-side routing inspection is mandatory. Missing read
     // permission is a hold, never interpreted as an empty rule set.
     const rules = await this.call(`/zones/${zone.id}/rulesets`);
-    const pageRules = await this.call(
-      `/zones/${zone.id}/pagerules?per_page=100&page=1`,
-    );
+    const pageRules = await this.call(`/zones/${zone.id}/pagerules`);
     const ruleRows = z
       .array(z.object({ phase: z.string() }).passthrough())
       .parse(rules.result);

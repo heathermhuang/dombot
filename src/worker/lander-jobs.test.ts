@@ -96,12 +96,13 @@ const fetcher: typeof fetch = async (input, init) => {
       name_servers: ['a.ns.cloudflare.com', 'b.ns.cloudflare.com'],
     });
   if (path.endsWith('/dns_records') && request.method === 'GET') {
+    expect(url.searchParams.get('order')).toBe('name');
     if (malformed) return new Response('broken');
     const page = Number(url.searchParams.get('page'));
     return result(records.slice((page - 1) * 100, page * 100), {
       page,
       per_page: 100,
-      total_pages: Math.max(1, Math.ceil(records.length / 100)),
+      total_pages: Math.ceil(records.length / 100),
       total_count: records.length,
     });
   }
@@ -239,6 +240,11 @@ describe('native Cloudflare qualification', () => {
     );
     expect(result.records).toEqual(records);
     expect(writes).toBe(0);
+    records = [];
+    expect(
+      (await new LanderCloudflare('cloudflare', fetcher).snapshot(domain))
+        .records,
+    ).toEqual([]);
   });
   it.each(['empty', 'wrong-account', 'no-apex', 'malformed'] as const)(
     'fails closed for %s',
