@@ -1,0 +1,108 @@
+{
+  "date": "2026-11-10",
+  "status": "deployed_and_verified",
+  "verifiedAt": "2026-11-10T00:15:53.027Z",
+  "implementationPullRequest": "https://github.com/heathermhuang/dombot/pull/209",
+  "releaseCommit": "f0b4556c1f0589da9629b4761f84152e933d9562",
+  "engine": "2.2.1-hosted.1",
+  "registrarSdk": "1.2.1-hosted.1",
+  "engineSourceSha256": "f98cb4ba12401806a2edfb26b0072a4a626c642ac978790c5699c190ecc8c27c",
+  "engineArchiveSha256": "7a9e3f2ecd67c38f727a9ab98da0b6535de88ca4b8b19ddbd9e9a76ddc4514e6",
+  "futureTemplateSha256": "8c9df2c923118dfa357a1edc841df04584c329ba2d297e80d8b59648a56f927c",
+  "upstream": {
+    "app": {
+      "version": "2.2.1",
+      "revision": "a688173c7e5099cec99d2f2721f040ef48f25fa7",
+      "pullRequest": "https://github.com/aoxborrow/dombot/pull/268",
+      "merged": true
+    },
+    "sdk": {
+      "version": "1.2.1",
+      "revision": "7f8b5a5f59edb8b91f0e29e65162de2f49d75324",
+      "pullRequest": "https://github.com/aoxborrow/registrar-client/pull/106",
+      "merged": true,
+      "directDnsAndAutorenew": "https://github.com/aoxborrow/registrar-client/pull/110"
+    }
+  },
+  "servingOriginalPortfolios": 48,
+  "preservation": {
+    "usersPreserved": 62,
+    "originalWorkspaceIdentitiesPreserved": 584,
+    "platformMappingsPreserved": 43,
+    "credentialNamespacesPreserved": 48,
+    "publishedSalesPreserved": 28,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 28,
+    "existingActiveHostsVerified": 2,
+    "notificationChoicesPreserved": true,
+    "allQualifiedBindingsPreserved": true,
+    "schedulesPreserved": true,
+    "originalAllocationRestored": true,
+    "directoryConflicts": 0
+  },
+  "runtimeEvidence": {
+    "privateStatusProbes": 43,
+    "publicReleaseProbes": 5,
+    "exactSourceForEveryPortfolio": true,
+    "providerSecretCustodyExpanded": false,
+    "coordinatorHealthChecks": 41
+  },
+  "templateBindingsPreserved": 16,
+  "liveMcp": {
+    "ownedDnsRead": true,
+    "publicUnownedDnsRead": true,
+    "rawDomainNamesOrRecordsPublished": false,
+    "registrarMutations": 0
+  },
+  "managedImport": {
+    "passed": true,
+    "production": true,
+    "source": "f0b4556c1f0589da9629b4761f84152e933d9562",
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "at": "2026-11-10T00:12:02.931Z",
+    "engine": "2.2.1-hosted.1",
+    "engineSource": "f98cb4ba12401806a2edfb26b0072a4a626c642ac978790c5699c190ecc8c27c",
+    "cleanupComplete": true,
+    "independentWorkerAbsence": true,
+    "independentDatabaseAbsence": true,
+    "setupErased": true,
+    "temporaryCredentialsDestroyed": true,
+    "realAccountsPreserved": true,
+    "activeQa": 0,
+    "unfinishedAllocations": 0
+  },
+  "recovery": {
+    "codeSettingsSnapshots": 50,
+    "cloudflareHostedDatabaseBookmarks": 49,
+    "databaseContentsDownloaded": false,
+    "rootKeysExported": false,
+    "durableRecoveryCustody": true,
+    "temporaryAssetTokensScrubbed": true
+  },
+  "httpChecks": 68,
+  "activeQaRuns": 0,
+  "unfinishedAllocations": 0,
+  "validation": {
+    "appTestFiles": 301,
+    "appTestsPassed": 3243,
+    "intentionalSkips": 1,
+    "sdkOfflineTests": 695,
+    "desktopMobileScenarios": 11,
+    "namefiAndMarketConnectionFormsPassed": true,
+    "securityRegressions": 4,
+    "relayChecks": 4,
+    "workerDryBundles": 6,
+    "ci": "https://github.com/heathermhuang/dombot/actions/runs/42718667212",
+    "codeql": "https://github.com/heathermhuang/dombot/actions/runs/42718667072"
+  },
+  "registrarMutations": 0
+}
