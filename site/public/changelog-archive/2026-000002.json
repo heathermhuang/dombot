@@ -98,6 +98,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-213",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Record verified inquiry identity production rollout",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #213 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #213",
+          "url": "https://github.com/heathermhuang/dombot/pull/213"
+        }
+      ]
+    },
+    {
       "id": "auto-core-release-438096189",
       "date": "2026-11-09",
       "layer": "core",
