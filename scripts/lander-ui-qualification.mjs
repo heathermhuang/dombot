@@ -266,6 +266,9 @@ try {
     .getByRole('heading', { name: 'Connect your domains', exact: true })
     .waitFor();
   assert.equal(selection.kind, 'matching-listings');
+  await page
+    .getByRole('heading', { name: 'Connect your domains', exact: true })
+    .scrollIntoViewIfNeeded();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth + 1,
   );

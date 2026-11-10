@@ -230,6 +230,13 @@ export default function UseLander({
                 Standard pages show the domain and a neutral inquiry action,
                 with no inferred price. Held domains remain unchanged.
               </p>
+              <button
+                className="primary"
+                disabled={action.busy || !ready}
+                onClick={() => apply('approve')}
+              >
+                Confirm publication and DNS for {ready} domains
+              </button>
             </>
           )}
           {['running', 'restoring'].includes(job.state) && (
@@ -328,15 +335,6 @@ export default function UseLander({
                 }
               >
                 Next results
-              </button>
-            )}
-            {job.state === 'awaiting-review' && (
-              <button
-                className="primary"
-                disabled={action.busy || !ready}
-                onClick={() => apply('approve')}
-              >
-                Confirm publication and DNS for {ready} domains
               </button>
             )}
             {['preparing', 'awaiting-review', 'running'].includes(
