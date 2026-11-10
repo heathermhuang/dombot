@@ -50,6 +50,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-211",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Add private inquiry contact details and seller identity context",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #211 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #211",
+          "url": "https://github.com/heathermhuang/dombot/pull/211"
+        }
+      ]
+    },
+    {
       "id": "auto-core-release-438096189",
       "date": "2026-11-09",
       "layer": "core",
