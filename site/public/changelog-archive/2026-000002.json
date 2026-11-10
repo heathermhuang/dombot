@@ -2,6 +2,54 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-evidence-1e1a282b4e842f38709636c3",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Verified hosted release record 2.2.1-hosted.1",
+      "status": "Verified release evidence published · Scope follows the linked record",
+      "changes": [
+        "A verified release record was published. Its linked evidence defines the deployed source, engine and validation scope; the date here is its publication date."
+      ],
+      "links": [
+        {
+          "label": "Verified release record",
+          "url": "https://github.com/heathermhuang/dombot/blob/a6a67e5bb8dbe936dfa87bea58e724ae0f69e1c3/docs/namefi-upstream-sync-release-20261110.json"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-f0b4556c1f0589da9629b4761f84152e933d9562-22",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Hosted service update observed: Merge upstream 2.2.1 and published Namefi SDK (#209)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/f0b4556c1f0589da9629b4761f84152e933d9562"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-210",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Record verified Namefi upstream production release",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #210 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #210",
+          "url": "https://github.com/heathermhuang/dombot/pull/210"
+        }
+      ]
+    },
+    {
       "id": "auto-core-release-438096189",
       "date": "2026-11-09",
       "layer": "core",
