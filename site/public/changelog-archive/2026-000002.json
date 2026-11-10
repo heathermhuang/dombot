@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-33a6ec08351a58429be30d37340d41d10f676502-23",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Hosted service update observed: Version the updated inquiry privacy notice for 10 November (#212)",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/33a6ec08351a58429be30d37340d41d10f676502"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-f0b4556c1f0589da9629b4761f84152e933d9562-22",
       "date": "2026-11-10",
       "layer": "saas",
