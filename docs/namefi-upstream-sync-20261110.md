@@ -74,3 +74,11 @@ production canary, tenant fleet/template/provisioner/gateway rollout, production
 import/cleanup, live provider write acceptance or a new independent-user result.
 Historical production receipts remain unchanged. The primary dirty checkout was
 preserved throughout; all work used an isolated temporary clone.
+
+## Managed production completion
+
+The qualified source is now deployed and verified across all 48 original admitted
+portfolios, the future template and gateway. See the separate
+[production release record](namefi-upstream-sync-release-20261110.md) and
+[machine receipt](namefi-upstream-sync-release-20261110.json) for runtime,
+preservation, import/retry/cleanup and recovery evidence.
