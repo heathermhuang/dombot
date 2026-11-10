@@ -652,6 +652,26 @@ export class LanderJobs {
             409,
           );
         if (j.state === 'restoring') {
+          if (p.write?.state === 'intent') {
+            const submitted = observeDnsChange(
+              current.records,
+              plan.changes[p.write.index],
+            );
+            if (submitted.state !== 'after') {
+              await save(
+                submitted.state === 'conflict' ? 'conflict' : 'held',
+                submitted.state === 'conflict'
+                  ? 'A submitted DNS write conflicts with current records. Later edits were preserved.'
+                  : 'A submitted DNS write is still unobserved. Restore is held because that write may arrive later; reconcile the provider outcome before cutback.',
+              );
+              return;
+            }
+            p.write = {
+              index: p.write.index,
+              state: 'verified',
+              record: submitted.record,
+            };
+          }
           let index = p.restoreIndex ?? plan.changes.length - 1;
           if (index < 0) {
             await save('restored-dns');

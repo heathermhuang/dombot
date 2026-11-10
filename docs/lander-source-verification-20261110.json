@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "observedAt": "2026-11-10T14:29:49.614Z",
+  "observedAt": "2026-11-10T14:57:29.158Z",
   "engine": {
     "version": "2.2.1-hosted.3",
-    "sourceSha256": "97f4f1fca1f4ba3af416a3f711e2a194ed2d362fd4effb794eba29195dd19335",
-    "archiveSha256": "23f8078d1e679323cc08fc22338a0696f1bda057b19a3bb0c0e792b6ad64ea46"
+    "sourceSha256": "57d6c82d7f9c18ed080537171822eb2e8e1bb85bfcfbf11012c82c218ee58e56",
+    "archiveSha256": "0c1ab7e0630d2235f47a45bba3f3ad18eaa8cbd25d9ed4647bc8f8afc00149c7"
   },
   "checks": {
     "hostedAuthInstalledAndBuilt": true,
@@ -14,9 +14,9 @@
     "changelog": "passed",
     "fullSuite": {
       "files": 305,
-      "passed": 3297,
+      "passed": 3299,
       "skipped": 1,
-      "note": "Full suite before the final focused pagination contract assertions. Exact affected job suite subsequently passed 18/18; PR CI runs and rebuilds the complete final source."
+      "note": "Full local suite after review correction; the affected job suite passed 19/19. Updated PR CI will verify the exact head."
     },
     "security": {
       "passed": 4
@@ -102,5 +102,5 @@
     "productionDeployment": false,
     "ownerFixtureSelected": false
   },
-  "release": "Held for provider access/configuration and an exact owner-authorized unused fixture; feature defaults disabled."
+  "release": "User requested review and deployment; code/schema deployment proceeds with automatic DNS disabled. Provider access and an exact owner fixture still gate activation."
 }

@@ -332,6 +332,32 @@ describe('durable exact lander manifests and recovery', () => {
     expect(writes).toBe(1);
     expect((await jobs.get(id)).items[0]).toMatchObject({ state: 'held' });
   });
+  it('holds restore for an unobserved submission and reconciles a late write before cutback', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    fail = 'before';
+    await tick();
+    await tick();
+    const row = await db
+      .prepare('SELECT sealed FROM lander_items WHERE job_id=?')
+      .bind(id)
+      .first<{ sealed: string }>();
+    const payload = JSON.parse(await store.cipher.open(row!.sealed));
+    await jobs.restore(id);
+    await tick('detached');
+    expect((await jobs.get(id)).items[0]).toMatchObject({ state: 'held' });
+    expect((await jobs.get(id)).items[0].reason).toContain('may arrive later');
+    expect(writes).toBe(1);
+    records.push({
+      ...payload.plan.changes[payload.write.index].after,
+      id: 'f'.repeat(32),
+    });
+    await jobs.restore(id);
+    for (let i = 0; i < 6; i++) await tick('detached');
+    expect((await jobs.get(id)).items[0].state).toBe('restored');
+    expect(records.some((r) => r.id === 'f'.repeat(32))).toBe(false);
+    expect(writes).toBe(2);
+  });
   it('prepares HTTPS before changing root/www routing', async () => {
     const { id, review } = await prepared();
     await jobs.approve(id, review.digest!);
