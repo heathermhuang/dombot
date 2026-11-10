@@ -1,7 +1,7 @@
 import { page, escapeHtml as e } from './views';
 
-export const legalVersion = '2026-10-19.3';
-export const legalEffectiveDate = '2026-10-19';
+export const legalVersion = '2026-11-10.1';
+export const legalEffectiveDate = '2026-11-10';
 export function legalReady(env: HostedEnv): boolean {
   return Boolean(
     env.LEGAL_OPERATOR_NAME?.trim() && env.LEGAL_JURISDICTION?.trim(),
