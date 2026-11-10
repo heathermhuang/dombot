@@ -647,9 +647,13 @@ export class SalesStore {
           ),
       );
     }
+    const shopChanged =
+      shop.published &&
+      (selected.size !== shop.published.listingIds.length ||
+        shop.published.listingIds.some((id) => !selected.has(id)));
     const nextShopRevision =
-      shop.revision && shop.published ? crypto.randomUUID() : shop.revision;
-    if (shop.revision && shop.published)
+      shop.revision && shopChanged ? crypto.randomUUID() : shop.revision;
+    if (shop.revision && shop.published && shopChanged)
       statements.push(
         this.db
           .prepare(

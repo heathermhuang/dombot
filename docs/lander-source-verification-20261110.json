@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "observedAt": "2026-11-10T15:09:34.302Z",
+  "engine": {
+    "version": "2.2.1-hosted.3",
+    "sourceSha256": "915838e6904df1d8eabba96b7023e0c4bb19c816ba0d5a7fdb6afa6ad802a4c4",
+    "archiveSha256": "9fdc00f6072d439bcfe8f8e446bf13eb5e26781156f53015aaed329b5617b9d4"
+  },
+  "checks": {
+    "hostedAuthInstalledAndBuilt": true,
+    "typechecks": "passed",
+    "lint": "passed",
+    "engineBoundaryAndArtifact": "passed",
+    "changelog": "passed",
+    "fullSuite": {
+      "files": 305,
+      "passed": 3299,
+      "skipped": 1,
+      "note": "Full local suite after review correction; the affected job suite passed 19/19. Updated PR CI will verify the exact head."
+    },
+    "security": {
+      "passed": 4
+    },
+    "relay": {
+      "passed": 4
+    },
+    "builds": [
+      {
+        "name": "gateway",
+        "status": 0
+      },
+      {
+        "name": "lander",
+        "status": 0
+      },
+      {
+        "name": "tenant",
+        "status": 0
+      },
+      {
+        "name": "prepare",
+        "status": 0
+      },
+      {
+        "name": "provisioner",
+        "status": 0
+      },
+      {
+        "name": "proxy-scheduler",
+        "status": 0
+      },
+      {
+        "name": "worker",
+        "status": 0
+      },
+      {
+        "name": "demo",
+        "status": 0
+      },
+      {
+        "name": "site",
+        "status": 0
+      }
+    ],
+    "exactFinalTenantProvisionerWorkerDryRuns": "passed",
+    "browser": {
+      "synthetic": true,
+      "providerWrites": 0,
+      "approved": 1,
+      "results": [
+        "reauthentication return retains selection and idempotency key",
+        "60 selected across pages; exact neutral review; one keyboard confirmation",
+        "job reopened after tab closure",
+        "mobile all-matching review without horizontal overflow"
+      ]
+    },
+    "reviewRegression": {
+      "focusedFiles": 3,
+      "passed": 39,
+      "note": "Includes late-write restore, current mail dependencies, refresher epoch cleanup, failed preparation cleanup and newer manual-plan preservation. Final complete suite/CI must pass before merge."
+    }
+  },
+  "live": {
+    "settings": {
+      "observedAt": "2026-11-10T13:55:34.181Z",
+      "customHostsEnabled": "true",
+      "qualifiedHostCount": 2,
+      "hasSalesProviderToken": false,
+      "hasSalesProviderZone": false,
+      "hasCnameTarget": false,
+      "automaticConnectionsEnabled": "unset",
+      "edgeKeysConfigured": false,
+      "bindingCount": 88
+    },
+    "provider": {
+      "observedAt": "2026-11-10T14:20:41.827Z",
+      "zoneReadStatus": 200,
+      "matchingZones": 1,
+      "customHostnameReadStatus": 403,
+      "customHostnameApiAvailable": false,
+      "fallbackReadStatus": 403,
+      "fallbackStatus": null,
+      "hasFallbackOrigin": false
+    },
+    "productionDnsWrites": 0,
+    "productionNameserverWrites": 0,
+    "productionDeployment": false,
+    "ownerFixtureSelected": false
+  },
+  "release": "User requested review and deployment; code/schema deployment proceeds with automatic DNS disabled. Provider access and an exact owner fixture still gate activation."
+}

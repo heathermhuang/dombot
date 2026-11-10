@@ -84,6 +84,9 @@
 
 ## Portfolio custom domains
 
+- Bulk lander connections use the current authoritative DNS provider and retain nameservers. The source candidate is controlled by `LANDER_CONNECTIONS_ENABLED`, an exact workspace list, qualified root/www host allowlists, a trusted CNAME target, endpoint qualification and a finite provider capacity. Keep these disabled until an owner-authorized fixture proves complete DNS preservation, root/www TLS and ordinary public HTTPS. Existing operator-worker hosts do not qualify this path. See `docs/lander-connections-20261110.md`.
+- Lander jobs and complete provider snapshots are tenant-local and encrypted; the gateway cron advances bounded work after tab closure. Never use the SDK's replacement DNS operation. Unknown submissions reconcile before any retry. Backup format 17/Sales v5 carry private recovery snapshots; restore must not import jobs, credentials-derived authority, publications or automatic DNS actions. The gateway owns scheduling for the new SQL tables; they must not wake registrar polling.
+
 - Keep custom domains gated separately from short handles. Require a published profile, a fresh per-plan TXT ownership proof, active provider/TLS state, an exact public-edge route and a successful HTTPS visit before activation. Never forward account authority to customer hosts.
 - Migration 0016 shares hostname reservations with Sales; keep the guard effective during rollback. Unknown provider writes require reconciliation, never blind retry. Detach revokes public routing first and invalidates the old plan. See `docs/portfolio-custom-domains.md` for configuration, limits and release qualification.
 

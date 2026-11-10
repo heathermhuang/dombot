@@ -3,6 +3,7 @@ import { PublicPageActions } from '../components/domains/PublicPageActions';
 import { supportsSales } from '../lib/platform';
 import { useTableSelection } from '../lib/table-selection';
 import { salesRequest } from '../lib/sales-client';
+import UseLander from './sales/UseLander';
 import { PresenceInspector } from '../components/owner-site/PresenceInspector';
 import { accountNumber, accountTitle } from '../../shared/account-label';
 import { syncProblems } from '../lib/activity';
@@ -2778,6 +2779,18 @@ export default function Domains() {
             </span>
           )}
         </div>
+      )}
+      {supportsSales() && (
+        <UseLander
+          selection={
+            selectedDomains.length
+              ? {
+                  kind: 'domains',
+                  domains: selectedDomains.map((d) => toAscii(d.domainName)),
+                }
+              : null
+          }
+        />
       )}
       <DataTable
         className="mt-[13px] min-h-64"

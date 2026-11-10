@@ -124,6 +124,9 @@ wrangler.local.jsonc
 # Local browser QA state
 .gstack/
 
+# Local bulk-lander provider/browser verification receipts
+.data/lander-*/
+
 # Immutable DomBot engine dependency consumed by the SaaS adapter
 !vendor/domains-domains-dombot-engine-*.tgz
 
