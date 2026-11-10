@@ -1,3 +1,4 @@
+import { buyerDetailsSchema } from './inquiry-identity';
 import { z } from 'zod';
 import { canonicalDomain } from './publication';
 import { toCurrencyCode, CURRENCIES, type CurrencyCode } from './currencies';
@@ -198,6 +199,11 @@ export const inquirySchema = z
       .transform((v) => v.toLowerCase()),
     offer: saleMoneySchema.nullable(),
     message: z.string().trim().max(4000),
+    buyerDetails: buyerDetailsSchema
+      .optional()
+      .transform((value) =>
+        value && Object.values(value).some(Boolean) ? value : undefined,
+      ),
     turnstileToken: z.string().max(2048),
     website: z.literal(''),
   })

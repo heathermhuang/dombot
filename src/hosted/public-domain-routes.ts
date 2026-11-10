@@ -1,3 +1,4 @@
+import { captureInquiryRequest } from '../shared/inquiry-identity';
 import { PublicDomainDirectory } from './public-domain-directory';
 import { z } from 'zod';
 import { canonicalDomain } from '../shared/publication';
@@ -159,6 +160,10 @@ export async function publicDomainRequest(
         forwarded,
         {
           purpose: 'sales-public',
+          ...(request.method === 'POST' &&
+          /\/inquiries$/.test(new URL(request.url).pathname)
+            ? { inquiryRequest: captureInquiryRequest(request) }
+            : {}),
           host: incoming.hostname,
           listing: null,
           epoch: 0,

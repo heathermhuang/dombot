@@ -12,6 +12,11 @@
 
 - Use inquiry-focused copy throughout public and account UI: “Domain inquiries”, “Get in touch” and “Open to inquiries”. Do not use availability slogans. Keep internal schema identifiers stable. Public inquiry pages refer to the contact or domain owner.
 
+## Inquiry contact identity
+
+- Inquiry forms use neutral role wording: “I’m inquiring”, with self, organization and client options. Do not use “buying” in these forms. Optional professional/company details are self-reported; confirmed email is not verified personal identity. Signed request context is captured at the public boundary and stored encrypted, visible only through owner inquiry access and protected exports/backups. Keep it out of public conversation responses, notification emails and analytics. Legacy inquiries have no backfill. See `docs/inquiry-identity-20261110.md`.
+- Contact-details requests prepare a reviewable reply without sending automatically or overwriting an existing reply draft. Backup format 16/Sales version 4 retain the identity fields and request metadata; rollback must retain a compatible reader once new records have been accepted.
+
 ## Legal operator
 
 - The owner confirmed on 18 October 2026 that domains.domains is operated by **Magic Crystal Limited, Hong Kong**. Use that exact company name and jurisdiction in the Terms and Privacy Policy. Public privacy/support contact is domains@domains.domains. Use **domains.domains** in public product copy, shared footers, source offers and project documentation; reserve the company name for necessary legal identification in Terms and Privacy. Retain existing copyright and license notices.

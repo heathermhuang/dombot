@@ -1,4 +1,9 @@
 import {
+  previousSalesFormScript,
+  previousSalesFormScriptPath,
+} from './sales-form-previous';
+import { captureInquiryRequest } from '../shared/inquiry-identity';
+import {
   salesFormScript,
   salesFormScriptPath,
 } from '../shared/sales-form-script';
@@ -33,13 +38,19 @@ export default {
       });
     const url = new URL(incoming.url);
     if (
-      [salesFormScriptPath, legacySalesFormScriptPath].includes(url.pathname) &&
+      [
+        salesFormScriptPath,
+        previousSalesFormScriptPath,
+        legacySalesFormScriptPath,
+      ].includes(url.pathname) &&
       incoming.method === 'GET'
     )
       return new Response(
         url.pathname === salesFormScriptPath
           ? salesFormScript
-          : legacySalesFormScript,
+          : url.pathname === previousSalesFormScriptPath
+            ? previousSalesFormScript
+            : legacySalesFormScript,
         {
           headers: {
             'Content-Type': 'text/javascript',
@@ -179,6 +190,10 @@ export default {
       PROOF_HEADER,
       await signGatewayRequest(key, row.workspace_id, null, request, {
         purpose: 'sales-public',
+        ...(incoming.method === 'POST' &&
+        /\/inquiries$/.test(new URL(incoming.url).pathname)
+          ? { inquiryRequest: captureInquiryRequest(incoming) }
+          : {}),
         host,
         listing: row.listing_id,
         epoch: row.epoch,

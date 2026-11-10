@@ -57,7 +57,7 @@ describe('buildBundle', () => {
     );
     expect(b.namespaces.meta).toBeUndefined();
     expect(b.namespaces.auth).toBeUndefined();
-    expect(b.version).toBe(15);
+    expect(b.version).toBe(16);
     expect(b.namespaces['registrar-credentials'].godaddy).toEqual({
       apiToken: 'k',
     });
@@ -263,13 +263,13 @@ describe('export → import', () => {
       expect(await store.list(old)).toEqual({});
   });
 
-  it('imports a v4 file (no history yet) and refuses one newer than v15', async () => {
+  it('imports a v4 file (no history yet) and refuses one newer than the current format', async () => {
     await seed();
     const v4 = { ...buildBundle(APP), version: 4 };
     await importBundle(JSON.stringify(v4));
     expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
-    expect(buildBundle(APP).version).toBe(15);
-    expect(() => parseBundle(JSON.stringify({ ...v4, version: 16 }))).toThrow(
+    expect(buildBundle(APP).version).toBe(16);
+    expect(() => parseBundle(JSON.stringify({ ...v4, version: 17 }))).toThrow(
       /newer Domains\.Domains/,
     );
   });
@@ -309,7 +309,7 @@ describe('export → import', () => {
     };
     await importBundle(JSON.stringify(bundle));
     const restored = buildBundle(APP);
-    expect(restored.version).toBe(15);
+    expect(restored.version).toBe(16);
     expect(restored.namespaces['market-accounts']).toEqual(
       bundle.namespaces['market-accounts'],
     );

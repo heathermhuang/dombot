@@ -20,7 +20,7 @@ const privateRow = z
   .strict();
 export const salesBackupSchema = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     journey: z.array(journeyRowSchema).max(100000).default([]),
     drafts: z.array(saleDraftSchema).max(20_000),
     destinations: z.array(destinationSchema).max(100),
@@ -183,7 +183,7 @@ export async function exportSales(
   const open = async (r: Record<string, unknown>) =>
     JSON.parse(await store.cipher.open(String(r.sealed)));
   return salesBackupSchema.parse({
-    version: 3,
+    version: 4,
     journey: (await journeyReady(store.db))
       ? (await read('sales_journey_daily')).map((r) => ({
           day: r.day,
