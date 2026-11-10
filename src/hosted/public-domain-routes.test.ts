@@ -178,7 +178,7 @@ beforeAll(async () => {
         `WORKSPACE_${i}`,
         {
           fetch: async (req: Request) => {
-            calls(i, req);
+            calls(i, req.clone());
             if (broken === i)
               return new Response('Synthetic reader failure', { status: 503 });
             const proof = await verifyGatewayRequest(keys[i], ids[i], req);
@@ -623,5 +623,33 @@ describe('canonical public domain routing', () => {
       env,
     );
     expect(blocked.status).toBe(404);
+  });
+});
+
+it('signs original public inquiry context and strips forged internal headers before forwarding', async () => {
+  await publish();
+  const incoming = request('/working.io/inquiries', 'POST', {
+    Origin: origin,
+    'cf-connecting-ip': '203.0.113.99',
+    'user-agent': 'Original browser',
+    'x-dombot-inquiry-request': 'forged',
+  });
+  Object.defineProperty(incoming, 'cf', {
+    value: { country: 'SG', city: 'Singapore', timezone: 'Asia/Singapore' },
+  });
+  await publicDomainRequest(incoming, env);
+  const forwarded = calls.mock.calls
+    .map(([, req]) => req as Request)
+    .find((req) => new URL(req.url).pathname === '/d/working.io/inquiries')!;
+  expect(forwarded).toBeDefined();
+  expect(forwarded.headers.get('x-dombot-inquiry-request')).toBeNull();
+  const proof = await verifyGatewayRequest(keys[0], ids[0], forwarded);
+  expect(
+    proof?.sales?.purpose === 'sales-public' && proof.sales.inquiryRequest,
+  ).toMatchObject({
+    ipAddress: '203.0.113.99',
+    userAgent: 'Original browser',
+    country: 'SG',
+    city: 'Singapore',
   });
 });

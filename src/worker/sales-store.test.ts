@@ -1,7 +1,15 @@
 import { MemoryDocStore } from '../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../core/storage/namespace';
 import { readFileSync } from 'node:fs';
-import { beforeAll, beforeEach, afterAll, describe, it, expect } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  afterAll,
+  describe,
+  it,
+  expect,
+  vi,
+} from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import {
   SalesStore,
@@ -459,6 +467,180 @@ describe('sales transaction and privacy boundary', () => {
   });
 });
 describe('durable inquiry and outbox', () => {
+  it('accepts the full public form, uses signed original metadata, and returns only a receipt', async () => {
+    const p = await live();
+    const form = new URLSearchParams({
+      observedRevision: p.revision,
+      idempotencyKey: crypto.randomUUID(),
+      name: 'Form contact',
+      email: 'contact@example.test',
+      message: 'Tell me more',
+      website: '',
+      profileUrl: 'https://example.test/profile',
+      company: 'Form organization',
+      companyWebsite: 'https://example.test',
+      inquiryRole: 'representative',
+      'cf-turnstile-response': 'fixture-challenge',
+    });
+    const request = new Request(
+      `https://fixture.example/d/${p.domain}/inquiries`,
+      {
+        method: 'POST',
+        body: form,
+        headers: {
+          Origin: 'https://fixture.example',
+          'cf-connecting-ip': '192.0.2.2',
+          'user-agent': 'Internal-hop browser',
+        },
+      },
+    );
+    const metadata = {
+      receivedAt: Date.now(),
+      ipAddress: '203.0.113.77',
+      userAgent: 'Original reported browser',
+      language: 'en-SG',
+      country: 'SG',
+      region: null,
+      city: 'Singapore',
+      timezone: 'Asia/Singapore',
+    };
+    const key = 'synthetic-public-form-key-'.repeat(3),
+      workspace = crypto.randomUUID();
+    request.headers.set(
+      'x-dombot-gateway-proof',
+      await signGatewayRequest(key, workspace, null, request, {
+        purpose: 'sales-public',
+        host: 'fixture.example',
+        listing: null,
+        epoch: 0,
+        inquiryRequest: metadata,
+      }),
+    );
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((url, options) =>
+        String(url) ===
+        'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+          ? Promise.resolve(
+              Response.json({
+                success: true,
+                hostname: 'fixture.example',
+                action: 'sales-inquiry',
+              }),
+            )
+          : originalFetch(url, options),
+      );
+    try {
+      const response = await createPublicSalesRoutes().request(
+        request,
+        undefined,
+        {
+          DB: db,
+          DOMBOT_AUTH: 'gateway',
+          DOMBOT_GATEWAY_SECRET: key,
+          DOMBOT_WORKSPACE_ID: workspace,
+          DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+          SALES_INQUIRIES_ENABLED: 'true',
+          SALES_PRIVACY_REVIEWED: 'true',
+          SALES_TURNSTILE_SECRET: 'fixture-only',
+          SALES_TURNSTILE_SITEKEY: 'fixture-sitekey',
+          DOMBOT_SALES_ORIGIN: 'https://fixture.example',
+        } as Env,
+      );
+      expect(response.status).toBe(202);
+      const html = await response.text();
+      expect(html).toContain('Inquiry saved');
+      expect(html).not.toMatch(
+        /203\.0\.113\.77|Original reported browser|Form organization/,
+      );
+      const row = await db
+        .prepare('SELECT id FROM sales_leads')
+        .first<{ id: string }>();
+      const thread = await inbox.thread(row!.id);
+      expect(thread.buyerDetails).toEqual({
+        profileUrl: 'https://example.test/profile',
+        company: 'Form organization',
+        companyWebsite: 'https://example.test',
+        inquiryRole: 'representative',
+      });
+      expect(thread.requestMetadata).toEqual(metadata);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('seals identity details and original request context, exposes them only to the owner, and round-trips them through recovery', async () => {
+    const p = await live();
+    const value = {
+      ...input(),
+      observedRevision: p.revision,
+      buyerDetails: {
+        profileUrl: 'https://example.test/profile',
+        company: 'PRIVATE_COMPANY',
+        companyWebsite: 'https://example.test',
+        inquiryRole: 'organization' as const,
+      },
+    };
+    const metadata = {
+      receivedAt: Date.now(),
+      ipAddress: '203.0.113.71',
+      userAgent: 'PRIVATE_BROWSER',
+      language: 'en-SG',
+      country: 'SG',
+      region: null,
+      city: 'Singapore',
+      timezone: 'Asia/Singapore',
+    };
+    const receipt = await inbox.intake(value, p, metadata);
+    expect(
+      await inbox.intake(value, p, { ...metadata, ipAddress: '192.0.2.3' }),
+    ).toEqual(receipt);
+    expect((await inbox.thread(receipt.id)).requestMetadata).toEqual(metadata);
+    expect((await inbox.thread(receipt.id)).buyerDetails).toEqual(
+      value.buyerDetails,
+    );
+    const row = JSON.stringify(
+      await db.prepare('SELECT * FROM sales_leads').all(),
+    );
+    expect(row).not.toMatch(/PRIVATE_COMPANY|PRIVATE_BROWSER|203\.0\.113\.71/);
+    expect(JSON.stringify(await inbox.thread(receipt.id, true))).not.toMatch(
+      /PRIVATE_COMPANY|PRIVATE_BROWSER|203\.0\.113\.71/,
+    );
+    expect(
+      JSON.stringify(await inbox.emailContext(receipt.id, null)),
+    ).not.toMatch(/PRIVATE_COMPANY|PRIVATE_BROWSER|203\.0\.113\.71/);
+    expect((await inbox.lease())[0].mail.context.name).toBe(value.name);
+    await expect(
+      inbox.intake(
+        {
+          ...value,
+          buyerDetails: { ...value.buyerDetails, company: 'Different' },
+        },
+        p,
+        metadata,
+      ),
+    ).rejects.toThrow(/different content/);
+    const backup = await exportSales(store);
+    expect(backup.version).toBe(4);
+    await restoreSales(store, backup);
+    const restored = await inbox.thread(receipt.id);
+    expect(restored.requestMetadata).toEqual(metadata);
+    expect(restored.buyerDetails).toEqual(value.buyerDetails);
+    await inbox.remove(receipt.id, restored.revision);
+    await expect(inbox.lead(receipt.id)).rejects.toThrow(/not found/);
+  });
+  it('reads legacy inquiry records without fabricating identity or network details', async () => {
+    const p = await live();
+    const receipt = await inbox.intake(
+      { ...input(), observedRevision: p.revision },
+      p,
+    );
+    const thread = await inbox.thread(receipt.id);
+    expect(thread.buyerDetails).toBeNull();
+    expect(thread.requestMetadata).toBeNull();
+  });
+
   it('projects complete email details without leaking private notes or unrelated messages', async () => {
     const p = await live();
     const r = await inbox.intake(
@@ -501,6 +683,12 @@ describe('durable inquiry and outbox', () => {
     const a = await inbox.intake(v, p),
       b = await inbox.intake(v, p);
     expect(a).toEqual(b);
+    expect(
+      await inbox.intake(
+        { ...v, buyerDetails: { company: '', inquiryRole: '' } },
+        p,
+      ),
+    ).toEqual(a);
     await expect(
       inbox.intake({ ...v, message: 'different' }, p),
     ).rejects.toThrow();
@@ -747,6 +935,10 @@ describe('backup, jobs and public HTTP', () => {
         body: new URLSearchParams({
           observedRevision: crypto.randomUUID(),
           idempotencyKey: crypto.randomUUID(),
+          profileUrl: 'https://example.test/profile',
+          company: 'Preserved organization',
+          companyWebsite: 'https://example.test',
+          inquiryRole: 'representative',
           name: 'Preserved Buyer',
           email: 'buyer@example.com',
           message: 'Preserved message',
@@ -768,6 +960,10 @@ describe('backup, jobs and public HTTP', () => {
     const html = await response.text();
     expect(html).toContain('Preserved Buyer');
     expect(html).toContain('Preserved message');
+    expect(html).toContain('https://example.test/profile');
+    expect(html).toContain('Preserved organization');
+    expect(html).toContain('value="representative" selected');
+    expect(html).not.toContain('buying');
     expect(html).toContain(p.revision);
     expect(html).toContain('terms changed');
     expect(
@@ -1846,7 +2042,7 @@ describe('source maintenance, transactions and honest measurements', () => {
       { event: 'provider-opened', count: 1 },
     ]);
     const exported = await exportSales(store);
-    expect(exported.version).toBe(3);
+    expect(exported.version).toBe(4);
     expect(exported.journey).toHaveLength(3);
     await restoreSales(store, exported);
     expect(await readPublicSale(db, draft.domain)).toBeNull();

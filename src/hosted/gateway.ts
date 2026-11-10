@@ -1,3 +1,8 @@
+import {
+  previousSalesFormScript,
+  previousSalesFormScriptPath,
+} from './sales-form-previous';
+import { captureInquiryRequest } from '../shared/inquiry-identity';
 import { drainSecurityNotifications } from './notification-security';
 import { notificationPreferencesSchema } from '../shared/notification-policy';
 import {
@@ -143,6 +148,7 @@ type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
 for (const [path, script] of [
   [salesFormScriptPath, salesFormScript],
+  [previousSalesFormScriptPath, previousSalesFormScript],
   [legacySalesFormScriptPath, legacySalesFormScript],
 ])
   app.get(path, (c) =>
@@ -1894,6 +1900,10 @@ app.all('/w/:workspace/*', async (c) => {
       salesPublicPath(path, c.req.method)
         ? {
             purpose: 'sales-public',
+            ...(c.req.raw.method === 'POST' &&
+            /\/inquiries$/.test(new URL(c.req.raw.url).pathname)
+              ? { inquiryRequest: captureInquiryRequest(c.req.raw) }
+              : {}),
             host: url.hostname,
             listing: null,
             epoch: 0,

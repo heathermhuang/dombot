@@ -1,3 +1,8 @@
+import {
+  buyerDetailsSchema,
+  inquiryRequestSchema,
+  type InquiryRequest,
+} from '../shared/inquiry-identity';
 import { recordJourney } from './sales-journey';
 import {
   resolveSaleEvidence,
@@ -33,6 +38,8 @@ export const leadPayloadSchema = z
     message: z.string().max(4000),
     offer: saleMoneySchema.nullable(),
     snapshot: publishedSaleSchema,
+    buyerDetails: buyerDetailsSchema.optional(),
+    requestMetadata: inquiryRequestSchema.optional(),
   })
   .strict();
 export const bodySchema = z
@@ -122,7 +129,14 @@ export class SalesInquiryStore {
   payloadHash(v: SaleInquiry) {
     return this.sales.hash(
       'payload',
-      JSON.stringify([v.observedRevision, v.name, v.email, v.offer, v.message]),
+      JSON.stringify([
+        v.observedRevision,
+        v.name,
+        v.email,
+        v.offer,
+        v.message,
+        ...(v.buyerDetails ? [v.buyerDetails] : []),
+      ]),
     );
   }
   async outbox(
@@ -164,6 +178,7 @@ export class SalesInquiryStore {
   async intake(
     value: SaleInquiry,
     snapshot: PublishedSale,
+    requestMetadata?: InquiryRequest,
   ): Promise<{ id: string; status: 'verification-pending' }> {
     const input = inquirySchema.parse(value),
       previous = await this.receipt(input, snapshot.id);
@@ -257,6 +272,15 @@ export class SalesInquiryStore {
               message: input.message,
               offer: input.offer,
               snapshot,
+              ...(input.buyerDetails
+                ? { buyerDetails: input.buyerDetails }
+                : {}),
+              ...(requestMetadata
+                ? {
+                    requestMetadata:
+                      inquiryRequestSchema.parse(requestMetadata),
+                  }
+                : {}),
             }),
           ),
         await this.tokenWrite(raw, 'verify', id, 1),
@@ -518,6 +542,9 @@ export class SalesInquiryStore {
     return {
       ...common,
       email: l.payload.email,
+      buyerDetails: l.payload.buyerDetails ?? null,
+      requestMetadata: l.payload.requestMetadata ?? null,
+      receivedAt: l.created_at,
       revision: l.revision,
       verification: l.verification,
       status: l.status,
@@ -917,7 +944,11 @@ export class SalesInquiryStore {
           .first<{ direction: string; created_at: number; sealed: string }>()
       : null;
     return salesEmailContextSchema.parse({
-      ...lead.payload,
+      name: lead.payload.name,
+      email: lead.payload.email,
+      message: lead.payload.message,
+      offer: lead.payload.offer,
+      snapshot: lead.payload.snapshot,
       receivedAt: lead.created_at,
       latest: latest
         ? {

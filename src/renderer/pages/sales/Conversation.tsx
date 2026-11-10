@@ -1,3 +1,4 @@
+import BuyerIdentity from './BuyerIdentity';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { SalesThread } from '../../../shared/sales-api';
@@ -74,9 +75,24 @@ export default function Conversation({
       {thread && (
         <>
           <h2>{thread.original.snapshot.domain}</h2>
-          <p>
-            {thread.original.name} · {thread.email}
-          </p>
+          <BuyerIdentity
+            thread={thread}
+            requestDisabled={action.busy || !!composeState.reply.body.trim()}
+            onRequest={() => {
+              if (composeState.reply.body.trim()) return;
+              compose.setMode('reply');
+              compose.setBody(
+                'reply',
+                `Thanks for your interest in ${thread.original.snapshot.domain}. Could you share your full name, LinkedIn or professional profile, company website (if applicable), and whether you are inquiring for yourself or on behalf of an organization or client?`,
+              );
+              action.setNotice(
+                'Contact-details request prepared below. Review it before sending.',
+              );
+              requestAnimationFrame(() =>
+                document.getElementById('inquiry-reply')?.focus(),
+              );
+            }}
+          />
           <p className="small">
             Original public terms:{' '}
             {salePriceLabel(thread.original.snapshot.publicPrice)} ·{' '}
@@ -85,7 +101,11 @@ export default function Conversation({
               ` · Buyer offer ${salePriceLabel(thread.original.offer)}`}
           </p>
           <div className="sales-toolbar">
-            <span className="badge">{thread.verification}</span>
+            <span className="badge">
+              {thread.verification === 'verified'
+                ? 'Email confirmed'
+                : thread.verification}
+            </span>
             <select
               aria-label="Conversation status"
               style={{ width: 180 }}
@@ -260,6 +280,7 @@ export default function Conversation({
             </p>
             <Field label={direction === 'reply' ? 'Reply' : 'Private note'}>
               <textarea
+                id="inquiry-reply"
                 required
                 value={body}
                 maxLength={4000}

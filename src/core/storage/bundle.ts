@@ -75,7 +75,8 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // v13 retains read-only Park.io observations; session cookies never travel.
 // v14 preserves explicit renewal-notification decisions and preference drafts.
 // v15 retains independent marketplace keys and proxy routing; older builds must not ignore that routing.
-export const BUNDLE_VERSION = 15;
+// v16 retains inquiry identity details and private submission metadata.
+export const BUNDLE_VERSION = 16;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
@@ -94,6 +95,7 @@ export interface DataBundle {
     | 12
     | 13
     | 14
+    | 15
     | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
@@ -149,9 +151,24 @@ export function parseBundle(
     );
   }
   if (
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, BUNDLE_VERSION].includes(
-      head.version as number,
-    )
+    ![
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      BUNDLE_VERSION,
+    ].includes(head.version as number)
   ) {
     throw new BundleError(
       `This file was made by a newer Domains.Domains (format v${String(head.version)}). Update and try again.`,

@@ -1,3 +1,7 @@
+import {
+  captureInquiryRequest,
+  type InquiryRequest,
+} from '../shared/inquiry-identity';
 import { recordJourney } from './sales-journey';
 import { validateSalesDestination } from '../shared/sales-provider';
 import {
@@ -34,7 +38,11 @@ import { brandFontBytes, brandFontPath } from '../shared/brand-font';
 export function createPublicSalesRoutes() {
   const app = new Hono<{
     Bindings: Env;
-    Variables: { salesBase: string; customSalesHost: boolean };
+    Variables: {
+      salesBase: string;
+      customSalesHost: boolean;
+      inquiryRequest?: InquiryRequest;
+    };
   }>();
   app.get(salesFormScriptPath, (c) =>
     c.body(salesFormScript, 200, {
@@ -65,6 +73,7 @@ export function createPublicSalesRoutes() {
           proof.sales.host !== new URL(c.req.url).hostname
         )
           return c.text('Sales page not found', 404);
+        c.set('inquiryRequest', proof.sales.inquiryRequest);
         if (proof.sales.listing) {
           c.set('salesBase', '');
           c.set('customSalesHost', true);
@@ -264,6 +273,12 @@ export function createPublicSalesRoutes() {
             email: fields!.email,
             message: fields!.message,
             website: fields!.website,
+            buyerDetails: {
+              profileUrl: fields!.profileUrl ?? undefined,
+              company: fields!.company ?? undefined,
+              companyWebsite: fields!.companyWebsite ?? undefined,
+              inquiryRole: fields!.inquiryRole ?? undefined,
+            },
             offer:
               fields!.intent === 'offer' && fields!.amount
                 ? { amount: fields!.amount, currency: fields!.currency }
@@ -295,6 +310,7 @@ export function createPublicSalesRoutes() {
           error:
             'The terms changed. Review the latest price, currency and sales path below before sending again.',
           fields: {
+            ...input.buyerDetails,
             name: input.name,
             email: input.email,
             message: input.message,
@@ -365,7 +381,13 @@ export function createPublicSalesRoutes() {
           400,
         );
       }
-      receipt = await db.intake(input, s);
+      receipt = await db.intake(
+        input,
+        s,
+        c.env.DOMBOT_AUTH === 'gateway'
+          ? c.get('inquiryRequest')
+          : captureInquiryRequest(c.req.raw),
+      );
     }
     return json
       ? c.json(

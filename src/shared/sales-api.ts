@@ -1,3 +1,4 @@
+import type { BuyerDetails, InquiryRequest } from './inquiry-identity';
 import type { CoreSaleReference } from './sales-events';
 import type { MarketPublicOffer } from './market-public-offer';
 import type {
@@ -59,6 +60,9 @@ export interface SalesInboxItem {
   followUpAt: number | null;
 }
 export interface SalesThread {
+  buyerDetails?: BuyerDetails | null;
+  requestMetadata?: InquiryRequest | null;
+  receivedAt?: number;
   saleEvidence?: {
     reference: CoreSaleReference;
     label: string;

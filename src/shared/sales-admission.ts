@@ -1,3 +1,4 @@
+import { inquiryRequestSchema } from './inquiry-identity';
 import { z } from 'zod';
 
 export const salesAdmissionSchema = z.discriminatedUnion('purpose', [
@@ -10,6 +11,7 @@ export const salesAdmissionSchema = z.discriminatedUnion('purpose', [
   z
     .object({
       purpose: z.literal('sales-public'),
+      inquiryRequest: inquiryRequestSchema.optional(),
       host: z.string().max(253),
       listing: z.string().uuid().nullable(),
       epoch: z.number().int().nonnegative(),
