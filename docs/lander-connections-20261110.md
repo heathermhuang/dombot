@@ -1,7 +1,9 @@
 # Bulk lander connections: source candidate and release qualification
 
 This implements the reviewed [execution plan](one-click-lander-implementation-20261110.md).
-It is a controlled source candidate, not evidence of a production DNS cutover.
+Update 11 November: the reviewed code/schema is deployed with automatic DNS
+disabled. See [the release record](bulk-lander-release-20261111.md). This is not
+evidence of a production DNS cutover.
 The dirty primary checkout is preserved; implementation is isolated on
 `codex/bulk-lander-connection`.
 
