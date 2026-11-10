@@ -146,6 +146,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-215",
+      "date": "2026-11-10",
+      "layer": "saas",
+      "title": "Record verified bulk lander code deployment and activation gate",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #215 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #215",
+          "url": "https://github.com/heathermhuang/dombot/pull/215"
+        }
+      ]
+    },
+    {
       "id": "auto-core-release-438096189",
       "date": "2026-11-09",
       "layer": "core",
