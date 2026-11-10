@@ -2,6 +2,38 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-6d96ee9995daf959dfd2b9b60762bdd60bccc53b",
+      "date": "2026-11-10",
+      "layer": "core",
+      "title": "Release 2.2.2",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 6d96ee9995da",
+          "url": "https://github.com/aoxborrow/dombot/commit/6d96ee9995daf959dfd2b9b60762bdd60bccc53b"
+        }
+      ]
+    },
+    {
+      "id": "auto-core-source-8a928f65ba8404a2ec7beb394d08752211ed5fee",
+      "date": "2026-11-10",
+      "layer": "core",
+      "title": "Desktop proxy: send writes with Content-Length, not chunked",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 8a928f65ba84",
+          "url": "https://github.com/aoxborrow/dombot/commit/8a928f65ba8404a2ec7beb394d08752211ed5fee"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-evidence-1e1a282b4e842f38709636c3",
       "date": "2026-11-10",
       "layer": "saas",
