@@ -203,6 +203,13 @@ export async function drainLanderConnections(env: HostedEnv) {
               work.domain,
               work.generation,
             );
+          else if (work.state === 'cleanup')
+            hostingState = await service.finishPreparation(
+              workspace,
+              work.listing,
+              work.domain,
+              work.generation,
+            );
           else if (work.state === 'restored-dns' && work.hosts)
             hostingState = await service.finishRestore(
               workspace,

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   landerPlanSchema,
   dnsSnapshotSchema,
+  hostingPlanSchema,
 } from '../shared/lander-connection';
 import type { SalesStore } from './sales-store';
 
@@ -12,6 +13,7 @@ export const landerRecoverySchema = z
       .object({
         domain: z.string().max(253),
         snapshot: dnsSnapshotSchema.optional(),
+        preparationHosts: z.array(hostingPlanSchema).length(2).optional(),
         plan: landerPlanSchema.optional(),
         write: z
           .object({

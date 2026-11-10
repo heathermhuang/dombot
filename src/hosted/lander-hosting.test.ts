@@ -10,6 +10,7 @@ import {
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFileSync, readdirSync } from 'node:fs';
 import { LanderHosting } from './lander-hosting';
+import { SalesHostnames } from './sales-hostnames';
 import { drainLanderConnections } from './lander-connections';
 import { PROOF_HEADER, verifyGatewayRequest } from '../shared/gateway-proof';
 let mf: Miniflare,
@@ -389,4 +390,42 @@ it('advances bounded scheduled slices with no browser and skips closed accounts'
   await db.prepare('UPDATE lander_workspaces SET due_at=0').run();
   await drainLanderConnections(env);
   expect(steps).toBe(4);
+});
+it('cleans a retained generation after the refresher advances it for lost TXT control', async () => {
+  const port = new LanderHosting(environment(), fetcher),
+    plans = await port.prepare(workspace, listing, domain, generation);
+  await db
+    .prepare(
+      "UPDATE sales_hostnames SET status='control-lost',epoch=epoch+1 WHERE connection_key=?",
+    )
+    .bind(generation)
+    .run();
+  await port.finishRestore(workspace, listing, generation, plans);
+  await port.finishRestore(workspace, listing, generation, plans);
+  expect(providers.size).toBe(0);
+  expect(routes).toHaveLength(0);
+  expect(
+    await db.prepare('SELECT max(epoch) AS epoch FROM sales_hostnames').first(),
+  ).toEqual({ epoch: 3 });
+});
+it('releases known resources from a failed preparation without deleting a newer manual plan', async () => {
+  const port = new LanderHosting(environment(), fetcher);
+  await port.prepare(workspace, listing, domain, generation);
+  await new SalesHostnames(environment(), fetcher).plan(
+    workspace,
+    listing,
+    domain,
+    domain,
+  );
+  await port.finishPreparation(workspace, listing, domain, generation);
+  expect(
+    await db
+      .prepare(
+        'SELECT connection_key,status FROM sales_hostnames WHERE hostname=?',
+      )
+      .bind(domain)
+      .first(),
+  ).toEqual({ connection_key: null, status: 'pending-proof' });
+  expect(providers.size).toBe(1);
+  expect(routes).toHaveLength(1);
 });

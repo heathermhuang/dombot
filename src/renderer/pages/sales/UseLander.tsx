@@ -344,7 +344,13 @@ export default function UseLander({
                 Cancel future work
               </button>
             )}
-            {['running', 'cancelled', 'finished'].includes(job.state) && (
+            {[
+              'running',
+              'cancelled',
+              'finished',
+              'preparing',
+              'awaiting-review',
+            ].includes(job.state) && (
               <button disabled={action.busy} onClick={() => apply('restore')}>
                 Restore previous web routing
               </button>

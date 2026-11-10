@@ -475,11 +475,74 @@ export class LanderHosting {
     }
     return ready ? 'live' : certificates ? 'tls-ready' : 'waiting';
   }
+  async finishPreparation(
+    workspace: string,
+    listing: string,
+    domain: string,
+    generation: string,
+  ) {
+    const rows = await this.env.CONTROL_DB.prepare(
+      'SELECT * FROM sales_hostnames WHERE workspace_id=? AND listing_id=? AND connection_key=?',
+    )
+      .bind(workspace, listing, generation)
+      .all<ConnectionHost>();
+    for (const row of rows.results) {
+      if (
+        ![domain, `www.${domain}`].includes(row.hostname) ||
+        row.domain !== domain
+      )
+        throw Error('Preparation cleanup hostname changed.');
+      if (!row.provider_id && row.connection_intent === 'create-hostname') {
+        const candidates = z
+          .array(providerSchema)
+          .max(100)
+          .parse(
+            (
+              await this.zoneCall(
+                `/custom_hostnames?hostname=${encodeURIComponent(row.hostname)}&per_page=100`,
+              )
+            ).result,
+          );
+        const own = candidates.filter(
+          (p) =>
+            p.hostname === row.hostname &&
+            p.custom_metadata?.domains_connection === generation,
+        );
+        if (
+          own.length !== 1 ||
+          this.env.LANDER_CUSTOM_METADATA_QUALIFIED !== 'true'
+        )
+          throw Error(
+            'An unknown hostname creation must reconcile before preparation cleanup.',
+          );
+        row.provider_id = own[0].id;
+        await this.env.CONTROL_DB.prepare(
+          "UPDATE sales_hostnames SET provider_id=?,connection_intent='prepared-hostname' WHERE hostname=? AND connection_key=? AND epoch=? AND provider_id IS NULL",
+        )
+          .bind(row.provider_id, row.hostname, generation, row.epoch)
+          .run();
+      }
+      if (!row.connection_route_id && row.connection_intent === 'create-route')
+        throw Error(
+          'An unknown edge-route creation must reconcile before preparation cleanup.',
+        );
+      const base =
+        row.status === 'control-lost'
+          ? row.epoch - 1
+          : row.status === 'detached'
+            ? row.epoch - 1
+            : row.epoch;
+      await this.finishRestore(workspace, listing, generation, [
+        { hostname: row.hostname, epoch: base },
+      ]);
+    }
+    return 'detached';
+  }
   async finishRestore(
     workspace: string,
     listing: string,
     generation: string,
-    hosts: LanderHostingPlan[],
+    hosts: Pick<LanderHostingPlan, 'hostname' | 'epoch'>[],
   ) {
     for (const host of hosts) {
       const row = await this.env.CONTROL_DB.prepare(
@@ -487,7 +550,15 @@ export class LanderHosting {
       )
         .bind(host.hostname, workspace, listing, generation)
         .first<ConnectionHost>();
-      if (!row || ![host.epoch, host.epoch + 1].includes(row.epoch))
+      if (
+        !row ||
+        !(
+          row.epoch === host.epoch ||
+          (row.status === 'control-lost' && row.epoch === host.epoch + 1) ||
+          (row.status === 'detached' &&
+            [host.epoch + 1, host.epoch + 2].includes(row.epoch))
+        )
+      )
         throw Error('Restore hostname generation changed.');
       await this.fence();
       if (row.status !== 'detached')
@@ -495,7 +566,7 @@ export class LanderHosting {
           workspace,
           listing,
           host.hostname,
-          host.epoch,
+          row.epoch,
         );
       if (row.connection_route_id) {
         const routes = z

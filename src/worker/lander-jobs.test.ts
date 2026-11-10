@@ -368,6 +368,50 @@ describe('durable exact lander manifests and recovery', () => {
     expect(records.some((r) => r.type === 'CNAME')).toBe(false);
     expect((await jobs.get(id)).items[0].state).toBe('pending-tls');
   });
+  it('rechecks newly introduced mail dependencies before the routing write', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    await tick();
+    await tick();
+    records.push({
+      id: 'e'.repeat(32),
+      name: domain,
+      type: 'MX',
+      content: domain,
+      ttl: 300,
+    });
+    await tick();
+    expect(writes).toBe(2);
+    expect(records.find((r) => r.id === 'd'.repeat(32))?.type).toBe('A');
+    expect((await jobs.get(id)).items[0].reason).toContain('Mail delivery');
+  });
+  it('cleans a failed preparation and releases its lock before a fresh connection', async () => {
+    const id = crypto.randomUUID();
+    await jobs.create({ kind: 'domains', domains: [domain] }, id, async () => [
+      domain,
+    ]);
+    const work = (await jobs.work())!;
+    records.push({
+      id: 'e'.repeat(32),
+      name: domain,
+      type: 'MX',
+      content: domain,
+      ttl: 300,
+    });
+    await jobs.step(work, hosts());
+    expect((await jobs.get(id)).items[0].state).toBe('held');
+    expect(writes).toBe(0);
+    await jobs.cancel(id);
+    await jobs.restore(id);
+    await tick('detached');
+    expect((await jobs.get(id)).items[0].state).toBe('restored');
+    expect(
+      await db.prepare('SELECT count(*) AS n FROM lander_domain_locks').first(),
+    ).toEqual({ n: 0 });
+    records = records.filter((r) => r.type !== 'MX');
+    const fresh = await prepared();
+    expect(fresh.review.counts).toEqual([{ state: 'ready', count: 1 }]);
+  });
   it('holds a publication race without DNS writes', async () => {
     const { id, review, work } = await prepared();
     const saved = await store.get(work.listing);

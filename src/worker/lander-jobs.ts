@@ -8,6 +8,7 @@ import {
   canonicalJson,
   landerPlanSchema,
   dnsSnapshotSchema,
+  hostingPlanSchema,
   type LanderHostingPlan,
   type LanderJobView,
   type LanderSelection,
@@ -26,6 +27,7 @@ const payloadSchema = z
   .object({
     domain: z.string(),
     snapshot: dnsSnapshotSchema.optional(),
+    preparationHosts: z.array(hostingPlanSchema).length(2).optional(),
     plan: landerPlanSchema.optional(),
     write: z
       .object({
@@ -311,7 +313,7 @@ export class LanderJobs {
       domain: p.domain,
       listing,
       state: r.state,
-      hosts: p.plan?.hosts ?? null,
+      hosts: p.plan?.hosts ?? p.preparationHosts ?? null,
       publication: p.plan?.publication ?? null,
     };
   }
@@ -433,20 +435,36 @@ export class LanderJobs {
     return this.get(id);
   }
   async restore(id: string) {
-    await this.job(id);
+    const job = await this.job(id);
+    if (job.state === 'restoring') return this.get(id);
+    if (
+      ![
+        'finished',
+        'cancelled',
+        'running',
+        'preparing',
+        'awaiting-review',
+      ].includes(job.state)
+    )
+      throw new SalesError(
+        'RECOVERY_STATE',
+        'Cancel incomplete selection preparation before starting recovery.',
+        409,
+      );
     // Keep generations and locks: unknown writes must reconcile before cutback.
     await this.store.db.batch([
       this.store.db
         .prepare(
-          "UPDATE lander_jobs SET state='restoring',updated_at=? WHERE id=? AND state IN ('finished','cancelled','running')",
+          "UPDATE lander_jobs SET state='restoring',updated_at=? WHERE id=? AND state IN ('finished','cancelled','running','preparing','awaiting-review')",
         )
         .bind(Date.now(), id),
       this.store.db
         .prepare(
-          "UPDATE lander_items SET state='restore',due_at=0 WHERE job_id=? AND digest IS NOT NULL",
+          "UPDATE lander_items SET state=CASE WHEN digest IS NULL AND listing_id IS NULL THEN 'restored' WHEN digest IS NULL THEN 'cleanup' ELSE 'restore' END,due_at=0 WHERE job_id=?",
         )
         .bind(id),
     ]);
+    await this.finalize(id);
     return this.get(id);
   }
   async step(
@@ -511,6 +529,32 @@ export class LanderJobs {
         .bind(r.domain_hash, r.job_id, r.ordinal, r.generation)
         .run();
       await fence();
+      if (r.state === 'cleanup') {
+        if (p.plan || p.write)
+          throw new SalesError(
+            'RECOVERY_CHANGED',
+            'An executable connection needs DNS restoration before cleanup.',
+            409,
+          );
+        if (hostingState === 'detached') {
+          await save(
+            'restored',
+            'Preparation cleaned up. No connection DNS writes were admitted.',
+          );
+          await this.store.db
+            .prepare(
+              'DELETE FROM lander_domain_locks WHERE domain_hash=? AND job_id=? AND ordinal=? AND generation=?',
+            )
+            .bind(r.domain_hash, r.job_id, r.ordinal, r.generation)
+            .run();
+        } else
+          await save(
+            'cleanup',
+            'Finishing preparation cleanup before releasing the domain.',
+            Date.now() + 120000,
+          );
+        return;
+      }
       if (r.state === 'restored-dns') {
         if (hostingState === 'detached') {
           await save('restored');
@@ -536,6 +580,7 @@ export class LanderJobs {
               'Root and www hosting are not qualified for this controlled rollout.',
             409,
           );
+        p.preparationHosts = hosts;
         const saved = await this.store.get(r.listing_id!),
           o = await this.observe(saved.draft);
         if (
@@ -588,6 +633,7 @@ export class LanderJobs {
           expiresAt: Date.now() + 900000,
         });
         delete p.snapshot;
+        delete p.preparationHosts;
         const digest = await this.store.hash(
           'lander-item',
           canonicalJson(p.plan),
@@ -778,6 +824,8 @@ export class LanderJobs {
             );
             return;
           }
+          if (change.after?.type === 'CNAME')
+            planLanderDns(current, plan.hosts, r.generation);
           if (seen.state === 'conflict') {
             await save(
               'conflict',

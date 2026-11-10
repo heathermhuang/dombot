@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "observedAt": "2026-11-10T14:57:29.158Z",
+  "observedAt": "2026-11-10T15:09:34.302Z",
   "engine": {
     "version": "2.2.1-hosted.3",
-    "sourceSha256": "57d6c82d7f9c18ed080537171822eb2e8e1bb85bfcfbf11012c82c218ee58e56",
-    "archiveSha256": "0c1ab7e0630d2235f47a45bba3f3ad18eaa8cbd25d9ed4647bc8f8afc00149c7"
+    "sourceSha256": "915838e6904df1d8eabba96b7023e0c4bb19c816ba0d5a7fdb6afa6ad802a4c4",
+    "archiveSha256": "9fdc00f6072d439bcfe8f8e446bf13eb5e26781156f53015aaed329b5617b9d4"
   },
   "checks": {
     "hostedAuthInstalledAndBuilt": true,
@@ -73,6 +73,11 @@
         "job reopened after tab closure",
         "mobile all-matching review without horizontal overflow"
       ]
+    },
+    "reviewRegression": {
+      "focusedFiles": 3,
+      "passed": 39,
+      "note": "Includes late-write restore, current mail dependencies, refresher epoch cleanup, failed preparation cleanup and newer manual-plan preservation. Final complete suite/CI must pass before merge."
     }
   },
   "live": {

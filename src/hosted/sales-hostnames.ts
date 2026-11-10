@@ -307,8 +307,13 @@ export class SalesHostnames {
       rollback:
         'Detach this binding first, then restore only the exact A/AAAA/CNAME records in this snapshot if those records still equal your reviewed change. Keep unrelated later changes and mail/verification records.',
     };
+    const resetConnection = (await this.env.CONTROL_DB.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='lander_workspaces'",
+    ).first())
+      ? ',connection_key=NULL,connection_route_id=NULL,connection_intent=NULL,connection_receipt=NULL'
+      : '';
     const row = await this.env.CONTROL_DB.prepare(
-      "INSERT INTO sales_hostnames(hostname,workspace_id,listing_id,domain,epoch,status,challenge_hash,plan,updated_at) VALUES(?,?,?,?,?,'pending-proof',?,?,?) ON CONFLICT(hostname) DO UPDATE SET workspace_id=excluded.workspace_id,listing_id=excluded.listing_id,domain=excluded.domain,epoch=excluded.epoch,status=excluded.status,challenge_hash=excluded.challenge_hash,provider_id=NULL,plan=excluded.plan,updated_at=excluded.updated_at,control_expires_at=0,observed_revision=NULL WHERE sales_hostnames.epoch=? RETURNING hostname",
+      `INSERT INTO sales_hostnames(hostname,workspace_id,listing_id,domain,epoch,status,challenge_hash,plan,updated_at) VALUES(?,?,?,?,?,'pending-proof',?,?,?) ON CONFLICT(hostname) DO UPDATE SET workspace_id=excluded.workspace_id,listing_id=excluded.listing_id,domain=excluded.domain,epoch=excluded.epoch,status=excluded.status,challenge_hash=excluded.challenge_hash,provider_id=NULL,plan=excluded.plan,updated_at=excluded.updated_at,control_expires_at=0,observed_revision=NULL${resetConnection} WHERE sales_hostnames.epoch=? RETURNING hostname`,
     )
       .bind(
         hostname,
