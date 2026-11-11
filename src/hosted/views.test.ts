@@ -184,7 +184,10 @@ describe('account UI recovery and credential identification', () => {
     );
     expect(emailCode('sample')).not.toContain('name="legalVersion"');
     expect(emailCode('sample')).not.toContain('name="accept"');
-    expect(authUnavailable()).toContain('href="/login"');
+    expect(authUnavailable()).toContain('href="/auth/email/retry"');
+    const retry = emailCode('sample', '', '/account');
+    expect(retry).toContain('href="/auth/email/retry?next=%2Faccount"');
+    expect(retry).toContain('name="next" value="/account"');
     const html = authRetry('<script>bad()</script>', 65);
     expect(html).toContain('2 minutes');
     expect(html).toContain('data-local-time datetime=');
