@@ -115,7 +115,7 @@ for (const [i, w] of saved.workspaces.entries()) {
 await json('gateway.jsonc', {
   name: 'domains-staging',
   account_id: resources.accountId,
-  main: path.join(root, 'src/hosted/gateway.ts'),
+  main: path.join(root, 'src/hosted/gateway-worker.ts'),
   compatibility_date: '2026-09-09',
   compatibility_flags: ['nodejs_compat'],
   workers_dev: true,

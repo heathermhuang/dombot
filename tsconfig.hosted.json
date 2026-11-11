@@ -13,6 +13,7 @@
   },
   "include": [
     "src/hosted/gateway.ts",
+    "src/hosted/gateway-worker.ts",
     "src/hosted/lander-edge.ts",
     "src/hosted/accounts.ts",
     "src/hosted/crypto.ts",

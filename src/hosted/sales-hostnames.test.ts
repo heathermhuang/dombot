@@ -29,7 +29,7 @@ const env = () =>
     GATEWAY_KEYS: JSON.stringify({ [workspace]: secret }),
     SALES_EDGE_KEYS: JSON.stringify({ [workspace]: edgeSecret }),
     SALES_CNAME_TARGET: 'fallback.example',
-    SALES_CF_ZONE_ID: 'fixture-zone',
+    SALES_CF_ZONE_ID: 'a'.repeat(32),
     SALES_CF_API_TOKEN: 'fixture-only-no-real-token',
     SALES_CUSTOM_HOSTS_ENABLED: 'true',
     SALES_HOST_ALLOWLIST: 'fixture.example,www.fixture.example',

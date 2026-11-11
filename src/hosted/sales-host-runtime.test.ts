@@ -8,7 +8,7 @@ let requests = 0;
 beforeAll(async () => {
   const bundle = await build({
     stdin: {
-      contents: `import {salesDns,SalesHostnames} from './src/hosted/sales-hostnames'; export default {async fetch(request){try{const path=new URL(request.url).pathname;const controller=new SalesHostnames({SALES_CF_ZONE_ID:'fixture',SALES_CF_API_TOKEN:'fixture-only'});if(path==='/provider')await controller.provider('/fixture');else if(path==='/probe')await controller.fetcher(new Request('https://fixture.example/',{redirect:'manual'}));else await salesDns('fixture.example','A');return new Response('observed')}catch{return new Response('unavailable',{status:503})}}};`,
+      contents: `import {salesDns,SalesHostnames} from './src/hosted/sales-hostnames'; export default {async fetch(request){try{const path=new URL(request.url).pathname;const controller=new SalesHostnames({SALES_CF_ZONE_ID:'${'a'.repeat(32)}',SALES_CF_API_TOKEN:'fixture-only'});if(path==='/provider')await controller.provider('/fixture');else if(path==='/probe')await controller.fetcher(new Request('https://fixture.example/',{redirect:'manual'}));else await salesDns('fixture.example','A');return new Response('observed')}catch{return new Response('unavailable',{status:503})}}};`,
       resolveDir: process.cwd(),
       loader: 'ts',
     },
