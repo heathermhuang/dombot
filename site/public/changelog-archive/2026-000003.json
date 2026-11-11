@@ -144,6 +144,22 @@
           "url": "https://github.com/heathermhuang/dombot/pull/220"
         }
       ]
+    },
+    {
+      "id": "auto-saas-pr-221",
+      "date": "2026-11-11",
+      "layer": "saas",
+      "title": "Fix Worker fetch binding that blocks lander DNS setup",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #221 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #221",
+          "url": "https://github.com/heathermhuang/dombot/pull/221"
+        }
+      ]
     }
   ]
 }
