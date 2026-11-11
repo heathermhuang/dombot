@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
+      "date": "2026-11-11",
+      "layer": "core",
+      "title": "Folders: drag to reorder; filter chips clear before removing",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 80218984214e",
+          "url": "https://github.com/aoxborrow/dombot/commit/80218984214ed36bcc17d4ec3a66d37d39d00eb8"
+        }
+      ]
+    }
+  ]
+}
