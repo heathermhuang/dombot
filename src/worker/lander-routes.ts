@@ -44,6 +44,9 @@ export function createLanderRoutes(
   });
   app.use('*', bodyLimit({ maxSize: 750000 }));
   app.use('*', stateful);
+  app.get('/dns-setup/inspection', async (c) =>
+    c.json(await new DynadotDnsSetup(c.env).inspect()),
+  );
   app.get('/dns-setup', async (c) =>
     c.json(await new DynadotDnsSetup(c.env).view()),
   );

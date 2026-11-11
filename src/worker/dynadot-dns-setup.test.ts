@@ -328,3 +328,23 @@ it('requires the gateway and portfolio to agree on the exact scoped request', as
   ).rejects.toThrow(/scopes differ/);
   expect(writes).toBe(0);
 });
+
+it('inspects only the scoped registrar protocol without writes, receipts or private record contents', async () => {
+  const result = await new DynadotDnsSetup(env, fetcher).inspect();
+  expect(result).toMatchObject({
+    domain,
+    records: { mode: 'NAME_SERVERS', mainCount: 0, subCount: 0 },
+    nameservers: park,
+    dnssec: { count: 0 },
+  });
+  expect(JSON.stringify(result)).not.toMatch(
+    /fixture-key|fixture-secret|extraProviderMetadata.*retained/,
+  );
+  expect(writes).toBe(0);
+  expect(
+    await db.prepare('SELECT id FROM lander_recovery_archive').all(),
+  ).toMatchObject({ results: [] });
+  expect(
+    await db.prepare('SELECT job_id FROM lander_domain_locks').all(),
+  ).toMatchObject({ results: [] });
+});
