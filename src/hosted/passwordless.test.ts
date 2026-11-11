@@ -407,6 +407,96 @@ describe('one email flow for sign-in and signup', () => {
     expect(messages).toHaveLength(1);
   });
 
+  it('routes a new-link retry for a stale signed-in session back to identity confirmation without refreshing it', async () => {
+    const existing = await owner(),
+      next = `/w/${ids[0]}/`;
+    await db.prepare('UPDATE sessions SET authenticated_at=0').run();
+    const requested = await post(
+      '/auth/email/request',
+      { intent: 'reauth', next },
+      existing.token,
+    );
+    const html = await requested.text();
+    const retry = '/auth/email/retry?next=' + encodeURIComponent(next);
+    expect(html).toContain(`href="${retry}"`);
+    const response = await gateway.fetch(
+      new Request('https://domains.domains' + retry, {
+        headers: { Cookie: cookie(existing.token) },
+      }),
+      env,
+    );
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe(
+      '/account/reauth?next=' + encodeURIComponent(next),
+    );
+    expect(response.headers.get('Set-Cookie')).toBeNull();
+    expect(
+      (await existing.accounts.session(existing.token))?.authenticated_at,
+    ).toBe(0);
+    expect(messages).toHaveLength(1);
+    const confirmation = await gateway.fetch(
+      new Request(
+        'https://domains.domains' + response.headers.get('Location'),
+        { headers: { Cookie: cookie(existing.token) } },
+      ),
+      env,
+    );
+    expect(await confirmation.text()).toContain('name="intent" value="reauth"');
+  });
+  it('routes signed-out retries to sign-in and rejects an external return destination', async () => {
+    const response = await gateway.fetch(
+      new Request(
+        'https://domains.domains/auth/email/retry?next=' +
+          encodeURIComponent('https://other.test/'),
+      ),
+      env,
+    );
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('/login?next=%2Fapp');
+    expect(response.headers.get('Set-Cookie')).toBeNull();
+    expect(messages).toHaveLength(0);
+    const unavailable = await gateway.fetch(
+      new Request(
+        'https://domains.domains/auth/email/confirm?id=expired&token=invalid',
+      ),
+      env,
+    );
+    expect(await unavailable.text()).toContain('href="/auth/email/retry"');
+  });
+  it('preserves the retry destination after a bad code and still requires a real email proof', async () => {
+    const existing = await owner(),
+      next = `/w/${ids[0]}/`;
+    await db.prepare('UPDATE sessions SET authenticated_at=0').run();
+    await post(
+      '/auth/email/request',
+      { intent: 'reauth', next },
+      existing.token,
+    );
+    const proof = delivered(),
+      wrong = proof.code === '999999' ? '000000' : '999999';
+    const rejected = await post(
+      '/auth/email/confirm',
+      { id: proof.id, code: wrong, next },
+      existing.token,
+    );
+    expect(rejected.status).toBe(400);
+    expect(await rejected.text()).toContain(
+      'href="/auth/email/retry?next=' + encodeURIComponent(next) + '"',
+    );
+    expect(rejected.headers.get('Set-Cookie')).toBeNull();
+    expect(
+      (await existing.accounts.session(existing.token))?.authenticated_at,
+    ).toBe(0);
+    const verified = await post(
+      '/auth/email/confirm',
+      { id: proof.id, code: proof.code, next: 'https://other.test/' },
+      existing.token,
+    );
+    expect(verified.status).toBe(303);
+    expect(verified.headers.get('Location')).toBe(next);
+    expect(verified.headers.get('Set-Cookie')).toBeTruthy();
+  });
+
   it('retains the exact owner pilot destination through email sign-in and session-bound reauthentication', async () => {
     const existing = await owner();
     const next = '/admin/parkio-pilot';
