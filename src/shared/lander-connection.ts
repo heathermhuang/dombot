@@ -23,7 +23,7 @@ export const dnsChangeSchema = z
 export type DnsChange = z.infer<typeof dnsChangeSchema>;
 export const dnsSnapshotSchema = z
   .object({
-    provider: z.literal('cloudflare'),
+    provider: z.enum(['cloudflare', 'dynadot']),
     accountId: z.string().max(128),
     providerAccountId: z.string().max(100),
     zoneId: z.string().regex(/^[a-f0-9]{32}$/),

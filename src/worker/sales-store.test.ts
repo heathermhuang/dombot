@@ -622,7 +622,7 @@ describe('durable inquiry and outbox', () => {
       ),
     ).rejects.toThrow(/different content/);
     const backup = await exportSales(store);
-    expect(backup.version).toBe(5);
+    expect(backup.version).toBe(6);
     await restoreSales(store, backup);
     const restored = await inbox.thread(receipt.id);
     expect(restored.requestMetadata).toEqual(metadata);
@@ -2042,7 +2042,7 @@ describe('source maintenance, transactions and honest measurements', () => {
       { event: 'provider-opened', count: 1 },
     ]);
     const exported = await exportSales(store);
-    expect(exported.version).toBe(5);
+    expect(exported.version).toBe(6);
     expect(exported.journey).toHaveLength(3);
     await restoreSales(store, exported);
     expect(await readPublicSale(db, draft.domain)).toBeNull();

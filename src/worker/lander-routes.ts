@@ -40,7 +40,15 @@ export function createLanderRoutes(
   app.use('*', bodyLimit({ maxSize: 750000 }));
   app.use('*', stateful);
   const controller = async (env: Env) =>
-    new LanderJobs(await SalesStore.from(env), createVerifiedSaleObserver(env));
+    new LanderJobs(
+      await SalesStore.from(env),
+      createVerifiedSaleObserver(env),
+      fetch,
+      z
+        .array(z.enum(['cloudflare', 'dynadot']))
+        .max(2)
+        .parse(JSON.parse(env.DOMBOT_LANDER_DNS_PROVIDERS ?? '["cloudflare"]')),
+    );
   app.get('/work', async (c) =>
     c.json({ work: await (await controller(c.env)).work() }),
   );

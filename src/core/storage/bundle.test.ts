@@ -3,6 +3,7 @@ import { MemoryDocStore } from './doc-store';
 import { configureStore, flushWrites, hydrateStores } from './namespace';
 import {
   BUNDLE_FORMAT,
+  BUNDLE_VERSION,
   BundleError,
   buildBundle,
   exportBundle,
@@ -57,7 +58,7 @@ describe('buildBundle', () => {
     );
     expect(b.namespaces.meta).toBeUndefined();
     expect(b.namespaces.auth).toBeUndefined();
-    expect(b.version).toBe(17);
+    expect(b.version).toBe(18);
     expect(b.namespaces['registrar-credentials'].godaddy).toEqual({
       apiToken: 'k',
     });
@@ -268,10 +269,10 @@ describe('export → import', () => {
     const v4 = { ...buildBundle(APP), version: 4 };
     await importBundle(JSON.stringify(v4));
     expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
-    expect(buildBundle(APP).version).toBe(17);
-    expect(() => parseBundle(JSON.stringify({ ...v4, version: 18 }))).toThrow(
-      /newer Domains\.Domains/,
-    );
+    expect(buildBundle(APP).version).toBe(18);
+    expect(() =>
+      parseBundle(JSON.stringify({ ...v4, version: BUNDLE_VERSION + 1 })),
+    ).toThrow(/newer Domains\.Domains/);
   });
 
   it('retains v14 imports and round-trips separate marketplace keys and proxy routing', async () => {
@@ -309,7 +310,7 @@ describe('export → import', () => {
     };
     await importBundle(JSON.stringify(bundle));
     const restored = buildBundle(APP);
-    expect(restored.version).toBe(17);
+    expect(restored.version).toBe(18);
     expect(restored.namespaces['market-accounts']).toEqual(
       bundle.namespaces['market-accounts'],
     );

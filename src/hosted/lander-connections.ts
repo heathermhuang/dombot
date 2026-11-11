@@ -62,6 +62,7 @@ export async function landerRequest(
             .array(z.string().uuid())
             .parse(JSON.parse(env.LANDER_CONNECTION_WORKSPACES ?? '[]'))
             .includes(workspace),
+        supportedProviders: ['cloudflare', 'dynadot'],
         provider: 'cloudflare',
       },
       { headers: { 'Cache-Control': 'no-store' } },

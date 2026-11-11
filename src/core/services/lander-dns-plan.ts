@@ -7,6 +7,10 @@ import type {
 import { LanderDnsError, sameRecord } from './lander-cloudflare';
 
 const name = (s: string) => s.toLowerCase().replace(/\.$/, '');
+export const isLanderWebChange = (change: DnsChange) =>
+  ['A', 'AAAA', 'CNAME', 'ANAME'].includes(
+    (change.after ?? change.before)?.type ?? '',
+  );
 function hold(message: string): never {
   throw new LanderDnsError('DNS_DEPENDENCY', message);
 }
@@ -32,7 +36,7 @@ export function planLanderDns(
     let changed = false;
     for (const r of records)
       if (
-        ['CNAME', 'DNAME'].includes(r.type) &&
+        ['CNAME', 'ANAME', 'DNAME'].includes(r.type) &&
         depends.has(name(r.content)) &&
         !depends.has(name(r.name))
       ) {
@@ -85,7 +89,9 @@ export function planLanderDns(
       hold(
         'Existing Cloudflare proxy/O2O routing needs separate qualification.',
       );
-    const web = current.filter((r) => ['A', 'AAAA', 'CNAME'].includes(r.type));
+    const web = current.filter((r) =>
+      ['A', 'AAAA', 'CNAME', 'ANAME'].includes(r.type),
+    );
     if (web.length > 1)
       hold(
         'Multiple web address records need a reviewed provider batch conversion.',
@@ -94,7 +100,7 @@ export function planLanderDns(
     // flattening is the qualified exception). Preserve all unrelated records.
     if (
       h.hostname !== domain &&
-      current.some((r) => !['A', 'AAAA', 'CNAME'].includes(r.type))
+      current.some((r) => !['A', 'AAAA', 'CNAME', 'ANAME'].includes(r.type))
     )
       hold(
         'Other records coexist at www. Review them before changing its routing.',
@@ -102,16 +108,26 @@ export function planLanderDns(
     const before = web[0] ?? null;
     const after = {
       ...(before ?? {}),
-      type: 'CNAME',
+      type:
+        snapshot.provider === 'dynadot' && h.hostname === domain
+          ? 'ANAME'
+          : 'CNAME',
       name: h.hostname,
       content: h.target,
-      ttl: before?.ttl ?? 300,
+      ttl:
+        snapshot.provider === 'dynadot'
+          ? Number(snapshot.settings.ttl)
+          : (before?.ttl ?? 300),
       proxied: false,
-      ...(!before
+      ...(!before && snapshot.provider !== 'dynadot'
         ? { comment: `Domains.Domains connection ${connection}` }
         : {}),
     };
-    if (!before || !sameRecord(before, after)) changes.push({ before, after });
+    if (!before || !sameRecord(before, after)) {
+      if (snapshot.provider === 'dynadot' && before) {
+        changes.push({ before, after: null }, { before: null, after });
+      } else changes.push({ before, after });
+    }
     for (const proof of h.records) {
       const owner = name(proof.name);
       if (
@@ -138,16 +154,37 @@ export function planLanderDns(
             type: 'TXT',
             name: owner,
             content: proof.value,
-            ttl: 300,
-            comment: `Domains.Domains connection ${connection}`,
+            ttl:
+              snapshot.provider === 'dynadot'
+                ? Number(snapshot.settings.ttl)
+                : 300,
+            ...(snapshot.provider !== 'dynadot'
+              ? { comment: `Domains.Domains connection ${connection}` }
+              : {}),
           },
         });
     }
   }
+  if (snapshot.provider === 'dynadot') {
+    const projected = [...records];
+    for (const c of changes) {
+      if (c.before) {
+        const index = projected.findIndex((r) => r.id === c.before!.id);
+        if (index >= 0) projected.splice(index, 1);
+      }
+      if (c.after) projected.push({ ...c.after, id: 'planned' });
+    }
+    if (
+      projected.filter((r) => r.name === domain).length > 20 ||
+      projected.filter((r) => r.name !== domain).length > 100
+    )
+      hold(
+        'Dynadot DNS record capacity is insufficient for the complete reviewed connection.',
+      );
+  }
   // Prove ownership and prepare certificates before replacing web routing.
   return changes.sort(
-    (a, b) =>
-      Number(a.after?.type === 'CNAME') - Number(b.after?.type === 'CNAME'),
+    (a, b) => Number(isLanderWebChange(a)) - Number(isLanderWebChange(b)),
   );
 }
 export type ChangeObservation = {
@@ -179,7 +216,8 @@ export function observeDnsChange(
         change.after &&
         r.name === change.after.name &&
         r.type === change.after.type &&
-        (r.type === 'CNAME' || r.comment === change.after.comment),
+        (['CNAME', 'ANAME'].includes(r.type) ||
+          r.comment === change.after.comment),
     )
   )
     return { state: 'conflict', record: null };

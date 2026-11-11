@@ -504,7 +504,7 @@ describe('durable exact lander manifests and recovery', () => {
     await tick();
     expect(writes).toBe(1);
     const backup = await exportSales(store);
-    expect(backup.version).toBe(5);
+    expect(backup.version).toBe(6);
     expect(backup.dnsRecovery).toHaveLength(1);
     expect(JSON.stringify(backup)).not.toContain('fixture-secret');
     await restoreSales(store, { ...backup, version: 4, dnsRecovery: [] });
@@ -518,6 +518,54 @@ describe('durable exact lander manifests and recovery', () => {
       (await store.get(review.items[0].publication!.id)).published,
     ).toBeNull();
     expect(writes).toBe(1);
+  });
+  it('round-trips Dynadot recovery without importing executable authority', async () => {
+    await prepared();
+    const backup = await exportSales(store);
+    expect(backup.version).toBe(6);
+    const snapshot = backup.dnsRecovery[0].payload.plan!.snapshot;
+    snapshot.provider = 'dynadot';
+    snapshot.nameservers = ['ns1.dynadot.com', 'ns2.dynadot.com'];
+    snapshot.settings = {
+      glue_type: 'DNS',
+      ttl: 3600,
+      dns_main_list: [{ record_type: 'a', record_value1: '192.0.2.1' }],
+      dns_sub_list: [],
+    };
+    // Model a destination with no current recovery custody. When importing
+    // onto the source, its existing snapshot deliberately wins ID conflicts.
+    await db.batch([
+      db.prepare('DELETE FROM lander_domain_locks'),
+      db.prepare('DELETE FROM lander_jobs'),
+    ]);
+    await restoreSales(store, backup);
+    const exported = await exportSales(store);
+    expect(exported.dnsRecovery[0].payload.plan!.snapshot).toEqual(snapshot);
+    expect(await jobs.work()).toBeNull();
+    expect(writes).toBe(0);
+  });
+  it('stops unqualified provider work before hosting preparation while retaining recovery', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    const revoked = new LanderJobs(store, observation, fetcher, []);
+    expect(await revoked.work()).toBeNull();
+    expect((await revoked.get(id)).items[0].state).toBe('held');
+    expect(writes).toBe(0);
+    await revoked.restore(id);
+    expect(await revoked.work()).not.toBeNull();
+    expect(writes).toBe(0);
+  });
+  it('rechecks provider qualification when it changes between scheduling and execution', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    const work = (await jobs.work())!;
+    await new LanderJobs(store, observation, fetcher, []).step(
+      work,
+      undefined,
+      'tls-ready',
+    );
+    expect((await jobs.get(id)).items[0].state).toBe('held');
+    expect(writes).toBe(0);
   });
   it('never accepts owner/public or cross-tenant proof on internal DNS routes', async () => {
     const secret = 'fixture-gateway-secret'.repeat(3),
