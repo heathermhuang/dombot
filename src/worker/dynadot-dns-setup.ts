@@ -55,7 +55,11 @@ export class DynadotDnsSetup {
   constructor(
     readonly env: Env,
     readonly fetcher: typeof fetch = fetch,
-  ) {}
+  ) {
+    // Worker fetch rejects an unrelated class instance as its receiver.
+    // Keep injected transports callable through this property as well.
+    this.fetcher = (input, init) => fetcher(input, init);
+  }
   private async confirmNoPublicDs(domain: string) {
     const r = await this.fetcher(
       'https://cloudflare-dns.com/dns-query?name=' +
