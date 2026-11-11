@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import {
   landerSelectionSchema,
+  landerManifestDigestSchema,
   hostingPlanSchema,
   type LanderJobView,
   canonicalJson,
@@ -176,10 +177,7 @@ export async function landerRequest(
             .strict()
             .parse(raw)
         : suffix.endsWith('/approve')
-          ? z
-              .object({ digest: z.string().length(64) })
-              .strict()
-              .parse(raw)
+          ? z.object({ digest: landerManifestDigestSchema }).strict().parse(raw)
           : z.object({}).strict().parse(raw);
     // Wake before forwarding: even a lost response must leave a durable scan.
     await wake(env, workspace);

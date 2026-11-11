@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { saleDomainSchema, publishedSaleSchema } from './hosted-sales';
 
+// SalesStore hashes are 32-byte HMACs encoded as unpadded base64url.
+export const landerManifestDigestSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{43}$/);
+
 // Provider-complete objects remain encrypted in the tenant. Only the exact diff
 // and public projection cross the owner boundary.
 export const dnsRecordSchema = z

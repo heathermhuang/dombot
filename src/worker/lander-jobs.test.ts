@@ -25,6 +25,7 @@ import { exportSales, restoreSales } from './sales-backup';
 import { signGatewayRequest } from '../shared/gateway-proof';
 import { Hono } from 'hono';
 import { createLanderRoutes } from './lander-routes';
+import { landerRequest } from '../hosted/lander-connections';
 
 let mf: Miniflare, db: D1Database, store: SalesStore, jobs: LanderJobs;
 const account = 'a'.repeat(32),
@@ -658,6 +659,66 @@ describe('durable exact lander manifests and recovery', () => {
       expect(writes).toBe(0);
     },
   );
+  it('approves a real stored manifest through both gateway and tenant HTTP validators', async () => {
+    const { id, review } = await prepared();
+    expect(review.digest).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const workspace = '11111111-1111-4111-8111-111111111111',
+      secret = 'fixture-gateway-secret'.repeat(3);
+    const app = new Hono<{ Bindings: Env }>();
+    app.route(
+      '/sales-internal/lander',
+      createLanderRoutes(async (_c, next) => {
+        await next();
+      }),
+    );
+    const workerEnv = {
+      DB: db,
+      DOMBOT_SECRET: btoa(String.fromCharCode(...new Uint8Array(32).fill(8))),
+      DOMBOT_WORKSPACE_ID: workspace,
+      DOMBOT_GATEWAY_SECRET: secret,
+      DOMBOT_SALES_V1: 'true',
+    } as Env;
+    const env = {
+      CANONICAL_ORIGIN: 'https://accounts.example',
+      AUTH_PEPPER: 'fixture-recipient-pepper',
+      WORKSPACES: JSON.stringify([
+        { id: workspace, binding: 'WORKSPACE_0', label: 'Synthetic' },
+      ]),
+      GATEWAY_KEYS: JSON.stringify({ [workspace]: secret }),
+      CONTROL_DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => ({ email_verified_at: Date.now() }),
+            run: async () => ({ success: true }),
+          }),
+        }),
+      },
+      WORKSPACE_0: {
+        fetch: (request: Request) => app.fetch(request, workerEnv),
+      },
+    } as unknown as HostedEnv;
+    const response = await landerRequest(
+      env,
+      workspace,
+      'owner@example.test',
+      '/sales/lander/jobs/' + id + '/approve',
+      new Request(
+        'https://accounts.example/w/' +
+          workspace +
+          '/sales/lander/jobs/' +
+          id +
+          '/approve',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ digest: review.digest }),
+        },
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id, state: 'running' });
+    expect(writes).toBe(0);
+  });
   it('never accepts owner/public or cross-tenant proof on internal DNS routes', async () => {
     const secret = 'fixture-gateway-secret'.repeat(3),
       workspace = '11111111-1111-4111-8111-111111111111';
