@@ -98,6 +98,52 @@ export class DynadotDnsSetup {
       throw e;
     }
   }
+  /** Fixed-scope, read-only protocol diagnostics. Never returns credentials or
+   * record contents, and never creates a receipt, lock or provider mutation. */
+  async inspect() {
+    const s = scope(this.env);
+    const api = new LanderDynadot(s.accountId, this.fetcher);
+    const result: Record<string, unknown> = { domain: s.domain };
+    for (const suffix of ['/records', '/nameservers', '/dnssec']) {
+      try {
+        const raw = await api.call(s.domain, suffix);
+        const value = z.record(z.string(), z.unknown()).parse(raw);
+        if (suffix === '/records') {
+          const glue = z.record(z.string(), z.unknown()).parse(value.glue_info);
+          result.records = {
+            mode: typeof glue.glue_type === 'string' ? glue.glue_type : null,
+            fields: Object.keys(glue).sort(),
+            mainCount: Array.isArray(glue.dns_main_list)
+              ? glue.dns_main_list.length
+              : null,
+            subCount: Array.isArray(glue.dns_sub_list)
+              ? glue.dns_sub_list.length
+              : null,
+            forwarding:
+              glue.email_forward_type === undefined
+                ? 'absent'
+                : glue.email_forward_type === 'MTYPE_NONE'
+                  ? 'none'
+                  : 'other',
+          };
+        } else if (suffix === '/nameservers') {
+          result.nameservers = nsList(value, true);
+        } else {
+          result.dnssec = {
+            fields: Object.keys(value).sort(),
+            count: Array.isArray(value.dnssec_info_list)
+              ? value.dnssec_info_list.length
+              : null,
+          };
+        }
+      } catch (error) {
+        result[suffix.slice(1)] = {
+          error: error instanceof LanderDnsError ? error.code : 'DNS_REPLY',
+        };
+      }
+    }
+    return result;
+  }
   async view() {
     const s = scope(this.env),
       store = await SalesStore.from(this.env),
