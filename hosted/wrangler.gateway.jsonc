@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "domains-staging",
-  "main": "../src/hosted/gateway.ts",
+  "main": "../src/hosted/gateway-worker.ts",
   "compatibility_date": "2026-09-09",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,

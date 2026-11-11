@@ -9,6 +9,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import { canonicalDomain } from '../shared/publication';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { workspaceKey, workspaceFor, workspaceService } from './workspaces';
+import {
+  salesHostingProvider,
+  salesHostingTarget,
+} from './sales-hosting-provider';
 
 export interface HostBinding {
   hostname: string;
@@ -273,9 +277,7 @@ export class SalesHostnames {
         salesDns(hostname, type, this.fetcher),
       ),
     );
-    const target = this.env.SALES_CNAME_TARGET
-      ? canonicalDomain(this.env.SALES_CNAME_TARGET)
-      : null;
+    const target = salesHostingTarget(this.env);
     const plan = {
       hostname,
       epoch,
@@ -331,14 +333,13 @@ export class SalesHostnames {
     return { ...plan, challenge };
   }
   async provider(path: string, body?: unknown): Promise<unknown> {
-    if (!this.env.SALES_CF_ZONE_ID || !this.env.SALES_CF_API_TOKEN)
-      throw new Error('Custom hostname provider access is not configured.');
+    const config = salesHostingProvider(this.env);
     const r = await this.fetcher(
-      `https://api.cloudflare.com/client/v4/zones/${this.env.SALES_CF_ZONE_ID}/custom_hostnames${path}`,
+      `https://api.cloudflare.com/client/v4/zones/${config.zoneId}/custom_hostnames${path}`,
       {
         method: body ? 'POST' : 'GET',
         headers: {
-          Authorization: `Bearer ${this.env.SALES_CF_API_TOKEN}`,
+          Authorization: `Bearer ${config.token}`,
           'Content-Type': 'application/json',
         },
         ...(body ? { body: JSON.stringify(body) } : {}),

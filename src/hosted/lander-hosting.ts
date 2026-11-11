@@ -5,6 +5,7 @@ import { canonicalDomain } from '../shared/publication';
 import { type LanderHostingPlan } from '../shared/lander-connection';
 import { claimHostname, rememberHostnameProvider } from './hostname-claims';
 import { workspaceSchema } from './workspaces';
+import { salesHostingProvider } from './sales-hosting-provider';
 
 interface ConnectionHost extends HostBinding {
   connection_key: string | null;
@@ -69,7 +70,8 @@ export class LanderHosting {
       !allow.has(domain) ||
       !allow.has(`www.${domain}`) ||
       !this.env.LANDER_QUALIFIED_CNAME_TARGET ||
-      this.env.LANDER_QUALIFIED_CNAME_TARGET !== this.env.SALES_CNAME_TARGET ||
+      this.env.LANDER_QUALIFIED_CNAME_TARGET !==
+        salesHostingProvider(this.env).target ||
       this.env.LANDER_APEX_FLATTENING_QUALIFIED !== 'true'
     )
       throw Error(
@@ -78,18 +80,14 @@ export class LanderHosting {
     canonicalDomain(this.env.LANDER_QUALIFIED_CNAME_TARGET);
   }
   async zoneCall(path: string, method = 'GET', body?: unknown) {
-    if (
-      !/^[a-f0-9]{32}$/.test(this.env.SALES_CF_ZONE_ID ?? '') ||
-      !this.env.SALES_CF_API_TOKEN
-    )
-      throw Error('The custom-hostname provider is not configured.');
+    const provider = salesHostingProvider(this.env);
     if (method !== 'GET') await this.fence();
     const r = await this.fetcher(
-      `https://api.cloudflare.com/client/v4/zones/${this.env.SALES_CF_ZONE_ID}${path}`,
+      `https://api.cloudflare.com/client/v4/zones/${provider.zoneId}${path}`,
       {
         method,
         headers: {
-          Authorization: `Bearer ${this.env.SALES_CF_API_TOKEN}`,
+          Authorization: `Bearer ${provider.token}`,
           'Content-Type': 'application/json',
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
