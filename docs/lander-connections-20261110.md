@@ -92,18 +92,19 @@ archive, clears execution locks/jobs and imports no publication, host bindings,
 resumed work or DNS authority. Older formats remain supported. A compatible
 reader must remain available after new recovery records are accepted.
 
-## Actual live gate, observed 10 November 2026
+## Actual live gate, corrected 11 November 2026
 
-A read-only live gateway settings check found custom hosts enabled for two
-existing hostnames, but **no** Sales provider API-token binding, provider zone,
-CNAME target or edge-key configuration for this automatic SaaS path. The new
-automatic connection flag is unset. Existing operator-worker hosts are separate
-and cannot qualify root/www SaaS onboarding. No owner-authorized unused test
-domain has yet been supplied in this execution chat. A separate read of the
-existing `domains.domains` zone succeeded, but custom-hostname and fallback-origin
-API reads returned HTTP 403 under the existing operator credential. That proves
-the current access is insufficient; it does not establish which entitlement or
-permission is missing. No paid plan was enabled or support outreach initiated.
+The gateway already contained a complete portfolio-hosting service configuration
+and the Sales edge-key secret binding. The earlier missing-key inference used a
+plaintext-value check on a secret binding and was incorrect. PR #216 now reuses
+the complete existing provider without mixing partial credentials. Its private,
+fixed-path service inspection returned HTTP 200 and an active fallback origin.
+The earlier HTTP 403 used the distinct CLI OAuth credential and did not prove
+the service secret lacked access. Automatic DNS remains disabled. The owner has
+selected `015.io` and authorized a one-time Park.io-to-Dynadot DNS move; live DNS,
+root/www TLS, ordinary HTTPS and restoration remain unqualified. See the
+[current candidate and qualification record](dynadot-lander-qualification-20261111.md).
+No paid plan was enabled or support outreach initiated.
 
 Before enabling this release, qualify the exact hosting zone, fallback target,
 edge admission, provider capacity and endpoint without a new paid commitment;

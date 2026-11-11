@@ -30,7 +30,7 @@ describe('portable owner reminder choices', () => {
     });
     await hydrateStores();
     const backup = buildBundle({ version: 'synthetic', platform: 'web' });
-    expect(backup.version).toBe(17);
+    expect(backup.version).toBe(18);
     expect(backup.namespaces['renewal-decisions']).toHaveProperty(
       'sample.example|2026-11-30',
     );

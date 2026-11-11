@@ -13,14 +13,15 @@ import {
   type LanderJobView,
   type LanderSelection,
 } from '../shared/lander-connection';
+import { LanderDnsError } from '../core/services/lander-cloudflare';
 import {
   discoverLanderZone,
-  LanderCloudflare,
-  LanderDnsError,
-} from '../core/services/lander-cloudflare';
+  landerDnsProvider,
+} from '../core/services/lander-dns-provider';
 import {
   observeDnsChange,
   planLanderDns,
+  isLanderWebChange,
 } from '../core/services/lander-dns-plan';
 
 const payloadSchema = z
@@ -599,8 +600,8 @@ export class LanderJobs {
             'Provider preflight is required before hosting preparation.',
             409,
           );
-        const snapshot = await new LanderCloudflare(
-            p.snapshot.accountId,
+        const snapshot = await landerDnsProvider(
+            p.snapshot,
             this.fetcher,
           ).snapshot(p.domain, p.snapshot.zoneId),
           changes = planLanderDns(snapshot, hosts, r.generation);
@@ -681,10 +682,7 @@ export class LanderJobs {
             'The listing or public terms changed. Review a fresh connection.',
             409,
           );
-        const provider = new LanderCloudflare(
-          plan.snapshot.accountId,
-          this.fetcher,
-        );
+        const provider = landerDnsProvider(plan.snapshot, this.fetcher, fence);
         // Re-validate authority, account, complete records and routing on every
         // external step. Credentials never travel in the durable payload.
         const current = await provider.snapshot(
@@ -761,7 +759,7 @@ export class LanderJobs {
               after: change.before,
             });
             const verified = observeDnsChange(
-              await provider.records(current.zoneId),
+              (await provider.snapshot(plan.domain, current.zoneId)).records,
               change,
             );
             if (verified.state !== 'before')
@@ -814,7 +812,7 @@ export class LanderJobs {
           const change = plan.changes[index],
             seen = observeDnsChange(current.records, change);
           if (
-            change.after?.type === 'CNAME' &&
+            isLanderWebChange(change) &&
             !['tls-ready', 'live'].includes(hostingState ?? '')
           ) {
             await save(
@@ -824,7 +822,7 @@ export class LanderJobs {
             );
             return;
           }
-          if (change.after?.type === 'CNAME')
+          if (isLanderWebChange(change))
             planLanderDns(current, plan.hosts, r.generation);
           if (seen.state === 'conflict') {
             await save(
@@ -859,7 +857,7 @@ export class LanderJobs {
             await provider.write(current, change);
           }
           const checked = observeDnsChange(
-            await provider.records(current.zoneId),
+            (await provider.snapshot(plan.domain, current.zoneId)).records,
             change,
           );
           if (checked.state !== 'after')

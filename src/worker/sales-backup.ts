@@ -31,6 +31,7 @@ export const salesBackupSchema = z
       z.literal(3),
       z.literal(4),
       z.literal(5),
+      z.literal(6),
     ]),
     dnsRecovery: z.array(landerRecoverySchema).max(100000).default([]),
     journey: z.array(journeyRowSchema).max(100000).default([]),
@@ -198,7 +199,7 @@ export async function exportSales(
   const open = async (r: Record<string, unknown>) =>
     JSON.parse(await store.cipher.open(String(r.sealed)));
   return salesBackupSchema.parse({
-    version: 5,
+    version: 6,
     dnsRecovery: await exportLanderRecovery(store),
     journey: (await journeyReady(store.db))
       ? (await read('sales_journey_daily')).map((r) => ({
