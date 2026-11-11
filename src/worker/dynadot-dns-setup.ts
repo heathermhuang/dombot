@@ -142,6 +142,29 @@ export class DynadotDnsSetup {
         };
       }
     }
+    try {
+      const store = await SalesStore.from(this.env);
+      const { payload } = await this.prepare(
+        api,
+        s,
+        await sha(api.credentials().apiKey!),
+      );
+      await store.seal(payload);
+      result.preflight = { ready: true };
+    } catch (error) {
+      result.preflight = {
+        ready: false,
+        code:
+          error instanceof LanderDnsError
+            ? error.code
+            : error instanceof z.ZodError
+              ? 'DNS_SHAPE'
+              : error instanceof Error &&
+                  error.message === 'Public DNSSEC evidence is unavailable.'
+                ? 'DNS_PUBLIC_DS'
+                : 'DNS_PREFLIGHT',
+      };
+    }
     return result;
   }
   async view() {
@@ -167,58 +190,11 @@ export class DynadotDnsSetup {
       reconciliation: !!requestId || !!lock,
     };
   }
-  async initialize(
-    requestId: string,
-    unused: boolean,
-    expectedScope?: DynadotDnsSetupScope,
+  private async prepare(
+    api: LanderDynadot,
+    s: DynadotDnsSetupScope,
+    credentialIdentity: string,
   ) {
-    z.string().uuid().parse(requestId);
-    if (unused !== true)
-      throw Error(
-        'Confirm that this unused domain has no email or custom DNS services.',
-      );
-    const s = scope(this.env),
-      store = await SalesStore.from(this.env),
-      domainHash = await store.hash('domain', s.domain),
-      id = 'dns-setup:' + requestId;
-    if (requestId !== s.requestId)
-      throw Error('This request is outside the configured one-domain setup.');
-    if (expectedScope && canonicalJson(expectedScope) !== canonicalJson(s))
-      throw Error('Gateway and portfolio DNS setup scopes differ.');
-    const fence = async () => {
-      if (
-        canonicalJson(scope(this.env)) !== canonicalJson(s) ||
-        !credentialIdentity ||
-        (await sha(api.credentials().apiKey!)) !== credentialIdentity
-      )
-        throw Error('DNS setup scope or credential changed.');
-      const lock = await store.db
-        .prepare(
-          'SELECT 1 FROM lander_domain_locks WHERE domain_hash=? AND job_id=? AND ordinal=0 AND generation=?',
-        )
-        .bind(domainHash, requestId, requestId)
-        .first();
-      if (!lock) throw Error('DNS setup authority changed.');
-    };
-    const api = new LanderDynadot(s.accountId, this.fetcher, fence);
-    const credentialIdentity = await sha(api.credentials().apiKey!);
-    const retained = await store.db
-      .prepare('SELECT sealed FROM lander_recovery_archive WHERE id=?')
-      .bind(id)
-      .first<{ sealed: string }>();
-    if (retained) {
-      const payload = await store.open(
-        retained.sealed,
-        landerRecoverySchema.shape.payload,
-      );
-      if (
-        payload.domain !== s.domain ||
-        payload.snapshot?.accountId !== s.accountId ||
-        payload.snapshot.settings.kind !== 'dynadot-dns-initialization'
-      )
-        throw Error('DNS receipt belongs to a different setup.');
-      return this.reconcile(store, api, s, requestId, retained.sealed, payload);
-    }
     const raw = z
       .object({
         glue_info: z
@@ -280,6 +256,65 @@ export class DynadotDnsSetup {
       throw Error(
         'The complete registrar configuration exceeds its recovery limit.',
       );
+    return { raw, previousNs, dnssec, payload };
+  }
+  async initialize(
+    requestId: string,
+    unused: boolean,
+    expectedScope?: DynadotDnsSetupScope,
+  ) {
+    z.string().uuid().parse(requestId);
+    if (unused !== true)
+      throw Error(
+        'Confirm that this unused domain has no email or custom DNS services.',
+      );
+    const s = scope(this.env),
+      store = await SalesStore.from(this.env),
+      domainHash = await store.hash('domain', s.domain),
+      id = 'dns-setup:' + requestId;
+    if (requestId !== s.requestId)
+      throw Error('This request is outside the configured one-domain setup.');
+    if (expectedScope && canonicalJson(expectedScope) !== canonicalJson(s))
+      throw Error('Gateway and portfolio DNS setup scopes differ.');
+    const fence = async () => {
+      if (
+        canonicalJson(scope(this.env)) !== canonicalJson(s) ||
+        !credentialIdentity ||
+        (await sha(api.credentials().apiKey!)) !== credentialIdentity
+      )
+        throw Error('DNS setup scope or credential changed.');
+      const lock = await store.db
+        .prepare(
+          'SELECT 1 FROM lander_domain_locks WHERE domain_hash=? AND job_id=? AND ordinal=0 AND generation=?',
+        )
+        .bind(domainHash, requestId, requestId)
+        .first();
+      if (!lock) throw Error('DNS setup authority changed.');
+    };
+    const api = new LanderDynadot(s.accountId, this.fetcher, fence);
+    const credentialIdentity = await sha(api.credentials().apiKey!);
+    const retained = await store.db
+      .prepare('SELECT sealed FROM lander_recovery_archive WHERE id=?')
+      .bind(id)
+      .first<{ sealed: string }>();
+    if (retained) {
+      const payload = await store.open(
+        retained.sealed,
+        landerRecoverySchema.shape.payload,
+      );
+      if (
+        payload.domain !== s.domain ||
+        payload.snapshot?.accountId !== s.accountId ||
+        payload.snapshot.settings.kind !== 'dynadot-dns-initialization'
+      )
+        throw Error('DNS receipt belongs to a different setup.');
+      return this.reconcile(store, api, s, requestId, retained.sealed, payload);
+    }
+    const { raw, previousNs, dnssec, payload } = await this.prepare(
+      api,
+      s,
+      credentialIdentity,
+    );
     const sealed = await store.seal(payload);
     const lock = await store.db
       .prepare(
@@ -315,7 +350,8 @@ export class DynadotDnsSetup {
         canonicalJson(freshDnssec) !== canonicalJson(dnssec) ||
         canonicalJson(nsList(await api.call(s.domain, '/nameservers'))) !==
           canonicalJson(previousNs) ||
-        (await sha(api.credentials().apiKey!)) !== snapshot.providerAccountId
+        (await sha(api.credentials().apiKey!)) !==
+          payload.snapshot!.providerAccountId
       )
         throw Error(
           'The approved registrar configuration changed before submission.',

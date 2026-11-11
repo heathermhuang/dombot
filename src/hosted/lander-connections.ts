@@ -62,61 +62,81 @@ export async function landerRequest(
   if (suffix === 'dns-setup') {
     const setup = dynadotDnsSetupScope(env.DYNDNS_SETUP_FIXTURE, workspace);
     if (!setup) return new Response('Not found', { status: 404 });
-    let content: string;
-    if (request.method === 'GET') {
-      const r = await landerInternal(env, workspace, 'dns-setup');
-      if (!r.ok) throw Error('DNS setup unavailable');
-      const v = z
-        .object({
-          domain: z.string(),
-          scope: dynadotDnsSetupScopeSchema,
-          requestId: z.string().uuid().nullable(),
-          reconciliation: z.boolean(),
-        })
-        .parse(await r.json());
-      if (
-        v.domain !== setup.domain ||
-        canonicalJson(v.scope) !== canonicalJson(setup) ||
-        v.requestId !== setup.requestId
-      )
-        throw Error('DNS setup scope mismatch');
-      content = `<section class="account"><h1>Set up Dynadot DNS</h1><p>Move only <strong>${e(setup.domain)}</strong> from Park.io to your connected Dynadot DNS account. Its existing Park.io web destination stays in place while the lander is prepared.</p><p>The original Park.io delegation is retained for rollback. Other domains are unaffected.</p><form method="post" action="/w/${workspace}/sales/lander/dns-setup"><input type="hidden" name="requestId" value="${setup.requestId}"><label class="check"><input type="checkbox" name="unused" required> This unused domain has no email or custom DNS services to migrate.</label><button>${v.reconciliation ? 'Recheck DNS setup' : `Move ${e(setup.domain)} to Dynadot DNS`}</button></form><p><a href="/w/${workspace}/">Back to portfolio</a></p></section>`;
-    } else if (request.method === 'POST') {
-      const f = await request.formData();
-      if (f.get('requestId') !== setup.requestId || f.get('unused') !== 'on')
-        throw Error('Confirm the exact unused-domain setup.');
-      const r = await landerInternal(env, workspace, 'dns-setup', false, {
-        requestId: setup.requestId,
-        unused: true,
-        expectedScope: setup,
+    const failed = () =>
+      new Response(
+        page(
+          'DNS setup needs attention',
+          `<section class="account"><h1>DNS setup did not complete</h1><p>The setup for ${e(setup.domain)} could not finish. Check its current status before trying again. A submitted request is reconciled before another change.</p><p><a href="/w/${workspace}/sales/lander/dns-setup">Check setup status</a> · <a href="/w/${workspace}/">Back to portfolio</a></p></section>`,
+        ),
+        {
+          status: 409,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Robots-Tag': 'noindex,nofollow',
+          },
+        },
+      );
+    try {
+      let content: string;
+      if (request.method === 'GET') {
+        const r = await landerInternal(env, workspace, 'dns-setup');
+        if (!r.ok) throw Error('DNS setup unavailable');
+        const v = z
+          .object({
+            domain: z.string(),
+            scope: dynadotDnsSetupScopeSchema,
+            requestId: z.string().uuid().nullable(),
+            reconciliation: z.boolean(),
+          })
+          .parse(await r.json());
+        if (
+          v.domain !== setup.domain ||
+          canonicalJson(v.scope) !== canonicalJson(setup) ||
+          v.requestId !== setup.requestId
+        )
+          throw Error('DNS setup scope mismatch');
+        content = `<section class="account"><h1>Set up Dynadot DNS</h1><p>Move only <strong>${e(setup.domain)}</strong> from Park.io to your connected Dynadot DNS account. Its existing Park.io web destination stays in place while the lander is prepared.</p><p>The original Park.io delegation is retained for rollback. Other domains are unaffected.</p><form method="post" action="/w/${workspace}/sales/lander/dns-setup"><input type="hidden" name="requestId" value="${setup.requestId}"><label class="check"><input type="checkbox" name="unused" required> This unused domain has no email or custom DNS services to migrate.</label><button>${v.reconciliation ? 'Recheck DNS setup' : `Move ${e(setup.domain)} to Dynadot DNS`}</button></form><p><a href="/w/${workspace}/">Back to portfolio</a></p></section>`;
+      } else if (request.method === 'POST') {
+        const f = await request.formData();
+        if (f.get('requestId') !== setup.requestId || f.get('unused') !== 'on')
+          throw Error('Confirm the exact unused-domain setup.');
+        const r = await landerInternal(env, workspace, 'dns-setup', false, {
+          requestId: setup.requestId,
+          unused: true,
+          expectedScope: setup,
+        });
+        if (!r.ok) {
+          await r.body?.cancel();
+          return failed();
+        }
+        const v = z
+          .object({
+            domain: z.string(),
+            state: z.enum(['configured', 'held', 'rejected']),
+            nameservers: z.array(z.string()).optional(),
+            receipt: z.string(),
+          })
+          .parse(await r.json());
+        if (
+          v.domain !== setup.domain ||
+          v.receipt !== 'dns-setup:' + setup.requestId
+        )
+          throw Error('DNS setup scope mismatch');
+        content = `<section class="account"><h1>${v.state === 'configured' ? 'Dynadot DNS configured' : v.state === 'rejected' ? 'DNS setup was refused' : 'DNS setup needs a recheck'}</h1><p>${e(setup.domain)}</p><p>${v.state === 'configured' ? 'DNS propagation, lander HTTPS and restoration checks still need to finish before automatic connections are enabled.' : 'The retained request will be checked before another write. An uncertain submission is never replayed.'}</p>${v.nameservers ? `<p>${v.nameservers.map(e).join('<br>')}</p>` : ''}<p><a href="/w/${workspace}/sales/lander/dns-setup">Recheck setup</a> · <a href="/w/${workspace}/">Back to portfolio</a></p></section>`;
+      } else return new Response('Not found', { status: 404 });
+      return new Response(page('Dynadot DNS setup', content), {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Robots-Tag': 'noindex,nofollow',
+        },
       });
-      if (!r.ok)
-        throw Error(
-          'DNS setup could not complete. Recheck the retained setup receipt.',
-        );
-      const v = z
-        .object({
-          domain: z.string(),
-          state: z.enum(['configured', 'held', 'rejected']),
-          nameservers: z.array(z.string()).optional(),
-          receipt: z.string(),
-        })
-        .parse(await r.json());
-      if (
-        v.domain !== setup.domain ||
-        v.receipt !== 'dns-setup:' + setup.requestId
-      )
-        throw Error('DNS setup scope mismatch');
-      content = `<section class="account"><h1>${v.state === 'configured' ? 'Dynadot DNS configured' : v.state === 'rejected' ? 'DNS setup was refused' : 'DNS setup needs a recheck'}</h1><p>${e(setup.domain)}</p><p>${v.state === 'configured' ? 'DNS propagation, lander HTTPS and restoration checks still need to finish before automatic connections are enabled.' : 'The retained request will be checked before another write. An uncertain submission is never replayed.'}</p>${v.nameservers ? `<p>${v.nameservers.map(e).join('<br>')}</p>` : ''}<p><a href="/w/${workspace}/sales/lander/dns-setup">Recheck setup</a> · <a href="/w/${workspace}/">Back to portfolio</a></p></section>`;
-    } else return new Response('Not found', { status: 404 });
-    return new Response(page('Dynadot DNS setup', content), {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Robots-Tag': 'noindex,nofollow',
-      },
-    });
+    } catch {
+      return failed();
+    }
   }
+
   if (suffix === 'config' && request.method === 'GET')
     return Response.json(
       {

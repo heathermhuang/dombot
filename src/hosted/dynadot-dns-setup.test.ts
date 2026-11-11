@@ -121,7 +121,7 @@ it.each(['wrong-id', 'not-confirmed'])(
           body: form,
         }),
       ),
-    ).rejects.toThrow();
+    ).resolves.toMatchObject({ status: 409 });
     expect(calls).toHaveLength(0);
   },
 );
@@ -144,5 +144,48 @@ it('refuses mismatched gateway and portfolio setup scopes', async () => {
       path,
       new Request('https://accounts.example' + path),
     ),
-  ).rejects.toThrow(/mismatch/);
+  ).resolves.toMatchObject({ status: 409 });
+});
+
+it('shows a recoverable HTML page for failed setup without leaking private worker errors', async () => {
+  const { env } = fixture();
+  env.WORKSPACE_0 = {
+    fetch: async () =>
+      new Response('private provider diagnostic', { status: 500 }),
+  } as Fetcher;
+  const form = new FormData();
+  form.set('requestId', requestId);
+  form.set('unused', 'on');
+  const r = await landerRequest(
+    env,
+    workspace,
+    'owner@example.invalid',
+    path,
+    new Request('https://accounts.example' + path, {
+      method: 'POST',
+      body: form,
+    }),
+  );
+  expect(r.status).toBe(409);
+  expect(r.headers.get('Content-Type')).toContain('text/html');
+  expect(r.headers.get('Cache-Control')).toBe('no-store');
+  const html = await r.text();
+  expect(html).toContain('Check setup status');
+  expect(html).not.toContain('private provider diagnostic');
+});
+
+it('keeps failed setup page reads recoverable without a raw admission exception', async () => {
+  const { env } = fixture();
+  env.WORKSPACE_0 = {
+    fetch: async () => new Response('private failure', { status: 500 }),
+  } as Fetcher;
+  const r = await landerRequest(
+    env,
+    workspace,
+    'owner@example.invalid',
+    path,
+    new Request('https://accounts.example' + path),
+  );
+  expect(r.status).toBe(409);
+  expect(await r.text()).toContain('Back to portfolio');
 });
