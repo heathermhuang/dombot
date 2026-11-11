@@ -337,6 +337,21 @@ export class LanderDynadot {
         'DNS_CONFLICT',
         'The append is already observable. Reconcile without replaying it.',
       );
+    if (!change.before) {
+      const atOwner = current.records.filter((x) => x.name === r.name);
+      if (
+        (['A', 'AAAA', 'CNAME', 'ANAME'].includes(r.type) &&
+          atOwner.some((x) =>
+            ['A', 'AAAA', 'CNAME', 'ANAME'].includes(x.type),
+          )) ||
+        (r.type === 'CNAME' && atOwner.length) ||
+        (r.type === 'TXT' && atOwner.some((x) => x.type !== 'TXT'))
+      )
+        throw new LanderDnsError(
+          'DNS_CONFLICT',
+          'A new record conflicts with the approved append. Later edits were preserved.',
+        );
+    }
     const apex = r.name === snapshot.domain,
       sub = apex ? undefined : r.name.slice(0, -snapshot.domain.length - 1);
     if (!apex && (!sub || r.name !== sub + '.' + snapshot.domain))

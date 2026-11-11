@@ -286,3 +286,22 @@ it('holds a provider-complete snapshot that would exceed encrypted custody limit
   ).rejects.toMatchObject({ code: 'DNS_SNAPSHOT_LIMIT' });
   expect(writes).toHaveLength(0);
 });
+it('preserves a web record or proof alias added after the approved plan', async () => {
+  const p = new LanderDynadot('dynadot', fetcher),
+    s = await p.snapshot(domain),
+    changes = planLanderDns(s, hosts, 'generation');
+  const web = changes.find(
+    (c) => c.after?.name === 'www.' + domain && c.after.type === 'CNAME',
+  )!;
+  sub.push({ sub_host: 'www', record_type: 'a', record_value1: '192.0.2.99' });
+  await expect(p.write(s, web)).rejects.toMatchObject({ code: 'DNS_CONFLICT' });
+  sub.push({
+    sub_host: '_domains-sales',
+    record_type: 'cname',
+    record_value1: 'later.example',
+  });
+  await expect(p.write(s, changes[0])).rejects.toMatchObject({
+    code: 'DNS_CONFLICT',
+  });
+  expect(writes).toHaveLength(0);
+});
