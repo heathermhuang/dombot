@@ -217,7 +217,9 @@ export function observeDnsChange(
         r.name === change.after.name &&
         r.type === change.after.type &&
         (['CNAME', 'ANAME'].includes(r.type) ||
-          r.comment === change.after.comment),
+          (typeof change.after.comment === 'string' &&
+            change.after.comment.length > 0 &&
+            r.comment === change.after.comment)),
     )
   )
     return { state: 'conflict', record: null };
