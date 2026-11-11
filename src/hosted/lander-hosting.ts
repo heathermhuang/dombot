@@ -44,7 +44,11 @@ export class LanderHosting {
     readonly env: HostedEnv,
     readonly fetcher: typeof fetch = fetch,
     readonly fence: () => Promise<void> = async () => {},
-  ) {}
+  ) {
+    // Worker fetch rejects an unrelated class instance as its receiver.
+    // Keep injected transports callable through this property as well.
+    this.fetcher = (input, init) => fetcher(input, init);
+  }
   qualified(workspace: string, domain: string) {
     if (
       this.env.LANDER_CONNECTIONS_ENABLED !== 'true' ||
