@@ -48,6 +48,22 @@
           "url": "https://github.com/heathermhuang/dombot/pull/216"
         }
       ]
+    },
+    {
+      "id": "auto-saas-pr-217",
+      "date": "2026-11-11",
+      "layer": "saas",
+      "title": "Add native Dynadot DNS support for controlled lander qualification",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #217 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #217",
+          "url": "https://github.com/heathermhuang/dombot/pull/217"
+        }
+      ]
     }
   ]
 }

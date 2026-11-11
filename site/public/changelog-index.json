@@ -1,14 +1,14 @@
 {
   "version": 3,
-  "totalEntries": 203,
+  "totalEntries": 204,
   "core": 77,
-  "saas": 126,
+  "saas": 127,
   "years": [
     {
       "year": "2026",
-      "count": 203,
+      "count": 204,
       "core": 77,
-      "saas": 126,
+      "saas": 127,
       "lastPart": 3,
       "oldest": "2026-08-30",
       "newest": "2026-11-11",
@@ -23,7 +23,7 @@
     {
       "id": "2026-000000",
       "path": "changelog-archive-index/2026-000000.json",
-      "sha256": "988a7715e84e28e5573eb50004e8c7de3f745896e88fa4ddde45cc9b85dfa21e",
+      "sha256": "ec4c0c0534a72563358f0aa859c1d511afdd46f6ec48e2dd63c5d80a66e21fff",
       "year": "2026",
       "firstPart": 1,
       "lastPart": 3
@@ -33,10 +33,10 @@
     "signatures": {
       "aoxborrow/dombot:releases": "6b01dde09a8d89cc6f9aa679f2fe8831f94f304875c121c9300e882c13296632",
       "heathermhuang/dombot:releases": "21c94b981c98e89d6e301599c1d12c5d3b928cc7d7c1e469efe30fb6ac74d0f7",
-      "pulls": "fcc8c7fd65892023d1bf90bd2b717622fba64f7a3693b40fd3878ffc1bbe251e"
+      "pulls": "190890358b9692646b2ecb89548bbf48e51e3c69f92a690bf7ab320a30ee584c"
     },
     "upstreamHead": "80218984214ed36bcc17d4ec3a66d37d39d00eb8",
-    "mainHead": "d9daa40c6f28192c72295823c851b834e72ba132",
+    "mainHead": "c24f6e007d4fa9dc6df23688840e2f64176dd2d1",
     "gatewaySource": "d9daa40c6f28192c72295823c851b834e72ba132",
     "curationFingerprint": "cbc903f1301dc436abaa0869de5fdc2cba75396170c8d5918e1558f1536206d3",
     "gatewayObservationSerial": 25,
@@ -52,6 +52,6 @@
       "heathermhuang/dombot:422392606": "saas-desktop-1-5-2",
       "heathermhuang/dombot:422382156": "saas-desktop-1-5-1"
     },
-    "archiveParent": "2c5c2ea1ce63f4f7f05c9166ea1b59983b9be789"
+    "archiveParent": "c24f6e007d4fa9dc6df23688840e2f64176dd2d1"
   }
 }
