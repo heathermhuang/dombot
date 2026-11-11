@@ -14,11 +14,11 @@ export const emailStart = (next = '/app', notice = '') =>
       `<form action="/auth/email/request" method="post"><span class="eyebrow">Your domain portfolio</span><h1>Continue with email.</h1><p>One email address for your portfolio. We’ll send a sign-in link and a six-digit code. No password or Google account needed.</p>${notice ? `<p class="notice" role="status">${e(notice)}</p>` : ''}<input type="hidden" name="next" value="${e(next)}"><label>Email<input name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="254"></label><button type="submit">Email me a sign-in link</button><p class="note">New here? Your account is created after you verify your email and accept the Terms, subject to early-access capacity.</p><p><button type="button" data-passkey="login">Use a passkey</button></p><p id="auth-status" role="status" aria-live="polite"></p><details><summary>Other sign-in options</summary><p><a href="/login/password?next=${encodeURIComponent(next)}">Sign in with a password you previously set</a></p></details></form>`,
     ),
   );
-export const emailCode = (id: string, error = '') =>
+export const emailCode = (id: string, error = '', next = '/app') =>
   withAuthScript(
     page(
       'Check your email',
-      `<form action="/auth/email/confirm" method="post"><h1>Check your email.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>Open the sign-in email, or enter its six-digit code below. If your address is eligible, the email will arrive shortly. Check Spam if it is missing.</p><input type="hidden" name="id" value="${e(id)}"><label>Six-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" minlength="6" required></label><button type="submit">Continue</button><p class="note">Expires in 10 minutes. A new request replaces your previous link and code. Delivery may take a few minutes.</p><p><a href="/login">Request a new link</a></p></form>`,
+      `<form action="/auth/email/confirm" method="post"><h1>Check your email.</h1>${error ? `<p class="error" role="alert">${e(error)}</p>` : ''}<p>Open the sign-in email, or enter its six-digit code below. If your address is eligible, the email will arrive shortly. Check Spam if it is missing.</p><input type="hidden" name="id" value="${e(id)}"><input type="hidden" name="next" value="${e(next)}"><label>Six-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" minlength="6" required></label><button type="submit">Continue</button><p class="note">Expires in 10 minutes. A new request replaces your previous link and code. Delivery may take a few minutes.</p><p><a href="/auth/email/retry?next=${encodeURIComponent(next)}">Request a new link</a></p></form>`,
     ),
   );
 export const emailConfirm = (
@@ -38,7 +38,7 @@ export const emailConfirm = (
 export const authUnavailable = () =>
   page(
     'Sign-in link unavailable',
-    '<h1>Request a new sign-in link.</h1><p>This link or code is unavailable. It may have expired, been replaced or already been used.</p><p><a class="button" href="/login">Request a new link</a></p><details><summary>Account and browser requirements</summary><p>New accounts require acceptance of the Terms and available early-access capacity.</p><p>You can open ordinary sign-in links in another browser. For a sensitive account change, return to the browser where you are signed in.</p></details>',
+    '<h1>Request a new sign-in link.</h1><p>This link or code is unavailable. It may have expired, been replaced or already been used.</p><p><a class="button" href="/auth/email/retry">Request a new link</a></p><details><summary>Account and browser requirements</summary><p>New accounts require acceptance of the Terms and available early-access capacity.</p><p>You can open ordinary sign-in links in another browser. For a sensitive account change, return to the browser where you are signed in.</p></details>',
   );
 export const reauthPage = (
   next: string,

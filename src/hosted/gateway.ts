@@ -365,6 +365,17 @@ app.get('/auth/parkio-native.js', (c) =>
     'Content-Type': 'text/javascript; charset=utf-8',
   }),
 );
+// Retrying an email proof must not take a signed-in, stale session through
+// /login: that route intentionally returns existing sessions to the app.
+app.get('/auth/email/retry', async (c) => {
+  const user = await account(c.env).session(readSession(c.req.raw));
+  return c.redirect(
+    (user ? '/account/reauth' : '/login') +
+      '?next=' +
+      encodeURIComponent(safeNext(c.req.query('next'))),
+    303,
+  );
+});
 app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
   if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
   if (!emailReady(c.env)) {
@@ -435,7 +446,7 @@ app.post('/auth/email/request', bodyLimit({ maxSize: 4096 }), async (c) => {
       readSession(c.req.raw),
       waitUntil,
     );
-    return c.html(emailCode(id), 202);
+    return c.html(emailCode(id, '', safeNext(form.next)), 202);
   } catch (error) {
     if (!(error instanceof AuthEmailUnavailable)) throw error;
     if (error.retryAfter > 0) c.header('Retry-After', String(error.retryAfter));
@@ -503,6 +514,7 @@ app.post('/auth/email/confirm', bodyLimit({ maxSize: 4096 }), async (c) => {
         : emailCode(
             id,
             'We couldn’t confirm that code. Check the six digits and try again, or request a new link if it has expired or is unavailable.',
+            safeNext(form.next),
           ),
       400,
     );
