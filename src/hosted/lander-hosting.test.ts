@@ -287,6 +287,45 @@ it('requires controlled apex entitlement, edge admission and finite capacity', a
   ).rejects.toThrow(/capacity/);
   expect(creates).toBe(0);
 });
+it('admits only the explicit bounded endpoint-qualification fixture before the live apex flag', () => {
+  const env = environment();
+  env.LANDER_APEX_FLATTENING_QUALIFIED = 'false';
+  env.LANDER_QUALIFIED_HOST_CAP = '2';
+  const scope = {
+    workspace,
+    domain,
+    accountId: 'dynadot',
+    requestId: generation,
+    expiresAt: Date.now() + 3600000,
+    qualifyEndpoint: true,
+  };
+  env.DYNDNS_SETUP_FIXTURE = JSON.stringify(scope);
+  expect(() =>
+    new LanderHosting(env, fetcher).qualified(workspace, domain),
+  ).not.toThrow();
+  for (const invalid of [
+    { ...scope, domain: 'other.example' },
+    { ...scope, workspace: listing },
+    { ...scope, expiresAt: 1 },
+    { ...scope, qualifyEndpoint: undefined },
+  ]) {
+    env.DYNDNS_SETUP_FIXTURE = JSON.stringify(invalid);
+    expect(() =>
+      new LanderHosting(env, fetcher).qualified(workspace, domain),
+    ).toThrow(/Root/);
+  }
+  env.DYNDNS_SETUP_FIXTURE = JSON.stringify(scope);
+  env.LANDER_CONNECTION_WORKSPACES = JSON.stringify([workspace, listing]);
+  expect(() =>
+    new LanderHosting(env, fetcher).qualified(workspace, domain),
+  ).toThrow(/Root/);
+  env.LANDER_CONNECTION_WORKSPACES = JSON.stringify([workspace]);
+  env.LANDER_QUALIFIED_HOST_CAP = '10';
+  expect(() =>
+    new LanderHosting(env, fetcher).qualified(workspace, domain),
+  ).toThrow(/Root/);
+  expect(creates).toBe(0);
+});
 it('fences stale scheduler writes before provider submission', async () => {
   const port = new LanderHosting(environment(), fetcher, async () => {
     throw Error('expired lease');
