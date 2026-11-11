@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-core-source-a31a6f8c9286dbf76ef5a5a558b8918a0293d160",
+      "date": "2026-11-11",
+      "layer": "core",
+      "title": "Adversarial Claude PR review workflow",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change a31a6f8c9286",
+          "url": "https://github.com/aoxborrow/dombot/commit/a31a6f8c9286dbf76ef5a5a558b8918a0293d160"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-2a55469d8d7eabdc33604e98d7b353332dcdb0fa-27",
       "date": "2026-11-11",
       "layer": "saas",
