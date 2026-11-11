@@ -6,6 +6,7 @@ import { type LanderHostingPlan } from '../shared/lander-connection';
 import { claimHostname, rememberHostnameProvider } from './hostname-claims';
 import { workspaceSchema } from './workspaces';
 import { salesHostingProvider } from './sales-hosting-provider';
+import { dynadotDnsSetupScope } from '../shared/dynadot-dns-setup';
 
 interface ConnectionHost extends HostBinding {
   connection_key: string | null;
@@ -66,13 +67,27 @@ export class LanderHosting {
     )
       throw Error('The public edge is not qualified for this account.');
     const allow = new Set((this.env.SALES_HOST_ALLOWLIST ?? '').split(','));
+    const fixture = dynadotDnsSetupScope(
+      this.env.DYNDNS_SETUP_FIXTURE,
+      workspace,
+    );
+    const admitted = z
+      .array(z.string().uuid())
+      .parse(JSON.parse(this.env.LANDER_CONNECTION_WORKSPACES ?? '[]'));
+    const qualificationOnly =
+      fixture?.qualifyConnection === true &&
+      fixture.domain === domain &&
+      admitted.length === 1 &&
+      admitted[0] === workspace &&
+      Number(this.env.LANDER_QUALIFIED_HOST_CAP) === 2;
     if (
       !allow.has(domain) ||
       !allow.has(`www.${domain}`) ||
       !this.env.LANDER_QUALIFIED_CNAME_TARGET ||
       this.env.LANDER_QUALIFIED_CNAME_TARGET !==
         salesHostingProvider(this.env).target ||
-      this.env.LANDER_APEX_FLATTENING_QUALIFIED !== 'true'
+      (this.env.LANDER_APEX_FLATTENING_QUALIFIED !== 'true' &&
+        !qualificationOnly)
     )
       throw Error(
         'Root and www routing need controlled provider and endpoint qualification.',

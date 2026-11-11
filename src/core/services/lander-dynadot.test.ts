@@ -21,11 +21,13 @@ type Row = {
 let main: Row[],
   sub: Row[],
   ns: string[],
+  assignedNs: string[],
   glueType: string,
   ttl: number,
   writes: Request[],
   unknown: boolean;
 let corruptRemoval = false;
+let emptyDnssecReply = false;
 const hosts: LanderHostingPlan[] = [domain, 'www.' + domain].map(
   (hostname) => ({
     hostname,
@@ -56,12 +58,10 @@ const fetcher: typeof fetch = async (input, init) => {
   const ok = (data: unknown) => Response.json({ code: 200, data });
   if (u.pathname.endsWith('/nameservers'))
     return ok({
-      nameserver_list: [
-        { server_name: 'ns1.dynadot.com' },
-        { server_name: 'ns2.dynadot.com' },
-      ],
+      nameserver_list: assignedNs.map((server_name) => ({ server_name })),
     });
-  if (u.pathname.endsWith('/dnssec')) return ok({ dnssec_info_list: [] });
+  if (u.pathname.endsWith('/dnssec'))
+    return ok(emptyDnssecReply ? {} : { dnssec_info_list: [] });
   if (r.method === 'GET')
     return ok({
       glue_info: {
@@ -126,11 +126,13 @@ beforeEach(async () => {
     },
   ];
   ns = ['ns1.dynadot.com', 'ns2.dynadot.com'];
+  assignedNs = [...ns];
   glueType = 'DNS';
   ttl = 1800;
   writes = [];
   unknown = false;
   corruptRemoval = false;
+  emptyDnssecReply = false;
   let time = Date.now();
   vi.spyOn(Date, 'now').mockImplementation(() => (time += 100000));
 });
@@ -143,6 +145,33 @@ it('reads complete native records, credential identity, authoritative NS and sha
   expect(s.records[1]).toMatchObject({ type: 'MX', priority: 10, ttl: 1800 });
   expect(s.settings.dns_main_list).toEqual(main);
   expect(JSON.stringify(s)).not.toMatch(/fixture-key|fixture-secret/);
+  expect(writes).toHaveLength(0);
+});
+it('accepts provider-assigned dyna-ns.net DNS while requiring exact public delegation agreement', async () => {
+  ns = ['ns1.dyna-ns.net', 'ns2.dyna-ns.net'];
+  assignedNs = [...ns];
+  expect(
+    (await new LanderDynadot('dynadot', fetcher).snapshot(domain)).nameservers,
+  ).toEqual(ns);
+  ns = ['a.dns.park.io', 'b.dns.park.io'];
+  await expect(
+    new LanderDynadot('dynadot', fetcher).snapshot(domain),
+  ).rejects.toMatchObject({ code: 'DNS_AUTHORITY' });
+  expect(writes).toHaveLength(0);
+});
+it('rejects a non-provider delegation even when the API and public NS agree', async () => {
+  ns = ['ns1.foreign.invalid', 'ns2.foreign.invalid'];
+  assignedNs = [...ns];
+  await expect(
+    new LanderDynadot('dynadot', fetcher).snapshot(domain),
+  ).rejects.toMatchObject({ code: 'DNS_AUTHORITY' });
+  expect(writes).toHaveLength(0);
+});
+it('preserves a successful empty DNSSEC response without inventing provider fields', async () => {
+  emptyDnssecReply = true;
+  expect(
+    (await new LanderDynadot('dynadot', fetcher).snapshot(domain)).dnssec,
+  ).toEqual({});
   expect(writes).toHaveLength(0);
 });
 it('requires explicit provider qualification even for a connected authoritative Dynadot account', async () => {

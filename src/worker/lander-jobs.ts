@@ -72,7 +72,25 @@ export class LanderJobs {
     readonly allowedDnsProviders: ReadonlyArray<DnsSnapshot['provider']> = [
       'cloudflare',
     ],
+    readonly qualificationFixture?: { domain: string; accountId: string },
   ) {}
+  private dnsAllowed(
+    snapshot: Pick<DnsSnapshot, 'provider' | 'domain' | 'accountId'>,
+  ) {
+    const fixture = this.qualificationFixture;
+    return (
+      this.allowedDnsProviders.includes(snapshot.provider) ||
+      (!!fixture &&
+        snapshot.provider === 'dynadot' &&
+        snapshot.domain === fixture.domain &&
+        snapshot.accountId === fixture.accountId)
+    );
+  }
+  private providersFor(domain: string) {
+    return this.qualificationFixture?.domain === domain
+      ? [...new Set([...this.allowedDnsProviders, 'dynadot' as const])]
+      : this.allowedDnsProviders;
+  }
   async create(
     selection: LanderSelection,
     id: string,
@@ -289,7 +307,7 @@ export class LanderJobs {
         p.snapshot = await discoverLanderZone(
           p.domain,
           this.fetcher,
-          this.allowedDnsProviders,
+          this.providersFor(p.domain),
         );
         await this.store.db
           .prepare(
@@ -316,11 +334,7 @@ export class LanderJobs {
       }
     }
     const snapshot = p.plan?.snapshot ?? p.snapshot;
-    if (
-      r.job_state !== 'restoring' &&
-      snapshot &&
-      !this.allowedDnsProviders.includes(snapshot.provider)
-    ) {
+    if (r.job_state !== 'restoring' && snapshot && !this.dnsAllowed(snapshot)) {
       await this.store.db
         .prepare(
           "UPDATE lander_items SET state='held',reason=? WHERE job_id=? AND ordinal=? AND generation=? AND lease_until<=?",
@@ -603,10 +617,7 @@ export class LanderJobs {
         return;
       }
       if (j.state === 'preparing') {
-        if (
-          p.snapshot &&
-          !this.allowedDnsProviders.includes(p.snapshot.provider)
-        )
+        if (p.snapshot && !this.dnsAllowed(p.snapshot))
           throw new SalesError(
             'DNS_PROVIDER_UNQUALIFIED',
             'This DNS provider is not qualified for automatic connections on this portfolio.',
@@ -721,10 +732,7 @@ export class LanderJobs {
             409,
           );
         const provider = landerDnsProvider(plan.snapshot, this.fetcher, fence);
-        if (
-          j.state !== 'restoring' &&
-          !this.allowedDnsProviders.includes(plan.snapshot.provider)
-        )
+        if (j.state !== 'restoring' && !this.dnsAllowed(plan.snapshot))
           throw new SalesError(
             'DNS_PROVIDER_UNQUALIFIED',
             'This DNS provider is not qualified for new DNS writes on this portfolio.',

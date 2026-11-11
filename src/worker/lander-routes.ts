@@ -12,6 +12,11 @@ import { createVerifiedSaleObserver } from './sales-observation';
 import { salesInventoryNames } from './sales-routes';
 import { SalesError } from '../shared/sales-review';
 import type { AuthConfig } from './auth';
+import { DynadotDnsSetup } from './dynadot-dns-setup';
+import {
+  dynadotDnsSetupScope,
+  dynadotDnsSetupScopeSchema,
+} from '../shared/dynadot-dns-setup';
 
 // Mounted under sales-internal after the stateful coordinator is available.
 // The public gateway never forwards this namespace from a user request.
@@ -39,8 +44,32 @@ export function createLanderRoutes(
   });
   app.use('*', bodyLimit({ maxSize: 750000 }));
   app.use('*', stateful);
-  const controller = async (env: Env) =>
-    new LanderJobs(
+  app.get('/dns-setup', async (c) =>
+    c.json(await new DynadotDnsSetup(c.env).view()),
+  );
+  app.post('/dns-setup', async (c) => {
+    const v = z
+      .object({
+        requestId: z.string().uuid(),
+        unused: z.literal(true),
+        expectedScope: dynadotDnsSetupScopeSchema,
+      })
+      .strict()
+      .parse(await c.req.json());
+    return c.json(
+      await new DynadotDnsSetup(c.env).initialize(
+        v.requestId,
+        v.unused,
+        v.expectedScope,
+      ),
+    );
+  });
+  const controller = async (env: Env) => {
+    const fixture = dynadotDnsSetupScope(
+      env.DYNDNS_SETUP_FIXTURE,
+      env.DOMBOT_WORKSPACE_ID ?? '',
+    );
+    return new LanderJobs(
       await SalesStore.from(env),
       createVerifiedSaleObserver(env),
       fetch,
@@ -48,7 +77,11 @@ export function createLanderRoutes(
         .array(z.enum(['cloudflare', 'dynadot']))
         .max(2)
         .parse(JSON.parse(env.DOMBOT_LANDER_DNS_PROVIDERS ?? '["cloudflare"]')),
+      fixture?.qualifyConnection === true
+        ? { domain: fixture.domain, accountId: fixture.accountId }
+        : undefined,
     );
+  };
   app.get('/work', async (c) =>
     c.json({ work: await (await controller(c.env)).work() }),
   );

@@ -19,6 +19,7 @@ export interface DomBotEnvironment {
   SALES_DNS_CONTROL_ENABLED?: string;
   DOMBOT_SALES_V1?: string;
   DOMBOT_LANDER_DNS_PROVIDERS?: string;
+  DYNDNS_SETUP_FIXTURE?: string;
   DOMBOT_NOTIFICATION_V1?: string;
   SALES_INQUIRIES_ENABLED?: string;
   SALES_PRIVACY_REVIEWED?: string;

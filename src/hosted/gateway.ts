@@ -1596,7 +1596,12 @@ app.all('/w/:workspace/*', async (c) => {
       return c.json({ error: 'Not signed in' }, 401);
     if (c.req.method !== 'GET') {
       if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
-      if (!(await new Passkeys(c.env).fresh(user)))
+      if (!(await new Passkeys(c.env).fresh(user))) {
+        if (path === '/sales/lander/dns-setup')
+          return c.redirect(
+            '/account/reauth?next=' + encodeURIComponent(base + path),
+            303,
+          );
         return c.json(
           {
             error: 'Confirm your identity before changing domain setup.',
@@ -1604,6 +1609,7 @@ app.all('/w/:workspace/*', async (c) => {
           },
           428,
         );
+      }
       if (!(await account(c.env).rateLimit(`sales-host:${id}`, 10)))
         return c.json(
           { error: 'Domain setup request limit reached. Try later.' },

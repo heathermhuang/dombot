@@ -7,6 +7,7 @@ import { sendThroughProxy } from './proxy-transport';
 import { createDynadotFetch } from './dynadot-transport';
 import { resolveNameservers } from '../dns';
 import { canonicalDomain } from '../../shared/publication';
+import { registrarHostsDns } from '../../shared/market-verification';
 import {
   canonicalJson,
   dnsSnapshotSchema,
@@ -269,7 +270,7 @@ export class LanderDynadot {
         .sort();
     if (
       !expected.length ||
-      expected.some((s) => !/^ns[12]\.dynadot\.com$/.test(s)) ||
+      !registrarHostsDns('dynadot', expected) ||
       canonicalJson(ns) !== canonicalJson(expected)
     )
       throw new LanderDnsError(
@@ -277,7 +278,9 @@ export class LanderDynadot {
         'This domain must already use its assigned authoritative Dynadot DNS nameservers.',
       );
     const dnssec = z
-      .object({ dnssec_info_list: z.array(z.record(z.string(), z.unknown())) })
+      .object({
+        dnssec_info_list: z.array(z.record(z.string(), z.unknown())).optional(),
+      })
       .passthrough()
       .parse(await this.call(domain, '/dnssec'));
     if (credentialIdentity !== (await hash(this.credentials().apiKey!)))
