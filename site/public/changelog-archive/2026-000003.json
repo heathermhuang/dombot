@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-44669c25ce5637e5a0db2c27c65a957dfe0e491d-29",
+      "date": "2026-11-11",
+      "layer": "saas",
+      "title": "Hosted service update observed: Fix the signed-in email retry loop. Exact-head CI run 43011279423 completed successfully: 3372 tests passed, 1 skipped, 4 security tests and 4 relay c",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/44669c25ce5637e5a0db2c27c65a957dfe0e491d"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-6fea8460402b392513053baeb257a6a9d58a1fc6-26",
       "date": "2026-11-11",
       "layer": "saas",
