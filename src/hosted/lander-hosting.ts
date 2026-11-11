@@ -37,6 +37,8 @@ const providerSchema = z
     custom_metadata: z.record(z.string(), z.string()).optional(),
   })
   .passthrough();
+export class LanderPreparationPending extends Error {}
+
 /** Controlled hosting preparation is separate from the read-only DNS planner.
  * It never changes DNS, publications, delegation or existing active bindings. */
 export class LanderHosting {
@@ -200,7 +202,7 @@ export class LanderHosting {
         workspace,
         claim,
       );
-      let provider;
+      let provider: z.infer<typeof providerSchema>;
       if (row.provider_id)
         provider = providerSchema.parse(
           (await this.zoneCall(`/custom_hostnames/${row.provider_id}`)).result,
@@ -288,6 +290,28 @@ export class LanderHosting {
           .first())
       )
         throw Error('Hostname generation changed.');
+      // Certificate instructions are asynchronous. Do not freeze a DNS review
+      // from the incomplete response returned by hostname creation.
+      const hasCertificateProof = () =>
+        provider.ssl.validation_records?.some(
+          (r) => !!r.txt_name && !!r.txt_value,
+        );
+      if (provider.ssl.status !== 'active' && !hasCertificateProof()) {
+        provider = providerSchema.parse(
+          (await this.zoneCall('/custom_hostnames/' + provider.id)).result,
+        );
+        if (
+          provider.hostname !== hostname ||
+          ((correlated ||
+            provider.custom_metadata?.domains_connection !== undefined) &&
+            provider.custom_metadata?.domains_connection !== generation)
+        )
+          throw Error('Hosting provider identity changed.');
+        if (provider.ssl.status !== 'active' && !hasCertificateProof())
+          throw new LanderPreparationPending(
+            'Certificate validation instructions are still being prepared.',
+          );
+      }
       const proof = z
         .object({ proof: z.object({ value: z.string() }) })
         .passthrough()

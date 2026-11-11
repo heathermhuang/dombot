@@ -8,7 +8,7 @@ import {
   canonicalJson,
 } from '../shared/lander-connection';
 import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
-import { LanderHosting } from './lander-hosting';
+import { LanderHosting, LanderPreparationPending } from './lander-hosting';
 import { salesRecipient } from './sales-notifications';
 import {
   dynadotDnsSetupScope,
@@ -310,6 +310,7 @@ export async function drainLanderConnections(env: HostedEnv) {
               work.publication.revision,
             );
         } catch (e) {
+          if (e instanceof LanderPreparationPending) continue;
           hostingState =
             e instanceof Error
               ? e.message.slice(0, 300)

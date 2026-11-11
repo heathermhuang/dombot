@@ -9,7 +9,7 @@ import {
 } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFileSync, readdirSync } from 'node:fs';
-import { LanderHosting } from './lander-hosting';
+import { LanderHosting, LanderPreparationPending } from './lander-hosting';
 import { SalesHostnames } from './sales-hostnames';
 import { drainLanderConnections } from './lander-connections';
 import { PROOF_HEADER, verifyGatewayRequest } from '../shared/gateway-proof';
@@ -467,4 +467,86 @@ it('releases known resources from a failed preparation without deleting a newer 
   ).toEqual({ connection_key: null, status: 'pending-proof' });
   expect(providers.size).toBe(1);
   expect(routes).toHaveLength(1);
+});
+
+it('retains its created hostname while delayed certificate TXT instructions are unavailable', async () => {
+  let pending = true;
+  const delayed: typeof fetch = async (input, init) => {
+    const r = await fetcher(input, init),
+      u = new URL(String(input));
+    if (
+      pending &&
+      u.pathname.includes('/custom_hostnames') &&
+      (init?.method ?? 'GET') !== 'DELETE'
+    ) {
+      const value = (await r.json()) as { result: unknown };
+      const clear = (p: Record<string, unknown>) => ({
+        ...p,
+        ssl: { status: 'initializing' },
+      });
+      if (Array.isArray(value.result))
+        value.result = value.result.map((p) => clear(p));
+      else if (value.result && typeof value.result === 'object')
+        value.result = clear(value.result as Record<string, unknown>);
+      return Response.json(value);
+    }
+    return r;
+  };
+  const port = new LanderHosting(environment(), delayed);
+  await expect(
+    port.prepare(workspace, listing, domain, generation),
+  ).rejects.toBeInstanceOf(LanderPreparationPending);
+  expect(creates).toBe(1);
+  expect(routes).toHaveLength(0);
+  pending = false;
+  const plans = await port.prepare(workspace, listing, domain, generation);
+  expect(plans).toHaveLength(2);
+  expect(
+    plans.every((p) =>
+      p.records.some((r) => r.name === '_acme-challenge.' + p.hostname),
+    ),
+  ).toBe(true);
+  expect(creates).toBe(2);
+});
+it('leaves preparation pending instead of stepping an incomplete certificate plan', async () => {
+  const env = environment();
+  let reads = 0,
+    steps = 0;
+  env.WORKSPACE_0 = {
+    fetch: async (request: Request) => {
+      if (request.url.endsWith('/work')) {
+        reads++;
+        return Response.json({
+          work: {
+            job: listing,
+            ordinal: 0,
+            generation,
+            domain,
+            listing,
+            state: 'preparing',
+            hosts: null,
+            publication: null,
+          },
+        });
+      }
+      steps++;
+      return Response.json({ ok: true });
+    },
+  } as Fetcher;
+  vi.spyOn(LanderHosting.prototype, 'prepare').mockRejectedValue(
+    new LanderPreparationPending('waiting'),
+  );
+  await db
+    .prepare('INSERT INTO lander_workspaces(workspace_id,due_at) VALUES(?,0)')
+    .bind(workspace)
+    .run();
+  await drainLanderConnections(env);
+  expect(reads).toBe(4);
+  expect(steps).toBe(0);
+  expect(
+    await db
+      .prepare('SELECT lease_until FROM lander_workspaces WHERE workspace_id=?')
+      .bind(workspace)
+      .first(),
+  ).toEqual({ lease_until: 0 });
 });
