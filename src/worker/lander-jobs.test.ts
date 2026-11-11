@@ -25,6 +25,7 @@ import { exportSales, restoreSales } from './sales-backup';
 import { signGatewayRequest } from '../shared/gateway-proof';
 import { Hono } from 'hono';
 import { createLanderRoutes } from './lander-routes';
+import { landerRequest } from '../hosted/lander-connections';
 
 let mf: Miniflare, db: D1Database, store: SalesStore, jobs: LanderJobs;
 const account = 'a'.repeat(32),
@@ -568,6 +569,98 @@ describe('durable exact lander manifests and recovery', () => {
     expect((await jobs.get(id)).items[0].state).toBe('held');
     expect(writes).toBe(0);
   });
+  it.each([false, true])(
+    'does not reverse unsubmitted native replacement steps (one proof submitted: %s)',
+    async (partial) => {
+      await createAccount(
+        'dynadot',
+        'Fixture DNS',
+        { apiKey: 'fixture-key', apiSecret: 'fixture-secret' },
+        undefined,
+        'dynadot',
+      );
+      const nativeRecords: NativeDnsRecord[] = [
+        {
+          id: 'old-root',
+          type: 'ANAME',
+          name: domain,
+          content: 'park.io',
+          ttl: 300,
+        },
+        {
+          id: 'old-www',
+          type: 'CNAME',
+          name: 'www.' + domain,
+          content: 'park.io',
+          ttl: 300,
+        },
+      ];
+      vi.spyOn(LanderDynadot.prototype, 'snapshot').mockResolvedValue({
+        provider: 'dynadot',
+        accountId: 'dynadot',
+        providerAccountId: 'd'.repeat(64),
+        zoneId: 'b'.repeat(32),
+        domain,
+        observedAt: Date.now(),
+        nameservers: ['ns1.dyna-ns.net', 'ns2.dyna-ns.net'],
+        records: nativeRecords,
+        dnssec: {},
+        settings: { ttl: 300 },
+      });
+      const write = vi
+        .spyOn(LanderDynadot.prototype, 'write')
+        .mockImplementation(async (_snapshot, change) => {
+          if (!partial) throw Error('Unexpected DNS write');
+          if (change.before) {
+            const index = nativeRecords.findIndex(
+              (r) => r.id === change.before!.id,
+            );
+            if (index >= 0) nativeRecords.splice(index, 1);
+          }
+          if (change.after) {
+            const record = {
+              ...change.after,
+              id: 'owned-proof',
+            } as NativeDnsRecord;
+            nativeRecords.push(record);
+            return record;
+          }
+          return null;
+        });
+      const qualified = new LanderJobs(store, observation, fetcher, [
+          'dynadot',
+        ]),
+        id = crypto.randomUUID();
+      await qualified.create(
+        { kind: 'domains', domains: [domain] },
+        id,
+        async () => [domain],
+      );
+      await qualified.step((await qualified.work())!, hosts());
+      expect((await qualified.get(id)).items[0].state).toBe('ready');
+      if (partial) {
+        await qualified.approve(id, (await qualified.get(id)).digest!);
+        await qualified.step((await qualified.work())!, undefined, 'tls-ready');
+        expect(write).toHaveBeenCalledTimes(1);
+        nativeRecords.find((r) => r.id === 'old-www')!.content =
+          'newer.owner.example';
+      }
+      await qualified.cancel(id);
+      await qualified.restore(id);
+      await qualified.step((await qualified.work())!);
+      expect((await qualified.get(id)).items[0].state).toBe('restored-dns');
+      if (partial) {
+        expect(write).toHaveBeenCalledTimes(2);
+        expect(nativeRecords.find((r) => r.id === 'old-www')!.content).toBe(
+          'newer.owner.example',
+        );
+        expect(nativeRecords.some((r) => r.type === 'TXT')).toBe(false);
+      } else expect(write).not.toHaveBeenCalled();
+      await db.prepare('UPDATE lander_items SET due_at=0').run();
+      await qualified.step((await qualified.work())!, undefined, 'detached');
+      expect((await qualified.get(id)).items[0].state).toBe('restored');
+    },
+  );
   it('admits only the selected native qualification fixture before provider-wide activation', async () => {
     await createAccount(
       'dynadot',
@@ -658,6 +751,66 @@ describe('durable exact lander manifests and recovery', () => {
       expect(writes).toBe(0);
     },
   );
+  it('approves a real stored manifest through both gateway and tenant HTTP validators', async () => {
+    const { id, review } = await prepared();
+    expect(review.digest).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const workspace = '11111111-1111-4111-8111-111111111111',
+      secret = 'fixture-gateway-secret'.repeat(3);
+    const app = new Hono<{ Bindings: Env }>();
+    app.route(
+      '/sales-internal/lander',
+      createLanderRoutes(async (_c, next) => {
+        await next();
+      }),
+    );
+    const workerEnv = {
+      DB: db,
+      DOMBOT_SECRET: btoa(String.fromCharCode(...new Uint8Array(32).fill(8))),
+      DOMBOT_WORKSPACE_ID: workspace,
+      DOMBOT_GATEWAY_SECRET: secret,
+      DOMBOT_SALES_V1: 'true',
+    } as Env;
+    const env = {
+      CANONICAL_ORIGIN: 'https://accounts.example',
+      AUTH_PEPPER: 'fixture-recipient-pepper',
+      WORKSPACES: JSON.stringify([
+        { id: workspace, binding: 'WORKSPACE_0', label: 'Synthetic' },
+      ]),
+      GATEWAY_KEYS: JSON.stringify({ [workspace]: secret }),
+      CONTROL_DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => ({ email_verified_at: Date.now() }),
+            run: async () => ({ success: true }),
+          }),
+        }),
+      },
+      WORKSPACE_0: {
+        fetch: (request: Request) => app.fetch(request, workerEnv),
+      },
+    } as unknown as HostedEnv;
+    const response = await landerRequest(
+      env,
+      workspace,
+      'owner@example.test',
+      '/sales/lander/jobs/' + id + '/approve',
+      new Request(
+        'https://accounts.example/w/' +
+          workspace +
+          '/sales/lander/jobs/' +
+          id +
+          '/approve',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ digest: review.digest }),
+        },
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id, state: 'running' });
+    expect(writes).toBe(0);
+  });
   it('never accepts owner/public or cross-tenant proof on internal DNS routes', async () => {
     const secret = 'fixture-gateway-secret'.repeat(3),
       workspace = '11111111-1111-4111-8111-111111111111';

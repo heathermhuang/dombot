@@ -771,7 +771,13 @@ export class LanderJobs {
               record: submitted.record,
             };
           }
-          let index = p.restoreIndex ?? plan.changes.length - 1;
+          // Only submitted forward steps belong to this recovery. Later
+          // delete/create pairs still describe the untouched original routing.
+          const submittedThrough = p.write?.index ?? -1;
+          let index = Math.min(
+            p.restoreIndex ?? submittedThrough,
+            submittedThrough,
+          );
           if (index < 0) {
             await save('restored-dns');
             return;

@@ -2,12 +2,13 @@ import { z } from 'zod';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import {
   landerSelectionSchema,
+  landerManifestDigestSchema,
   hostingPlanSchema,
   type LanderJobView,
   canonicalJson,
 } from '../shared/lander-connection';
 import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
-import { LanderHosting } from './lander-hosting';
+import { LanderHosting, LanderPreparationPending } from './lander-hosting';
 import { salesRecipient } from './sales-notifications';
 import {
   dynadotDnsSetupScope,
@@ -176,10 +177,7 @@ export async function landerRequest(
             .strict()
             .parse(raw)
         : suffix.endsWith('/approve')
-          ? z
-              .object({ digest: z.string().length(64) })
-              .strict()
-              .parse(raw)
+          ? z.object({ digest: landerManifestDigestSchema }).strict().parse(raw)
           : z.object({}).strict().parse(raw);
     // Wake before forwarding: even a lost response must leave a durable scan.
     await wake(env, workspace);
@@ -312,6 +310,7 @@ export async function drainLanderConnections(env: HostedEnv) {
               work.publication.revision,
             );
         } catch (e) {
+          if (e instanceof LanderPreparationPending) continue;
           hostingState =
             e instanceof Error
               ? e.message.slice(0, 300)

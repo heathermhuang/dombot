@@ -5,6 +5,7 @@ import { verifyGatewayRequest } from '../shared/gateway-proof';
 import {
   hostingPlanSchema,
   landerSelectionSchema,
+  landerManifestDigestSchema,
 } from '../shared/lander-connection';
 import { SalesStore } from './sales-store';
 import { LanderJobs } from './lander-jobs';
@@ -164,7 +165,7 @@ export function createLanderRoutes(
           403,
         );
       const v = z
-        .object({ digest: z.string().length(64) })
+        .object({ digest: landerManifestDigestSchema })
         .strict()
         .parse(await c.req.json());
       return c.json(await jobs.approve(id, v.digest));
