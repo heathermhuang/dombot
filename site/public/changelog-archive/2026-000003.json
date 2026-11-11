@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-6fea8460402b392513053baeb257a6a9d58a1fc6-26",
+      "date": "2026-11-11",
+      "layer": "saas",
+      "title": "Hosted service update observed: Initialize the approved Dynadot DNS fixture through the saved API connection",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/6fea8460402b392513053baeb257a6a9d58a1fc6"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-d9daa40c6f28192c72295823c851b834e72ba132-25",
       "date": "2026-11-11",
       "layer": "saas",
