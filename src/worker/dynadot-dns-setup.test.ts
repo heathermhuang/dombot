@@ -336,6 +336,7 @@ it('inspects only the scoped registrar protocol without writes, receipts or priv
     records: { mode: 'NAME_SERVERS', mainCount: 0, subCount: 0 },
     nameservers: park,
     dnssec: { count: 0 },
+    preflight: { ready: true },
   });
   expect(JSON.stringify(result)).not.toMatch(
     /fixture-key|fixture-secret|extraProviderMetadata.*retained/,
@@ -346,5 +347,15 @@ it('inspects only the scoped registrar protocol without writes, receipts or priv
   ).toMatchObject({ results: [] });
   expect(
     await db.prepare('SELECT job_id FROM lander_domain_locks').all(),
+  ).toMatchObject({ results: [] });
+});
+
+it('reports a failed read-only preflight without creating a DNS intent', async () => {
+  publicDs = true;
+  const result = await new DynadotDnsSetup(env, fetcher).inspect();
+  expect(result.preflight).toMatchObject({ ready: false });
+  expect(writes).toBe(0);
+  expect(
+    await db.prepare('SELECT id FROM lander_recovery_archive').all(),
   ).toMatchObject({ results: [] });
 });
