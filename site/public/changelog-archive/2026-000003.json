@@ -208,6 +208,22 @@
           "url": "https://github.com/heathermhuang/dombot/pull/222"
         }
       ]
+    },
+    {
+      "id": "auto-saas-pr-223",
+      "date": "2026-11-11",
+      "layer": "saas",
+      "title": "Fix lander approval, certificate readiness and safe recovery",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #223 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #223",
+          "url": "https://github.com/heathermhuang/dombot/pull/223"
+        }
+      ]
     }
   ]
 }
