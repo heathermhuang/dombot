@@ -13,6 +13,7 @@ import { MemoryDocStore } from '../core/storage/doc-store';
 import { configureStore, hydrateStores } from '../core/storage/namespace';
 import { createAccount } from '../core/services/accounts';
 import { LanderCloudflare } from '../core/services/lander-cloudflare';
+import { LanderDynadot } from '../core/services/lander-dynadot';
 import { SalesStore } from './sales-store';
 import { LanderJobs } from './lander-jobs';
 import { emptySale } from '../shared/hosted-sales';
@@ -567,6 +568,96 @@ describe('durable exact lander manifests and recovery', () => {
     expect((await jobs.get(id)).items[0].state).toBe('held');
     expect(writes).toBe(0);
   });
+  it('admits only the selected native qualification fixture before provider-wide activation', async () => {
+    await createAccount(
+      'dynadot',
+      'Fixture DNS',
+      { apiKey: 'fixture-key', apiSecret: 'fixture-secret' },
+      undefined,
+      'dynadot',
+    );
+    vi.spyOn(LanderDynadot.prototype, 'snapshot').mockResolvedValue({
+      provider: 'dynadot',
+      accountId: 'dynadot',
+      providerAccountId: 'd'.repeat(64),
+      zoneId: 'b'.repeat(32),
+      domain,
+      observedAt: Date.now(),
+      nameservers: ['ns1.dyna-ns.net', 'ns2.dyna-ns.net'],
+      records: [],
+      dnssec: {},
+      settings: { ttl: 300 },
+    });
+    const qualified = new LanderJobs(store, observation, fetcher, [], {
+        domain,
+        accountId: 'dynadot',
+      }),
+      id = crypto.randomUUID();
+    await qualified.create(
+      { kind: 'domains', domains: [domain] },
+      id,
+      async () => [domain],
+    );
+    const work = (await qualified.work())!;
+    expect(work).not.toBeNull();
+    await qualified.step(work, hosts());
+    const review = await qualified.get(id);
+    expect(review.counts).toEqual([{ state: 'ready', count: 1 }]);
+    expect(
+      review.items[0].changes?.some((c) => c.after?.type === 'ANAME'),
+    ).toBe(true);
+    expect(writes).toBe(0);
+    await qualified.approve(id, review.digest!);
+    const scheduled = (await qualified.work())!;
+    await new LanderJobs(store, observation, fetcher, []).step(
+      scheduled,
+      undefined,
+      'tls-ready',
+    );
+    expect((await qualified.get(id)).items[0].state).toBe('held');
+    expect(writes).toBe(0);
+    await qualified.restore(id);
+    expect(
+      await new LanderJobs(store, observation, fetcher, []).work(),
+    ).not.toBeNull();
+  });
+  it.each(['other-domain', 'other-account'] as const)(
+    'does not broaden qualification to %s',
+    async (mode) => {
+      await createAccount(
+        'dynadot',
+        'Fixture DNS',
+        { apiKey: 'fixture-key', apiSecret: 'fixture-secret' },
+        undefined,
+        'dynadot',
+      );
+      vi.spyOn(LanderDynadot.prototype, 'snapshot').mockResolvedValue({
+        provider: 'dynadot',
+        accountId: 'dynadot',
+        providerAccountId: 'd'.repeat(64),
+        zoneId: 'b'.repeat(32),
+        domain,
+        observedAt: Date.now(),
+        nameservers: ['ns1.dyna-ns.net', 'ns2.dyna-ns.net'],
+        records: [],
+        dnssec: {},
+        settings: { ttl: 300 },
+      });
+      const qualified = new LanderJobs(store, observation, fetcher, [], {
+          domain: mode === 'other-domain' ? 'other.example' : domain,
+          accountId: mode === 'other-account' ? 'other' : 'dynadot',
+        }),
+        id = crypto.randomUUID();
+      await qualified.create(
+        { kind: 'domains', domains: [domain] },
+        id,
+        async () => [domain],
+      );
+      expect(await qualified.work()).toBeNull();
+      expect((await qualified.get(id)).items[0].state).toBe('held');
+      expect(writes).toBe(0);
+    },
+  );
   it('never accepts owner/public or cross-tenant proof on internal DNS routes', async () => {
     const secret = 'fixture-gateway-secret'.repeat(3),
       workspace = '11111111-1111-4111-8111-111111111111';

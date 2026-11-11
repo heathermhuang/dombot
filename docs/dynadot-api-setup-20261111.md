@@ -54,9 +54,10 @@ required.
 
 ## Controlled endpoint qualification
 
-The optional trusted `qualifyEndpoint=true` fixture field permits preparation of
-only that exact root/www endpoint while the normal apex-qualified flag remains
-false. It requires one admitted workspace and a global hostname cap of exactly
+The optional trusted `qualifyConnection=true` fixture field admits only the
+selected Dynadot account/domain for a controlled connection test, without marking
+the provider qualified portfolio-wide. It also permits preparation of only that
+exact root/www endpoint while the normal apex-qualified flag remains false. It requires one admitted workspace and a global hostname cap of exactly
 two, plus the existing edge keys, host allowlist and trusted service target.
 Missing, expired, other-domain, multi-workspace and excess-cap configurations
 remain closed. This is test admission, not a claim of a live endpoint.
@@ -66,7 +67,7 @@ ordinary public HTTPS remain mandatory. The allowance changes no final live
 verification. Remove it after real cutover/restoration qualification and retain
 the normal provider/host/workspace activation boundaries.
 
-Focused validation covers 78 native, initializer, form, controller and hosting
+Focused validation covers 81 native, initializer, form, controller and hosting
 tests, plus type/lint checks. Exact-head CI must pass before deployment. Real DNS,
 TLS and restoration still require the authorized fixture; source/fixture tests
 do not establish those outcomes.

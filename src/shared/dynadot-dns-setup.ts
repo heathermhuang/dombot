@@ -7,7 +7,7 @@ export const dynadotDnsSetupScopeSchema = z
     accountId: z.string().min(1).max(128),
     requestId: z.string().uuid(),
     expiresAt: z.number().int().positive(),
-    qualifyEndpoint: z.literal(true).optional(),
+    qualifyConnection: z.literal(true).optional(),
   })
   .strict();
 export type DynadotDnsSetupScope = z.infer<typeof dynadotDnsSetupScopeSchema>;

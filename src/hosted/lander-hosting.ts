@@ -75,7 +75,7 @@ export class LanderHosting {
       .array(z.string().uuid())
       .parse(JSON.parse(this.env.LANDER_CONNECTION_WORKSPACES ?? '[]'));
     const qualificationOnly =
-      fixture?.qualifyEndpoint === true &&
+      fixture?.qualifyConnection === true &&
       fixture.domain === domain &&
       admitted.length === 1 &&
       admitted[0] === workspace &&

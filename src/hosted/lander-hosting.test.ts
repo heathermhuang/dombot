@@ -297,7 +297,7 @@ it('admits only the explicit bounded endpoint-qualification fixture before the l
     accountId: 'dynadot',
     requestId: generation,
     expiresAt: Date.now() + 3600000,
-    qualifyEndpoint: true,
+    qualifyConnection: true,
   };
   env.DYNDNS_SETUP_FIXTURE = JSON.stringify(scope);
   expect(() =>
@@ -307,7 +307,7 @@ it('admits only the explicit bounded endpoint-qualification fixture before the l
     { ...scope, domain: 'other.example' },
     { ...scope, workspace: listing },
     { ...scope, expiresAt: 1 },
-    { ...scope, qualifyEndpoint: undefined },
+    { ...scope, qualifyConnection: undefined },
   ]) {
     env.DYNDNS_SETUP_FIXTURE = JSON.stringify(invalid);
     expect(() =>
