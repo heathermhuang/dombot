@@ -544,6 +544,29 @@ describe('durable exact lander manifests and recovery', () => {
     expect(await jobs.work()).toBeNull();
     expect(writes).toBe(0);
   });
+  it('stops unqualified provider work before hosting preparation while retaining recovery', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    const revoked = new LanderJobs(store, observation, fetcher, []);
+    expect(await revoked.work()).toBeNull();
+    expect((await revoked.get(id)).items[0].state).toBe('held');
+    expect(writes).toBe(0);
+    await revoked.restore(id);
+    expect(await revoked.work()).not.toBeNull();
+    expect(writes).toBe(0);
+  });
+  it('rechecks provider qualification when it changes between scheduling and execution', async () => {
+    const { id, review } = await prepared();
+    await jobs.approve(id, review.digest!);
+    const work = (await jobs.work())!;
+    await new LanderJobs(store, observation, fetcher, []).step(
+      work,
+      undefined,
+      'tls-ready',
+    );
+    expect((await jobs.get(id)).items[0].state).toBe('held');
+    expect(writes).toBe(0);
+  });
   it('never accepts owner/public or cross-tenant proof on internal DNS routes', async () => {
     const secret = 'fixture-gateway-secret'.repeat(3),
       workspace = '11111111-1111-4111-8111-111111111111';

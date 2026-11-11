@@ -16,6 +16,12 @@ DNSSEC reads. Unsupported forwarding, duplicate records, ambiguous accounts and
 record-capacity shortfalls are holds. No nameserver or DNSSEC mutation is part
 of the adapter.
 
+`DOMBOT_LANDER_DNS_PROVIDERS` is an explicit, host-owned per-portfolio provider
+list. Its default is Cloudflare only. Adding a connected Dynadot account or
+qualifying Cloudflare cannot admit Dynadot writes. Discovery and forward
+execution require explicit native-provider qualification; revocation stops new
+preparation/writes while preserving recovery of an already approved operation.
+
 Separate durable removal/append intents accommodate the provider's lack of a
 record-update operation. Ownership/certificate proofs precede web changes;
 both web removal and creation require TLS readiness. The lease is checked again

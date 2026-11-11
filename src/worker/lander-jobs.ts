@@ -12,6 +12,7 @@ import {
   type LanderHostingPlan,
   type LanderJobView,
   type LanderSelection,
+  type DnsSnapshot,
 } from '../shared/lander-connection';
 import { LanderDnsError } from '../core/services/lander-cloudflare';
 import {
@@ -68,6 +69,9 @@ export class LanderJobs {
     readonly store: SalesStore,
     readonly observe: SaleObserver,
     readonly fetcher: typeof fetch = fetch,
+    readonly allowedDnsProviders: ReadonlyArray<DnsSnapshot['provider']> = [
+      'cloudflare',
+    ],
   ) {}
   async create(
     selection: LanderSelection,
@@ -240,10 +244,10 @@ export class LanderJobs {
   async work() {
     const r = await this.store.db
       .prepare(
-        "SELECT i.* FROM lander_items i JOIN lander_jobs j ON j.id=i.job_id WHERE ((j.state='preparing' AND i.state='preparing') OR (j.state IN ('running','restoring') AND i.state NOT IN ('held','live','cancelled','restored','conflict'))) AND i.due_at<=? AND i.lease_until<=? ORDER BY i.due_at,j.created_at,i.ordinal LIMIT 1",
+        "SELECT i.*,j.state AS job_state FROM lander_items i JOIN lander_jobs j ON j.id=i.job_id WHERE ((j.state='preparing' AND i.state='preparing') OR (j.state IN ('running','restoring') AND i.state NOT IN ('held','live','cancelled','restored','conflict'))) AND i.due_at<=? AND i.lease_until<=? ORDER BY i.due_at,j.created_at,i.ordinal LIMIT 1",
       )
       .bind(Date.now(), Date.now())
-      .first<Item>();
+      .first<Item & { job_state: string }>();
     if (!r) return null;
     const p = await this.store.open(r.sealed, payloadSchema);
     let listing = r.listing_id;
@@ -282,7 +286,11 @@ export class LanderJobs {
               'Refresh exact domain ownership before preparing hosting.',
             409,
           );
-        p.snapshot = await discoverLanderZone(p.domain, this.fetcher);
+        p.snapshot = await discoverLanderZone(
+          p.domain,
+          this.fetcher,
+          this.allowedDnsProviders,
+        );
         await this.store.db
           .prepare(
             "UPDATE lander_items SET sealed=? WHERE job_id=? AND ordinal=? AND generation=? AND state='preparing'",
@@ -306,6 +314,27 @@ export class LanderJobs {
         await this.finalize(r.job_id);
         return null;
       }
+    }
+    const snapshot = p.plan?.snapshot ?? p.snapshot;
+    if (
+      r.job_state !== 'restoring' &&
+      snapshot &&
+      !this.allowedDnsProviders.includes(snapshot.provider)
+    ) {
+      await this.store.db
+        .prepare(
+          "UPDATE lander_items SET state='held',reason=? WHERE job_id=? AND ordinal=? AND generation=? AND lease_until<=?",
+        )
+        .bind(
+          'This DNS provider is not qualified for automatic connections on this portfolio.',
+          r.job_id,
+          r.ordinal,
+          r.generation,
+          Date.now(),
+        )
+        .run();
+      await this.finalize(r.job_id);
+      return null;
     }
     return {
       job: r.job_id,
@@ -574,6 +603,15 @@ export class LanderJobs {
         return;
       }
       if (j.state === 'preparing') {
+        if (
+          p.snapshot &&
+          !this.allowedDnsProviders.includes(p.snapshot.provider)
+        )
+          throw new SalesError(
+            'DNS_PROVIDER_UNQUALIFIED',
+            'This DNS provider is not qualified for automatic connections on this portfolio.',
+            409,
+          );
         if (!hosts)
           throw new SalesError(
             'HOSTING_UNQUALIFIED',
@@ -683,6 +721,15 @@ export class LanderJobs {
             409,
           );
         const provider = landerDnsProvider(plan.snapshot, this.fetcher, fence);
+        if (
+          j.state !== 'restoring' &&
+          !this.allowedDnsProviders.includes(plan.snapshot.provider)
+        )
+          throw new SalesError(
+            'DNS_PROVIDER_UNQUALIFIED',
+            'This DNS provider is not qualified for new DNS writes on this portfolio.',
+            409,
+          );
         // Re-validate authority, account, complete records and routing on every
         // external step. Credentials never travel in the durable payload.
         const current = await provider.snapshot(

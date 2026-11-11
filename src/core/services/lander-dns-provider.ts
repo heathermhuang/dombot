@@ -16,11 +16,12 @@ export function landerDnsProvider(
 export async function discoverLanderZone(
   domain: string,
   fetcher: typeof fetch = fetch,
+  allowedProviders: ReadonlyArray<DnsSnapshot['provider']> = ['cloudflare'],
 ): Promise<DnsSnapshot> {
   const matches: DnsSnapshot[] = [];
   for (const a of listAccounts().filter(
     (a) =>
-      ['cloudflare', 'dynadot'].includes(a.registrar) &&
+      allowedProviders.includes(a.registrar as DnsSnapshot['provider']) &&
       isRegistrarEnabled(a.id),
   )) {
     const c = getStoredCredentials(a.id);

@@ -4,6 +4,7 @@ import { configureStore, hydrateStores } from '../storage/namespace';
 import { createAccount } from './accounts';
 import { setStoredCredentials } from './credentials';
 import { LanderDynadot } from './lander-dynadot';
+import { discoverLanderZone } from './lander-dns-provider';
 import {
   planLanderDns,
   observeDnsChange,
@@ -142,6 +143,15 @@ it('reads complete native records, credential identity, authoritative NS and sha
   expect(s.records[1]).toMatchObject({ type: 'MX', priority: 10, ttl: 1800 });
   expect(s.settings.dns_main_list).toEqual(main);
   expect(JSON.stringify(s)).not.toMatch(/fixture-key|fixture-secret/);
+  expect(writes).toHaveLength(0);
+});
+it('requires explicit provider qualification even for a connected authoritative Dynadot account', async () => {
+  await expect(discoverLanderZone(domain, fetcher)).rejects.toMatchObject({
+    code: 'DNS_ACCOUNT',
+  });
+  expect(
+    (await discoverLanderZone(domain, fetcher, ['dynadot'])).provider,
+  ).toBe('dynadot');
   expect(writes).toHaveLength(0);
 });
 it.each(['external', 'wrong-ns', 'duplicate'] as const)(
