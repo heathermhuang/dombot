@@ -112,6 +112,22 @@
           "url": "https://github.com/heathermhuang/dombot/pull/219"
         }
       ]
+    },
+    {
+      "id": "auto-saas-pr-220",
+      "date": "2026-11-11",
+      "layer": "saas",
+      "title": "Check DNS setup readiness without submitting and preserve error recovery",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #220 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #220",
+          "url": "https://github.com/heathermhuang/dombot/pull/220"
+        }
+      ]
     }
   ]
 }
