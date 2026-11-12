@@ -556,6 +556,7 @@ app.get('/account/reauth', async (c) => {
       (await new Passkeys(c.env).list(user)).length > 0,
       user.email,
       credential?.password_hash.startsWith('scrypt-v1:') ?? false,
+      c.req.query('reason') === 'domain-setup' ? 'domain-setup' : undefined,
     ),
   );
 });

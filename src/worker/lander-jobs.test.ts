@@ -321,9 +321,16 @@ describe('durable exact lander manifests and recovery', () => {
     fail = 'after';
     await tick();
     expect(writes).toBe(1);
+    expect((await jobs.get(id)).items[0].dnsProgress).toMatchObject({
+      verified: 0,
+      tracked: 1,
+    });
     await tick();
     expect(writes).toBe(1);
-    expect((await jobs.get(id)).items[0].state).toBe('dns');
+    expect((await jobs.get(id)).items[0]).toMatchObject({
+      state: 'dns',
+      dnsProgress: { verified: 1, tracked: 1 },
+    });
   });
   it('never blindly retries an unknown write that is not yet observable', async () => {
     const { id, review } = await prepared();

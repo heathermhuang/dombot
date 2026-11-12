@@ -9,6 +9,7 @@ import {
   landerPlanSchema,
   dnsSnapshotSchema,
   hostingPlanSchema,
+  landerDnsProgress,
   type LanderHostingPlan,
   type LanderJobView,
   type LanderSelection,
@@ -239,6 +240,11 @@ export class LanderJobs {
                 publication: p.plan.publication,
                 publishes: !!p.plan.publicationReview,
                 changes: p.plan.changes,
+                dnsProgress: landerDnsProgress(
+                  p.plan.changes.length,
+                  p.write,
+                  p.restoreIndex,
+                ),
                 hosts: p.plan.hosts.map((h) => ({
                   hostname: h.hostname,
                   epoch: h.epoch,
