@@ -50,6 +50,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-226",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Polish connection progress and return to the saved review",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #226 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #226",
+          "url": "https://github.com/heathermhuang/dombot/pull/226"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
       "date": "2026-11-11",
       "layer": "core",
