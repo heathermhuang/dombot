@@ -437,3 +437,91 @@ describe('controlled hostname lifecycle', () => {
     ).toBeNull();
   });
 });
+
+describe('bounded certificate validation recheck', () => {
+  it.each([false, true])(
+    'rechecks once only after every current TXT value is public, including an ambiguous response: %s',
+    async (ambiguous) => {
+      let visible = false,
+        patches = 0;
+      const ssl = {
+        status: 'pending_validation',
+        method: 'txt',
+        type: 'dv',
+        settings: { min_tls_version: '1.2' },
+        validation_records: [
+          { txt_name: '_acme-challenge.fixture.example', txt_value: 'dcv-one' },
+          { txt_name: '_acme-challenge.fixture.example', txt_value: 'dcv-two' },
+        ],
+      };
+      const h = new SalesHostnames(env(), async (input, init) => {
+        const request =
+          input instanceof Request ? input : new Request(input, init);
+        const url = new URL(request.url);
+        if (
+          url.hostname === 'cloudflare-dns.com' &&
+          url.searchParams.get('name') === '_acme-challenge.fixture.example'
+        )
+          return Response.json({
+            Status: 0,
+            Answer: (visible ? ['dcv-one', 'dcv-two'] : ['dcv-one']).map(
+              (data) => ({
+                name: '_acme-challenge.fixture.example',
+                type: 16,
+                TTL: 300,
+                data: `"${data}"`,
+              }),
+            ),
+          });
+        if (url.hostname === 'api.cloudflare.com') {
+          const provider = {
+            id: 'provider-id',
+            hostname: 'fixture.example',
+            status: 'active',
+            ssl,
+          };
+          if (request.method === 'PATCH') {
+            patches++;
+            expect(await request.json()).toEqual({
+              ssl: {
+                method: 'txt',
+                type: 'dv',
+                settings: { min_tls_version: '1.2' },
+              },
+            });
+            if (ambiguous)
+              throw Error('connection closed after provider accepted');
+          }
+          return Response.json({
+            success: true,
+            result: url.searchParams.has('hostname') ? [provider] : provider,
+          });
+        }
+        return fetcher(request);
+      });
+      const p = await h.plan(
+        workspace,
+        listing,
+        'fixture.example',
+        'fixture.example',
+      );
+      challenge = p.challenge;
+      const activate = () =>
+        h.activate(
+          workspace,
+          listing,
+          'fixture.example',
+          p.epoch,
+          p.challenge,
+          'published-fixture-revision',
+        );
+      expect((await activate()).status).toBe('pending-tls');
+      expect(patches).toBe(0);
+      visible = true;
+      await Promise.all([activate(), activate()]);
+      await activate();
+      expect(patches).toBe(1);
+      expect(bindingWrites).toHaveLength(0);
+    },
+  );
+});
