@@ -18,7 +18,7 @@ export default function WebEntry({
         className="w-full max-w-sm space-y-4 rounded-lg border p-6"
       >
         <p className="text-xl font-bold tracking-tight">
-          {managed ? 'domains.domains' : 'DomBot'}
+          domains.domains
         </p>
         <h1 className="text-lg font-semibold">
           {state === 'loading'
