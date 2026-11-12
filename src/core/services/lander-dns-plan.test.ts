@@ -204,4 +204,43 @@ describe('preservation-safe lander DNS planning', () => {
       }).state,
     ).toBe('conflict');
   });
+  it('allows separate untagged TXT validation values at the same owner', () => {
+    const first: NativeDnsRecord = {
+      id: 'first-native-proof',
+      type: 'TXT',
+      name: '_acme-challenge.fixture.example',
+      content: 'first-certificate-proof',
+      ttl: 300,
+    };
+    const second = {
+      ...first,
+      id: 'second-native-proof',
+      content: 'second-certificate-proof',
+    };
+    const change = { before: null, after: second };
+    expect(observeDnsChange([first], change).state).toBe('before');
+    expect(observeDnsChange([first, second], change)).toEqual({
+      state: 'after',
+      record: second,
+    });
+    expect(
+      observeDnsChange([first, second, { ...second, id: 'duplicate' }], change)
+        .state,
+    ).toBe('conflict');
+    expect(
+      observeDnsChange([first], { before: second, after: null }).state,
+    ).toBe('after');
+  });
+  it('still holds a changed TXT value carrying the same connection tag', () => {
+    const after = {
+      ...record('TXT', '_acme-challenge.fixture.example', 'expected-proof'),
+      comment: 'unique-connection',
+    };
+    expect(
+      observeDnsChange([{ ...after, content: 'later-edit' }], {
+        before: null,
+        after,
+      }).state,
+    ).toBe('conflict');
+  });
 });
