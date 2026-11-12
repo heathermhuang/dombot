@@ -37,8 +37,8 @@ const glueSchema = z
   .object({
     glue_type: z.literal('DNS'),
     ttl: z.coerce.number().int().positive(),
-    dns_main_list: z.array(record).max(20),
-    dns_sub_list: z.array(record).max(100),
+    dns_main_list: z.array(record).max(20).optional(),
+    dns_sub_list: z.array(record).max(100).optional(),
     email_forward_type: z.string().optional(),
     email_alias_list: z.array(z.unknown()).optional(),
   })
@@ -186,8 +186,8 @@ export class LanderDynadot {
       );
     const records: NativeDnsRecord[] = [];
     for (const [apex, list] of [
-      [true, value.dns_main_list],
-      [false, value.dns_sub_list],
+      [true, value.dns_main_list ?? []],
+      [false, value.dns_sub_list ?? []],
     ] as const)
       for (const r of list) {
         const type = r.record_type.toUpperCase();
