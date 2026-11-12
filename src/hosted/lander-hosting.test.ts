@@ -550,3 +550,94 @@ it('leaves preparation pending instead of stepping an incomplete certificate pla
       .first(),
   ).toEqual({ lease_until: 0 });
 });
+
+it('requests one fenced certificate recheck before web routing changes, and reports a newly required TXT value', async () => {
+  let secondVisible = false,
+    patches = 0,
+    fenced = false;
+  const transport: typeof fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init),
+      url = new URL(request.url);
+    if (url.hostname === 'cloudflare-dns.com') {
+      const name = url.searchParams.get('name'),
+        type = url.searchParams.get('type');
+      if (name === '_acme-challenge.' + domain)
+        return Response.json({
+          Status: 0,
+          Answer: (secondVisible
+            ? ['fixture-certificate', 'second-required-value']
+            : ['fixture-certificate']
+          ).map((data) => ({ name, type: 16, TTL: 300, data: `"${data}"` })),
+        });
+      if (type === 'CNAME' && name === 'www.' + domain)
+        return Response.json({
+          Status: 0,
+          Answer: [{ name, type: 5, TTL: 300, data: 'park.example.' }],
+        });
+    }
+    if (url.hostname === 'api.cloudflare.com' && request.method === 'PATCH') {
+      expect(fenced).toBe(true);
+      expect(await request.json()).toEqual({
+        ssl: {
+          method: 'txt',
+          type: 'dv',
+          settings: { min_tls_version: '1.2' },
+        },
+      });
+      patches++;
+      return Response.json({
+        success: true,
+        result: providers.get(url.pathname.split('/').at(-1)!),
+      });
+    }
+    return fetcher(request);
+  };
+  const port = new LanderHosting(environment(), transport, async () => {
+    fenced = true;
+  });
+  const plans = await port.prepare(workspace, listing, domain, generation);
+  const root = [...providers.values()].find((p) => p.hostname === domain)!;
+  root.ssl = {
+    status: 'pending_validation',
+    method: 'txt',
+    type: 'dv',
+    settings: { min_tls_version: '1.2' },
+    validation_records: [
+      {
+        txt_name: '_acme-challenge.' + domain,
+        txt_value: 'fixture-certificate',
+      },
+      {
+        txt_name: '_acme-challenge.' + domain,
+        txt_value: 'second-required-value',
+      },
+    ],
+  };
+  expect(
+    await port.verify(workspace, listing, domain, generation, plans, revision),
+  ).toBe('waiting');
+  expect(patches).toBe(0);
+  const receipt = await db
+    .prepare('SELECT connection_receipt FROM sales_hostnames WHERE hostname=?')
+    .bind(domain)
+    .first<{ connection_receipt: string }>();
+  expect(JSON.parse(receipt!.connection_receipt).certificateValidation).toEqual(
+    { required: 2, visible: 1 },
+  );
+  secondVisible = true;
+  const cancelled = new LanderHosting(environment(), transport, async () => {
+    throw Error('generation cancelled');
+  });
+  await expect(
+    cancelled.verify(workspace, listing, domain, generation, plans, revision),
+  ).rejects.toThrow('generation cancelled');
+  expect(patches).toBe(0);
+  await Promise.all([
+    port.verify(workspace, listing, domain, generation, plans, revision),
+    port.verify(workspace, listing, domain, generation, plans, revision),
+  ]);
+  expect(
+    await port.verify(workspace, listing, domain, generation, plans, revision),
+  ).toBe('waiting');
+  expect(patches).toBe(1);
+});

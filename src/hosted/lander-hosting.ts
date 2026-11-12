@@ -18,19 +18,21 @@ const providerSchema = z
     id: z.string().uuid(),
     hostname: z.string(),
     status: z.string(),
-    ssl: z.object({
-      status: z.string(),
-      validation_records: z
-        .array(
-          z
-            .object({
-              txt_name: z.string().optional(),
-              txt_value: z.string().optional(),
-            })
-            .passthrough(),
-        )
-        .optional(),
-    }),
+    ssl: z
+      .object({
+        status: z.string(),
+        validation_records: z
+          .array(
+            z
+              .object({
+                txt_name: z.string().optional(),
+                txt_value: z.string().optional(),
+              })
+              .passthrough(),
+          )
+          .optional(),
+      })
+      .passthrough(),
     ownership_verification: z
       .object({ type: z.string(), name: z.string(), value: z.string() })
       .optional(),
@@ -425,6 +427,10 @@ export class LanderHosting {
           provider.custom_metadata?.domains_connection !== generation)
       )
         throw Error('Provider resource is outside this connection.');
+      const certificateValidation = await new SalesHostnames(
+        this.env,
+        this.fetcher,
+      ).recheckCertificate(row, provider, this.fence);
       await this.env.CONTROL_DB.prepare(
         'UPDATE sales_hostnames SET connection_receipt=? WHERE hostname=? AND epoch=? AND connection_key=?',
       )
@@ -432,6 +438,7 @@ export class LanderHosting {
           JSON.stringify({
             providerStatus: provider.status,
             sslStatus: provider.ssl.status,
+            ...(certificateValidation ? { certificateValidation } : {}),
             checkedAt: Date.now(),
           }),
           host.hostname,

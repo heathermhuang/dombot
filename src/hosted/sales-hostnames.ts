@@ -334,6 +334,94 @@ export class SalesHostnames {
     if (!row) throw new Error('The binding changed. Prepare a fresh plan.');
     return { ...plan, challenge };
   }
+  /** One recheck per retained claim, including before routing cutover. */
+  async recheckCertificate(
+    row: HostBinding,
+    provider: {
+      id: string;
+      hostname: string;
+      status: string;
+      ssl: { status: string };
+    },
+    fence: () => Promise<void> = async () => {},
+  ) {
+    const {
+      hostname,
+      workspace_id: workspace,
+      listing_id: listing,
+      epoch,
+    } = row;
+    if (
+      this.env.SALES_CUSTOM_HOSTS_ENABLED !== 'true' ||
+      !(this.env.SALES_HOST_ALLOWLIST ?? '').split(',').includes(hostname) ||
+      provider.hostname !== hostname ||
+      (row.provider_id && provider.id !== row.provider_id) ||
+      provider.status !== 'active' ||
+      provider.ssl.status !== 'pending_validation'
+    )
+      return;
+    if (
+      Object.prototype.hasOwnProperty.call(JSON.parse(row.plan), 'dcvRecheckAt')
+    )
+      return { recheck: 'already-attempted' };
+    const dcv = z
+      .object({
+        method: z.literal('txt'),
+        type: z.literal('dv'),
+        settings: z.record(z.string(), z.unknown()).nullable().optional(),
+        validation_records: z
+          .array(
+            z.object({ txt_name: z.string(), txt_value: z.string().min(1) }),
+          )
+          .min(1)
+          .max(10),
+      })
+      .safeParse(provider.ssl);
+    if (
+      !dcv.success ||
+      !dcv.data.validation_records.every(
+        (v) =>
+          v.txt_name.replace(/\.$/, '').toLowerCase() ===
+          `_acme-challenge.${hostname}`,
+      )
+    )
+      return;
+    const records = dcv.data.validation_records;
+    const observed = await salesDns(
+      `_acme-challenge.${hostname}`,
+      'TXT',
+      this.fetcher,
+    ).catch(() => null);
+    const visible = records.filter((v) =>
+      observed?.answers.some(
+        (a) => a.type === 16 && a.data.replaceAll('"', '') === v.txt_value,
+      ),
+    ).length;
+    const progress = { required: records.length, visible };
+    if (visible !== records.length) return progress;
+    await fence();
+    // Claim before sending, so concurrent callers and ambiguous responses
+    // cannot replay a refresh. A new hostname epoch has a separate budget.
+    const claimed = await this.env.CONTROL_DB.prepare(
+      "UPDATE sales_hostnames SET plan=json_set(plan,'$.dcvRecheckAt',?) WHERE hostname=? AND workspace_id=? AND listing_id=? AND epoch=? AND status!='detached' AND json_type(plan,'$.dcvRecheckAt') IS NULL RETURNING hostname",
+    )
+      .bind(Date.now(), hostname, workspace, listing, epoch)
+      .first();
+    if (!claimed) return { ...progress, recheck: 'already-attempted' };
+    await fence();
+    const ssl = {
+      method: dcv.data.method,
+      type: dcv.data.type,
+      ...(dcv.data.settings ? { settings: dcv.data.settings } : {}),
+    };
+    try {
+      await this.provider(`/${provider.id}`, { ssl }, 'PATCH');
+    } catch {
+      // Keep normal read-only status polling. An uncertain request is never
+      // replayed or treated as evidence of certificate readiness.
+    }
+    return { ...progress, recheck: 'attempted' };
+  }
   async provider(
     path: string,
     body?: unknown,
@@ -492,75 +580,7 @@ export class SalesHostnames {
       `${workspace}:${listing}:${epoch}`,
       provider.id,
     );
-    // TXT records are installed after certificate creation. Once every current
-    // DCV value is publicly visible, request one configuration-neutral recheck
-    // rather than waiting for the provider's progressively longer retry timer.
-    if (
-      !managed &&
-      !policy &&
-      provider.status === 'active' &&
-      provider.ssl.status === 'pending_validation' &&
-      !Object.prototype.hasOwnProperty.call(JSON.parse(r.plan), 'dcvRecheckAt')
-    ) {
-      const dcv = z
-        .object({
-          method: z.literal('txt'),
-          type: z.literal('dv'),
-          settings: z.record(z.string(), z.unknown()).nullable().optional(),
-          validation_records: z
-            .array(
-              z.object({ txt_name: z.string(), txt_value: z.string().min(1) }),
-            )
-            .min(1)
-            .max(10),
-        })
-        .safeParse(provider.ssl);
-      if (
-        dcv.success &&
-        dcv.data.validation_records.every(
-          (v) =>
-            v.txt_name.replace(/\.$/, '').toLowerCase() ===
-            `_acme-challenge.${hostname}`,
-        )
-      ) {
-        const observed = await salesDns(
-          `_acme-challenge.${hostname}`,
-          'TXT',
-          this.fetcher,
-        ).catch(() => null);
-        if (
-          observed &&
-          dcv.data.validation_records.every((v) =>
-            observed.answers.some(
-              (a) =>
-                a.type === 16 && a.data.replaceAll('"', '') === v.txt_value,
-            ),
-          )
-        ) {
-          // Claim before sending: an ambiguous PATCH must not be replayed by
-          // concurrent activation, polling or a restarted Worker. A fresh
-          // hostname epoch gets its own bounded attempt.
-          const claimed = await this.env.CONTROL_DB.prepare(
-            "UPDATE sales_hostnames SET plan=json_set(plan,'$.dcvRecheckAt',?) WHERE hostname=? AND workspace_id=? AND listing_id=? AND epoch=? AND status!='detached' AND json_type(plan,'$.dcvRecheckAt') IS NULL RETURNING hostname",
-          )
-            .bind(Date.now(), hostname, workspace, listing, epoch)
-            .first();
-          if (claimed) {
-            const ssl = {
-              method: dcv.data.method,
-              type: dcv.data.type,
-              ...(dcv.data.settings ? { settings: dcv.data.settings } : {}),
-            };
-            try {
-              await this.provider(`/${provider.id}`, { ssl }, 'PATCH');
-            } catch {
-              // Continue read-only status polling; never repeat an uncertain
-              // refresh or treat the request as proof of certificate readiness.
-            }
-          }
-        }
-      }
-    }
+    if (!managed && !policy) await this.recheckCertificate(r, provider);
     const ready =
       provider.status === 'active' && provider.ssl.status === 'active';
     const state = !ready
