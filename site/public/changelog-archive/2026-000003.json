@@ -114,6 +114,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-228",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Recheck pending certificate validation once after public TXT proof",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #228 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #228",
+          "url": "https://github.com/heathermhuang/dombot/pull/228"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
       "date": "2026-11-11",
       "layer": "core",
