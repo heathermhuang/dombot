@@ -8,6 +8,8 @@ import {
   savedLanderReview,
   landerReviewPath,
   landerReviewFromLocation,
+  landerPreviewOnly,
+  landerHostStatus,
 } from './lander-presentation';
 it('does not count an unknown submitted write as verified', () => {
   expect(landerDnsProgress(12)).toEqual({
@@ -121,4 +123,52 @@ it('shows a native delete/append pair as one complete routing comparison', () =>
       after: 'ANAME origin.example',
     },
   ]);
+});
+it('never calls a partial bulk results page an unused preview', () => {
+  const item = {
+    ordinal: 0,
+    domain: 'fixture.example',
+    state: 'held',
+    reason: null,
+    dnsProgress: landerDnsProgress(12),
+  };
+  const job = {
+    state: 'finished',
+    total: 1,
+    counts: [{ state: 'held', count: 1 }],
+    items: [item],
+    cursor: null,
+  };
+  expect(landerPreviewOnly(job, -1)).toBe(true);
+  expect(landerPreviewOnly({ ...job, total: 101, cursor: 100 }, -1)).toBe(
+    false,
+  );
+  expect(landerPreviewOnly({ ...job, total: 101 }, 100)).toBe(false);
+  expect(
+    landerPreviewOnly(
+      {
+        ...job,
+        items: [
+          {
+            ...item,
+            dnsProgress: landerDnsProgress(12, { index: 8, state: 'verified' }),
+          },
+        ],
+      },
+      -1,
+    ),
+  ).toBe(false);
+});
+it('does not show a stale verified HTTPS badge during DNS recovery', () => {
+  const receipt = { sslStatus: 'active', ordinaryHttpsAt: 123 };
+  expect(landerHostStatus('live', receipt).verified).toBe(true);
+  expect(landerHostStatus('restore', receipt)).toEqual({
+    label: 'Restoring DNS',
+    verified: false,
+  });
+  expect(landerHostStatus('restored', receipt)).toEqual({
+    label: 'Connection removed',
+    verified: false,
+  });
+  expect(landerHostStatus('held', receipt).verified).toBe(false);
 });

@@ -6,6 +6,63 @@ import type {
 
 export const domainCount = (n: number) =>
   `${n} ${n === 1 ? 'domain' : 'domains'}`;
+export function landerHostStatus(
+  state: string,
+  receipt?: Record<string, unknown> | null,
+) {
+  if (state === 'restored')
+    return { label: 'Connection removed', verified: false };
+  if (state === 'restore') return { label: 'Restoring DNS', verified: false };
+  if (['cleanup', 'restored-dns'].includes(state))
+    return { label: 'Removing connection', verified: false };
+  if (state === 'cancelled')
+    return { label: 'Connection stopped', verified: false };
+  if (['held', 'conflict'].includes(state))
+    return {
+      label:
+        receipt?.sslStatus === 'active'
+          ? 'Certificate ready; connection needs attention'
+          : 'Connection needs attention',
+      verified: false,
+    };
+  if (
+    state === 'live' &&
+    typeof receipt?.ordinaryHttpsAt === 'number' &&
+    receipt.ordinaryHttpsAt > 0
+  )
+    return { label: 'Public HTTPS verified', verified: true };
+  return {
+    label:
+      receipt?.sslStatus === 'active'
+        ? 'Certificate ready; checking DNS and page'
+        : 'Preparing certificate and DNS',
+    verified: false,
+  };
+}
+export function landerPreviewOnly(
+  job: Pick<
+    LanderJobView,
+    'state' | 'total' | 'counts' | 'items' | 'cursor'
+  > | null,
+  cursor: number,
+) {
+  if (!job) return false;
+  if (['preparing', 'awaiting-review'].includes(job.state)) return true;
+  // Restore acts on the complete job, not just the visible results page.
+  if (
+    cursor !== -1 ||
+    job.cursor !== null ||
+    job.items.length !== job.total ||
+    !job.items.length
+  )
+    return false;
+  return (
+    !job.counts.some((c) => c.state === 'live' && c.count > 0) &&
+    job.items.every((i) =>
+      i.dnsProgress ? i.dnsProgress.tracked === 0 : !i.changes,
+    )
+  );
+}
 export const landerIssue = (reason: string) =>
   reason ===
   'Connection could not be qualified. Check provider permissions, publication and hosting configuration.'

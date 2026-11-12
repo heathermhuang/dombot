@@ -19,6 +19,8 @@ import {
   landerReviewPath,
   landerReviewFromLocation,
   landerIssue,
+  landerPreviewOnly,
+  landerHostStatus,
 } from '../../lib/lander-presentation';
 
 export default function UseLander({
@@ -41,6 +43,7 @@ export default function UseLander({
   const action = useSalesAction();
   const identityLink = useRef<HTMLAnchorElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const viewEpoch = useRef(0);
   const pendingKey = 'domains-lander-pending:' + location.pathname;
   const reviewKey = 'domains-lander-review:' + location.pathname;
   const [pending, setPending] = useState<{
@@ -84,9 +87,18 @@ export default function UseLander({
     );
   }, []);
   const read = async (id: string, after = -1) => {
-    const v = await salesRequest<LanderJobView>(
-      `/lander/jobs/${id}?cursor=${after}`,
-    );
+    const epoch = ++viewEpoch.current;
+    let v: LanderJobView;
+    try {
+      v = await salesRequest<LanderJobView>(
+        `/lander/jobs/${id}?cursor=${after}`,
+      );
+    } catch (error) {
+      if (epoch !== viewEpoch.current) return null;
+      throw error;
+    }
+    if (epoch !== viewEpoch.current) return null;
+    viewEpoch.current++;
     accept(v);
     setCursor(after);
     return v;
@@ -101,20 +113,21 @@ export default function UseLander({
       /* Storage can be unavailable in private browsing. */
     }
     if (!saved) return;
+    const epoch = ++viewEpoch.current;
     let stopped = false;
     // Reopen the saved GET view only. Approval and DNS actions are never replayed.
     void salesRequest<LanderJobView>(
       `/lander/jobs/${saved.id}?cursor=${saved.cursor}`,
     )
       .then((value) => {
-        if (stopped) return;
+        if (stopped || epoch !== viewEpoch.current) return;
         accept(value);
         setCursor(saved.cursor);
         setOpen(true);
         setResumeError('');
       })
       .catch(() => {
-        if (!stopped)
+        if (!stopped && epoch === viewEpoch.current)
           setResumeError(
             'Your saved connection could not be reopened. Use recent connections to try again.',
           );
@@ -124,15 +137,18 @@ export default function UseLander({
     };
   }, [reviewKey, accept]);
   useEffect(() => {
-    if (open && jobId)
-      try {
-        sessionStorage.setItem(
-          reviewKey,
-          JSON.stringify({ id: jobId, cursor }),
-        );
-      } catch {
-        /* Recent connections remain available. */
-      }
+    if (!open || !jobId) return;
+    const view = { id: jobId, cursor };
+    try {
+      sessionStorage.setItem(reviewKey, JSON.stringify(view));
+    } catch {
+      /* The read-only return URL remains available. */
+    }
+    try {
+      history.replaceState(history.state, '', landerReviewPath(location, view));
+    } catch {
+      /* Recent connections remain available. */
+    }
   }, [open, jobId, cursor, reviewKey]);
   useEffect(() => {
     if (jobState !== 'awaiting-review' || expiresAt === undefined) return;
@@ -163,23 +179,32 @@ export default function UseLander({
     if (
       !jobId ||
       !open ||
+      action.busy ||
       !['preparing', 'running', 'restoring'].includes(jobState ?? '')
     )
       return;
     let stopped = false;
+    let reading = false;
     const timer = setInterval(() => {
+      if (reading) return;
+      reading = true;
+      const epoch = viewEpoch.current;
       void salesRequest<LanderJobView>(`/lander/jobs/${jobId}?cursor=${cursor}`)
         .then((v) => {
-          if (!stopped) accept(v);
+          if (!stopped && epoch === viewEpoch.current) accept(v);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          reading = false;
+        });
     }, 5000);
     return () => {
       stopped = true;
       clearInterval(timer);
     };
-  }, [jobId, jobState, open, cursor, accept]);
+  }, [jobId, jobState, open, cursor, accept, action.busy]);
   const clearSavedView = () => {
+    viewEpoch.current++;
     try {
       sessionStorage.removeItem(reviewKey);
     } catch {
@@ -213,13 +238,14 @@ export default function UseLander({
   const apply = (kind: 'approve' | 'cancel' | 'restore') =>
     void action.run(async () => {
       if (!job) return;
-      accept(
-        await salesRequest<LanderJobView>(
-          `/lander/jobs/${job.id}/${kind}`,
-          'POST',
-          kind === 'approve' ? { digest: job.digest } : {},
-        ),
+      viewEpoch.current++;
+      const value = await salesRequest<LanderJobView>(
+        `/lander/jobs/${job.id}/${kind}`,
+        'POST',
+        kind === 'approve' ? { digest: job.digest } : {},
       );
+      viewEpoch.current++;
+      accept(value);
       onChange?.();
     });
   const ready = job?.counts.find((c) => c.state === 'ready')?.count ?? 0;
@@ -227,11 +253,7 @@ export default function UseLander({
     jobState === 'awaiting-review' &&
     expiresAt !== undefined &&
     expiresAt <= now;
-  const previewOnly =
-    ['preparing', 'awaiting-review'].includes(jobState ?? '') ||
-    (!!job?.items.length &&
-      !job.counts.some((c) => c.state === 'live' && c.count > 0) &&
-      job.items.every((i) => i.dnsProgress?.tracked === 0 || !i.changes));
+  const previewOnly = landerPreviewOnly(job, cursor);
   const restored =
     !!job?.total &&
     job.counts.some((c) => c.state === 'restored' && c.count === job.total);
@@ -272,10 +294,10 @@ export default function UseLander({
             {recent.map((j) => (
               <li key={j.id}>
                 <button
+                  disabled={action.busy}
                   onClick={() =>
                     void action.run(async () => {
-                      await read(j.id);
-                      setOpen(true);
+                      if (await read(j.id)) setOpen(true);
                     })
                   }
                 >
@@ -438,8 +460,8 @@ export default function UseLander({
             <div className="sales-lander-auth" role="status">
               <strong>This review has expired.</strong>
               <p>
-                This preview has not changed your DNS. Remove it, then prepare a
-                fresh review.
+                Remove this setup before preparing a fresh review. Recovery
+                checks any DNS changes submitted since this review was opened.
               </p>
               <button disabled={action.busy} onClick={() => apply('restore')}>
                 Remove expired preview
@@ -506,22 +528,19 @@ export default function UseLander({
                   ) : null;
                 })()}
               <div className="sales-lander-hosts">
-                {item.hosts?.map((host) => (
-                  <div
-                    key={host.hostname}
-                    className="sales-lander-host"
-                    data-verified={!!host.receipt?.ordinaryHttpsAt}
-                  >
-                    <strong>{host.hostname}</strong>
-                    <span>
-                      {host.receipt?.ordinaryHttpsAt
-                        ? 'Public HTTPS verified'
-                        : host.receipt?.sslStatus === 'active'
-                          ? 'Certificate ready; checking DNS and page'
-                          : 'Preparing certificate and DNS'}
-                    </span>
-                  </div>
-                ))}
+                {item.hosts?.map((host) => {
+                  const status = landerHostStatus(item.state, host.receipt);
+                  return (
+                    <div
+                      key={host.hostname}
+                      className="sales-lander-host"
+                      data-verified={status.verified}
+                    >
+                      <strong>{host.hostname}</strong>
+                      <span>{status.label}</span>
+                    </div>
+                  );
+                })}
               </div>
               {item.state === 'live' && (
                 <a
@@ -575,7 +594,7 @@ export default function UseLander({
               )}
               {item.changes && (
                 <div className="sales-lander-routing">
-                  <h3>Web routing</h3>
+                  <h3>Reviewed web routing</h3>
                   {landerRoutingChanges(item.changes).map((row) => (
                     <div key={row.name}>
                       <strong>{row.name}</strong>
@@ -665,7 +684,9 @@ export default function UseLander({
           </div>
           <p className="small">
             A domain is connected only after root and www pass DNS, certificate
-            and public HTTPS checks. Restore preserves newer DNS edits.
+            and public HTTPS checks. Recovery applies to all{' '}
+            {domainCount(job.total)} in this connection and preserves newer DNS
+            edits.
           </p>
           <details className="sales-lander-technical">
             <summary>Connection details</summary>
