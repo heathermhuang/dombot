@@ -332,7 +332,7 @@ export default function UseLander({
           <strong>You’re signed in. Confirm this DNS change.</strong>
           <p>
             Identity confirmation lasts five minutes. Your{' '}
-            {job ? 'connection details' : 'domain selection'} are saved, and
+            {job ? 'connection details are' : 'domain selection is'} saved, and
             you’ll return here after confirming.
           </p>
           <a
@@ -522,8 +522,10 @@ export default function UseLander({
                     </div>
                   ) : recovery ? (
                     <p>
-                      Removing this connection. There are no DNS changes to
-                      reverse.
+                      {item.state === 'restored'
+                        ? 'Connection removed.'
+                        : 'Removing this connection.'}{' '}
+                      There are no DNS changes to reverse.
                     </p>
                   ) : null;
                 })()}
