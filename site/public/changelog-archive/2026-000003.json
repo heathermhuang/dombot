@@ -66,6 +66,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-c42f194c7eaf6d63d36932d2e905069c8d265e15-37",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix(ui): label retained DNS work as restoration in revised reviews",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/c42f194c7eaf6d63d36932d2e905069c8d265e15"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-e3ebf868c0af2fd33d1650c2b8758e0fda25a379-35",
       "date": "2026-11-12",
       "layer": "saas",
