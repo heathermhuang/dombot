@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-f16ac2320f6f4247bfc1c1be7245c1917ee061b6-31",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Hosted service update observed: Fix multiple native certificate TXT values",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/f16ac2320f6f4247bfc1c1be7245c1917ee061b6"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-224",
       "date": "2026-11-12",
       "layer": "saas",
