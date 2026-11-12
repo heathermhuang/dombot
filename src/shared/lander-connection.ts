@@ -107,11 +107,34 @@ export interface LanderReviewItem {
   publication?: z.infer<typeof publishedSaleSchema>;
   publishes?: boolean;
   changes?: DnsChange[];
+  dnsProgress?: {
+    total: number;
+    verified: number;
+    tracked: number;
+    restored: number;
+  };
   hosts?: {
     hostname: string;
     epoch: number;
     receipt?: Record<string, unknown> | null;
   }[];
+}
+/** Read-only progress: an unverified submission is never counted as verified. */
+export function landerDnsProgress(
+  total: number,
+  write?: { index: number; state: 'intent' | 'verified' },
+  restoreIndex?: number,
+): NonNullable<LanderReviewItem['dnsProgress']> {
+  const tracked = write ? Math.min(total, Math.max(0, write.index + 1)) : 0;
+  return {
+    total,
+    tracked,
+    verified: write?.state === 'verified' ? tracked : Math.max(0, tracked - 1),
+    restored:
+      restoreIndex === undefined
+        ? 0
+        : Math.min(tracked, Math.max(0, (write?.index ?? -1) - restoreIndex)),
+  };
 }
 export interface LanderJobView {
   id: string;

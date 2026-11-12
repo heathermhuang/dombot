@@ -40,12 +40,22 @@ export function PublicPageActions({ domain }: { domain: string }) {
           ? 'Paused'
           : sale.pendingChanges
             ? 'Needs review'
-            : 'Live';
+            : 'Published';
   return (
     <div className="flex flex-col gap-1 text-xs">
-      <span title={error || sale?.suppression || undefined}>{state}</span>
+      <span
+        title={
+          error ||
+          sale?.suppression ||
+          (state === 'Published'
+            ? 'Your inquiry page is published. Domain connection has its own DNS and HTTPS status.'
+            : undefined)
+        }
+      >
+        {state}
+      </span>
       {sale?.id ? (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-x-2 gap-y-1">
           <Link
             className="text-primary underline"
             to={`/sales/listings/${sale.id}`}
@@ -74,7 +84,7 @@ export function PublicPageActions({ domain }: { domain: string }) {
                   .catch((e) => setError(e.message))
               }
             >
-              Copy link
+              Copy page link
             </button>
           )}
         </div>

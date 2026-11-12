@@ -11,6 +11,165 @@
   margin: 0 auto;
   padding-bottom: 24px;
 }
+.sales-lander-panel .sales-heading h2 {
+  margin: 0;
+}
+.sales-lander-history {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.sales-lander-history button {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  flex-wrap: wrap;
+}
+.sales-lander-history time {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.sales-lander-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 20px 0;
+  padding: 0;
+}
+.sales-lander-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.sales-lander-steps li > span {
+  display: inline-flex;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+.sales-lander-steps li[aria-current='step'] {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.sales-lander-steps li[aria-current='step'] > span,
+.sales-lander-steps li[data-complete='true'] > span {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.sales-lander-item.sales-section {
+  margin: 16px 0 0;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.sales-lander-item > summary,
+.sales-lander-technical > summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.sales-lander-state {
+  margin-inline-start: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.sales-lander-progress {
+  margin: 16px 0;
+  font-size: 13px;
+}
+.sales-lander-progress progress {
+  display: block;
+  width: 100%;
+  height: 7px;
+  margin-top: 8px;
+  accent-color: var(--primary);
+}
+.sales-lander-hosts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.sales-lander-host {
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sales-lander-host strong,
+.sales-lander-host span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.sales-lander-host span {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.sales-lander-host[data-verified='true'] span {
+  color: var(--primary);
+}
+.sales-lander-routing {
+  margin: 20px 0;
+}
+.sales-lander-routing h3 {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.sales-lander-routing > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr);
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.sales-lander-routing code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.sales-lander-auth {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--primary);
+  border-radius: 6px;
+  background: var(--background);
+}
+.sales-lander-auth p {
+  max-width: 65ch;
+  margin: 8px 0 12px;
+}
+.sales-lander-reason {
+  overflow-wrap: anywhere;
+}
+.sales-lander-technical p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .sales-lander-hosts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sales-lander-routing > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sales-lander-steps {
+    gap: 6px;
+  }
+  .sales-lander-steps li {
+    gap: 5px;
+    font-size: 12px;
+  }
+}
 .sales-nav {
   display: flex;
   gap: 24px;

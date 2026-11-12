@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './sales.css';
 import {
   salesRequest,
@@ -10,6 +10,16 @@ import type {
   LanderSelection,
   LanderJobView,
 } from '../../../shared/lander-connection';
+import {
+  domainCount,
+  landerItemLabel,
+  landerJobLabel,
+  landerRoutingChanges,
+  savedLanderReview,
+  landerReviewPath,
+  landerReviewFromLocation,
+  landerIssue,
+} from '../../lib/lander-presentation';
 
 export default function UseLander({
   selection,
@@ -23,11 +33,16 @@ export default function UseLander({
   const [job, setJob] = useState<LanderJobView | null>(null),
     [open, setOpen] = useState(false),
     [recent, setRecent] = useState<
-      { id: string; state: string; total: number }[]
+      { id: string; state: string; total: number; updated_at?: number }[]
     >([]),
-    [cursor, setCursor] = useState(-1);
+    [cursor, setCursor] = useState(-1),
+    [resumeError, setResumeError] = useState(''),
+    [now, setNow] = useState(() => Date.now());
   const action = useSalesAction();
+  const identityLink = useRef<HTMLAnchorElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
   const pendingKey = 'domains-lander-pending:' + location.pathname;
+  const reviewKey = 'domains-lander-review:' + location.pathname;
   const [pending, setPending] = useState<{
     id: string;
     selection: LanderSelection;
@@ -46,15 +61,88 @@ export default function UseLander({
   });
   const [enabled, setEnabled] = useState(false);
   const jobId = job?.id,
-    jobState = job?.state;
+    jobState = job?.state,
+    expiresAt = job?.expiresAt;
+  useEffect(() => {
+    if (action.reauth) identityLink.current?.focus();
+  }, [action.reauth]);
+  useEffect(() => {
+    if (open && jobId) reviewHeading.current?.focus();
+  }, [open, jobId]);
+  const accept = useCallback((value: LanderJobView) => {
+    setJob(value);
+    setResumeError('');
+    setRecent((rows) =>
+      rows.some((r) => r.id === value.id)
+        ? rows.map((r) =>
+            r.id === value.id ? { ...r, state: value.state } : r,
+          )
+        : [
+            { id: value.id, state: value.state, total: value.total },
+            ...rows,
+          ].slice(0, 20),
+    );
+  }, []);
   const read = async (id: string, after = -1) => {
     const v = await salesRequest<LanderJobView>(
       `/lander/jobs/${id}?cursor=${after}`,
     );
-    setJob(v);
+    accept(v);
     setCursor(after);
     return v;
   };
+  useEffect(() => {
+    let saved: ReturnType<typeof savedLanderReview> = null;
+    try {
+      saved =
+        landerReviewFromLocation(location) ??
+        savedLanderReview(sessionStorage.getItem(reviewKey));
+    } catch {
+      /* Storage can be unavailable in private browsing. */
+    }
+    if (!saved) return;
+    let stopped = false;
+    // Reopen the saved GET view only. Approval and DNS actions are never replayed.
+    void salesRequest<LanderJobView>(
+      `/lander/jobs/${saved.id}?cursor=${saved.cursor}`,
+    )
+      .then((value) => {
+        if (stopped) return;
+        accept(value);
+        setCursor(saved.cursor);
+        setOpen(true);
+        setResumeError('');
+      })
+      .catch(() => {
+        if (!stopped)
+          setResumeError(
+            'Your saved connection could not be reopened. Use recent connections to try again.',
+          );
+      });
+    return () => {
+      stopped = true;
+    };
+  }, [reviewKey, accept]);
+  useEffect(() => {
+    if (open && jobId)
+      try {
+        sessionStorage.setItem(
+          reviewKey,
+          JSON.stringify({ id: jobId, cursor }),
+        );
+      } catch {
+        /* Recent connections remain available. */
+      }
+  }, [open, jobId, cursor, reviewKey]);
+  useEffect(() => {
+    if (jobState !== 'awaiting-review' || expiresAt === undefined) return;
+    setNow(Date.now());
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.max(0, expiresAt - Date.now() + 50),
+    );
+    return () => clearTimeout(timer);
+  }, [jobState, expiresAt]);
   useEffect(() => {
     let stopped = false;
     void salesRequest<{ enabled: boolean }>('/lander/config')
@@ -82,7 +170,7 @@ export default function UseLander({
     const timer = setInterval(() => {
       void salesRequest<LanderJobView>(`/lander/jobs/${jobId}?cursor=${cursor}`)
         .then((v) => {
-          if (!stopped) setJob(v);
+          if (!stopped) accept(v);
         })
         .catch(() => {});
     }, 5000);
@@ -90,9 +178,22 @@ export default function UseLander({
       stopped = true;
       clearInterval(timer);
     };
-  }, [jobId, jobState, open, cursor]);
+  }, [jobId, jobState, open, cursor, accept]);
+  const clearSavedView = () => {
+    try {
+      sessionStorage.removeItem(reviewKey);
+    } catch {
+      /* Storage is optional. */
+    }
+    try {
+      history.replaceState(history.state, '', landerReviewPath(location, null));
+    } catch {
+      /* The view can still close. */
+    }
+  };
   const prepare = (value: LanderSelection) =>
     void action.run(async () => {
+      clearSavedView();
       setJob(null);
       const request =
         pending && JSON.stringify(pending.selection) === JSON.stringify(value)
@@ -105,20 +206,14 @@ export default function UseLander({
       });
       sessionStorage.removeItem(pendingKey);
       setPending(null);
-      setJob(v);
-      setRecent((rows) =>
-        [
-          { id: v.id, state: v.state, total: v.total },
-          ...rows.filter((r) => r.id !== v.id),
-        ].slice(0, 20),
-      );
+      accept(v);
       setOpen(true);
       setCursor(-1);
     });
   const apply = (kind: 'approve' | 'cancel' | 'restore') =>
     void action.run(async () => {
       if (!job) return;
-      setJob(
+      accept(
         await salesRequest<LanderJobView>(
           `/lander/jobs/${job.id}/${kind}`,
           'POST',
@@ -128,7 +223,24 @@ export default function UseLander({
       onChange?.();
     });
   const ready = job?.counts.find((c) => c.state === 'ready')?.count ?? 0;
-  if (!enabled && !recent.length && !open && !action.error) return null;
+  const expired =
+    jobState === 'awaiting-review' &&
+    expiresAt !== undefined &&
+    expiresAt <= now;
+  const previewOnly =
+    ['preparing', 'awaiting-review'].includes(jobState ?? '') ||
+    (!!job?.items.length &&
+      !job.counts.some((c) => c.state === 'live' && c.count > 0) &&
+      job.items.every((i) => i.dnsProgress?.tracked === 0 || !i.changes));
+  const restored =
+    !!job?.total &&
+    job.counts.some((c) => c.state === 'restored' && c.count === job.total);
+  const needsAttention =
+    !!job &&
+    ['finished', 'cancelled'].includes(job.state) &&
+    job.counts.some((c) => ['held', 'conflict'].includes(c.state));
+  if (!enabled && !recent.length && !open && !action.error && !resumeError)
+    return null;
   return (
     <div className="sales sales-lander-action">
       {enabled && selection && (
@@ -156,88 +268,183 @@ export default function UseLander({
       {!!recent.length && (
         <details>
           <summary>Recent lander connections</summary>
-          {recent.map((j) => (
-            <p key={j.id}>
-              <button
-                onClick={() =>
-                  void action.run(async () => {
-                    await read(j.id);
-                    setOpen(true);
-                  })
-                }
-              >
-                {j.total} domains · {j.state}
-              </button>
-            </p>
-          ))}
+          <ul className="sales-lander-history">
+            {recent.map((j) => (
+              <li key={j.id}>
+                <button
+                  onClick={() =>
+                    void action.run(async () => {
+                      await read(j.id);
+                      setOpen(true);
+                    })
+                  }
+                >
+                  <span>
+                    {domainCount(j.total)} ·{' '}
+                    {landerJobLabel({
+                      state: j.state,
+                      total: j.total,
+                      counts: job?.id === j.id ? job.counts : [],
+                    })}
+                  </span>
+                  {typeof j.updated_at === 'number' && j.updated_at > 0 && (
+                    <time dateTime={new Date(j.updated_at).toISOString()}>
+                      {new Date(j.updated_at).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
         </details>
       )}
-      {action.error && <p role="alert">{action.error}</p>}
+      {resumeError && <p role="alert">{resumeError}</p>}
+      {action.error && !action.reauth && <p role="alert">{action.error}</p>}
       {action.reauth && (
-        <p>
+        <div className="sales-lander-auth" role="alert">
+          <strong>You’re signed in. Confirm this DNS change.</strong>
+          <p>
+            Identity confirmation lasts five minutes. Your{' '}
+            {job ? 'connection details' : 'domain selection'} are saved, and
+            you’ll return here after confirming.
+          </p>
           <a
+            ref={identityLink}
+            className="sales-button primary"
             href={
               action.reauth +
-              '?next=' +
+              '?reason=domain-setup&next=' +
               encodeURIComponent(
-                location.pathname + location.search + location.hash,
+                landerReviewPath(location, job ? { id: job.id, cursor } : null),
               )
             }
           >
-            Confirm your identity, then return to this selection
+            Confirm identity
           </a>
-        </p>
+        </div>
       )}
       {open && job && (
         <section
-          className="sales-section"
+          className="sales-section sales-lander-panel"
           aria-label="Lander connection review"
         >
           <div className="sales-heading">
-            <h2>
-              {job.state === 'awaiting-review'
-                ? 'Connect your domains'
-                : job.state === 'preparing'
-                  ? 'Preparing your review'
-                  : 'Lander connections'}
+            <h2 ref={reviewHeading} tabIndex={-1}>
+              {landerJobLabel(job)}
             </h2>
             <button
               aria-label="Close connection details"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                clearSavedView();
+                setOpen(false);
+              }}
             >
               Close
             </button>
           </div>
           <p role="status">
-            {job.total} exact selected domains ·{' '}
-            {job.counts.map((c) => `${c.count} ${c.state}`).join(' · ')}
+            {domainCount(job.total)} ·{' '}
+            {job.total === 1
+              ? landerItemLabel(
+                  job.items[0] ?? { state: job.counts[0]?.state ?? job.state },
+                )
+              : job.counts
+                  .map(
+                    (c) =>
+                      `${c.count} ${landerItemLabel({ state: c.state }).toLowerCase()}`,
+                  )
+                  .join(' · ')}
           </p>
+          {needsAttention && (
+            <div className="sales-lander-auth">
+              <p>
+                {previewOnly
+                  ? 'Remove this unused preview before preparing another connection.'
+                  : 'Review the details below. Restore checks the saved DNS and preserves newer edits.'}
+              </p>
+              <button
+                className="primary"
+                disabled={action.busy}
+                onClick={() => apply('restore')}
+              >
+                {previewOnly
+                  ? 'Remove preview'
+                  : `Restore previous DNS for ${domainCount(job.total)}`}
+              </button>
+            </div>
+          )}
+          {(['preparing', 'awaiting-review', 'running'].includes(job.state) ||
+            landerJobLabel(job) === 'Connected') && (
+            <ol className="sales-lander-steps" aria-label="Connection progress">
+              {['Prepare', 'Review', 'Connect'].map((label, index) => {
+                const stage =
+                  job.state === 'preparing'
+                    ? 0
+                    : job.state === 'awaiting-review'
+                      ? 1
+                      : 2;
+                const complete =
+                  index < stage ||
+                  (index === 2 &&
+                    job.counts.some(
+                      (c) => c.state === 'live' && c.count === job.total,
+                    ));
+                return (
+                  <li
+                    key={label}
+                    data-complete={complete}
+                    aria-current={
+                      index === stage && !complete ? 'step' : undefined
+                    }
+                  >
+                    <span aria-hidden="true">{complete ? '✓' : index + 1}</span>
+                    {label}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
           {job.state === 'preparing' && (
             <p>
               Checking DNS and preparing root and www hosting. DNS and public
               pages stay unchanged until you confirm.
             </p>
           )}
-          {job.state === 'awaiting-review' && (
+          {job.state === 'awaiting-review' && !expired && (
             <>
               <p>
-                Confirm once to connect the {ready} eligible domains at their
-                current DNS provider. Existing nameservers stay in place. New
-                pages publish the exact content shown below; existing public
-                terms stay unchanged.
+                Review the page and DNS changes below, then connect{' '}
+                {domainCount(ready)}. Your nameservers stay in place.
               </p>
               <p>
-                Standard pages show the domain and a neutral inquiry action,
-                with no inferred price. Held domains remain unchanged.
+                Existing published terms stay unchanged. Domains needing
+                attention are left out.
               </p>
               <button
                 className="primary"
-                disabled={action.busy || !ready}
+                disabled={action.busy || !ready || !job.digest}
                 onClick={() => apply('approve')}
               >
-                Confirm publication and DNS for {ready} domains
+                Confirm and connect {domainCount(ready)}
               </button>
             </>
+          )}
+          {expired && (
+            <div className="sales-lander-auth" role="status">
+              <strong>This review has expired.</strong>
+              <p>
+                This preview has not changed your DNS. Remove it, then prepare a
+                fresh review.
+              </p>
+              <button disabled={action.busy} onClick={() => apply('restore')}>
+                Remove expired preview
+              </button>
+            </div>
           )}
           {['running', 'restoring'].includes(job.state) && (
             <p>
@@ -246,28 +453,93 @@ export default function UseLander({
             </p>
           )}
           {job.items.map((item) => (
-            <details key={item.ordinal} className="sales-section">
+            <details
+              key={item.ordinal}
+              className="sales-section sales-lander-item"
+              open={job.total === 1 || undefined}
+            >
               <summary>
-                {item.domain} · {item.state}
+                <strong>{item.domain}</strong>
+                {' · '}
+                <span className="sales-lander-state">
+                  {landerItemLabel(item)}
+                </span>
               </summary>
-              {item.reason && <p>{item.reason}</p>}
-              {item.hosts?.map((host) => (
-                <p key={host.hostname}>
-                  {host.hostname} ·{' '}
-                  {host.receipt?.ordinaryHttpsAt
-                    ? 'Public HTTPS verified'
-                    : host.receipt?.sslStatus === 'active'
-                      ? 'HTTPS ready; checking public page'
-                      : 'Preparing DNS and HTTPS'}
+              {item.reason && (
+                <p className="sales-lander-reason">
+                  {landerIssue(item.reason)}
                 </p>
-              ))}
+              )}
+              {item.dnsProgress &&
+                (() => {
+                  const p = item.dnsProgress;
+                  const recovery =
+                    job.state === 'restoring' || item.state === 'restored';
+                  const total = recovery ? p.tracked : p.total;
+                  const done = recovery ? p.restored : p.verified;
+                  return total > 0 ? (
+                    <div className="sales-lander-progress">
+                      <label>
+                        {done} of {total} DNS changes{' '}
+                        {recovery ? 'restored' : 'verified'}
+                        <progress
+                          max={total}
+                          value={done}
+                          aria-label={
+                            recovery
+                              ? 'DNS restoration'
+                              : 'Verified DNS changes'
+                          }
+                        />
+                      </label>
+                      {!recovery && p.tracked > p.verified && (
+                        <p className="small">
+                          A DNS change is awaiting provider verification.
+                        </p>
+                      )}
+                    </div>
+                  ) : recovery ? (
+                    <p>
+                      Removing this connection. There are no DNS changes to
+                      reverse.
+                    </p>
+                  ) : null;
+                })()}
+              <div className="sales-lander-hosts">
+                {item.hosts?.map((host) => (
+                  <div
+                    key={host.hostname}
+                    className="sales-lander-host"
+                    data-verified={!!host.receipt?.ordinaryHttpsAt}
+                  >
+                    <strong>{host.hostname}</strong>
+                    <span>
+                      {host.receipt?.ordinaryHttpsAt
+                        ? 'Public HTTPS verified'
+                        : host.receipt?.sslStatus === 'active'
+                          ? 'Certificate ready; checking DNS and page'
+                          : 'Preparing certificate and DNS'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {item.state === 'live' && (
+                <a
+                  className="sales-button primary"
+                  href={`https://${item.domain}/`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open {item.domain}
+                </a>
+              )}
               {item.publication && (
                 <div>
                   <p>
                     <strong>
                       {item.publishes
-                        ? 'Approve publication'
-                        : 'Keep existing publication'}
+                        ? 'Publish this inquiry page'
+                        : 'Keep the published page'}
                       : {item.publication.displayName}
                     </strong>
                   </p>
@@ -276,8 +548,14 @@ export default function UseLander({
                     {item.publication.publicPrice
                       ? `${item.publication.publicPrice.currency} ${item.publication.publicPrice.amount}`
                       : 'No public price'}{' '}
-                    · {item.publication.mode} · questions{' '}
-                    {item.publication.allowQuestions ? 'enabled' : 'disabled'}
+                    ·{' '}
+                    {item.publication.mode === 'inquiry'
+                      ? 'Open to inquiries'
+                      : item.publication.mode}{' '}
+                    ·{' '}
+                    {item.publication.allowQuestions
+                      ? 'Questions accepted'
+                      : 'Questions off'}
                   </p>
                   {item.publication.sellerDisplayName && (
                     <p>Contact: {item.publication.sellerDisplayName}</p>
@@ -296,8 +574,29 @@ export default function UseLander({
                 </div>
               )}
               {item.changes && (
+                <div className="sales-lander-routing">
+                  <h3>Web routing</h3>
+                  {landerRoutingChanges(item.changes).map((row) => (
+                    <div key={row.name}>
+                      <strong>{row.name}</strong>
+                      <span>
+                        <code>{row.before ?? 'No web record'}</code>
+                        <span aria-hidden="true"> → </span>
+                        <span className="sr-only"> changes to </span>
+                        <code>{row.after ?? 'No web record'}</code>
+                      </span>
+                    </div>
+                  ))}
+                  {!landerRoutingChanges(item.changes).length && (
+                    <p>No web routing changes are needed.</p>
+                  )}
+                </div>
+              )}
+              {item.changes && (
                 <details>
-                  <summary>Exact DNS changes · {item.changes.length}</summary>
+                  <summary>
+                    All {item.changes.length} DNS record changes
+                  </summary>
                   <pre
                     style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                   >
@@ -337,11 +636,9 @@ export default function UseLander({
                 Next results
               </button>
             )}
-            {['preparing', 'awaiting-review', 'running'].includes(
-              job.state,
-            ) && (
+            {job.state === 'running' && (
               <button disabled={action.busy} onClick={() => apply('cancel')}>
-                Cancel future work
+                Stop further changes
               </button>
             )}
             {[
@@ -350,11 +647,14 @@ export default function UseLander({
               'finished',
               'preparing',
               'awaiting-review',
-            ].includes(job.state) && (
-              <button disabled={action.busy} onClick={() => apply('restore')}>
-                Restore previous web routing
-              </button>
-            )}
+            ].includes(job.state) &&
+              !restored &&
+              !expired &&
+              !needsAttention && (
+                <button disabled={action.busy} onClick={() => apply('restore')}>
+                  {previewOnly ? 'Remove preview' : 'Restore previous DNS'}
+                </button>
+              )}
             <button
               onClick={() =>
                 downloadSales(`lander-${job.id}-results.json`, job)
@@ -364,10 +664,13 @@ export default function UseLander({
             </button>
           </div>
           <p className="small">
-            Connection receipt: {job.id}. Root and www must each pass public
-            DNS, certificate and ordinary HTTPS checks before a domain is live.
-            Restore preserves later DNS edits and reports conflicts.
+            A domain is connected only after root and www pass DNS, certificate
+            and public HTTPS checks. Restore preserves newer DNS edits.
           </p>
+          <details className="sales-lander-technical">
+            <summary>Connection details</summary>
+            <p className="small">Connection receipt: {job.id}</p>
+          </details>
         </section>
       )}
     </div>
