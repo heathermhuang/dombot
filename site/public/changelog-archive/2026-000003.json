@@ -82,6 +82,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-227",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Fix hosted account startup recovery and finish connection copy",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #227 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #227",
+          "url": "https://github.com/heathermhuang/dombot/pull/227"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
       "date": "2026-11-11",
       "layer": "core",
