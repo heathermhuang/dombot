@@ -130,6 +130,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-fa57007c7fd8a5915abd51c20dc9586c13bb5483-39",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix(lander): align scan deadlines with scheduled ticks",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/fa57007c7fd8a5915abd51c20dc9586c13bb5483"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-224",
       "date": "2026-11-12",
       "layer": "saas",
@@ -270,6 +286,22 @@
         {
           "label": "Change #232",
           "url": "https://github.com/heathermhuang/dombot/pull/232"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-233",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Avoid skipping the next scheduled lander scan after slow work",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #233 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #233",
+          "url": "https://github.com/heathermhuang/dombot/pull/233"
         }
       ]
     },
