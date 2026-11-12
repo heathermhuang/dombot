@@ -464,7 +464,9 @@ export default function UseLander({
                 checks any DNS changes submitted since this review was opened.
               </p>
               <button disabled={action.busy} onClick={() => apply('restore')}>
-                Remove expired preview
+                {previewOnly
+                  ? 'Remove expired preview'
+                  : 'Restore previous DNS'}
               </button>
             </div>
           )}
