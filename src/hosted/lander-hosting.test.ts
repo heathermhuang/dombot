@@ -9,7 +9,11 @@ import {
 } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { readFileSync, readdirSync } from 'node:fs';
-import { LanderHosting, LanderPreparationPending } from './lander-hosting';
+import {
+  LanderHosting,
+  LanderPreparationPending,
+  LanderCertificatePlanChanged,
+} from './lander-hosting';
 import { SalesHostnames } from './sales-hostnames';
 import { drainLanderConnections } from './lander-connections';
 import { PROOF_HEADER, verifyGatewayRequest } from '../shared/gateway-proof';
@@ -613,8 +617,24 @@ it('requests one fenced certificate recheck before web routing changes, and repo
       },
     ],
   };
+  await expect(
+    port.verify(workspace, listing, domain, generation, plans, revision),
+  ).rejects.toBeInstanceOf(LanderCertificatePlanChanged);
+  const updatedPlans = await port.prepare(
+    workspace,
+    listing,
+    domain,
+    generation,
+  );
   expect(
-    await port.verify(workspace, listing, domain, generation, plans, revision),
+    await port.verify(
+      workspace,
+      listing,
+      domain,
+      generation,
+      updatedPlans,
+      revision,
+    ),
   ).toBe('waiting');
   expect(patches).toBe(0);
   const receipt = await db
@@ -629,15 +649,29 @@ it('requests one fenced certificate recheck before web routing changes, and repo
     throw Error('generation cancelled');
   });
   await expect(
-    cancelled.verify(workspace, listing, domain, generation, plans, revision),
+    cancelled.verify(
+      workspace,
+      listing,
+      domain,
+      generation,
+      updatedPlans,
+      revision,
+    ),
   ).rejects.toThrow('generation cancelled');
   expect(patches).toBe(0);
   await Promise.all([
-    port.verify(workspace, listing, domain, generation, plans, revision),
-    port.verify(workspace, listing, domain, generation, plans, revision),
+    port.verify(workspace, listing, domain, generation, updatedPlans, revision),
+    port.verify(workspace, listing, domain, generation, updatedPlans, revision),
   ]);
   expect(
-    await port.verify(workspace, listing, domain, generation, plans, revision),
+    await port.verify(
+      workspace,
+      listing,
+      domain,
+      generation,
+      updatedPlans,
+      revision,
+    ),
   ).toBe('waiting');
   expect(patches).toBe(1);
 });

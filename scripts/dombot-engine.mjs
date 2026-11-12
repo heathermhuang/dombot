@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const root = process.cwd();
 const name = '@domains-domains/dombot-engine';
-const version = '2.2.1-hosted.13';
+const version = '2.2.1-hosted.14';
 const upstream = {
   repository: 'https://github.com/aoxborrow/dombot',
   revision: 'a688173c7e5099cec99d2f2721f040ef48f25fa7',

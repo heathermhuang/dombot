@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { revisedCertificatePlan } from './lander-certificate-review';
 import { toUnicode } from '../shared/domain-name';
 import { canonicalDomain } from '../shared/publication';
 import { emptySale } from '../shared/hosted-sales';
@@ -756,6 +757,69 @@ export class LanderJobs {
             'The saved DNS account identity changed.',
             409,
           );
+        if (j.state === 'running' && hostingState === 'certificate-review') {
+          if (!hosts || p.write?.state === 'intent')
+            throw new SalesError(
+              'CERTIFICATE_REVIEW',
+              'Reconcile submitted DNS before updating this review.',
+              409,
+            );
+          const through = p.write?.index ?? -1;
+          for (let previous = 0; previous <= through; previous++)
+            if (
+              observeDnsChange(current.records, plan.changes[previous])
+                .state !== 'after'
+            )
+              throw new SalesError(
+                'DNS_CONFLICT',
+                'Previously verified DNS changed. Later edits were preserved.',
+                409,
+              );
+          const revisedPlan = revisedCertificatePlan(
+            plan,
+            hosts,
+            r.generation,
+            through,
+          );
+          const digest = await this.store.hash(
+            'lander-item',
+            canonicalJson(revisedPlan),
+          );
+          await fence();
+          await this.store.atomic([
+            ...this.store.guard(
+              "EXISTS(SELECT 1 FROM lander_jobs WHERE id=? AND state='running' AND digest=?) AND EXISTS(SELECT 1 FROM lander_items WHERE job_id=? AND ordinal=? AND generation=? AND lease=? AND lease_until>?)",
+              [
+                r.job_id,
+                j.digest,
+                r.job_id,
+                r.ordinal,
+                r.generation,
+                lease,
+                Date.now(),
+              ],
+            ),
+            this.store.db
+              .prepare(
+                "UPDATE lander_items SET state='ready',sealed=?,digest=?,reason=?,due_at=0,lease=NULL,lease_until=0 WHERE job_id=? AND ordinal=? AND generation=? AND lease=?",
+              )
+              .bind(
+                await this.store.seal({ ...p, plan: revisedPlan }),
+                digest,
+                'Certificate validation changed. Review the updated DNS records before continuing.',
+                r.job_id,
+                r.ordinal,
+                r.generation,
+                lease,
+              ),
+            this.store.db
+              .prepare(
+                "UPDATE lander_jobs SET state='preparing',digest=NULL,updated_at=? WHERE id=? AND state='running'",
+              )
+              .bind(Date.now(), r.job_id),
+          ]);
+          return;
+        }
         if (j.state === 'restoring') {
           if (p.write?.state === 'intent') {
             const submitted = observeDnsChange(

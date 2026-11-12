@@ -40,6 +40,7 @@ const providerSchema = z
   })
   .passthrough();
 export class LanderPreparationPending extends Error {}
+export class LanderCertificatePlanChanged extends Error {}
 
 /** Controlled hosting preparation is separate from the read-only DNS planner.
  * It never changes DNS, publications, delegation or existing active bindings. */
@@ -427,6 +428,20 @@ export class LanderHosting {
           provider.custom_metadata?.domains_connection !== generation)
       )
         throw Error('Provider resource is outside this connection.');
+      const changedCertificate = provider.ssl.validation_records?.some(
+        (v) =>
+          v.txt_name &&
+          v.txt_value &&
+          !host.records.some(
+            (r) =>
+              r.name === v.txt_name!.replace(/\.$/, '').toLowerCase() &&
+              r.value === v.txt_value,
+          ),
+      );
+      if (provider.ssl.status !== 'active' && changedCertificate)
+        throw new LanderCertificatePlanChanged(
+          'Certificate validation changed; review the updated DNS records.',
+        );
       const certificateValidation = await new SalesHostnames(
         this.env,
         this.fetcher,
