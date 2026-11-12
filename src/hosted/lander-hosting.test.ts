@@ -675,3 +675,30 @@ it('requests one fenced certificate recheck before web routing changes, and repo
   ).toBe('waiting');
   expect(patches).toBe(1);
 });
+
+it('keeps a slow work slice eligible at the next scheduled two-minute tick', async () => {
+  const env = environment();
+  const tick = Date.parse('2026-11-12T09:20:00.000Z');
+  let clock = tick + 123,
+    reads = 0;
+  vi.spyOn(Date, 'now').mockImplementation(() => clock);
+  env.WORKSPACE_0 = {
+    fetch: async (request: Request) => {
+      expect(new URL(request.url).pathname).toBe('/sales-internal/lander/work');
+      reads++;
+      clock += 55000;
+      return Response.json({ work: null });
+    },
+  } as Fetcher;
+  await db
+    .prepare('INSERT INTO lander_workspaces(workspace_id,due_at) VALUES(?,0)')
+    .bind(workspace)
+    .run();
+  await drainLanderConnections(env);
+  expect(reads).toBe(1);
+  clock = tick + 120000;
+  await drainLanderConnections(env);
+  expect(reads).toBe(2);
+  expect(creates).toBe(0);
+  expect(routes).toHaveLength(0);
+});

@@ -344,7 +344,9 @@ export async function drainLanderConnections(env: HostedEnv) {
       await env.CONTROL_DB.prepare(
         'UPDATE lander_workspaces SET due_at=?,lease=NULL,lease_until=0 WHERE workspace_id=? AND lease=?',
       )
-        .bind(Date.now() + 120000, workspace, lease)
+        // Cron runs every two minutes. A delay measured from the end of a
+        // slice falls after the next tick and needlessly skips that scan.
+        .bind((Math.floor(Date.now() / 120000) + 1) * 120000, workspace, lease)
         .run();
     }
   }
