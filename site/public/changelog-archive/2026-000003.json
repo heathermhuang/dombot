@@ -178,6 +178,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-230",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Review rotated certificate DNS values without losing recovery progress",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #230 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #230",
+          "url": "https://github.com/heathermhuang/dombot/pull/230"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
       "date": "2026-11-11",
       "layer": "core",
