@@ -210,6 +210,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-231",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Use restoration labels for revised reviews with retained DNS work",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #231 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #231",
+          "url": "https://github.com/heathermhuang/dombot/pull/231"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
       "date": "2026-11-11",
       "layer": "core",
