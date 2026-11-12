@@ -3,15 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import App from './App';
 import Login from './pages/Login';
+import WebEntry from './pages/WebEntry';
 import { ThemeProvider } from '@/components/theme-provider';
 import { createHttpApi, setSessionActive } from './api/http';
+import { markDemo, markWeb, hostPath, webAuthMode } from './lib/platform';
 import {
-  markDemo,
-  markWeb,
-  hostPath,
-  webAuthMode,
-  type AuthMode,
-} from './lib/platform';
+  readWebAuthStatus,
+  isManagedWorkspacePath,
+} from './lib/web-auth-bootstrap';
 import './index.css';
 import './app-surfaces.css';
 
@@ -61,23 +60,38 @@ if (window.api) {
   })();
 } else {
   window.api = createHttpApi();
-  void (async () => {
-    const status = (await fetch(hostPath('/auth/status'), {
-      credentials: 'same-origin',
-    })
-      .then((r) => r.json())
-      .catch(() => ({ mode: 'password', authenticated: false }))) as {
-      mode: AuthMode;
-      authenticated: boolean;
-      sales?: boolean;
-      notifications?: boolean;
-    };
+  const managed = isManagedWorkspacePath(location.pathname);
+  if (managed) {
+    markWeb('gateway');
+    document.documentElement.classList.add('hosted-theme');
+  }
+  const bootstrap = async () => {
+    setSessionActive(false);
+    const entry = (state: 'loading' | 'unavailable' | 'sign-in') =>
+      render(
+        <WebEntry
+          state={state}
+          managed={managed}
+          onRetry={() => void bootstrap()}
+          returnTo={location.pathname + location.search + location.hash}
+        />,
+      );
+    entry('loading');
+    let status;
+    try {
+      status = await readWebAuthStatus(hostPath('/auth/status'), managed);
+    } catch {
+      entry('unavailable');
+      return;
+    }
     markWeb(status.mode, status.sales === true, status.notifications === true);
     const start = () => {
       setSessionActive(true);
       render(app);
     };
     if (status.authenticated) start();
-    else render(<Login onSuccess={start} />);
-  })();
+    else if (status.mode === 'password') render(<Login onSuccess={start} />);
+    else entry(status.mode === 'gateway' ? 'sign-in' : 'unavailable');
+  };
+  void bootstrap();
 }
