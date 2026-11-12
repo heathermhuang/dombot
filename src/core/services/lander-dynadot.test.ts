@@ -10,7 +10,10 @@ import {
   observeDnsChange,
   isLanderWebChange,
 } from './lander-dns-plan';
-import type { LanderHostingPlan } from '../../shared/lander-connection';
+import {
+  canonicalJson,
+  type LanderHostingPlan,
+} from '../../shared/lander-connection';
 const domain = 'fixture.example';
 type Row = {
   record_type: string;
@@ -28,6 +31,7 @@ let main: Row[],
   unknown: boolean;
 let corruptRemoval = false;
 let emptyDnssecReply = false;
+let omitEmptyLists = false;
 const hosts: LanderHostingPlan[] = [domain, 'www.' + domain].map(
   (hostname) => ({
     hostname,
@@ -67,8 +71,8 @@ const fetcher: typeof fetch = async (input, init) => {
       glue_info: {
         glue_type: glueType,
         ttl: String(ttl),
-        dns_main_list: main,
-        dns_sub_list: sub,
+        ...(!omitEmptyLists || main.length ? { dns_main_list: main } : {}),
+        ...(!omitEmptyLists || sub.length ? { dns_sub_list: sub } : {}),
       },
     });
   writes.push(r.clone());
@@ -90,11 +94,11 @@ const fetcher: typeof fetch = async (input, init) => {
     );
     main = main.filter(
       (x) =>
-        !b.dns_main_list?.some((y) => JSON.stringify(x) === JSON.stringify(y)),
+        !b.dns_main_list?.some((y) => canonicalJson(x) === canonicalJson(y)),
     );
     sub = sub.filter(
       (x) =>
-        !b.dns_sub_list?.some((y) => JSON.stringify(x) === JSON.stringify(y)),
+        !b.dns_sub_list?.some((y) => canonicalJson(x) === canonicalJson(y)),
     );
     if (corruptRemoval) main = [];
   }
@@ -133,6 +137,7 @@ beforeEach(async () => {
   unknown = false;
   corruptRemoval = false;
   emptyDnssecReply = false;
+  omitEmptyLists = false;
   let time = Date.now();
   vi.spyOn(Date, 'now').mockImplementation(() => (time += 100000));
 });
@@ -225,6 +230,103 @@ it('plans apex ANAME and www CNAME, proves first, preserves TTL and unrelated re
   expect(main).toHaveLength(original.main.length);
   expect(sub).toEqual(original.sub);
 });
+it('round-trips root/www routing when empty native record lists are omitted', async () => {
+  main = [{ record_type: 'aname', record_value1: 'park.example' }];
+  sub = [
+    { sub_host: 'www', record_type: 'cname', record_value1: 'park.example' },
+  ];
+  omitEmptyLists = true;
+  const original = structuredClone({ main, sub });
+  const certificateHosts = hosts.map((h) => ({
+    ...h,
+    records: [
+      ...h.records,
+      {
+        type: 'TXT' as const,
+        name: '_cf-custom-hostname.' + h.hostname,
+        value: 'provider-proof',
+      },
+      {
+        type: 'TXT' as const,
+        name: '_acme-challenge.' + h.hostname,
+        value: 'first-certificate-proof',
+      },
+      {
+        type: 'TXT' as const,
+        name: '_acme-challenge.' + h.hostname,
+        value: 'second-certificate-proof',
+      },
+    ],
+  }));
+  const p = new LanderDynadot('dynadot', fetcher);
+  const changes = planLanderDns(
+    await p.snapshot(domain),
+    certificateHosts,
+    'generation',
+  );
+  expect(changes).toHaveLength(12);
+  for (const change of changes) {
+    await p.write(await p.snapshot(domain), change);
+    const after = await p.snapshot(domain);
+    expect(observeDnsChange(after.records, change).state).toBe('after');
+    if (!main.length)
+      expect(after.settings).not.toHaveProperty('dns_main_list');
+  }
+  expect(main).toEqual([
+    { record_type: 'aname', record_value1: 'origin.example' },
+  ]);
+  expect(sub.filter((r) => r.sub_host === 'www')).toEqual([
+    { sub_host: 'www', record_type: 'cname', record_value1: 'origin.example' },
+  ]);
+  for (const change of [...changes].reverse()) {
+    const current = await p.snapshot(domain);
+    const seen = observeDnsChange(current.records, change);
+    await p.write(current, { before: seen.record, after: change.before });
+    expect(
+      observeDnsChange((await p.snapshot(domain)).records, change).state,
+    ).toBe('before');
+  }
+  expect({ main, sub }).toEqual(original);
+  expect(writes).toHaveLength(24);
+});
+it.each(['main', 'sub'])(
+  'preserves an omitted empty %s list without inventing provider fields',
+  async (empty) => {
+    if (empty === 'main') main = [];
+    else sub = [];
+    omitEmptyLists = true;
+    const snapshot = await new LanderDynadot('dynadot', fetcher).snapshot(
+      domain,
+    );
+    expect(snapshot.settings).not.toHaveProperty(
+      empty === 'main' ? 'dns_main_list' : 'dns_sub_list',
+    );
+    expect(snapshot.records).toHaveLength(main.length + sub.length);
+    expect(writes).toHaveLength(0);
+  },
+);
+it.each([null, {}, 'invalid'])(
+  'rejects a present malformed native record list: %j',
+  async (invalid) => {
+    const broken: typeof fetch = async (input, init) => {
+      const response = await fetcher(input, init);
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (
+        url.pathname.endsWith('/records') &&
+        (init?.method ?? 'GET') === 'GET'
+      ) {
+        const value = await response.json();
+        value.data.glue_info.dns_main_list = invalid;
+        return Response.json(value);
+      }
+      return response;
+    };
+    await expect(
+      new LanderDynadot('dynadot', broken).snapshot(domain),
+    ).rejects.toThrow();
+    expect(writes).toHaveLength(0);
+  },
+);
 it('does not replay a timed-out append and reconciles it with a fresh provider instance', async () => {
   const p = new LanderDynadot('dynadot', fetcher),
     s = await p.snapshot(domain),
