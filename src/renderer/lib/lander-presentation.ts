@@ -47,7 +47,7 @@ export function landerPreviewOnly(
   cursor: number,
 ) {
   if (!job) return false;
-  if (['preparing', 'awaiting-review'].includes(job.state)) return true;
+  if (['running', 'restoring'].includes(job.state)) return false;
   // Restore acts on the complete job, not just the visible results page.
   if (
     cursor !== -1 ||
