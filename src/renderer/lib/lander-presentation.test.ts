@@ -172,3 +172,23 @@ it('does not show a stale verified HTTPS badge during DNS recovery', () => {
   });
   expect(landerHostStatus('held', receipt).verified).toBe(false);
 });
+
+it('labels a revised review with retained DNS work as restoration, even when every item is ready', () => {
+  const job = {
+    state: 'awaiting-review',
+    total: 1,
+    counts: [{ state: 'ready', count: 1 }],
+    cursor: null,
+    items: [
+      {
+        ordinal: 0,
+        domain: 'fixture.example',
+        state: 'ready',
+        reason: null,
+        dnsProgress: landerDnsProgress(12, { index: 6, state: 'verified' }),
+      },
+    ],
+  };
+  expect(landerPreviewOnly(job, -1)).toBe(false);
+  expect(landerPreviewOnly({ ...job, state: 'preparing' }, -1)).toBe(false);
+});
