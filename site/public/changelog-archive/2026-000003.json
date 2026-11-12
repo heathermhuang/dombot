@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-225",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Handle omitted empty Dynadot DNS lists",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #225 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #225",
+          "url": "https://github.com/heathermhuang/dombot/pull/225"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-80218984214ed36bcc17d4ec3a66d37d39d00eb8",
       "date": "2026-11-11",
       "layer": "core",
