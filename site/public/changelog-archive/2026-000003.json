@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-08902e166620acbd5203c34579051ffef4612d8e-33",
+      "date": "2026-11-12",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix(ui): retain the full Domains.Domains wordmark",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/08902e166620acbd5203c34579051ffef4612d8e"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-231811d2249bced68f27c90aae70137406e62380-32",
       "date": "2026-11-12",
       "layer": "saas",
