@@ -8,7 +8,11 @@ import {
   canonicalJson,
 } from '../shared/lander-connection';
 import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
-import { LanderHosting, LanderPreparationPending } from './lander-hosting';
+import {
+  LanderHosting,
+  LanderPreparationPending,
+  LanderCertificatePlanChanged,
+} from './lander-hosting';
 import { salesRecipient } from './sales-notifications';
 import {
   dynadotDnsSetupScope,
@@ -310,11 +314,21 @@ export async function drainLanderConnections(env: HostedEnv) {
               work.publication.revision,
             );
         } catch (e) {
-          if (e instanceof LanderPreparationPending) continue;
-          hostingState =
-            e instanceof Error
-              ? e.message.slice(0, 300)
-              : 'Hosting is unavailable.';
+          if (e instanceof LanderCertificatePlanChanged) {
+            hosts = await service.prepare(
+              workspace,
+              work.listing,
+              work.domain,
+              work.generation,
+            );
+            hostingState = 'certificate-review';
+          } else {
+            if (e instanceof LanderPreparationPending) continue;
+            hostingState =
+              e instanceof Error
+                ? e.message.slice(0, 300)
+                : 'Hosting is unavailable.';
+          }
         }
         const step = await landerInternal(env, workspace, 'step', false, {
           job: work.job,

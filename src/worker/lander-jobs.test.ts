@@ -856,3 +856,80 @@ describe('durable exact lander manifests and recovery', () => {
     }
   });
 });
+
+it('pauses rotated certificate values for a new exact approval while retaining verified progress and full rollback', async () => {
+  const original = structuredClone(records);
+  const { id, review } = await prepared();
+  await jobs.approve(id, review.digest!);
+  await tick();
+  const before = await jobs.get(id),
+    beforeWrites = writes;
+  expect(before.items[0].dnsProgress?.verified).toBe(1);
+  const updated = hosts();
+  updated[0].records.push({
+    type: 'TXT',
+    name: `_acme-challenge.${domain}`,
+    value: 'current-provider-token',
+  });
+  await db.prepare('UPDATE lander_items SET due_at=0').run();
+  const work = (await jobs.work())!;
+  await jobs.step(work, updated, 'certificate-review');
+  const revised = await jobs.get(id);
+  expect(revised.state).toBe('awaiting-review');
+  expect(revised.digest).not.toBe(review.digest);
+  expect(revised.items[0].dnsProgress?.verified).toBe(1);
+  expect(revised.items[0].changes?.slice(0, 2)).toEqual(
+    review.items[0].changes?.slice(0, 2),
+  );
+  expect(writes).toBe(beforeWrites);
+  await expect(jobs.approve(id, review.digest!)).rejects.toThrow(/manifest/i);
+  await jobs.approve(id, revised.digest!);
+  for (let n = 0; n < 20 && (await jobs.get(id)).state !== 'finished'; n++)
+    await tick('live');
+  expect((await jobs.get(id)).items[0].state).toBe('live');
+  expect(records.some((r) => r.content === 'current-provider-token')).toBe(
+    true,
+  );
+  await jobs.restore(id);
+  for (
+    let n = 0;
+    n < 20 && (await jobs.get(id)).items[0].state !== 'restored';
+    n++
+  )
+    await tick('detached');
+  expect((await jobs.get(id)).items[0].state).toBe('restored');
+  expect(records).toEqual(original);
+});
+
+it('keeps the old recovery payload when a revised-review transaction loses its guard', async () => {
+  const original = structuredClone(records);
+  const { id } = await prepared();
+  await jobs.approve(id, (await jobs.get(id)).digest!);
+  await tick();
+  const updated = hosts();
+  updated[0].records.push({
+    type: 'TXT',
+    name: `_acme-challenge.${domain}`,
+    value: 'later-token',
+  });
+  await db.prepare('UPDATE lander_items SET due_at=0').run();
+  const work = (await jobs.work())!;
+  const guard = vi
+    .spyOn(store, 'atomic')
+    .mockRejectedValueOnce(Error('guard lost'));
+  try {
+    await jobs.step(work, updated, 'certificate-review');
+  } finally {
+    guard.mockRestore();
+  }
+  expect((await jobs.get(id)).items[0].state).toBe('held');
+  await jobs.restore(id);
+  for (
+    let n = 0;
+    n < 15 && (await jobs.get(id)).items[0].state !== 'restored';
+    n++
+  )
+    await tick('detached');
+  expect((await jobs.get(id)).items[0].state).toBe('restored');
+  expect(records).toEqual(original);
+});
