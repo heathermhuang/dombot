@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-c23940cd3351c7f4cff2cbe1221abaeb0e1db6b3",
+      "date": "2026-11-13",
+      "layer": "core",
+      "title": "Bump registrar-client to 1.3.0 and add a registrar default DNS choice",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change c23940cd3351",
+          "url": "https://github.com/aoxborrow/dombot/commit/c23940cd3351c7f4cff2cbe1221abaeb0e1db6b3"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-08902e166620acbd5203c34579051ffef4612d8e-33",
       "date": "2026-11-12",
       "layer": "saas",
