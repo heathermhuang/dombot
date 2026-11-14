@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-14",
+  "status": "deployed_and_verified",
+  "verifiedAt": "2026-11-14T13:12:52.114Z",
+  "implementationPullRequest": "https://github.com/heathermhuang/dombot/pull/234",
+  "mergeCommit": "22b1dd3d0c07b65dc6c03a3af75c2c82df849f61",
+  "releaseCommit": "65d2beff448a20ee04a622f0073c6943c4f8a45f",
+  "engine": "2.2.2-hosted.1",
+  "registrarSdk": "1.3.0-hosted.1",
+  "engineSourceSha256": "17e8ce727115781fe02d4033589ac058e8c8093b0ca3b91c72f32a362227429d",
+  "engineArchiveSha256": "f5c24236dbda80a72247e00b47b1114eaee96fe62d540b658d59acfb44277313",
+  "upstream": {
+    "app": {
+      "version": "2.2.2",
+      "revision": "c933ae929c147c97bf34e4fce2eef38d026d247c",
+      "includesAllCurrentMainAtSync": true
+    },
+    "sdk": {
+      "version": "1.3.0",
+      "revision": "b90595051df3133d26ba7eff84ddfa9ce4f0a02d"
+    }
+  },
+  "publicSourceOfferVerified": true,
+  "verification": {
+    "run": "43590216049",
+    "tests": 3434,
+    "skipped": 1,
+    "security": 4,
+    "relay": 4,
+    "allRequiredPassed": true,
+    "sdkOfflineTests": 711,
+    "packagedUiScenarios": 11,
+    "folderKeyboardOrderingPersists": true
+  },
+  "sourceRebuildEntryPoint": "Full repository at the pinned release commit; embedded SDK snapshot packaging remains a follow-up",
+  "controlledDnsFixtureQualification": "Separate and unfinished"
+}
