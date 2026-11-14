@@ -301,7 +301,7 @@ third _adapter_ over the same `services/` core the UI uses — see
     `portfolio_sync` runs the live cross-registrar pass that refreshes the
     cache, returning a per-registrar summary. An agent syncs once (or when
     `portfolio_query` reports `stale`/empty), then reads cheaply.
-  - _Folders:_ `folder_list` (with domain counts), `folder_create`, `folder_rename`, `folder_delete` (its
+  - _Folders:_ `folder_list` (with domain counts), `folder_create`, `folder_rename`, `folder_order_set`, `folder_delete` (its
     domains go back to no folder), and `domain_set_folder` (by folder name or
     id, or `null` to clear). They write the same folder store as the app, so
     an open window updates live.
@@ -324,7 +324,8 @@ third _adapter_ over the same `services/` core the UI uses — see
     distinct from `registrar_pricing`). `domain_get` and
     `domain_nameservers_get` serve from the detail cache when fresh, fetch live
     and write through otherwise, and take `refresh` to force a live fetch.
-  - _Writes (non-money):_ `domain_nameservers_set`, `domain_dns_set`,
+  - _Writes (non-money):_ `domain_nameservers_set`,
+    `domain_nameservers_reset` (back to the registrar's default), `domain_dns_set`,
     `domain_contacts_set`, `domain_email_forwarding_set`,
     `domain_url_forwarding_set`, `domain_set_autorenew`, `domain_set_lock`,
     `domain_set_privacy`. Forwarding (email alias and URL redirect) is

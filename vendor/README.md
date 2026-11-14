@@ -1,3 +1,19 @@
+# Current hosted registrar dependency, 14 November 2026
+
+The current engine pins `@aoxborrow/registrar-client@1.3.0-hosted.1`.
+The adjacent JSON pins upstream SDK 1.3.0, archive integrity and cumulative
+source/test patch hashes. To reproduce, check out that revision, apply
+`registrar-client-1.3.0-hosted.1.patch` and its `tests.patch`, set the package
+and root lock versions to `1.3.0-hosted.1`, install locked dependencies, run
+the offline suite and typecheck, then build and pack with scripts disabled.
+All 711 offline tests, typecheck and ESM/CJS/declaration builds pass.
+Retained patches cover request deadlines/retry budgets, Gandi path validation,
+Cloudflare expression escaping and provider date interpretation. Registrar
+nameserver reset is the upstream 1.3.0 implementation, with app account/scope
+checks retained. No provider mutation is used for this qualification.
+
+The sections below describe historical retained artifacts.
+
 # Namefi DNS ownership guard
 
 The current dependency is `@aoxborrow/registrar-client@1.1.0-hosted.4`.

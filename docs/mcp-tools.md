@@ -115,10 +115,13 @@ in the same store, so a change shows up in an open window right away. Folder
 names are kept unique (case-insensitive).
 
 - **`folder_list`** — every folder's `id`, `name`, `description`, `color`
-  and `domainCount`.
+  and `domainCount`, in the order the app shows them.
 - **`folder_create`** — `name`, `description?`, `color?` (one of the app's
   palette keys; default `blue`). Returns the new folder.
 - **`folder_rename`** — `folder`, `name`. Returns `{ id, name, previousName }`.
+- **`folder_order_set`** — `folders` (names or ids, first to last). Sets the
+  order folders show in everywhere; any left out keep their order after them.
+  Returns `{ folders }` in the new order.
 - **`folder_delete`** — `folder`. Its domains go back to no folder; nothing is
   deleted at a registrar. Returns `{ id, name, deleted, unassigned }`.
 - **`domain_set_folder`** — `domain`, `folder` (a name, an id, or
@@ -232,7 +235,14 @@ Writes:
 - **`domain_set_autorenew`** — `enabled`.
 - **`domain_set_lock`** — `locked`.
 - **`domain_set_privacy`** — `enabled`.
-- **`domain_nameservers_set`** — `nameservers[]`.
+- **`domain_nameservers_set`** — `nameservers[]`. Given a registrar's own
+  default hosts (Spaceship's `launch1/launch2.spaceship.net`, Namecheap's
+  `dns1/dns2.registrar-servers.com`), it switches the domain back to the
+  registrar's DNS rather than setting them as custom nameservers.
+- **`domain_nameservers_reset`** — no extra arguments. Puts the domain back on
+  its registrar's own default nameservers without naming them, and returns
+  the hosts the registrar then reports. Unsupported on GoDaddy, NameBright,
+  101domain, Cloudflare and Namefi.
 - **`domain_dns_set`** — `records[]` (`type`, `name`, `value`, `ttl?`,
   `priority?`, `weight?`, `port?`). Replaces the whole set.
 - **`domain_contacts_set`** — `contacts` (any of the four roles).

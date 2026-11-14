@@ -4,7 +4,7 @@ import { coreMethods } from '../src/core/api';
 import { registerTools } from '../src/core/mcp/tools';
 import { getRegistrarCatalog } from '../src/core/services/registrars';
 const parity = JSON.parse(
-  fs.readFileSync('docs/upstream-parity-20261110.json', 'utf8'),
+  fs.readFileSync('docs/upstream-parity-20261114.json', 'utf8'),
 );
 function tools(scopes) {
   const names = [];
@@ -61,6 +61,8 @@ describe('pinned upstream feature parity', () => {
       'market_listings_delete',
       'market_sale_auth_code_set',
       'domain_transfer_out_approve',
+      'domain_nameservers_reset',
+      'folder_order_set',
     ]) {
       expect(read).not.toContain(name);
       if (parity.mcpTools.includes(name)) expect(write).toContain(name);

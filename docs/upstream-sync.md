@@ -111,3 +111,13 @@ records are not rewritten by this source change.
 SDK qualification: 695 offline tests, typecheck and ESM/CJS/declarations pass.
 App, installed engine/UI, security and managed release evidence are recorded
 separately. No registrar purchase, DNS or auto-renew write is used for qualification.
+
+## v2.2.2 and current upstream main, 14 November 2026
+
+The complete upstream main `c933ae929c147c97bf34e4fce2eef38d026d247c`
+is merged into the source candidate, including v2.2.2 and subsequent commits.
+Engine `2.2.2-hosted.1` uses SDK `1.3.0-hosted.1` with cumulative hosted safety
+patches. Folder ordering and default nameserver resets are covered by existing
+hosted OAuth scopes and exact-account restrictions. The upstream optional review
+integration remains restricted to upstream. See [source qualification](upstream-sync-20261114.md).
+Source merge, CI and managed deployment are recorded separately.

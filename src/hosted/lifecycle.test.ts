@@ -119,6 +119,38 @@ describe('agent access and zero spend budget', () => {
         ),
       ).toContain('zero');
   });
+  it('keeps new upstream writes within the selected workspace and registrar account', () => {
+    const policy = JSON.stringify({
+      one: {
+        allowedTools: ['folder_order_set', 'domain_nameservers_reset'],
+        accountIds: ['account-a'],
+      },
+    });
+    expect(
+      mcpPolicyDenial(
+        call('folder_order_set', { folders: ['f1'] }),
+        'one',
+        policy,
+      ),
+    ).toBe(null);
+    expect(
+      mcpPolicyDenial(
+        call('domain_nameservers_reset', { accountId: 'account-a' }),
+        'one',
+        policy,
+      ),
+    ).toBe(null);
+    expect(
+      mcpPolicyDenial(
+        call('domain_nameservers_reset', { accountId: 'account-b' }),
+        'one',
+        policy,
+      ),
+    ).toContain('permitted');
+    expect(
+      mcpPolicyDenial(call('domain_nameservers_reset'), 'one', policy),
+    ).toContain('permitted');
+  });
   it('restricts explicit tools and account IDs without permitting portfolio-wide aggregation', () => {
     const policy = JSON.stringify({
       one: {
