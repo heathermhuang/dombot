@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-c933ae929c147c97bf34e4fce2eef38d026d247c",
+      "date": "2026-11-14",
+      "layer": "core",
+      "title": "SellerHub doc: For Sale page and lease-to-own via Spaceship's MCP",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change c933ae929c14",
+          "url": "https://github.com/aoxborrow/dombot/commit/c933ae929c147c97bf34e4fce2eef38d026d247c"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-c23940cd3351c7f4cff2cbe1221abaeb0e1db6b3",
       "date": "2026-11-13",
       "layer": "core",
