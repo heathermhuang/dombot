@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-234",
+      "date": "2026-11-14",
+      "layer": "saas",
+      "title": "Sync complete upstream main and SDK 1.3.0 into Domains.Domains",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #234 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #234",
+          "url": "https://github.com/heathermhuang/dombot/pull/234"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-c23940cd3351c7f4cff2cbe1221abaeb0e1db6b3",
       "date": "2026-11-13",
       "layer": "core",
