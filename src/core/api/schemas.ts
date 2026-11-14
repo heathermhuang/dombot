@@ -47,6 +47,7 @@ export const domainOp = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('nameservers'),
     nameservers: z.array(hostLabel).max(13),
+    registrarDefault: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal('urlForwarding'),
@@ -83,7 +84,6 @@ export const folderPatch = z
     name: z.string().trim().min(1).max(100),
     description: z.string().max(500),
     color: folderColor,
-    settings: z.object({ forSale: z.boolean().optional() }).strict(),
   })
   .partial()
   .strict();

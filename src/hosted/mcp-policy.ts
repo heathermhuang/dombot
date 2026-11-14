@@ -52,6 +52,7 @@ export function mcpPolicyDenial(
       'folder_list',
       'folder_create',
       'folder_rename',
+      'folder_order_set',
       'folder_delete',
     ].includes(name)
   ) {
@@ -72,6 +73,7 @@ export function mcpPolicyDenial(
       'registrar_check_availability',
       'domain_dns_set',
       'domain_nameservers_set',
+      'domain_nameservers_reset',
       'domain_contacts_set',
       'domain_set_privacy',
       'domain_set_autorenew',

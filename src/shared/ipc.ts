@@ -224,6 +224,7 @@ export const IpcChannels = {
   getFolders: 'folders:list',
   createFolder: 'folders:create',
   updateFolder: 'folders:update',
+  reorderFolders: 'folders:reorder',
   deleteFolder: 'folders:delete',
   assignFolder: 'folders:assign',
   getSettings: 'settings:get',
@@ -788,7 +789,14 @@ export type DomainOp =
   | { kind: 'autoRenew'; enabled: boolean }
   | { kind: 'privacy'; enabled: boolean }
   | { kind: 'lock'; locked: boolean }
-  | { kind: 'nameservers'; nameservers: string[] }
+  | {
+      kind: 'nameservers';
+      /** The full set to write; empty with `registrarDefault`. */
+      nameservers: string[];
+      /** Put the domain back on its registrar's own default nameservers
+       *  (registrar-client `resetNameservers`), whatever their hosts are. */
+      registrarDefault?: boolean;
+    }
   | {
       kind: 'urlForwarding';
       forwards: UrlForwardInput[];
@@ -989,17 +997,6 @@ export const FOLDER_COLORS: FolderColor[] = [
   'pink',
 ];
 
-/**
- * Future per-folder configuration that cascades to the folder's domains. Kept
- * as an optional bag so new keys are purely additive; empty/absent today. The
- * motivating case is `forSale` — not yet acted on anywhere.
- */
-export interface FolderSettings {
-  /** Marks the folder's domains as listed for inquiries. Groundwork only. */
-  forSale?: boolean;
-  // future: autoRenew?: boolean; nameserverProfile?: string; ...
-}
-
 /** A user-defined folder for organizing domains (name, description, color). */
 export interface Folder {
   /** Stable id (crypto.randomUUID() in main). */
@@ -1008,8 +1005,6 @@ export interface Folder {
   /** Short, may be empty. */
   description: string;
   color: FolderColor;
-  /** Per-folder config; absent until a feature uses it. */
-  settings?: FolderSettings;
 }
 
 /** Fields a caller supplies when creating a folder (id is assigned in main). */
@@ -1021,7 +1016,7 @@ export interface FolderInput {
 
 /** A patch to an existing folder — any subset of its editable fields. */
 export type FolderPatch = Partial<
-  Pick<Folder, 'name' | 'description' | 'color' | 'settings'>
+  Pick<Folder, 'name' | 'description' | 'color'>
 >;
 
 /**
@@ -1246,6 +1241,8 @@ export interface DombotApi {
   createFolder: (input: FolderInput) => Promise<Folder>;
   /** Patch a folder's editable fields. */
   updateFolder: (id: string, patch: FolderPatch) => Promise<void>;
+  /** Put the folders in this order (folder ids), the order every list shows. */
+  reorderFolders: (ids: string[]) => Promise<void>;
   /** Delete a folder and drop every assignment pointing at it. */
   deleteFolder: (id: string) => Promise<void>;
   /** Assign a domain to a folder, or unassign it with a null folderId. */

@@ -209,6 +209,16 @@ try {
   );
   assert.equal(await clear().count(), 0, 'Registrar filter clears selection.');
   await page
+    .getByRole('button', { name: 'Clear Registrar filter', exact: true })
+    .click();
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Registrar: any', exact: true })
+      .count(),
+    1,
+    'Clearing a set filter preserves its empty chip.',
+  );
+  await page
     .getByRole('button', { name: 'Remove Registrar filter', exact: true })
     .click();
   await search.fill('fixture-003');

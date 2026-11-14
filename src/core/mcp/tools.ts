@@ -71,6 +71,7 @@ import {
   createFolder,
   deleteFolder,
   getFolders,
+  reorderFolders,
   updateFolder,
 } from '../services/folders';
 import { broadcastPortfolioChanged } from '../events';
@@ -157,6 +158,9 @@ async function domainOp(
     success: r.status === 'ok',
     status: r.status,
     message: r.message,
+    ...(op.kind === 'nameservers' && op.registrarDefault && r.patch?.nameservers
+      ? { nameservers: r.patch.nameservers }
+      : {}),
   });
 }
 
@@ -890,7 +894,7 @@ export function registerTools(
       {
         title: 'List folders',
         description:
-          'List your folders — Domains.Domains’s own groupings of domains, as in Settings → Folders — with each one’s id, name, description, color, and how many domains it holds. Use a folder’s name or id with folder_rename, folder_delete, domain_set_folder, and portfolio_query’s `folder` filter.',
+          'List your folders — Domains.Domains’s own groupings of domains, as in Settings → Folders — in the order the app shows them, with each one’s id, name, description, color, and how many domains it holds. Use a folder’s name or id with folder_rename, folder_delete, domain_set_folder, and portfolio_query’s `folder` filter.',
         inputSchema: {},
         annotations: { readOnlyHint: true },
       },
@@ -962,6 +966,33 @@ export function registerTools(
         assertFolderNameFree(name, target.id);
         updateFolder(target.id, { name });
         return localWrite({ id: target.id, name, previousName: target.name });
+      },
+    );
+
+  if (allow('folder_order_set'))
+    server.registerTool(
+      'folder_order_set',
+      {
+        title: 'Reorder folders',
+        description:
+          'Set the order folders show in, everywhere the app lists them (Settings → Folders, the Folder filter and menus, folder_list). Pass folders by name or id in the order you want; any you leave out keep their order after them. Returns the new order.',
+        inputSchema: {
+          folders: z
+            .array(folderParam)
+            .min(1)
+            .describe('Folders in the order you want them, first to last.'),
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true },
+      },
+      async ({ folders }) => {
+        const ids = folders.map((f) => resolveFolder(f).id);
+        reorderFolders([...new Set(ids)]);
+        return localWrite({
+          folders: getFolders().folders.map((f) => ({
+            id: f.id,
+            name: f.name,
+          })),
+        });
       },
     );
 
@@ -1948,6 +1979,32 @@ export function registerTools(
           r,
           domain,
           { kind: 'nameservers', nameservers },
+          account.id,
+        );
+      },
+    );
+
+  if (allow('domain_nameservers_reset'))
+    server.registerTool(
+      'domain_nameservers_reset',
+      {
+        title: 'Reset nameservers to the registrar’s default',
+        description:
+          'For a single domain: put it back on its registrar’s own default nameservers, so the registrar hosts its DNS again (Spaceship Basic DNS, Namecheap BasicDNS, Gandi LiveDNS, and so on). Use this rather than domain_nameservers_set when you don’t know the default hosts. Unsupported where the registrar’s API can’t do it (GoDaddy, NameBright, 101domain, Cloudflare, Namefi). Returns the hosts the registrar reports afterwards when it reports them.',
+        inputSchema: { accountId, registrar: optionalRegistrar, domain },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+        },
+      },
+      async ({ accountId, registrar, domain }) => {
+        const r = resolveRegistrar(domain, registrar, accountId);
+        const account = resolveDomainAccount(r, domain, accountId);
+        return domainOp(
+          r,
+          domain,
+          { kind: 'nameservers', nameservers: [], registrarDefault: true },
           account.id,
         );
       },
