@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-65d2beff448a20ee04a622f0073c6943c4f8a45f-40",
+      "date": "2026-11-14",
+      "layer": "saas",
+      "title": "Hosted service update observed: Merge upstream main through c933ae92 with hosted SDK 1.3.0 safeguards",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/65d2beff448a20ee04a622f0073c6943c4f8a45f"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-234",
       "date": "2026-11-14",
       "layer": "saas",
