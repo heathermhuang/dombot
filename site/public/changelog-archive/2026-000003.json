@@ -82,6 +82,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-239",
+      "date": "2026-11-15",
+      "layer": "saas",
+      "title": "fix: honor DNS continuation delay within lander slices",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #239 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #239",
+          "url": "https://github.com/heathermhuang/dombot/pull/239"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-c933ae929c147c97bf34e4fce2eef38d026d247c",
       "date": "2026-11-14",
       "layer": "core",
