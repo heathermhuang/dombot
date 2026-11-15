@@ -339,6 +339,9 @@ export async function drainLanderConnections(env: HostedEnv) {
         });
         if (!step.ok) throw Error('Connection step unavailable');
         await step.body?.cancel();
+        // Tenant DNS steps become due after one second. Honor that delay before
+        // requesting the next item in this same bounded four-step slice.
+        if (n < 3) await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     } finally {
       await env.CONTROL_DB.prepare(

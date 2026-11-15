@@ -936,3 +936,45 @@ it('keeps a slow work slice eligible at the next scheduled two-minute tick', asy
   expect(creates).toBe(0);
   expect(routes).toHaveLength(0);
 });
+
+it('advances the one-second DNS continuation within the existing four-step slice', async () => {
+  const env = environment();
+  let due = 0,
+    reads = 0,
+    steps = 0;
+  env.WORKSPACE_0 = {
+    fetch: async (request: Request) => {
+      if (request.url.endsWith('/work')) {
+        reads++;
+        return Response.json({
+          work:
+            Date.now() < due
+              ? null
+              : {
+                  job: generation,
+                  ordinal: 0,
+                  generation,
+                  domain,
+                  listing,
+                  state: 'dns',
+                  hosts: null,
+                  publication: null,
+                },
+        });
+      }
+      expect(request.url.endsWith('/step')).toBe(true);
+      steps++;
+      due = Date.now() + 1000;
+      return Response.json({ ok: true });
+    },
+  } as Fetcher;
+  await db
+    .prepare('INSERT INTO lander_workspaces(workspace_id,due_at) VALUES(?,0)')
+    .bind(workspace)
+    .run();
+  await drainLanderConnections(env);
+  expect(steps).toBe(4);
+  expect(reads).toBe(4);
+  expect(creates).toBe(0);
+  expect(routes).toHaveLength(0);
+}, 15000);
