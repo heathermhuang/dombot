@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-236",
+      "date": "2026-11-15",
+      "layer": "saas",
+      "title": "Fix the active SDK in standalone engine source packages",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #236 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #236",
+          "url": "https://github.com/heathermhuang/dombot/pull/236"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-c933ae929c147c97bf34e4fce2eef38d026d247c",
       "date": "2026-11-14",
       "layer": "core",
