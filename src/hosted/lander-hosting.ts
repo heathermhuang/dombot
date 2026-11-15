@@ -6,7 +6,10 @@ import { type LanderHostingPlan } from '../shared/lander-connection';
 import { claimHostname, rememberHostnameProvider } from './hostname-claims';
 import { workspaceSchema } from './workspaces';
 import { salesHostingProvider } from './sales-hosting-provider';
-import { dynadotDnsSetupScope } from '../shared/dynadot-dns-setup';
+import {
+  dynadotDnsSetupScope,
+  dynadotDnsSetupScopeSchema,
+} from '../shared/dynadot-dns-setup';
 
 interface ConnectionHost extends HostBinding {
   connection_key: string | null;
@@ -39,6 +42,11 @@ const providerSchema = z
     custom_metadata: z.record(z.string(), z.string()).optional(),
   })
   .passthrough();
+class HostingProviderReplyError extends Error {
+  constructor(readonly providerStatus: number) {
+    super('The hosting provider reply is unavailable or invalid.');
+  }
+}
 export class LanderPreparationPending extends Error {}
 export class LanderCertificatePlanChanged extends Error {}
 
@@ -125,7 +133,7 @@ export class LanderHosting {
       ['GET', 'DELETE'].includes(method)
     ) {
       await r.body?.cancel();
-      return { result: null, result_info: undefined };
+      return { result: null, result_info: undefined, responseStatus: r.status };
     }
     const reader = r.body?.getReader(),
       decoder = new TextDecoder();
@@ -146,15 +154,134 @@ export class LanderHosting {
         await reader.cancel().catch(() => {});
         throw error;
       }
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(text);
+    } catch {
+      throw new HostingProviderReplyError(r.status);
+    }
+    if (
+      method === 'GET' &&
+      r.ok &&
+      decoded === null &&
+      /^\/custom_hostnames\/[a-f0-9-]+$/.test(path)
+    )
+      return { result: null, result_info: undefined, responseStatus: r.status };
     const value = z
       .object({
         success: z.literal(true),
         result: z.unknown(),
         result_info: z.object({ total_count: z.number() }).optional(),
       })
-      .parse(JSON.parse(text));
-    if (!r.ok) throw Error('Hosting provider unavailable.');
-    return value;
+      .safeParse(decoded);
+    if (!r.ok || !value.success) throw new HostingProviderReplyError(r.status);
+    return { ...value.data, responseStatus: r.status };
+  }
+  /** Fixed current-fixture inspection only; no credentials, IDs, proofs or mutations. */
+  async inspectQualification() {
+    let value: unknown;
+    try {
+      value = JSON.parse(this.env.DYNDNS_SETUP_FIXTURE ?? 'null');
+    } catch {
+      return { enabled: false };
+    }
+    const parsed = dynadotDnsSetupScopeSchema.safeParse(value);
+    if (!parsed.success) return { enabled: false };
+    const fixture = dynadotDnsSetupScope(
+      this.env.DYNDNS_SETUP_FIXTURE,
+      parsed.data.workspace,
+    );
+    if (
+      !fixture?.qualifyConnection ||
+      Number(this.env.LANDER_QUALIFIED_HOST_CAP) !== 2
+    )
+      return { enabled: false };
+    this.qualified(fixture.workspace, fixture.domain);
+    const rows = await this.env.CONTROL_DB.prepare(
+      'SELECT * FROM sales_hostnames WHERE workspace_id=? AND domain=? AND hostname IN (?,?) ORDER BY hostname',
+    )
+      .bind(
+        fixture.workspace,
+        fixture.domain,
+        fixture.domain,
+        `www.${fixture.domain}`,
+      )
+      .all<ConnectionHost>();
+    const slots = [];
+    for (const row of rows.results) {
+      if (!row.provider_id) {
+        slots.push({
+          slot: row.hostname === fixture.domain ? 'root' : 'www',
+          recorded: false,
+        });
+        continue;
+      }
+      const read = async (path: string) => {
+        try {
+          return { ok: true as const, ...(await this.zoneCall(path)) };
+        } catch (error) {
+          return {
+            ok: false as const,
+            responseStatus:
+              error instanceof HostingProviderReplyError
+                ? error.providerStatus
+                : null,
+          };
+        }
+      };
+      const byId = await read(`/custom_hostnames/${row.provider_id}`);
+      const list = await read(
+        `/custom_hostnames?hostname=${encodeURIComponent(row.hostname)}&per_page=100`,
+      );
+      const one = providerSchema.safeParse(byId.ok ? byId.result : null),
+        many = z
+          .array(providerSchema)
+          .max(100)
+          .safeParse(list.ok ? list.result : null);
+      const exact = many.success
+        ? many.data.filter(
+            (p) => p.id === row.provider_id && p.hostname === row.hostname,
+          )
+        : [];
+      let planValid = false;
+      try {
+        const plan = JSON.parse(row.plan);
+        planValid = typeof plan?.proof?.value === 'string';
+      } catch {
+        /* No private plan data is exposed. */
+      }
+      slots.push({
+        slot: row.hostname === fixture.domain ? 'root' : 'www',
+        recorded: true,
+        planValidated: planValid,
+        byIdRead: byId.ok,
+        byIdStatus: byId.responseStatus,
+        byIdObject: one.success,
+        byIdMatches:
+          one.success &&
+          one.data.id === row.provider_id &&
+          one.data.hostname === row.hostname,
+        listRead: list.ok,
+        listStatus: list.responseStatus,
+        listValidated: many.success,
+        listedCount: many.success ? many.data.length : null,
+        hostnameMatches: many.success
+          ? many.data.filter((p) => p.hostname === row.hostname).length
+          : null,
+        caseInsensitiveIdMatches: many.success
+          ? many.data.filter(
+              (p) =>
+                p.id.toLowerCase() === row.provider_id!.toLowerCase() &&
+                p.hostname === row.hostname,
+            ).length
+          : null,
+        exactListedIds: exact.length,
+        listedProviderStatus: exact[0]?.status.slice(0, 80) ?? null,
+        listedTlsStatus: exact[0]?.ssl.status.slice(0, 80) ?? null,
+        certificateRecords: exact[0]?.ssl.validation_records?.length ?? null,
+      });
+    }
+    return { enabled: true, slots };
   }
   async preparationProvider(
     row: ConnectionHost,
@@ -163,6 +290,26 @@ export class LanderHosting {
   ) {
     const value = (await this.zoneCall(`/custom_hostnames/${id}`)).result;
     if (value === null) {
+      const listed = z
+        .array(providerSchema)
+        .max(100)
+        .safeParse(
+          (
+            await this.zoneCall(
+              `/custom_hostnames?hostname=${encodeURIComponent(row.hostname)}&per_page=100`,
+            )
+          ).result,
+        );
+      if (!listed.success)
+        throw Error('The retained hostname listing could not be validated.');
+      const exact = listed.data.filter(
+        (p) => p.id === id && p.hostname === row.hostname,
+      );
+      if (exact.length === 1) return exact[0];
+      if (exact.length > 1)
+        throw Error(
+          'The retained hostname listing is ambiguous and needs reconciliation.',
+        );
       // An accepted create can precede visibility on a provider read replica.
       // Retain its exact ID and poll reads only; never replay the creation.
       const age = Date.now() - row.updated_at;

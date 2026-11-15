@@ -527,6 +527,17 @@ it.each([404, 200])(
         return missingStatus === 404
           ? new Response('not visible yet', { status: 404 })
           : Response.json({ success: true, result: null });
+      if (
+        hidden &&
+        (init?.method ?? 'GET') === 'GET' &&
+        u.pathname.endsWith('/custom_hostnames') &&
+        u.searchParams.get('hostname') === `www.${domain}`
+      )
+        return Response.json({
+          success: true,
+          result: [],
+          result_info: { total_count: 0 },
+        });
       const response = await fetcher(input, init);
       if (
         hidden &&
@@ -563,6 +574,130 @@ it.each([404, 200])(
     expect(routes).toHaveLength(2);
   },
 );
+
+it.each([404, 200, 'null-envelope'])(
+  'reconciles a retained prepared provider only by its exact id and hostname (%s)',
+  async (status) => {
+    const port = new LanderHosting(environment(), fetcher);
+    await port.prepare(workspace, listing, domain, generation);
+    const readThroughList: typeof fetch = async (input, init) => {
+      const u = new URL(String(input));
+      if (
+        (init?.method ?? 'GET') === 'GET' &&
+        u.pathname.includes('/custom_hostnames/')
+      )
+        return status === 404
+          ? new Response('not visible by id', { status: 404 })
+          : Response.json(
+              status === 'null-envelope'
+                ? null
+                : { success: true, result: null },
+            );
+      return fetcher(input, init);
+    };
+    const plans = await new LanderHosting(
+      environment(),
+      readThroughList,
+    ).prepare(workspace, listing, domain, generation);
+    expect(plans).toHaveLength(2);
+    expect(creates).toBe(2);
+    expect(routes).toHaveLength(2);
+  },
+);
+
+it('keeps operator inspection disabled outside the finite qualified fixture', async () => {
+  const transport = vi.fn(fetcher);
+  expect(
+    await new LanderHosting(environment(), transport).inspectQualification(),
+  ).toEqual({ enabled: false });
+  expect(transport).not.toHaveBeenCalled();
+});
+
+it('returns only scoped status and identity-match counts from fixture inspection', async () => {
+  const env = environment();
+  env.LANDER_QUALIFIED_HOST_CAP = '2';
+  env.DYNDNS_SETUP_FIXTURE = JSON.stringify({
+    workspace,
+    domain,
+    accountId: 'dynadot',
+    requestId: generation,
+    expiresAt: Date.now() + 3600000,
+    qualifyConnection: true,
+  });
+  const port = new LanderHosting(env, fetcher);
+  await port.prepare(workspace, listing, domain, generation);
+  const inspect: typeof fetch = async (input, init) =>
+    new URL(String(input)).pathname.includes('/custom_hostnames/')
+      ? new Response('missing', { status: 404 })
+      : fetcher(input, init);
+  const result = await new LanderHosting(env, inspect).inspectQualification();
+  expect(result.enabled).toBe(true);
+  expect(result.slots).toHaveLength(2);
+  expect(
+    result.slots?.every((s) => 'exactListedIds' in s && s.exactListedIds === 1),
+  ).toBe(true);
+  const text = JSON.stringify(result);
+  expect(text).not.toContain(domain);
+  expect(text).not.toContain('fixture-only');
+  expect(text).not.toContain('fixture-owner');
+  for (const id of providers.keys()) expect(text).not.toContain(id);
+  expect(creates).toBe(2);
+  expect(routes).toHaveLength(2);
+});
+
+it('reports an unavailable by-id provider read without exposing its body or blocking scoped listing diagnostics', async () => {
+  const env = environment();
+  env.LANDER_QUALIFIED_HOST_CAP = '2';
+  env.DYNDNS_SETUP_FIXTURE = JSON.stringify({
+    workspace,
+    domain,
+    accountId: 'dynadot',
+    requestId: generation,
+    expiresAt: Date.now() + 3600000,
+    qualifyConnection: true,
+  });
+  await new LanderHosting(env, fetcher).prepare(
+    workspace,
+    listing,
+    domain,
+    generation,
+  );
+  const failure: typeof fetch = async (input, init) =>
+    new URL(String(input)).pathname.includes('/custom_hostnames/')
+      ? new Response('private-provider-body', { status: 503 })
+      : fetcher(input, init);
+  const result = await new LanderHosting(env, failure).inspectQualification();
+  expect(
+    result.slots?.every(
+      (s) =>
+        'byIdStatus' in s &&
+        s.byIdStatus === 503 &&
+        'exactListedIds' in s &&
+        s.exactListedIds === 1,
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(result)).not.toContain('private-provider-body');
+  expect(creates).toBe(2);
+  expect(routes).toHaveLength(2);
+});
+
+it('does not substitute another provider id for a retained missing hostname', async () => {
+  const port = new LanderHosting(environment(), fetcher);
+  await port.prepare(workspace, listing, domain, generation);
+  const row = await db
+    .prepare('SELECT provider_id FROM sales_hostnames WHERE hostname=?')
+    .bind(domain)
+    .first<{ provider_id: string }>();
+  const old = providers.get(row!.provider_id)!;
+  providers.delete(row!.provider_id);
+  const otherId = crypto.randomUUID();
+  providers.set(otherId, { ...old, id: otherId });
+  await expect(
+    port.prepare(workspace, listing, domain, generation),
+  ).rejects.toThrow(/reconcil/i);
+  expect(creates).toBe(2);
+  expect(routes).toHaveLength(2);
+});
 
 it('bounds missing retained-provider reads and never recreates the missing resource', async () => {
   const port = new LanderHosting(environment(), fetcher);
