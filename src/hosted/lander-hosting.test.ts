@@ -512,6 +512,105 @@ it('retains its created hostname while delayed certificate TXT instructions are 
   ).toBe(true);
   expect(creates).toBe(2);
 });
+it.each([404, 200])(
+  'retains a newly created www provider identity while its first reads are not visible (%i)',
+  async (missingStatus) => {
+    let hidden = true;
+    const delayed: typeof fetch = async (input, init) => {
+      const u = new URL(String(input));
+      const provider = providers.get(u.pathname.split('/').at(-1)!);
+      if (
+        hidden &&
+        (init?.method ?? 'GET') === 'GET' &&
+        provider?.hostname === `www.${domain}`
+      )
+        return missingStatus === 404
+          ? new Response('not visible yet', { status: 404 })
+          : Response.json({ success: true, result: null });
+      const response = await fetcher(input, init);
+      if (
+        hidden &&
+        init?.method === 'POST' &&
+        u.pathname.endsWith('/custom_hostnames')
+      ) {
+        const value = (await response.json()) as {
+          result: Record<string, unknown>;
+        };
+        if (value.result.hostname === `www.${domain}`)
+          value.result = { ...value.result, ssl: { status: 'initializing' } };
+        return Response.json(value);
+      }
+      return response;
+    };
+    const port = new LanderHosting(environment(), delayed);
+    await expect(
+      port.prepare(workspace, listing, domain, generation),
+    ).rejects.toBeInstanceOf(LanderPreparationPending);
+    expect(creates).toBe(2);
+    expect(routes).toHaveLength(1);
+    const retained = await db
+      .prepare(
+        'SELECT provider_id,connection_intent FROM sales_hostnames WHERE hostname=?',
+      )
+      .bind(`www.${domain}`)
+      .first<{ provider_id: string; connection_intent: string }>();
+    expect(retained?.provider_id).toBeTruthy();
+    expect(retained?.connection_intent).toBe('create-hostname');
+    hidden = false;
+    const plans = await port.prepare(workspace, listing, domain, generation);
+    expect(plans).toHaveLength(2);
+    expect(creates).toBe(2);
+    expect(routes).toHaveLength(2);
+  },
+);
+
+it('bounds missing retained-provider reads and never recreates the missing resource', async () => {
+  const port = new LanderHosting(environment(), fetcher);
+  await port.prepare(workspace, listing, domain, generation);
+  const row = await db
+    .prepare('SELECT provider_id FROM sales_hostnames WHERE hostname=?')
+    .bind(`www.${domain}`)
+    .first<{ provider_id: string }>();
+  providers.delete(row!.provider_id);
+  await db
+    .prepare(
+      "UPDATE sales_hostnames SET connection_route_id=NULL,connection_intent='create-hostname',updated_at=? WHERE hostname=?",
+    )
+    .bind(Date.now() - 600001, `www.${domain}`)
+    .run();
+  let error: unknown;
+  try {
+    await port.prepare(workspace, listing, domain, generation);
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeInstanceOf(Error);
+  expect(error).not.toBeInstanceOf(LanderPreparationPending);
+  expect((error as Error).message).toMatch(/reconcil/i);
+  expect(creates).toBe(2);
+});
+
+it('holds a prepared provider resource that disappears without recreating or waiting as a new create', async () => {
+  const port = new LanderHosting(environment(), fetcher);
+  await port.prepare(workspace, listing, domain, generation);
+  const row = await db
+    .prepare('SELECT provider_id FROM sales_hostnames WHERE hostname=?')
+    .bind(domain)
+    .first<{ provider_id: string }>();
+  providers.delete(row!.provider_id);
+  let error: unknown;
+  try {
+    await port.prepare(workspace, listing, domain, generation);
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeInstanceOf(Error);
+  expect(error).not.toBeInstanceOf(LanderPreparationPending);
+  expect((error as Error).message).toMatch(/reconcil/i);
+  expect(creates).toBe(2);
+  expect(routes).toHaveLength(2);
+});
+
 it('leaves preparation pending instead of stepping an incomplete certificate plan', async () => {
   const env = environment();
   let reads = 0,

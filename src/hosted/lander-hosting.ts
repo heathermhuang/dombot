@@ -156,6 +156,37 @@ export class LanderHosting {
     if (!r.ok) throw Error('Hosting provider unavailable.');
     return value;
   }
+  async preparationProvider(
+    row: ConnectionHost,
+    id: string,
+    justCreated = false,
+  ) {
+    const value = (await this.zoneCall(`/custom_hostnames/${id}`)).result;
+    if (value === null) {
+      // An accepted create can precede visibility on a provider read replica.
+      // Retain its exact ID and poll reads only; never replay the creation.
+      const age = Date.now() - row.updated_at;
+      if (
+        row.status === 'pending-proof' &&
+        !row.connection_route_id &&
+        (justCreated || row.connection_intent === 'create-hostname') &&
+        age >= 0 &&
+        age <= 600000
+      )
+        throw new LanderPreparationPending(
+          'The created hostname is still becoming visible.',
+        );
+      throw Error(
+        'The retained provider hostname is unavailable and needs reconciliation.',
+      );
+    }
+    const parsed = providerSchema.safeParse(value);
+    if (!parsed.success)
+      throw Error(
+        'The provider returned an invalid retained hostname response.',
+      );
+    return parsed.data;
+  }
   async prepare(
     workspace: string,
     listing: string,
@@ -205,11 +236,10 @@ export class LanderHosting {
         workspace,
         claim,
       );
-      let provider: z.infer<typeof providerSchema>;
+      let provider: z.infer<typeof providerSchema>,
+        justCreated = false;
       if (row.provider_id)
-        provider = providerSchema.parse(
-          (await this.zoneCall(`/custom_hostnames/${row.provider_id}`)).result,
-        );
+        provider = await this.preparationProvider(row, row.provider_id);
       else {
         const candidates = z
           .array(providerSchema)
@@ -276,6 +306,7 @@ export class LanderHosting {
               })
             ).result,
           );
+          justCreated = true;
         }
       }
       if (
@@ -300,8 +331,10 @@ export class LanderHosting {
           (r) => !!r.txt_name && !!r.txt_value,
         );
       if (provider.ssl.status !== 'active' && !hasCertificateProof()) {
-        provider = providerSchema.parse(
-          (await this.zoneCall('/custom_hostnames/' + provider.id)).result,
+        provider = await this.preparationProvider(
+          row,
+          provider.id,
+          justCreated,
         );
         if (
           provider.hostname !== hostname ||
