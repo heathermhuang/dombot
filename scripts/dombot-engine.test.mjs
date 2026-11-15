@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
@@ -103,4 +104,31 @@ it('brands the managed HTML title without changing standalone or desktop titles'
   expect(await fs.readFile('index.html', 'utf8')).toContain(
     '<title>DomBot</title>',
   );
+});
+
+it('embeds the active SDK archive and its matching provenance for standalone source rebuilds', async () => {
+  const snapshot = path.join(
+    root,
+    'node_modules/@domains-domains/dombot-engine/source',
+  );
+  const pkg = JSON.parse(
+    await fs.readFile(path.join(snapshot, 'package.json'), 'utf8'),
+  );
+  const sdk = pkg.dependencies['@aoxborrow/registrar-client'];
+  expect(sdk).toMatch(/^file:vendor\//);
+  const archive = sdk.slice(5);
+  const archiveBytes = await fs.readFile(path.join(snapshot, archive));
+  const metadataPath = archive
+    .replace('aoxborrow-registrar-client-', 'registrar-client-')
+    .replace(/\.tgz$/, '.json');
+  const metadata = JSON.parse(
+    await fs.readFile(path.join(snapshot, metadataPath), 'utf8'),
+  );
+  const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  expect(metadata.archive).toBe(archive);
+  expect(sha(archiveBytes)).toBe(metadata.sha256);
+  for (const patch of metadata.patches)
+    expect(sha(await fs.readFile(path.join(snapshot, patch.path)))).toBe(
+      patch.sha256,
+    );
 });

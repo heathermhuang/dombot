@@ -8,12 +8,41 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const root = process.cwd();
 const name = '@domains-domains/dombot-engine';
-const version = '2.2.2-hosted.1';
+const version = '2.2.2-hosted.2';
 const upstream = {
   repository: 'https://github.com/aoxborrow/dombot',
   revision: 'c933ae929c147c97bf34e4fce2eef38d026d247c',
   version: '2.2.2',
 };
+const rootPackage = JSON.parse(await fs.readFile('package.json', 'utf8'));
+const sha = (value) => createHash('sha256').update(value).digest('hex');
+const sdkDependency = rootPackage.dependencies['@aoxborrow/registrar-client'];
+if (
+  typeof sdkDependency !== 'string' ||
+  !/^file:vendor\/aoxborrow-registrar-client-[A-Za-z0-9.+-]+\.tgz$/.test(
+    sdkDependency,
+  )
+)
+  throw Error(
+    'The hosted engine requires a pinned local registrar SDK archive.',
+  );
+const sdkArchive = sdkDependency.slice(5);
+const sdkMetadataPath = sdkArchive
+  .replace('aoxborrow-registrar-client-', 'registrar-client-')
+  .replace(/\.tgz$/, '.json');
+const sdkMetadata = JSON.parse(await fs.readFile(sdkMetadataPath, 'utf8'));
+if (
+  sdkMetadata.archive !== sdkArchive ||
+  sha(await fs.readFile(sdkArchive)) !== sdkMetadata.sha256
+)
+  throw Error('Registrar SDK archive does not match its provenance.');
+for (const patch of sdkMetadata.patches) {
+  if (
+    !/^vendor\/[A-Za-z0-9._-]+$/.test(patch.path) ||
+    sha(await fs.readFile(patch.path)) !== patch.sha256
+  )
+    throw Error('Registrar SDK source patch does not match its provenance.');
+}
 const sourceRoots = [
   'src/core',
   'src/shared',
@@ -28,10 +57,9 @@ const sourceFiles = [
   'index.html',
   'vite.web.config.mts',
   'scripts/dombot-engine.mjs',
-  'vendor/aoxborrow-registrar-client-1.2.1-hosted.1.tgz',
-  'vendor/registrar-client-1.2.1-hosted.1.patch',
-  'vendor/registrar-client-1.2.1-hosted.1.tests.patch',
-  'vendor/registrar-client-1.2.1-hosted.1.json',
+  sdkArchive,
+  sdkMetadataPath,
+  ...sdkMetadata.patches.map((patch) => patch.path),
 ];
 async function walk(directory) {
   const result = [];
@@ -49,14 +77,12 @@ const sources = [
   ...sourceFiles,
   ...(await Promise.all(sourceRoots.map(walk))).flat(),
 ].sort();
-const sha = (value) => createHash('sha256').update(value).digest('hex');
 const sourceHash = createHash('sha256');
 for (const file of sources)
   sourceHash
     .update(file + '\0')
     .update(await fs.readFile(path.join(root, file)))
     .update('\0');
-const rootPackage = JSON.parse(await fs.readFile('package.json', 'utf8'));
 // Pin the build/runtime dependency declarations without a recursive digest of
 // this artifact's own file dependency or its integrity field in package-lock.
 const { [name]: _engine, ...dependencies } = rootPackage.dependencies;
@@ -173,6 +199,23 @@ if (process.argv[2] === 'verify') {
     target: 'es2022',
     external: ['cloudflare:*', 'node:*'],
     metafile: true,
+    plugins: [
+      {
+        name: 'standalone-package-manifest',
+        setup(builder) {
+          builder.onLoad({ filter: /package\.json$/ }, (args) => {
+            if (path.resolve(args.path) !== path.join(root, 'package.json'))
+              return;
+            // The artifact cannot depend on its previous installed version.
+            // Use the same manifest that is included in the source snapshot.
+            return {
+              contents: JSON.stringify({ ...rootPackage, dependencies }),
+              loader: 'json',
+            };
+          });
+        },
+      },
+    ],
   });
   await fs.writeFile(
     path.join(temp, 'engine.mjs'),
