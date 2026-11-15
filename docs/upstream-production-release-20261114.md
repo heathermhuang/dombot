@@ -14,6 +14,8 @@ Exact-head CI passed 3,434 application tests with one existing skip, four securi
 
 Use the full repository at the pinned release commit for source rebuilds. The private engine artifact's embedded source snapshot still carries the earlier SDK archive, while its package lock and runtime use SDK 1.3.0. The current SDK archive and cumulative source/test patches are included in the full repository and are integrity-pinned. Aligning that embedded snapshot with the active SDK is a packaging follow-up; standalone rebuild from that embedded snapshot is not qualified by this release.
 
+The embedded-source packaging follow-up is addressed by corrected artifact `2.2.2-hosted.2`; see [the source-snapshot repair](engine-source-snapshot-20261115.md). The runtime release above remains the dated production record.
+
 Controlled DNS-fixture qualification is separate and unfinished. This upstream release does not establish that acceptance.
 
 [Public source/version receipt](upstream-production-release-20261114.json) · [Source qualification](upstream-sync-20261114.md)
