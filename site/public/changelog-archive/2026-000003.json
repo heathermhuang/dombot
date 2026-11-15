@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-1d8983fe9951b5594b7921668cff025d87d51f95-43",
+      "date": "2026-11-15",
+      "layer": "saas",
+      "title": "Hosted service update observed: fix: honor DNS continuation delay within scheduled lander slices",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/1d8983fe9951b5594b7921668cff025d87d51f95"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-8ae4999e99e2016b5dc1416fa37eb83a8de73514-41",
       "date": "2026-11-15",
       "layer": "saas",
