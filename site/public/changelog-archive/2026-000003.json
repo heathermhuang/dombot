@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-5c0711da63ecbc2548b1466c4a39adf4ebd508f5",
+      "date": "2026-11-16",
+      "layer": "core",
+      "title": "Claude review: grant statuses: write to the shared review (#292)",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 5c0711da63ec",
+          "url": "https://github.com/aoxborrow/dombot/commit/5c0711da63ecbc2548b1466c4a39adf4ebd508f5"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-1d8983fe9951b5594b7921668cff025d87d51f95-43",
       "date": "2026-11-15",
       "layer": "saas",
