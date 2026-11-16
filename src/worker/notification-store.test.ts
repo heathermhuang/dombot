@@ -77,6 +77,13 @@ beforeEach(async () => {
   );
 });
 describe('durable portfolio email lifecycle', () => {
+  it('baselines past-expiry checks after restore instead of replaying email', async () => {
+    fixture.rows = [
+      { ...fixture.rows[0], date: '2026-11-01', expiryDate: '2026-11-01' },
+    ];
+    await store.baselineAfterRestore();
+    expect(await store.prepare(prefs, null, now)).toBeNull();
+  });
   it('atomically deduplicates concurrent preparation and send claims', async () => {
     await Promise.all([
       store.prepare(prefs, null, now),

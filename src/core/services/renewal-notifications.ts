@@ -1,3 +1,4 @@
+import { resolveRegistrar } from '../../shared/registrar-mapping';
 import { withParkioProjection } from './parkio-projection';
 import { PARKIO_INTERVAL } from '../../shared/parkio';
 import { marketSales } from './markets/sync';
@@ -86,20 +87,35 @@ export function renewalNotificationRows(now = Date.now()): RenewalNoticeRow[] {
     const expiry = d.expirationDate
       ? new Date(d.expirationDate).getTime()
       : NaN;
+    const status = String(d.status).toLowerCase();
     const expiredStatus =
       !imported &&
       !stale &&
-      ['expired', 'redemptionperiod', 'pendingdelete'].includes(
-        String(d.status).toLowerCase(),
-      );
+      ['expired', 'redemptionperiod', 'pendingdelete'].includes(status);
     return [
       {
         domain: toAscii(d.domainName),
         account:
-          (d.parkio ? 'Park.io · ' + d.parkio.label : account?.accountLabel) ||
-          d.importedRegistrarLabel ||
-          d.registrar ||
-          'Imported',
+          (d.parkio ? d.parkio.label : account?.accountLabel) ||
+          d.accountLabel ||
+          '',
+        registrar: d.parkio
+          ? 'Park.io'
+          : account?.displayName ||
+            d.importedRegistrarLabel ||
+            resolveRegistrar({ name: d.registrar })?.label ||
+            'Registrar not recorded',
+        registrarId: d.parkio ? 'parkio' : d.registrar,
+        dateKind: d.renewalDate ? ('renewal' as const) : ('expiry' as const),
+        expiryDate: Number.isFinite(expiry)
+          ? new Date(expiry).toISOString().slice(0, 10)
+          : null,
+        ...(expiredStatus
+          ? {
+              expiryStatus: status as
+                'expired' | 'redemptionperiod' | 'pendingdelete',
+            }
+          : {}),
         date: parsed.toISOString().slice(0, 10),
         autoRenew: d.autoRenewUnknown ? null : d.autoRenew,
         observedAt: at,

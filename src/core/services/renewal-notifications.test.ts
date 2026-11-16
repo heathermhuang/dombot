@@ -3,7 +3,12 @@ import { MemoryDocStore } from '../storage/doc-store';
 import { configureStore, hydrateStores } from '../storage/namespace';
 import { configureParkioProjection } from './parkio-projection';
 import { importedRow } from '../../shared/imported-domains';
-import { renewalNotificationRows } from './renewal-notifications';
+import { createAccount } from './accounts';
+import { writeEntry } from './cache';
+import {
+  currentRenewalCandidates,
+  renewalNotificationRows,
+} from './renewal-notifications';
 const now = Date.parse('2026-11-09T09:00:00Z');
 const projection = () => ({
   ...importedRow('sample.example', {
@@ -37,11 +42,50 @@ describe('renewal inventory provenance', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       domain: 'sample.example',
-      account: 'Park.io · Sample account',
+      account: 'Sample account',
+      registrar: 'Park.io',
+      expiryDate: '2026-11-30',
+      dateKind: 'expiry',
       autoRenew: null,
       imported: false,
       stale: false,
       observedAt: now,
+    });
+  });
+  it('keeps the registrar and expiry separate from account nicknames and future renewal dates', async () => {
+    const account = await createAccount('dynadot', 'Main', {
+      apiKey: 'synthetic',
+      apiSecret: 'synthetic',
+    });
+    writeEntry('portfolio', account.id, {
+      domains: [
+        {
+          domainName: 'recovery.example',
+          status: 'active',
+          createdDate: null,
+          expirationDate: new Date('2026-11-01'),
+          renewalDate: new Date('2026-12-01'),
+          autoRenew: true,
+          locked: true,
+          privacy: true,
+          nameservers: [],
+        },
+      ],
+      lastSyncedAt: now,
+      lastError: null,
+    });
+    expect(renewalNotificationRows(now)[0]).toMatchObject({
+      registrar: 'Dynadot',
+      registrarId: 'dynadot',
+      account: 'Main',
+      expiryDate: '2026-11-01',
+      date: '2026-12-01',
+      dateKind: 'renewal',
+      failure: null,
+    });
+    expect(currentRenewalCandidates('UTC', now)[0]).toMatchObject({
+      stage: 'past-expiry',
+      urgent: true,
     });
   });
   it('does not remind for names missing from the connected source', () => {

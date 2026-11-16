@@ -307,7 +307,7 @@ export class NotificationStore {
     const rows = renewalNotificationRows(now);
     const hashes = await Promise.all(
       rows.flatMap((row) =>
-        ['review', 'soon'].map((stage) =>
+        ['review', 'soon', 'past-expiry'].map((stage) =>
           this.hash(row.domain + '|' + row.date + '|' + stage),
         ),
       ),
