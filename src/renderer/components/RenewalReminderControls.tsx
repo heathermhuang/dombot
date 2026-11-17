@@ -176,7 +176,7 @@ export default function RenewalReminderControls() {
     [loading, setLoading] = useState(true),
     [offset, setOffset] = useState(0),
     [count, setCount] = useState(0),
-    [at, setAt] = useState(Date.now());
+    [at, setAt] = useState(() => Date.now());
   const [zone, setZone] = useState('UTC');
   const latest = useRef(0);
   useEffect(() => {
