@@ -18,6 +18,7 @@ export default function Channels() {
   const [provider, setProvider] = useState('Spaceship'),
     [url, setUrl] = useState(''),
     [domain, setDomain] = useState('');
+  const [editing, setEditing] = useState<SaleDestination | null>(null);
   return (
     <SalesShell>
       <p className="sales-kicker">SALES / CHANNELS</p>
@@ -29,7 +30,7 @@ export default function Channels() {
       <SalesFeedback
         error={remote.error || action.error}
         notice={action.notice}
-        loading={action.busy}
+        loading={action.busy || remote.loading}
         retry={() => void remote.reload()}
       />
       <div className="sales-table-region">
@@ -40,9 +41,18 @@ export default function Channels() {
               <th>Connection</th>
               <th>Exact destination</th>
               <th>Link check</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
+            {!remote.loading && !remote.error && !remote.data?.items.length && (
+              <tr>
+                <td colSpan={5}>
+                  No provider links yet. Add a link below, then select it in a
+                  page draft.
+                </td>
+              </tr>
+            )}
             {remote.data?.items.map((d) => (
               <tr key={d.id}>
                 <td>{d.provider}</td>
@@ -62,6 +72,20 @@ export default function Channels() {
                     ? 'Seller-configured · purchase availability unverified'
                     : d.check}
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    disabled={action.busy}
+                    onClick={() => {
+                      setEditing(d);
+                      setProvider(d.provider);
+                      setUrl(d.url);
+                      setDomain('');
+                    }}
+                  >
+                    Edit link
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -76,9 +100,11 @@ export default function Channels() {
               provider,
               url,
               ...(domain ? { domain } : {}),
-              revision: null,
+              ...(editing ? { id: editing.id } : {}),
+              revision: editing?.revision ?? null,
             });
             setUrl('');
+            setEditing(null);
             await remote.reload();
             action.setNotice(
               'Manual provider link saved. Select it in the domain editor and review before publishing.',
@@ -86,7 +112,12 @@ export default function Channels() {
           });
         }}
       >
-        <h2>Add a manual provider link</h2>
+        <h2>{editing ? 'Edit provider link' : 'Add a manual provider link'}</h2>
+        <p className="small">
+          Changes update this saved destination. Review affected sales-page
+          drafts before publishing; existing public snapshots are not silently
+          replaced.
+        </p>
         <Field label="Provider">
           <select
             value={provider}
@@ -114,12 +145,38 @@ export default function Channels() {
           />
         </Field>
         <button className="primary" disabled={action.busy}>
-          Save manual link
+          {action.busy
+            ? 'Saving…'
+            : editing
+              ? 'Save link changes'
+              : 'Save manual link'}
         </button>
+        {editing && (
+          <button
+            type="button"
+            disabled={action.busy}
+            onClick={() => {
+              setEditing(null);
+              setUrl('');
+              setDomain('');
+            }}
+          >
+            Cancel edit
+          </button>
+        )}
       </form>
       <section className="sales-section">
         <h2>Connected marketplace accounts</h2>
         {accounts.error && <p role="alert">{accounts.error}</p>}
+        {accounts.loading && <p role="status">Loading connected accounts…</p>}
+        {!accounts.loading &&
+          !accounts.error &&
+          !accounts.data?.items.length && (
+            <p>
+              No marketplace accounts connected.{' '}
+              <Link to="/settings?tab=markets">Connect a market account</Link>
+            </p>
+          )}
         <ul>
           {accounts.data?.items.map((account) => (
             <li key={account.id}>

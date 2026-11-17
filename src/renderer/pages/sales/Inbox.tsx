@@ -2,16 +2,35 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { SalesInboxItem, SalesPage } from '../../../shared/sales-api';
 import { useSalesData } from '../../lib/sales-client';
+import { navigateInboxPage } from '../../lib/inbox-pagination';
 import Conversation from './Conversation';
-import { SalesShell, SalesFeedback, salePriceLabel } from './shared';
+import {
+  SalesShell,
+  SalesFeedback,
+  salePriceLabel,
+  conversationStatusLabel,
+} from './shared';
 
 export default function Inbox() {
   const { id } = useParams(),
     [status, setStatus] = useState(''),
-    [cursor, setCursor] = useState('');
+    [cursors, setCursors] = useState<string[]>(['']);
+  const cursor = cursors.at(-1) ?? '';
   const data = useSalesData<SalesPage<SalesInboxItem>>(
     `/inbox?cursor=${cursor}&${status === 'pending' ? 'verification=pending' : `status=${status}`}`,
   );
+  const navigatePage = (direction: 'first' | 'previous' | 'next') => {
+    if (data.loading) return;
+    setCursors((history) =>
+      navigateInboxPage(
+        history,
+        cursor,
+        direction,
+        data.data?.cursor,
+        data.loading,
+      ),
+    );
+  };
   return (
     <SalesShell>
       <div className="sales-heading">
@@ -31,13 +50,13 @@ export default function Inbox() {
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);
-            setCursor('');
+            setCursors(['']);
           }}
         >
           {[
             ['', 'All inquiries'],
             ['new', 'New'],
-            ['negotiating', 'Following up'],
+            ['negotiating', 'Negotiating'],
             ['awaiting-buyer', 'Awaiting buyer'],
             ['closed', 'Closed'],
             ['pending', 'Pending verification'],
@@ -72,23 +91,34 @@ export default function Inbox() {
                   : 'Pending verification'}
               </p>
               <p className="small">
-                {r.status} · {new Date(r.updatedAt).toLocaleString()}
+                {conversationStatusLabel(r.status)} ·{' '}
+                {new Date(r.updatedAt).toLocaleString()}
               </p>
             </Link>
           ))}
-          {!data.data?.items.length && !data.loading && (
+          {!data.data?.items.length && !data.loading && !data.error && (
             <p className="sales-empty">
               No inquiries in this view. A published lander gives buyers a
               direct way to contact you.
             </p>
           )}
           <div className="sales-toolbar">
-            <button disabled={!cursor} onClick={() => setCursor('')}>
+            <button
+              disabled={data.loading || !cursor}
+              onClick={() => navigatePage('first')}
+            >
               First
             </button>
             <button
-              disabled={!data.data?.cursor}
-              onClick={() => setCursor(data.data!.cursor!)}
+              disabled={data.loading || cursors.length === 1}
+              onClick={() => navigatePage('previous')}
+            >
+              Previous
+            </button>
+            <span>Page {cursors.length}</span>
+            <button
+              disabled={data.loading || !data.data?.cursor}
+              onClick={() => navigatePage('next')}
             >
               Next
             </button>

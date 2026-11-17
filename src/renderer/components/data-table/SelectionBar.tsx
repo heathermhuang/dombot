@@ -28,7 +28,7 @@ const UP_SHADOW =
  * SelectionBarButton) after it. As wide as what's in it, up to 80% of the
  * table, or 90% under 724px (tablets and phones), never all of it: edge to
  * edge it would cut the table in two rather than float. Shortcuts drop out
- * with `@max-[…]/float:hidden` at the width they stop fitting; on a phone
+ * with container width queries at the width they stop fitting; on a phone
  * "of N" goes, leaving "2 selected", and past that the text shortens.
  */
 export function SelectionBar({

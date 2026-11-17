@@ -16,7 +16,7 @@ export function ProfileEditor({
     value: string,
   ) => onChange({ ...draft, profile: { ...profile, [key]: value } });
   return (
-    <section>
+    <section data-field="profile" tabIndex={-1}>
       <h2>Profile</h2>
       <p>
         Explain who you are and which conversations you welcome. Your portfolio
@@ -27,6 +27,7 @@ export function ProfileEditor({
           <label>
             Site address
             <input
+              data-field="handle"
               value={draft.handle}
               disabled={lockedHandle}
               onChange={(e) => onChange({ ...draft, handle: e.target.value })}
@@ -38,6 +39,7 @@ export function ProfileEditor({
         <label>
           Display name
           <input
+            data-field="profile.name"
             value={profile.name}
             onChange={(e) => field('name', e.target.value)}
             maxLength={100}
@@ -46,6 +48,7 @@ export function ProfileEditor({
         <label>
           Headline
           <input
+            data-field="profile.headline"
             value={profile.headline}
             onChange={(e) => field('headline', e.target.value)}
             maxLength={160}
@@ -54,6 +57,7 @@ export function ProfileEditor({
         <label>
           Introduction
           <textarea
+            data-field="profile.intro"
             value={profile.intro}
             onChange={(e) => field('intro', e.target.value)}
             maxLength={600}
@@ -62,6 +66,7 @@ export function ProfileEditor({
         <label>
           Investment interests, one per line
           <textarea
+            data-field="profile.interests"
             value={profile.interests.join('\n')}
             onChange={(e) =>
               onChange({
@@ -83,6 +88,7 @@ export function ProfileEditor({
         <label>
           Conversations welcome, one per line
           <textarea
+            data-field="profile.opportunities"
             value={profile.opportunities.join('\n')}
             onChange={(e) =>
               onChange({
@@ -108,6 +114,7 @@ export function ProfileEditor({
           Public contact email (optional)
           <input
             type="email"
+            data-field="profile.contactEmail"
             value={profile.contactEmail}
             onChange={(e) => field('contactEmail', e.target.value)}
             maxLength={254}
@@ -115,12 +122,20 @@ export function ProfileEditor({
           <small>This address becomes public. Leave blank to hide it.</small>
         </label>
       </div>
-      <h3>Profile links</h3>
+      <h3 data-field="profile.links" tabIndex={-1}>
+        Profile links
+      </h3>
       {profile.links.map((link, index) => (
-        <div className="os-fields os-link" key={index}>
+        <div
+          className="os-fields os-link"
+          key={index}
+          data-field={`profile.links.${index}`}
+          tabIndex={-1}
+        >
           <label>
             Link label
             <input
+              data-field={`profile.links.${index}.label`}
               value={link.label}
               onChange={(e) =>
                 onChange({
@@ -140,6 +155,7 @@ export function ProfileEditor({
             HTTPS link
             <input
               type="url"
+              data-field={`profile.links.${index}.url`}
               value={link.url}
               onChange={(e) =>
                 onChange({

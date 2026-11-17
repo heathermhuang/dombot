@@ -935,7 +935,7 @@ export default function Activity() {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
       {/* -m-1 p-1 leaves room for focus rings, which the scroll box would clip. */}
-      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1 short:gap-[9px]">
+      <div className="-m-1 flex shrink-0 flex-col gap-[13px] p-1 short:gap-[9px]">
         {/* As tall as Domains' title row (its Sync button), so the toolbar
             lands in the same place on both pages. */}
         <div className="mb-1 min-h-9 short:mb-[7px]">

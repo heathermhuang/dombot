@@ -6,6 +6,9 @@ import path from 'node:path';
 import os from 'node:os';
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'dombot-sales-qa-'));
 const root = process.cwd();
+const assetDirectory = process.argv.includes('--source-ui')
+  ? path.join(root, 'dist/web')
+  : path.join(root, 'node_modules/@domains-domains/dombot-engine/web');
 const fixtureEntry = `
 export { aesGcmCipher, EncryptedDocStore } from '${root}/src/core/storage/encrypted';
 export { D1DocStore } from '${root}/src/worker/storage/d1-doc-store';
@@ -14,8 +17,10 @@ export { SalesStore } from '${root}/src/worker/sales-store';
 export { SalesInquiryStore } from '${root}/src/worker/sales-inquiry-store';
 export { sourcePriceFingerprint } from '${root}/src/core/publication/sales';
 export { PublicationStore } from '${root}/src/worker/publication-store';
-export { emptyOwnerSite, convertOwnerSiteV3, selectedSite } from '${root}/src/shared/owner-site';
-export { emptySale } from '${root}/src/shared/sales';
+export { emptyOwnerSite, convertOwnerSite, convertOwnerSiteV3, selectedSite } from '${root}/src/shared/owner-site';
+export { emptySale } from '${root}/src/shared/hosted-sales';
+export { emptyDraft, privateListing } from '${root}/src/shared/publication';
+export { previewSnapshot } from '${root}/src/shared/publication-edit';
 `;
 await build({
   stdin: { contents: fixtureEntry, resolveDir: root, loader: 'ts' },
@@ -26,10 +31,36 @@ await build({
   logLevel: 'silent',
 });
 const fixture = await import(path.join(temp, 'fixture.mjs'));
+const auditForms = process.argv.includes('--ui-audit');
+const formScript = auditForms
+  ? (
+      await build({
+        entryPoints: ['scripts/ui-audit-form.tsx'],
+        bundle: true,
+        write: false,
+        format: 'esm',
+        platform: 'browser',
+        jsx: 'automatic',
+        alias: { '@': path.join(root, 'src/renderer') },
+        define: {
+          __DOMBOT_DEMO__: 'false',
+          __APP_VERSION__: '"local-qualification"',
+        },
+      })
+    ).outputFiles[0].text
+  : '';
+const formCss = (await fs.readdir(path.join(assetDirectory, 'assets'))).find(
+  (name) => name.endsWith('.css'),
+);
+const formHtml = `<!doctype html><html class="hosted-theme"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local forwarding form</title><link rel="stylesheet" href="/assets/${formCss}"><body><div id="root"></div><script type="module" src="/__qa/forwarding.js"></script></body></html>`;
+
 const script = (
   await build({
     stdin: {
       contents: `import worker from '${root}/node_modules/@domains-domains/dombot-engine/engine.mjs';import{SalesStore}from'${root}/src/worker/sales-store';import{SalesInquiryStore}from'${root}/src/worker/sales-inquiry-store';import{renderSalesEmail}from'${root}/src/shared/sales-email';import{salesEscape}from'${root}/src/shared/render-sales-lander';import{signGatewayRequest}from'${root}/src/shared/gateway-proof';import{salesPublicPath}from'${root}/src/shared/sales-admission';export default {async fetch(r,e,c){
+        if(${auditForms}&&new URL(r.url).pathname==='/__qa/forwarding') return new Response(${JSON.stringify(formHtml)},{headers:{'Content-Type':'text/html;charset=utf-8'}});
+        if(${auditForms}&&new URL(r.url).pathname==='/__qa/forwarding.js') return new Response(${JSON.stringify(formScript)},{headers:{'Content-Type':'text/javascript;charset=utf-8'}});
+
         if(new URL(r.url).pathname==='/__qa/mail'){const store=await SalesStore.from(e);const rows=await e.DB.prepare('SELECT id,kind,sealed,lead_id,message_id FROM sales_outbox ORDER BY updated_at DESC LIMIT 20').all();const links=[];for(const row of rows.results){const mail=JSON.parse(await store.cipher.open(row.sealed));if(new URL(r.url).searchParams.get('view')===row.id){const inbox=new SalesInquiryStore(store,e.DOMBOT_SALES_ORIGIN);const content=renderSalesEmail({...mail,context:await inbox.emailContext(row.lead_id,row.message_id)},row.kind);return new Response(content.html,{headers:{'Content-Type':'text/html;charset=utf-8','Cache-Control':'no-store'}});}links.push('<p>'+salesEscape(row.kind)+' · <a href="'+salesEscape(mail.url.replace('https://fixture.example',new URL(r.url).origin))+'">Open simulated mail link</a> · <a href="?view='+row.id+'">Preview complete email</a></p>');}return new Response('<!doctype html><html><body><h1>Local synthetic mail log</h1><p>No email was sent. These are local fixture capabilities.</p>'+links.join('')+'</body></html>',{headers:{'Content-Type':'text/html;charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});}
         const url=new URL(r.url);const prefix='/w/'+e.DOMBOT_WORKSPACE_ID;if(url.pathname.startsWith(prefix+'/'))url.pathname=url.pathname.slice(prefix.length);const headers=new Headers(r.headers);headers.set('cf-connecting-ip','127.0.0.1');const request=new Request(url,{method:r.method,headers,body:['GET','HEAD'].includes(r.method)?undefined:r.body});const publicRequest=salesPublicPath(url.pathname,r.method);request.headers.set('x-dombot-gateway-proof',await signGatewayRequest(e.DOMBOT_GATEWAY_SECRET,e.DOMBOT_WORKSPACE_ID,publicRequest?null:'local-synthetic-owner',request,publicRequest?{purpose:'sales-public',host:url.hostname,listing:null,epoch:0}:(url.pathname.startsWith('/sales/')||url.pathname.startsWith('/publishing/change-sets'))?{purpose:'sales-owner',recipientVerified:true}:undefined));return worker.fetch(request,e,c);
       },scheduled:worker.scheduled};`,
@@ -82,15 +113,11 @@ const mf = new Miniflare(
             const url = new URL(request.url);
             const file = url.pathname.startsWith('/assets/')
               ? path.join(
-                  root,
-                  'node_modules/@domains-domains/dombot-engine/web',
+                  assetDirectory,
                   path.basename(path.dirname(url.pathname)),
                   path.basename(url.pathname),
                 )
-              : path.join(
-                  root,
-                  'node_modules/@domains-domains/dombot-engine/web/index.html',
-                );
+              : path.join(assetDirectory, 'index.html');
             try {
               return new Response(await fs.readFile(file), {
                 headers: {
@@ -147,6 +174,12 @@ const names = [
   'ledger.example',
   'parcel.example',
   'private.example',
+  ...(process.argv.includes('--ui-audit')
+    ? Array.from(
+        { length: 65 },
+        (_, i) => `review-${String(i + 1).padStart(3, '0')}.example`,
+      )
+    : []),
   ...(process.argv.includes('--large')
     ? Array.from(
         { length: 1000 },
@@ -162,9 +195,22 @@ await store.put('registrar-domains', accountId, {
     domains: names.map((domainName) => ({
       domainName,
       registrar: 'dynadot',
+      status: 'active',
       accountId,
       notes: 'SAMPLE_PRIVATE_NOTE',
       renewal: 15,
+      ...(process.argv.includes('--ui-audit')
+        ? {
+            createdDate: new Date(now - 86400_000 * 365).toISOString(),
+            expirationDate: new Date(
+              now + (domainName.startsWith('review-00') ? -4 : 45) * 86400_000,
+            ).toISOString(),
+            autoRenew: false,
+            locked: true,
+            privacy: true,
+            nameservers: ['ns1.synthetic.example', 'ns2.synthetic.example'],
+          }
+        : {}),
     })),
   },
 });
@@ -209,7 +255,49 @@ for (const domain of names.filter((name) =>
     await sales.publish(review.id, observe);
   }
 }
-const profile = fixture.emptyOwnerSite();
+if (process.argv.includes('--ui-audit')) {
+  // Trusted setup only: a synthetic inquiry and its local confirmation grant.
+  // The fixture has no mail transport; no email is sent or delivery asserted.
+  const row = await db
+    .prepare('SELECT id FROM published_sales WHERE domain=?')
+    .bind('canopy.example')
+    .first();
+  const published = (await sales.get(row.id)).published;
+  const inbox = new fixture.SalesInquiryStore(sales, 'https://fixture.example');
+  const receipt = await inbox.intake(
+    {
+      observedRevision: published.revision,
+      idempotencyKey: crypto.randomUUID(),
+      name: 'Sample inquirer',
+      email: 'inquirer@example.test',
+      offer: null,
+      message:
+        'Synthetic inquiry for local UI qualification. No message was sent.',
+      website: '',
+      turnstileToken: 'local-fixture',
+    },
+    published,
+  );
+  const verification = await db
+    .prepare(
+      "SELECT sealed FROM sales_outbox WHERE lead_id=? AND kind='verification'",
+    )
+    .bind(receipt.id)
+    .first();
+  const mail = JSON.parse(await sales.cipher.open(verification.sealed));
+  await inbox.confirm(new URL(mail.url).pathname.split('/').at(-1));
+}
+const profile = process.argv.includes('--ui-audit')
+  ? fixture.convertOwnerSite({
+      ...fixture.emptyDraft(),
+      contactEmail: 'owner@example.test',
+      listings: names.map((domain) => ({
+        ...fixture.privateListing(domain),
+        visibility: 'inquiry',
+        askingPrice: 500,
+      })),
+    })
+  : fixture.emptyOwnerSite();
 profile.profile.name = 'Sample publishing owner';
 profile.profile.intro =
   'Local synthetic qualification. No customer holdings or messages.';
@@ -254,6 +342,24 @@ if (process.argv.includes('--linked')) {
   ];
   await publication.save(linked, null);
 } else await publication.save(profile, null);
+if (auditForms) {
+  // A separate legacy public projection exercises visitor paging. Every field
+  // is synthetic and the local runtime denies external provider requests.
+  const snapshot = fixture.previewSnapshot({
+    ...fixture.emptyDraft(),
+    handle: 'sample-public',
+    title: 'Sample public portfolio',
+    contactEmail: 'owner@example.test',
+    listings: names.map((domain) => ({
+      ...fixture.privateListing(domain),
+      visibility: 'inquiry',
+      askingPrice: 500,
+    })),
+  });
+  await db.prepare(
+    "INSERT INTO published_portfolios (id,handle,revision,payload) VALUES ('main',?,?,?)",
+  ).bind(snapshot.handle, 'local-synthetic-projection', JSON.stringify(snapshot)).run();
+}
 console.log(
   JSON.stringify({
     localOnly: true,

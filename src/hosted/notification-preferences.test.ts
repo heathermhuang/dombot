@@ -142,9 +142,14 @@ describe('hosted notification preferences and admission', () => {
   it('does not enroll on read, rejects CSRF/stale revisions, and requires real recipient proof', async () => {
     const before = await request('/account/notifications');
     expect(before.status).toBe(200);
-    expect(
-      ((await before.json()) as { revision: unknown }).revision,
-    ).toBeNull();
+    const initial = (await before.json()) as {
+      revision: unknown;
+      address: string;
+      workspaceId: string;
+    };
+    expect(initial.revision).toBeNull();
+    expect(initial.address).toBe(email);
+    expect(initial.workspaceId).toBe(workspace);
     const body = {
       preferences: { ...notificationDefaults, renewalReminders: true },
       revision: null,

@@ -335,9 +335,7 @@ export function StatCardRow({
           </div>
         ))}
       </div>
-      <p className="text-right text-[11px] text-muted-foreground/40 sm:text-xs">
-        {note}
-      </p>
+      <p className="text-right text-xs text-muted-foreground">{note}</p>
     </div>
   );
 }

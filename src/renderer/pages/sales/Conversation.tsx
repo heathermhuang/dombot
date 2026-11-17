@@ -140,6 +140,12 @@ export default function Conversation({
               Export loaded thread page
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => document.getElementById('inquiry-reply')?.focus()}
+          >
+            Write a reply or private note
+          </button>
           <div className="message">
             <p className="small">
               Buyer inquiry · snapshot {thread.original.snapshot.revision}
@@ -187,52 +193,55 @@ export default function Conversation({
               link.
             </p>
           )}
-          <h2>Sale observations</h2>
-          {thread.outcomes?.map((o) => (
-            <p key={o.id} className="small">
-              {o.state === 'completed' ? 'Completion reported' : o.state} ·
-              seller-entered · {o.provider} ·{' '}
-              {new Date(o.createdAt).toLocaleString()}
-              <br />
-              {o.evidence}
-              {o.coreEvidence && (
-                <span>
-                  <br />
-                  Core Sales: {o.coreEvidence.status} · {o.coreEvidence.source}{' '}
-                  · payout{' '}
-                  {o.coreEvidence.paidOutOn ?? 'not separately confirmed'}
-                </span>
-              )}
-            </p>
-          ))}
-          <h2>Delivery records</h2>
-          {thread.deliveries.map((r) => (
-            <p key={r.id} className="small">
-              {r.kind} · {deliveryLabel[r.state] ?? r.state} · {r.attempts}{' '}
-              attempts · {new Date(r.updated_at).toLocaleString()}
-            </p>
-          ))}
-          <details>
-            <summary>Email recovery</summary>
-            <p className="small">
-              If delivery is unknown, the previous email may have arrived.
-              Sending a fresh link may send a duplicate notification. It revokes
-              previous conversation links and retains the delivery history.
-            </p>
-            <button
-              disabled={action.busy}
-              onClick={() =>
-                void action.run(async () => {
-                  await salesRequest(`/inbox/${id}/fresh-link`, 'POST', {});
-                  await remote.reload();
-                  action.setNotice(
-                    'A fresh inquiry link is queued. Earlier delivery receipts are preserved.',
-                  );
-                })
-              }
-            >
-              Email a fresh link to this buyer
-            </button>
+          <details className="sales-section">
+            <summary>Sale observations and email delivery details</summary>{' '}
+            <h2>Sale observations</h2>
+            {thread.outcomes?.map((o) => (
+              <p key={o.id} className="small">
+                {outcomeLabel(o.state)} · seller-entered · {o.provider} ·{' '}
+                {new Date(o.createdAt).toLocaleString()}
+                <br />
+                {o.evidence}
+                {o.coreEvidence && (
+                  <span>
+                    <br />
+                    Core Sales: {o.coreEvidence.status} ·{' '}
+                    {o.coreEvidence.source} · payout{' '}
+                    {o.coreEvidence.paidOutOn ?? 'not separately confirmed'}
+                  </span>
+                )}
+              </p>
+            ))}
+            <h2>Delivery records</h2>
+            {thread.deliveries.map((r) => (
+              <p key={r.id} className="small">
+                {r.kind} · {deliveryLabel[r.state] ?? r.state} · {r.attempts}{' '}
+                attempts · {new Date(r.updated_at).toLocaleString()}
+              </p>
+            ))}
+            <details>
+              <summary>Email recovery</summary>
+              <p className="small">
+                If delivery is unknown, the previous email may have arrived.
+                Sending a fresh link may send a duplicate notification. It
+                revokes previous conversation links and retains the delivery
+                history.
+              </p>
+              <button
+                disabled={action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    await salesRequest(`/inbox/${id}/fresh-link`, 'POST', {});
+                    await remote.reload();
+                    action.setNotice(
+                      'A fresh inquiry link is queued. Earlier delivery receipts are preserved.',
+                    );
+                  })
+                }
+              >
+                Email a fresh link to this buyer
+              </button>
+            </details>
           </details>
           <p className="small" role="status">
             {compose.isDirty()
@@ -368,7 +377,7 @@ export default function Conversation({
               reports hold new selling actions. Record actual transaction terms
               in core Sales, then explicitly link the evidence here.
             </p>
-            <Field label="Core Sales evidence (optional)">
+            <Field label="Link a recorded sale (optional)">
               <select
                 value={coreSale}
                 onChange={(e) => setCoreSale(e.target.value)}
@@ -397,7 +406,9 @@ export default function Conversation({
                   'canceled',
                   'unknown',
                 ].map((v) => (
-                  <option key={v}>{v}</option>
+                  <option key={v} value={v}>
+                    {outcomeLabel(v)}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -493,5 +504,20 @@ export default function Conversation({
         </>
       )}
     </section>
+  );
+}
+
+function outcomeLabel(value: string) {
+  return (
+    (
+      {
+        'handed-off': 'Sent to provider',
+        'payment-reported': 'Payment reported',
+        'transfer-reported': 'Transfer reported',
+        completed: 'Completion reported',
+        canceled: 'Cancelled',
+        unknown: 'Unknown',
+      } as Record<string, string>
+    )[value] ?? value.replaceAll('-', ' ')
   );
 }

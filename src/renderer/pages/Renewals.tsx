@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import RenewalReminderControls from '../components/RenewalReminderControls';
 import { multiAccountRegistrars } from '../lib/registrar-accounts';
 import { useMemo, useState } from 'react';
@@ -397,9 +398,7 @@ export default function Renewals() {
           value={[
             {
               value: count(summary.total),
-              unit: `${registrarCount} registrar${
-                registrarCount === 1 ? '' : 's'
-              }`,
+              unit: `${registrarCount} registrar sources`,
             },
           ]}
         />
@@ -407,7 +406,7 @@ export default function Renewals() {
           size="sm"
           icon={CalendarDays}
           accentClass="text-sky-400"
-          label="Monthly avg"
+          label="Run rate / month"
           value={usd(monthly)}
           title={exact(monthly)}
         />
@@ -415,7 +414,7 @@ export default function Renewals() {
           size="sm"
           icon={CalendarSync}
           accentClass="text-violet-400"
-          label="Yearly"
+          label="Annualized cost"
           value={[{ value: usd(summary.yearly) }]}
           title={exact(summary.yearly)}
         />
@@ -423,7 +422,7 @@ export default function Renewals() {
           size="sm"
           icon={AlarmClock}
           accentClass="text-rose-400"
-          label="Upcoming, 30 days"
+          label="Scheduled, 30 days"
           value={[
             {
               value: usd(due30.yearly),
@@ -436,7 +435,7 @@ export default function Renewals() {
           size="sm"
           icon={CalendarClock}
           accentClass="text-amber-400"
-          label="Upcoming, 90 days"
+          label="Scheduled, 90 days"
           value={[
             {
               value: usd(due90.yearly),
@@ -448,7 +447,9 @@ export default function Renewals() {
       </StatCardRow>
 
       <p className="text-sm text-muted-foreground">
-        Annual renewal estimates, not confirmed charges. Planning uses a
+        Annualized cost is the current yearly rate for priced holdings, not a
+        confirmed charge or the scheduled 12-month total. The forecast excludes
+        missing/past dates and dates outside its window. Planning uses a
         registrar renewal date when known, otherwise reported expiry.
         {pastDates.length > 0 &&
           ` ${pastDates.length} past planning date${pastDates.length === 1 ? '' : 's'} need verification and are excluded from upcoming totals.`}
@@ -456,7 +457,13 @@ export default function Renewals() {
           ` ${unverifiedDates} unverified legacy Gandi date${unverifiedDates === 1 ? '' : 's'} ignored; reported expiry is used for planning.`}
       </p>
 
-      <RenewalCoverage rows={portfolio} pricing={pricing} />
+      <details className="rounded-md border bg-card p-3">
+        <summary className="cursor-pointer font-medium">
+          Price coverage: {summary.priced} of {summary.total} have saved prices
+          {summary.unpriced ? ` · ${summary.unpriced} unavailable` : ''}
+        </summary>
+        <RenewalCoverage rows={portfolio} pricing={pricing} />
+      </details>
 
       {/* A toolbar over the chart and donuts, as over the other pages'
           tables: the view first, then the registrars, which wrap under it
@@ -467,7 +474,17 @@ export default function Renewals() {
       </div>
 
       {/* Spend over time, between the totals and the composition donuts. */}
-      <MonthlyBarChart months={months} fmt={usd} exact={exact} />
+      <MonthlyBarChart
+        months={months}
+        fmt={usd}
+        exact={exact}
+        scope={new URLSearchParams({
+          renewalMode: renewing,
+          ...(registrar.length
+            ? { renewalRegistrar: registrar.join(',') }
+            : {}),
+        }).toString()}
+      />
 
       {/* Composition: two pairs (count + spend), one row per dimension. */}
       <div className="grid gap-[13px] md:grid-cols-2">
@@ -540,7 +557,9 @@ function MonthlyBarChart({
   months,
   fmt: usd,
   exact,
+  scope,
 }: {
+  scope: string;
   months: MonthBucket[];
   /** Whole amounts in the page's currency. */
   fmt: (n: number) => string;
@@ -612,6 +631,36 @@ function MonthlyBarChart({
           );
         })}
       </div>
+      <details>
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">
+          Inspect monthly amounts and domains
+        </summary>
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Estimate</th>
+              <th>Domains</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((m) => (
+              <tr key={m.key}>
+                <th className="py-2 font-normal">{m.label}</th>
+                <td>{exact(m.yearly)}</td>
+                <td>
+                  <Link
+                    className="inline-flex min-h-11 items-center underline"
+                    to={`/?renewalMonth=${m.key}&${scope}`}
+                  >
+                    View {m.count} domains
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
     </div>
   );
 }

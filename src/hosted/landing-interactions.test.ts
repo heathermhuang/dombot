@@ -1,3 +1,4 @@
+import { registrarLogos } from './registrar-logos';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import gateway from './gateway';
@@ -12,7 +13,7 @@ describe('approved MCP-first landing page', () => {
   it('explains core portfolio capabilities and the limits of AI access', () => {
     const html = home(false, true);
     for (const capability of [
-      'Connect multiple accounts across 11 supported registrars',
+      `Connect multiple accounts across ${registrarLogos.length} supported registrars and domain providers`,
       'import a CSV or paste a domain list',
       'folders and notes',
       'Update auto-renew, transfer locks and nameservers',

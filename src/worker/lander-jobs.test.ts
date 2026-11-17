@@ -933,3 +933,15 @@ it('keeps the old recovery payload when a revised-review transaction loses its g
   expect((await jobs.get(id)).items[0].state).toBe('restored');
   expect(records).toEqual(original);
 });
+
+describe('private connection history summaries', () => {
+  it('reads the first domain from encrypted job items without provider writes', async () => {
+    const id = crypto.randomUUID();
+    await jobs.create({ kind: 'domains', domains: [domain] }, id, async () => [
+      domain,
+    ]);
+    expect(await jobs.summaryDomain(id)).toBe(domain);
+    expect(writes).toBe(0);
+    expect(await jobs.summaryDomain(crypto.randomUUID())).toBeNull();
+  });
+});

@@ -72,7 +72,8 @@ export default function Listings() {
           <p className="sales-kicker">SALES / LISTINGS</p>
           <h1>Sales pages</h1>
           <p className="small">
-            Manage sales pages and inquiries alongside your portfolio.
+            Manage sales pages and inquiries alongside your portfolio. Private
+            prices, costs and notes remain private.
           </p>
         </div>
         <button className="primary" onClick={() => setCreate(!create)}>
@@ -457,12 +458,10 @@ export default function Listings() {
                   <Link className="domain" to={`/sales/listings/${r.draft.id}`}>
                     {r.draft.displayName}
                   </Link>
-                  <p className="small">
-                    {r.published &&
-                    r.published.description !== r.draft.description
-                      ? 'Changes pending'
-                      : 'Private terms kept separate'}
-                  </p>
+                  {r.published &&
+                    r.published.description !== r.draft.description && (
+                      <p className="small">Changes pending</p>
+                    )}
                   <details className="sales-row-details">
                     <summary>Page details</summary>
                     <dl>

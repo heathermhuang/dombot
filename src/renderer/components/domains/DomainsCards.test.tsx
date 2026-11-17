@@ -101,7 +101,7 @@ describe('DomainsCards, Owned', () => {
 
   it('counts names expiring within 30 days that don’t renew on their own', () => {
     expect(ownedCards(rows, pricing)).toContain(
-      'Expiring, 30 days 2 auto-renew off',
+      'Expiry, 30 days 2 auto-renew off',
     );
   });
 
@@ -111,7 +111,7 @@ describe('DomainsCards, Owned', () => {
 
   it('leaves the cost off when no auto-renewing name has a price', () => {
     const text = ownedCards(rows, {});
-    expect(text).toContain('Auto-renew 40% Expiring');
+    expect(text).toContain('Auto-renew 40% Expiry');
   });
 });
 

@@ -79,6 +79,9 @@ const manifest = JSON.stringify({
     ...(salesEnabled
       ? [{ name: 'DOMBOT_SALES_V1', type: 'plain_text', text: 'true' }]
       : []),
+    ...(process.argv.includes('--ui-audit')
+      ? [{ name: 'DOMBOT_NOTIFICATION_V1', type: 'plain_text', text: 'true' }]
+      : []),
   ],
 });
 const controlRuntime = new Miniflare(
@@ -307,6 +310,12 @@ const env = {
   GATEWAY_KEYS: '{}',
   CANONICAL_ORIGIN: 'https://synthetic-import.invalid',
   PLATFORM_ENABLED: 'true',
+  ...(process.argv.includes('--ui-audit')
+    ? {
+        NOTIFICATION_POLICY_ENABLED: 'true',
+        NOTIFICATION_MAIL_ENABLED: 'false',
+      }
+    : {}),
   ON_DEMAND_ENABLED: 'true',
   ON_DEMAND_TEMPLATE_SHA256: sha(manifest),
   DISPATCHER: provisioning.DISPATCHER,
@@ -340,15 +349,126 @@ const env = {
     },
   },
 };
+const uiFaults = new Set();
+let uiPresenceReads = 0;
+let uiProxySaveRequests = 0;
 const server = createServer(async (incoming, outgoing) => {
   try {
     const url = new URL(incoming.url, origin);
+    if (
+      process.argv.includes('--ui-audit') &&
+      url.pathname.endsWith('/publishing/presence')
+    )
+      uiPresenceReads++;
+    if (
+      process.argv.includes('--ui-audit') &&
+      url.pathname.endsWith('/api/saveProxySettings')
+    )
+      uiProxySaveRequests++;
     if (url.pathname === '/__qualification/session') {
+      // This entry point creates/refreshes only the disposable synthetic identity.
+      // Keep form qualification fresh without changing production auth rules.
+      if (process.argv.includes('--ui-audit'))
+        await control
+          .prepare(
+            'UPDATE sessions SET authenticated_at=?,expires_at=? WHERE token_hash=? AND user_id=?',
+          )
+          .bind(Date.now(), Date.now() + 3600000, sha(token), user)
+          .run();
       outgoing.writeHead(303, {
         'Set-Cookie': `import_qualification_session=${token}; Path=/; HttpOnly; SameSite=Lax`,
         Location: `/w/${workspace}/`,
       });
       outgoing.end();
+      return;
+    }
+    const auditOwner =
+      process.argv.includes('--ui-audit') &&
+      incoming.headers.cookie
+        ?.split(';')
+        .map((value) => value.trim())
+        .includes(`import_qualification_session=${token}`);
+    const reply = (status, value) => {
+      outgoing.writeHead(status, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      });
+      outgoing.end(JSON.stringify(value));
+    };
+    if (
+      auditOwner &&
+      url.pathname === '/__qualification/ui-fault' &&
+      incoming.method === 'POST'
+    ) {
+      const name = url.searchParams.get('name');
+      if (!['notifications', 'mcp', 'revoke'].includes(name)) {
+        reply(400, { error: 'Unknown synthetic fault' });
+        return;
+      }
+      uiFaults.add(name);
+      reply(200, { armed: name });
+      return;
+    }
+    const fault =
+      url.pathname === '/account/notifications' && incoming.method === 'GET'
+        ? 'notifications'
+        : url.pathname.endsWith('/api/getMcpInfo')
+          ? 'mcp'
+          : url.pathname.endsWith('/api/revokeMcpClient')
+            ? 'revoke'
+            : null;
+    if (auditOwner && fault && uiFaults.delete(fault)) {
+      reply(503, { error: `Synthetic ${fault} read/action failure` });
+      return;
+    }
+    if (auditOwner && url.pathname.endsWith('/api/testProxySettings')) {
+      reply(200, { result: { ip: '8.8.8.8', expected: '', matches: true } });
+      return;
+    }
+    if (auditOwner && url.pathname.endsWith('/api/listMcpClients')) {
+      reply(200, {
+        result: [
+          {
+            clientId: '11111111-1111-4111-8111-111111111111',
+            clientName: 'Sample Codex',
+            pairedAt: Date.now(),
+          },
+          {
+            clientId: '22222222-2222-4222-8222-222222222222',
+            clientName: 'Sample Codex',
+            pairedAt: Date.now(),
+            scopes: ['domains:read'],
+          },
+        ],
+      });
+      return;
+    }
+    // Presentation-only history for the explicit local audit mode. Never a
+    // production fixture, never a DNS action, and never dispatched to a provider.
+    if (
+      process.argv.includes('--ui-audit') &&
+      incoming.method === 'GET' &&
+      url.pathname === `/w/${workspace}/sales/lander/jobs` &&
+      incoming.headers.cookie
+        ?.split(';')
+        .map((value) => value.trim())
+        .includes(`import_qualification_session=${token}`)
+    ) {
+      outgoing.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      });
+      outgoing.end(
+        JSON.stringify({
+          items: Array.from({ length: 10 }, (_, i) => ({
+            id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+            state: 'finished',
+            total: 1,
+            domain: `history-${i + 1}.example`,
+            updated_at: Date.now() - i * 3600000,
+          })),
+        }),
+      );
       return;
     }
     if (url.pathname === '/__qualification/status') {
@@ -362,6 +482,8 @@ const server = createServer(async (incoming, outgoing) => {
       outgoing.end(
         JSON.stringify({
           synthetic: true,
+          uiPresenceReads,
+          uiProxySaveRequests,
           lastError,
           workspace,
           user,
@@ -407,6 +529,11 @@ const server = createServer(async (incoming, outgoing) => {
       env,
     );
     const outgoingHeaders = new Headers(response.headers);
+    if (
+      process.argv.includes('--ui-audit') &&
+      outgoingHeaders.get('Content-Type')?.includes('text/html')
+    )
+      outgoingHeaders.set('Permissions-Policy', 'clipboard-write=()');
     if (outgoingHeaders.has('Location'))
       outgoingHeaders.set(
         'Location',

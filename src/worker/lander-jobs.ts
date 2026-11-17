@@ -214,6 +214,17 @@ export class LanderJobs {
     if (!r) throw new SalesError('MISSING', 'Connection job not found.', 404);
     return r;
   }
+  async summaryDomain(id: string): Promise<string | null> {
+    const row = await this.store.db
+      .prepare(
+        'SELECT sealed FROM lander_items WHERE job_id=? ORDER BY ordinal LIMIT 1',
+      )
+      .bind(id)
+      .first<{ sealed: string }>();
+    return row
+      ? (await this.store.open(row.sealed, payloadSchema)).domain
+      : null;
+  }
   async get(id: string, cursor = -1): Promise<LanderJobView> {
     const j = await this.job(id),
       counts = await this.store.db

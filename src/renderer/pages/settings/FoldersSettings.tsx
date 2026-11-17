@@ -316,8 +316,8 @@ function FolderRow({
       )}
       <FolderIcon className={cn('size-7 shrink-0', style.text)} aria-hidden />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{folder.name}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="break-all font-medium">{folder.name}</span>
           <span className="text-xs tabular-nums text-muted-foreground">
             <CountLink
               count={owned}
@@ -337,9 +337,10 @@ function FolderRow({
           </span>
         </div>
         {folder.description ? (
-          <p className="truncate text-sm text-muted-foreground">
-            {folder.description}
-          </p>
+          <details className="text-sm text-muted-foreground">
+            <summary className="cursor-pointer">Description</summary>
+            <p className="break-words">{folder.description}</p>
+          </details>
         ) : (
           <p className="truncate text-sm italic text-muted-foreground/60">
             No description

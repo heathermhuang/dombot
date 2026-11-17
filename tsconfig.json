@@ -23,6 +23,7 @@
   },
   "include": [
     "src",
+    "scripts/ui-audit-form.tsx",
     "*.config.ts",
     "*.config.mts",
     "forge.config.ts",

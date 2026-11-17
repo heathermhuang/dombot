@@ -14,13 +14,13 @@ export function DomainLink({ name }: { name: string }) {
       target="_blank"
       rel="noopener noreferrer"
       title={`Open https://${name} in a new window`}
-      className="group/domain inline-flex items-center font-mono underline-offset-[3px] hover:underline compact:text-[13px]"
+      className="group/domain inline-flex min-w-0 items-center break-all font-mono underline-offset-[3px] hover:underline compact:text-[13px]"
     >
       {/* One step up from the reduced mobile body size — the domain is the
           row's primary field. Desktop inherits the table's text-sm. */}
       {name}
       <ExternalLink
-        className="ml-1.5 size-3.5 shrink-0 opacity-0 transition-opacity group-hover/domain:opacity-70"
+        className="ml-1.5 size-3.5 shrink-0 opacity-70"
         aria-hidden
       />
     </a>

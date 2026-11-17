@@ -1,3 +1,5 @@
+import { formatAmountInput, DEFAULT_NUMBER_FORMAT } from '../../shared/money';
+import { useAppStore } from '../store/app';
 import { useEffect, useState } from 'react';
 import type { Domain, RenewalPriceAge, RenewalPricing } from '../../shared/ipc';
 import { domainKey } from '../../shared/account-key';
@@ -19,6 +21,9 @@ export function RenewalCoverage({
   rows: readonly Domain[];
   pricing: Record<string, RenewalPricing>;
 }) {
+  const numberFormat = useAppStore(
+    (s) => s.settings?.numberFormat ?? DEFAULT_NUMBER_FORMAT,
+  );
   const [selected, setSelected] = useState<RenewalPriceAge | 'all'>('all');
   const [page, setPage] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -73,7 +78,10 @@ export function RenewalCoverage({
                 <td className="p-2 tabular-nums">{group.count}</td>
                 <td className="p-2 tabular-nums">
                   {group.totals
-                    .map((t) => `${t.currency} ${t.amount}`)
+                    .map(
+                      (t) =>
+                        `${t.currency} ${formatAmountInput(t.amount, t.currency, numberFormat)}`,
+                    )
                     .join(' · ') || 'Unknown'}
                 </td>
               </tr>

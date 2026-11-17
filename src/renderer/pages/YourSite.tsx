@@ -4,8 +4,8 @@ import {
   PortfolioAddressPanel,
   usePortfolioAddress,
 } from '../components/owner-site/PortfolioAddress';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import DomainWorkspace from './DomainWorkspace';
 import Domains from './Domains';
 import {
@@ -30,6 +30,10 @@ import { ProfileEditor } from '../components/owner-site/ProfileEditor';
 import { SectionsEditor } from '../components/owner-site/SectionsEditor';
 import './your-site.css';
 import { PresenceInspector } from '../components/owner-site/PresenceInspector';
+import {
+  issueFocusTarget,
+  focusIssueField,
+} from '../lib/owner-site-validation-focus';
 import { PublishingWorkspace } from '../components/owner-site/PublishingWorkspace';
 
 function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
@@ -78,20 +82,26 @@ function YourSiteContent({ inventory = false }: { inventory?: boolean }) {
   if (!state.enabled && !isOwnerSite(state.draft))
     return (
       <>
-        <PresenceInspector />
-        <PortfolioAddressPanel />
-        <PortfolioDomainPanel />
         <DomainWorkspace area="page" />
+        <details className="profile-address-settings">
+          <summary>Address and domain settings</summary>
+          <PresenceInspector />
+          <PortfolioAddressPanel />
+          <PortfolioDomainPanel />
+        </details>
       </>
     );
   if (state.revision && !isOwnerSite(state.draft)) {
     if (new URLSearchParams(location.search).has('legacy'))
       return (
         <>
-          <PresenceInspector />
-          <PortfolioAddressPanel />
-          <PortfolioDomainPanel />
           <DomainWorkspace area="page" />
+          <details className="profile-address-settings">
+            <summary>Address and domain settings</summary>
+            <PresenceInspector />
+            <PortfolioAddressPanel />
+            <PortfolioDomainPanel />
+          </details>
         </>
       );
     let preview: PublishedOwnerSite | null = null;
@@ -204,16 +214,58 @@ function SiteAuthor() {
   const publicLink = (handle: string) =>
     addressState?.address?.url ?? hostPath(`/p/${handle}`);
   const { state, draft, status, error } = useSiteEditor();
-  const location = useLocation();
-  const requestedView = new URLSearchParams(location.search).get('view');
-  const [view, setView] = useState(
+  const [params, setParams] = useSearchParams();
+  const requestedView = params.get('view');
+  const view =
     requestedView === 'preview' || requestedView === 'review'
       ? requestedView
-      : 'edit',
-  );
-  const [section, setSection] = useState<
-    'profile' | 'collections' | 'domains' | 'settings'
-  >('profile');
+      : 'edit';
+  const requestedSection = params.get('section');
+  const section = ['profile', 'collections', 'domains', 'settings'].includes(
+    requestedSection ?? '',
+  )
+    ? requestedSection!
+    : 'profile';
+  const setView = (value: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('view', value);
+      return next;
+    });
+  const setSection = (value: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('section', value);
+      return next;
+    });
+  const [focusRequest, setFocusRequest] = useState<ReturnType<
+    typeof issueFocusTarget
+  > | null>(null);
+  const editorRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!focusRequest || view !== 'edit' || section !== focusRequest.section)
+      return;
+    const root = editorRef.current;
+    if (!root) return;
+    const focus = () => {
+      if (!focusIssueField(root, focusRequest.field)) return false;
+      setFocusRequest(null);
+      return true;
+    };
+    if (focus()) return;
+    // Domain pagination/filter state may commit after the URL-selected section.
+    // Observe that commit instead of guessing when a frame will contain it.
+    const observer = new MutationObserver(() => {
+      if (focus()) observer.disconnect();
+    });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+    return () => observer.disconnect();
+  }, [focusRequest, view, section]);
+  const initialReview = useRef(requestedView === 'review');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState('');
@@ -236,10 +288,10 @@ function SiteAuthor() {
     void siteEditor
       .load()
       .then(() => {
-        if (requestedView === 'review') return siteEditor.refreshReview();
+        if (initialReview.current) return siteEditor.refreshReview();
       })
       .catch(() => {});
-  }, [requestedView]);
+  }, []);
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => {
       if (siteEditor.isDirty()) {
@@ -284,27 +336,13 @@ function SiteAuthor() {
     siteEditor.update(value);
   };
   const live = state.publishedSnapshot;
-  const exportBackup = async () => {
-    const text = await window.api.exportData();
-    const url = URL.createObjectURL(
-      new Blob([text], { type: 'application/json' }),
-    );
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'domains-domains-private-backup.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
   return (
-    <section className="os-editor">
+    <section className="os-editor" ref={editorRef}>
       <header className="os-header">
         <div>
           <span className="os-eyebrow">Public profile</span>
           <h1>{draft.profile.name}</h1>
-          <p>
-            Introduce yourself. Share only what you choose. A site with no
-            public domains is complete.
-          </p>
           <p role="status">
             {status === 'saved'
               ? 'Draft saved'
@@ -319,9 +357,15 @@ function SiteAuthor() {
           </p>
         </div>
         <div className="os-actions">
-          <a href={publicLink(draft.handle)} target="_blank" rel="noreferrer">
-            {live ? 'View published site ↗' : 'Published address'}
-          </a>
+          {live ? (
+            <a href={publicLink(draft.handle)} target="_blank" rel="noreferrer">
+              View published site ↗
+            </a>
+          ) : (
+            <span>
+              Future address: {publicLink(draft.handle)} · not published
+            </span>
+          )}
           <button
             onClick={() => void run(() => siteEditor.flush())}
             disabled={busy || !state.enabled}
@@ -367,36 +411,58 @@ function SiteAuthor() {
         </div>
       )}
       {!issues.success && (
-        <ul role="alert">
-          {issues.error.issues.slice(0, 6).map((issue, i) => (
+        <p role="alert">
+          {issues.error.issues.length}{' '}
+          {issues.error.issues.length === 1 ? 'field needs' : 'fields need'}{' '}
+          attention. Choose an issue to open its section.
+        </p>
+      )}
+      {!issues.success && (
+        <ul>
+          {issues.error.issues.map((issue, i) => (
             <li key={i}>
-              {issue.path
-                .map((part) =>
-                  typeof part === 'number'
-                    ? part + 1
-                    : ((
-                        {
-                          profile: 'Profile',
-                          domainPresentations: 'Domain details',
-                          projects: 'Projects',
-                          collections: 'Collections',
-                          url: 'HTTPS link',
-                          name: 'Display name',
-                          title: 'Title',
-                          intro: 'Introduction',
-                          contactEmail: 'Public contact email',
-                          interests: 'Investment interests',
-                          opportunities: 'Conversations welcome',
-                          links: 'Profile links',
-                          headline: 'Headline',
-                          slug: 'Collection link',
-                          askingPrice: 'Asking price',
-                          currency: 'Currency',
-                        } as Record<string, string>
-                      )[String(part)] ?? String(part)),
-                )
-                .join(' → ')}
-              : {issue.message}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  const target = issueFocusTarget(issue.path);
+                  setFocusRequest(target);
+                  setParams((previous) => {
+                    const next = new URLSearchParams(previous);
+                    next.set('view', 'edit');
+                    next.set('section', target.section);
+                    return next;
+                  });
+                }}
+              >
+                {issue.path
+                  .map((part) =>
+                    typeof part === 'number'
+                      ? part + 1
+                      : ((
+                          {
+                            profile: 'Profile',
+                            domainPresentations: 'Domain details',
+                            projects: 'Projects',
+                            collections: 'Collections',
+                            url: 'HTTPS link',
+                            name: 'Display name',
+                            title: 'Title',
+                            intro: 'Introduction',
+                            contactEmail: 'Public contact email',
+                            interests: 'Investment interests',
+                            opportunities: 'Conversations welcome',
+                            links: 'Profile links',
+                            headline: 'Headline',
+                            slug: 'Collection link',
+                            askingPrice: 'Asking price',
+                            currency: 'Currency',
+                          } as Record<string, string>
+                        )[String(part)] ?? String(part)),
+                  )
+                  .join(' → ')}
+                : {issue.message}
+              </button>
             </li>
           ))}
         </ul>
@@ -459,12 +525,12 @@ function SiteAuthor() {
         </nav>
       )}
       {view === 'edit' && section === 'settings' && (
-        <>
+        <section data-field="settings" tabIndex={-1}>
           <PortfolioAddressPanel />
           <PortfolioDomainPanel />
           {state.v3Enabled && draft.version === 2 && (
             <section>
-              <h2>Linked domain pages (v3)</h2>
+              <h2>Use linked domain pages</h2>
               <p>
                 Conversion keeps selected and excluded draft sections, prices,
                 contact fields and order. It creates no Sales links and does not
@@ -482,11 +548,11 @@ function SiteAuthor() {
                   })
                 }
               >
-                Save v3 draft conversion
+                Update private draft
               </button>
             </section>
           )}
-        </>
+        </section>
       )}
       {view === 'edit' && section === 'domains' && (
         <PublishingWorkspace draft={draft} state={state} />
@@ -504,6 +570,7 @@ function SiteAuthor() {
           {section !== 'profile' && (
             <SectionsEditor
               section={section === 'domains' ? 'domains' : 'collections'}
+              focusField={focusRequest?.field}
               draft={draft}
               review={state.review}
               onChange={update}
@@ -604,9 +671,7 @@ function SiteAuthor() {
         </section>
       )}
       <footer className="os-footer">
-        <button disabled={busy} onClick={() => void run(exportBackup)}>
-          Export private backup
-        </button>
+        <Link to="/settings?tab=import-export">Back up your portfolio…</Link>
         {live && (
           <>
             <a href={publicLink(live.handle)} target="_blank" rel="noreferrer">

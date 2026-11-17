@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   canonicalDomain,
@@ -17,8 +17,10 @@ export function SectionsEditor({
   review,
   onChange,
   section,
+  focusField,
 }: {
   section?: 'collections' | 'domains';
+  focusField?: string;
   draft: OwnerSiteDraft;
   review: ReconciledListing[];
   onChange: (draft: OwnerSiteDraft) => void;
@@ -28,6 +30,14 @@ export function SectionsEditor({
   const [error, setError] = useState('');
   const [domainQuery, setDomainQuery] = useState('');
   const [domainPage, setDomainPage] = useState(1);
+  const [revealedField, setRevealedField] = useState<string>();
+  useEffect(() => {
+    const match = focusField?.match(/^domainPresentations\.(\d+)(?:\.|$)/);
+    if (!match) return;
+    setRevealedField(focusField);
+    setDomainQuery('');
+    setDomainPage(Math.floor(Number(match[1]) / 30) + 1);
+  }, [focusField]);
   const domainRows = draft.domainPresentations.filter((d) =>
     d.domain.includes(domainQuery.toLowerCase()),
   );
@@ -39,6 +49,7 @@ export function SectionsEditor({
         <label className="os-check">
           <input
             type="checkbox"
+            data-field={index >= 0 ? `homepage.${kind}.${index}` : undefined}
             checked={index >= 0}
             onChange={() =>
               onChange({
@@ -85,18 +96,28 @@ export function SectionsEditor({
   };
   return (
     <>
-      <section hidden={section === 'domains'}>
+      <section
+        hidden={section === 'domains'}
+        data-field="collections"
+        tabIndex={-1}
+      >
         <h2>Collections</h2>
         <p>
           Give a selection context. Include it on your site only when it is
           ready; an included collection must contain at least one domain.
         </p>
-        {draft.collections.map((c) => (
-          <div className="os-section" key={c.id}>
+        {draft.collections.map((c, index) => (
+          <div
+            className="os-section"
+            key={c.id}
+            data-field={`collections.${index}`}
+            tabIndex={-1}
+          >
             <div className="os-fields">
               <label>
                 Collection title
                 <input
+                  data-field={`collections.${index}.title`}
                   value={c.title}
                   maxLength={100}
                   onChange={(e) =>
@@ -112,6 +133,7 @@ export function SectionsEditor({
               <label>
                 Collection link
                 <input
+                  data-field={`collections.${index}.slug`}
                   value={c.slug}
                   onChange={(e) =>
                     onChange({
@@ -127,6 +149,7 @@ export function SectionsEditor({
               <label>
                 Collection introduction
                 <textarea
+                  data-field={`collections.${index}.intro`}
                   value={c.intro}
                   maxLength={600}
                   onChange={(e) =>
@@ -153,7 +176,10 @@ export function SectionsEditor({
                 })
               }
             />
-            <button onClick={() => setPicker(picker === c.id ? null : c.id)}>
+            <button
+              data-field={`collections.${index}.domainIds`}
+              onClick={() => setPicker(picker === c.id ? null : c.id)}
+            >
               Select domains for {c.title}
             </button>
             {picker === c.id && (
@@ -212,20 +238,30 @@ export function SectionsEditor({
           Add collection
         </button>
       </section>
-      <section hidden={section === 'domains'}>
+      <section
+        hidden={section === 'domains'}
+        data-field="projects"
+        tabIndex={-1}
+      >
         <h2>Projects</h2>
         <p>
           Show what you are building. Links and project descriptions are your
           claims; adding a domain requires the same ownership check as a
           collection.
         </p>
-        {draft.projects.map((p) => (
-          <div className="os-section" key={p.id}>
+        {draft.projects.map((p, index) => (
+          <div
+            className="os-section"
+            key={p.id}
+            data-field={`projects.${index}`}
+            tabIndex={-1}
+          >
             <div className="os-fields">
               <label>
                 Project title
                 <input
                   maxLength={100}
+                  data-field={`projects.${index}.title`}
                   value={p.title}
                   onChange={(e) =>
                     onChange({
@@ -241,6 +277,7 @@ export function SectionsEditor({
                 Project HTTPS link
                 <input
                   type="url"
+                  data-field={`projects.${index}.url`}
                   value={p.url}
                   onChange={(e) =>
                     onChange({
@@ -256,6 +293,7 @@ export function SectionsEditor({
                 Project description
                 <textarea
                   maxLength={600}
+                  data-field={`projects.${index}.description`}
                   value={p.description}
                   onChange={(e) =>
                     onChange({
@@ -283,7 +321,10 @@ export function SectionsEditor({
                 })
               }
             />
-            <button onClick={() => setPicker(picker === p.id ? null : p.id)}>
+            <button
+              data-field={`projects.${index}.domainIds`}
+              onClick={() => setPicker(picker === p.id ? null : p.id)}
+            >
               Select project domains (optional)
             </button>
             {picker === p.id && (
@@ -341,11 +382,16 @@ export function SectionsEditor({
           Add project
         </button>
       </section>
-      <section hidden={section === 'domains'}>
+      <section
+        hidden={section === 'domains'}
+        data-field="catalogue"
+        tabIndex={-1}
+      >
         <h2>Optional catalogue</h2>
         <label className="os-check">
           <input
             type="checkbox"
+            data-field="catalogue.enabled"
             checked={draft.catalogue.enabled}
             onChange={(e) =>
               onChange({
@@ -370,6 +416,7 @@ export function SectionsEditor({
               }
             />
             <button
+              data-field="catalogue.domainIds"
               onClick={() =>
                 setPicker(picker === 'catalogue' ? null : 'catalogue')
               }
@@ -393,7 +440,11 @@ export function SectionsEditor({
           </>
         )}
       </section>
-      <section hidden={section === 'collections'}>
+      <section
+        hidden={section === 'collections'}
+        data-field="domainPresentations"
+        tabIndex={-1}
+      >
         <h2>Domain details</h2>
         <p>
           One availability and price per domain, shared across every collection.
@@ -411,7 +462,12 @@ export function SectionsEditor({
           />
         </label>
         {domainRows.slice((domainPage - 1) * 30, domainPage * 30).map((d) => (
-          <details className="os-section" key={d.id}>
+          <details
+            className="os-section"
+            key={d.id}
+            data-field={`domainPresentations.${draft.domainPresentations.indexOf(d)}`}
+            tabIndex={-1}
+          >
             <summary>
               {d.domain} ·{' '}
               {d.ownership === 'historical'
@@ -459,6 +515,7 @@ export function SectionsEditor({
               <label>
                 Ownership assertion
                 <select
+                  data-field={`domainPresentations.${draft.domainPresentations.indexOf(d)}.ownership`}
                   value={d.ownership}
                   onChange={(e) =>
                     onChange({
@@ -488,6 +545,7 @@ export function SectionsEditor({
               <label>
                 Availability
                 <select
+                  data-field={`domainPresentations.${draft.domainPresentations.indexOf(d)}.availability`}
                   value={d.availability}
                   disabled={d.ownership === 'historical'}
                   onChange={(e) =>
@@ -514,6 +572,7 @@ export function SectionsEditor({
                 Domain description
                 <textarea
                   maxLength={400}
+                  data-field={`domainPresentations.${draft.domainPresentations.indexOf(d)}.description`}
                   value={d.description}
                   onChange={(e) =>
                     onChange({
@@ -527,7 +586,13 @@ export function SectionsEditor({
                   }
                 />
               </label>
-              {d.availability === 'inquiries' && (
+              {(d.availability === 'inquiries' ||
+                (focusField ?? revealedField)?.startsWith(
+                  `domainPresentations.${draft.domainPresentations.indexOf(d)}.askingPrice`,
+                ) ||
+                (focusField ?? revealedField)?.startsWith(
+                  `domainPresentations.${draft.domainPresentations.indexOf(d)}.currency`,
+                )) && (
                 <>
                   <label>
                     Asking price (optional)
@@ -539,6 +604,7 @@ export function SectionsEditor({
                       type="number"
                       min="0.01"
                       step="any"
+                      data-field={`domainPresentations.${draft.domainPresentations.indexOf(d)}.askingPrice`}
                       value={d.askingPrice ?? ''}
                       onChange={(e) =>
                         onChange({
@@ -562,6 +628,7 @@ export function SectionsEditor({
                     Currency
                     <input
                       maxLength={3}
+                      data-field={`domainPresentations.${draft.domainPresentations.indexOf(d)}.currency`}
                       value={d.currency}
                       onChange={(e) =>
                         onChange({

@@ -1,3 +1,9 @@
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../components/ui/collapsible';
+import { matchesRenewalMonth } from '../lib/renewals';
 import { marketObservationRows } from '../../shared/market-observation-rows';
 import { PublicPageActions } from '../components/domains/PublicPageActions';
 import { supportsSales } from '../lib/platform';
@@ -772,7 +778,7 @@ const COLUMNS: Column[] = [
     key: 'domainName',
     label: 'Domain',
     render: (d) => (
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
         <DomainLink name={d.domainName} />
         <LifecycleBadge status={d.status} hold />
         {d.source === 'imported' && (
@@ -2056,9 +2062,30 @@ export default function Domains() {
   );
 
   // Filter → sort. Pagination is applied after, on the sorted result.
+  const forecastMonth = params.get('renewalMonth');
+  const forecastMode = params.get('renewalMode');
+  const forecastRegistrar = params.get('renewalRegistrar');
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = shown.filter((d) => {
+      if (
+        forecastMonth &&
+        !(
+          !standingOfRow(d).archived &&
+          !standingOfRow(d).salePending &&
+          matchesRenewalMonth(d, forecastMonth, new Date(now)) &&
+          (forecastMode !== 'auto' ||
+            (d.autoRenew === true && !d.autoRenewUnknown)) &&
+          (forecastMode !== 'manual' ||
+            d.autoRenew !== true ||
+            d.autoRenewUnknown) &&
+          (!forecastRegistrar ||
+            forecastRegistrar
+              .split(',')
+              .includes(registrarFilterValue(d, portfolioRegistrarLabels)))
+        )
+      )
+        return false;
       if (pastExpiryOnly && !standingOfRow(d).pastReportedExpiry) return false;
       if (q && !d.domainName.toLowerCase().includes(q)) return false;
       if (tld.length > 0 && !tld.includes(tldOf(d.domainName))) return false;
@@ -2174,6 +2201,10 @@ export default function Domains() {
     sortKey,
     sortDir,
     pricing,
+    forecastMonth,
+    forecastMode,
+    forecastRegistrar,
+    now,
   ]);
 
   // The rows on screen (the table pages the same way), for lazy detail loads.
@@ -2413,7 +2444,7 @@ export default function Domains() {
       const key = domainKey(d);
       return (
         <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-2">
+          <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-2 break-all">
             {col.render(d, portfolioRegistrarLabels)}
             <SoldBadge standing={standingOfRow(d)} underWay={saleUnderWay(d)} />
           </span>
@@ -2576,11 +2607,11 @@ export default function Domains() {
     .join('\n');
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div className="inventory-page flex w-full flex-col sm:min-h-0 sm:flex-1">
       {/* Title and filters scroll away on a short screen so the column names
           and the row-count bar keep a slice of the page. The -m-1 p-1
           pair leaves room for focus rings, which the scroll box would clip. */}
-      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1 short:gap-[9px]">
+      <div className="-m-1 flex shrink-0 flex-col gap-[13px] p-1 short:gap-[9px]">
         <div className="mb-1 flex items-start justify-between gap-x-6 short:mb-[7px]">
           {/* Centred on the 36px Sync button beside it. */}
           <h1 className="mt-1.5 flex min-w-0 items-baseline gap-2.5 text-2xl font-bold leading-none sm:mt-0.5 sm:text-[32px]">
@@ -2690,18 +2721,40 @@ export default function Domains() {
           matches). Columns is in the table's footer, under the rows. */}
         {/* One bar per view: each has its own default chips, and its own
             memory of the ones you removed. */}
+        {forecastMonth && (
+          <div className="rounded-md border bg-card p-3 text-sm">
+            <strong>Scheduled renewals: {forecastMonth}</strong>
+            <p>
+              {forecastMode === 'auto'
+                ? 'Auto-renew enabled'
+                : forecastMode === 'manual'
+                  ? 'Manual renewals'
+                  : 'All renewal settings'}
+              {forecastRegistrar ? ' · selected registrar source' : ''}. Dates
+              and inclusion follow the Renewals forecast.
+            </p>
+            <Link
+              className="inline-flex min-h-11 items-center underline"
+              to="/"
+            >
+              Clear forecast scope and use inventory filters
+            </Link>
+          </div>
+        )}
         <FilterToolbar
           key={view}
           id={`domains.${view}`}
           switch={
-            <OwnershipSwitch
-              view={view}
-              ownedCount={ownedCount}
-              listedCount={listedCount}
-              archiveCount={archiveCount}
-              listings={marketsOn}
-              onView={setListView}
-            />
+            !forecastMonth && (
+              <OwnershipSwitch
+                view={view}
+                ownedCount={ownedCount}
+                listedCount={listedCount}
+                archiveCount={archiveCount}
+                listings={marketsOn}
+                onView={setListView}
+              />
+            )
           }
           search={search}
           onSearch={(value) => {
@@ -2797,6 +2850,58 @@ export default function Domains() {
       )}
       <DataTable
         className="mt-[13px] min-h-64"
+        mobileRow={(d) => (
+          <div className="space-y-3">
+            {renderCell(columnByKey.get('domainName')!, d)}
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+              <div>
+                <dt className="text-xs text-muted-foreground">Registrar</dt>
+                <dd className="break-words">
+                  {d.registrationRegistrar ||
+                    (d.source === 'imported'
+                      ? importedRegistrarName(d, portfolioRegistrarLabels)
+                      : registrarLabel(
+                          d.registrar,
+                          portfolioRegistrarLabels,
+                        )) ||
+                    'Unknown'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  {archiveView ? 'Reported expiry (not owned)' : 'Expiry'}
+                </dt>
+                <dd className="[&>*]:flex-wrap">
+                  {renderCell(columnByKey.get('expirationDate')!, d)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  {archiveView
+                    ? 'Saved annual estimate (historical)'
+                    : 'Annual renewal estimate'}
+                </dt>
+                <dd>{dataColumn(RENEWAL).cell(d)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Auto-renew</dt>
+                <dd>{renderCell(columnByKey.get('autoRenew')!, d)}</dd>
+              </div>
+            </dl>
+            <Collapsible>
+              <CollapsibleTrigger className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
+                Page and domain details
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                {supportsSales() && (
+                  <PublicPageActions domain={toAscii(d.domainName)} />
+                )}
+                <DomainLink name={d.domainName} />
+                {renderCell(columnByKey.get('nameservers')!, d)}
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        )}
         // The bulk actions float over the table once rows are selected (or
         // a bulk job's progress, while one runs).
         floatingBar={

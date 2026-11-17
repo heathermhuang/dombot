@@ -279,9 +279,10 @@ export function RowActionsMenu({
             // Covers the Domain cell outside the name: the cell lights, not
             // the button (index.css).
             data-cell-action
-            className="-my-2 w-7 text-muted-foreground hover:bg-transparent hover:text-foreground compact:h-7 compact:w-6 dark:hover:bg-transparent"
+            className="-my-2 w-auto gap-1 px-2 text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent"
           >
             <Ellipsis />
+            <span className="text-xs sm:sr-only">Manage</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

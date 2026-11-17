@@ -245,3 +245,69 @@
     transition: none;
   }
 }
+
+/* Working controls retain their height; the page owns vertical scrolling. */
+.hosted-app .inventory-page > * {
+  flex-shrink: 0;
+}
+.hosted-app .inventory-page > .\@container {
+  flex-shrink: 1;
+}
+.profile-address-settings {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.profile-address-settings > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.hosted-app .sales-lander-action {
+  flex-shrink: 0;
+}
+.hosted-app .sales-lander-history {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+}
+@media (max-width: 639px) {
+  .app-statusbar {
+    min-height: 44px;
+  }
+  .app-statusbar > div:last-child {
+    justify-content: flex-end;
+  }
+  .hosted-app .inventory-page > .\@container {
+    flex: none;
+    min-height: 400px;
+  }
+  .hosted-app .inventory-page .domain-scroll-host {
+    min-height: 340px;
+  }
+  .hosted-app .sales-toolbar {
+    flex-wrap: wrap;
+  }
+  .hosted-app .sales-toolbar > select {
+    flex: 1 1 150px;
+    min-width: 0;
+    width: auto;
+  }
+  .hosted-app .sales-nav {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .hosted-app .sales-nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* Keep all primary labels visible when metrics and the managed release badge fill the header. */
+@media (max-width: 1535px) {
+  .hosted-app .hosted-nav [data-slot='tab-metric'] {
+    display: none;
+  }
+}

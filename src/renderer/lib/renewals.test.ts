@@ -10,6 +10,7 @@ import {
   summarize,
   tldOf,
   upcomingByMonth,
+  matchesRenewalMonth,
 } from './renewals';
 
 const NOW = new Date('2026-06-15T12:00:00Z');
@@ -411,5 +412,34 @@ it('counts portal snapshots separately from base, TLD and manual prices', () => 
     tld: 0,
     manual: 0,
     yearly: 45,
+  });
+});
+
+describe('forecast domain drill-down', () => {
+  it('uses the same qualified date and future-month boundary as chart membership', () => {
+    const rows = [
+      domain({
+        domainName: 'renewal.example',
+        expirationDate: new Date('2026-09-01T00:00:00Z'),
+        renewalDate: new Date('2026-07-02T00:00:00Z'),
+      }),
+      domain({
+        domainName: 'expiry.example',
+        expirationDate: new Date('2026-07-10T00:00:00Z'),
+      }),
+      domain({
+        domainName: 'past.example',
+        expirationDate: new Date('2026-06-01T00:00:00Z'),
+      }),
+      domain({ domainName: 'unknown.example' }),
+    ];
+    const now = new Date('2026-06-15T12:00:00Z');
+    expect(
+      rows
+        .filter((d) => matchesRenewalMonth(d, '2026-07', now))
+        .map((d) => d.domainName),
+    ).toEqual(['renewal.example', 'expiry.example']);
+    expect(matchesRenewalMonth(rows[2], '2026-06', now)).toBe(false);
+    expect(matchesRenewalMonth(rows[3], '2026-07', now)).toBe(false);
   });
 });

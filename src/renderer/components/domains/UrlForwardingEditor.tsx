@@ -65,7 +65,7 @@ export function UrlForwardingEditor({
       )}
 
       {rows.length > 0 && (
-        <div className="grid grid-cols-[6rem_minmax(0,1fr)_9.5rem_2rem] items-center gap-2 text-xs text-muted-foreground">
+        <div className="hidden sm:grid sm:grid-cols-[6rem_minmax(0,1fr)_9.5rem_2rem] items-center gap-2 text-xs text-muted-foreground">
           <span>Host</span>
           <span>Destination URL</span>
           <span>Redirect</span>
@@ -75,49 +75,64 @@ export function UrlForwardingEditor({
       {rows.map((r, i) => (
         <div
           key={i}
-          className="grid grid-cols-[6rem_minmax(0,1fr)_9.5rem_2rem] items-center gap-2"
+          className="grid grid-cols-1 sm:grid-cols-[6rem_minmax(0,1fr)_9.5rem_2rem] items-center gap-2"
         >
-          <Input
-            value={r.host}
-            placeholder="@"
-            aria-label="Host"
-            disabled={disabled}
-            onChange={(e) => update(i, { host: e.target.value })}
-            className="h-8 font-mono text-[13px]"
-          />
-          <Input
-            value={r.url}
-            placeholder={urlPlaceholder}
-            aria-label="Destination URL"
-            disabled={disabled}
-            onChange={(e) => update(i, { url: e.target.value })}
-            className="h-8 font-mono text-[13px]"
-          />
-          <Select
-            value={r.type}
-            disabled={disabled}
-            onValueChange={(v) =>
-              update(i, { type: v as UrlForwardInput['type'] })
-            }
-          >
-            <SelectTrigger
-              size="sm"
-              aria-label="Redirect type"
-              className="w-full"
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground sm:sr-only">
+              Rule {i + 1} host
+            </span>
+            <Input
+              value={r.host}
+              placeholder="@"
+              aria-label={`Rule ${i + 1} host`}
+              disabled={disabled}
+              onChange={(e) => update(i, { host: e.target.value })}
+              className="h-11 sm:h-8 font-mono text-[13px]"
+            />
+          </label>
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground sm:sr-only">
+              Destination URL
+            </span>
+            <Input
+              value={r.url}
+              placeholder={urlPlaceholder}
+              aria-label={`Rule ${i + 1} destination URL`}
+              disabled={disabled}
+              onChange={(e) => update(i, { url: e.target.value })}
+              className="h-11 sm:h-8 font-mono text-[13px]"
+            />
+          </label>
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground sm:sr-only">
+              Redirect type
+            </span>
+            <Select
+              value={r.type}
+              disabled={disabled}
+              onValueChange={(v) =>
+                update(i, { type: v as UrlForwardInput['type'] })
+              }
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="permanent">301 permanent</SelectItem>
-              <SelectItem value="temporary">302 temporary</SelectItem>
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                size="sm"
+                aria-label={`Rule ${i + 1} redirect type`}
+                className="w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="permanent">301 permanent</SelectItem>
+                <SelectItem value="temporary">302 temporary</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
           <Button
             variant="ghost"
             size="icon-sm"
             disabled={disabled}
             onClick={() => remove(i)}
-            aria-label="Remove rule"
+            aria-label={`Remove rule ${i + 1}`}
             className="text-muted-foreground hover:text-destructive"
           >
             <Trash2 />

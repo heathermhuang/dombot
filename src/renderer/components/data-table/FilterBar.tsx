@@ -359,10 +359,11 @@ function FilterChip({
         </DropdownMenuTrigger>
         <button
           type="button"
-          aria-label={`${empty ? 'Remove' : 'Clear'} ${field.label} filter`}
-          title={empty ? 'Remove filter' : 'Clear filter'}
+          aria-label={`${empty ? 'Hide control for' : 'Clear'} ${field.label} filter`}
+          title={empty ? 'Hide this filter control' : 'Clear filter'}
           onClick={empty ? onRemove : onClear}
           className={cn(
+            empty && 'hidden!',
             // Vertically centred where it always was, but the hitbox starts at
             // the icon (no padding on its left), over the trigger, so a click
             // just past the value doesn't land on it.

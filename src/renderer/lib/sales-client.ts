@@ -68,7 +68,10 @@ export function useSalesAction() {
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [reauth, setReauth] = useState('');
+  const running = useRef(false);
   const run = async (work: () => Promise<void>) => {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setError('');
     setNotice('');
@@ -89,6 +92,7 @@ export function useSalesAction() {
           : 'Could not save. Your edits are still here.',
       );
     } finally {
+      running.current = false;
       setBusy(false);
     }
   };

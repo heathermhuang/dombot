@@ -1,3 +1,4 @@
+import { salesDestinationLabel } from '../../lib/sales-destination-label';
 import { PublicPageJourney } from '../../components/domains/PublicPageJourney';
 import { publicDomainPath } from '../../../shared/public-publishing-links';
 import { useListingDraft } from '../../lib/sales-drafts';
@@ -149,9 +150,41 @@ function ListingEditorView() {
       {remote.data && comparison && (
         <details>
           <summary>Saved version comparison</summary>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify(remote.data.draft, null, 2)}
-          </pre>
+          <div className="sales-table-region">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Your edits</th>
+                  <th>Saved version</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.keys(remote.data.draft)
+                  .filter(
+                    (key) =>
+                      !['id', 'version'].includes(key) &&
+                      JSON.stringify(draft?.[key as keyof SaleDraft]) !==
+                        JSON.stringify(
+                          remote.data!.draft[key as keyof SaleDraft],
+                        ),
+                  )
+                  .map((key) => (
+                    <tr key={key}>
+                      <th>{draftFieldLabel(key)}</th>
+                      <td>
+                        {draftFieldValue(draft?.[key as keyof SaleDraft])}
+                      </td>
+                      <td>
+                        {draftFieldValue(
+                          remote.data!.draft[key as keyof SaleDraft],
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </details>
       )}
       <div className="sales-mobile-tabs">
@@ -443,11 +476,27 @@ function ListingEditorView() {
                   <option value="">Direct inquiry</option>
                   {remote.data.destinations.map((v: SaleDestination) => (
                     <option key={v.id} value={v.id}>
-                      {v.provider} · {v.url} · {v.check}
+                      {v.provider} · {salesDestinationLabel(v.url)}
                     </option>
                   ))}
                 </select>
               </Field>
+              {draft.destinationId && (
+                <p className="small break-all">
+                  Selected destination:{' '}
+                  {
+                    remote.data.destinations.find(
+                      (v) => v.id === draft.destinationId,
+                    )?.url
+                  }{' '}
+                  ·{' '}
+                  {remote.data.destinations.find(
+                    (v) => v.id === draft.destinationId,
+                  )?.check === 'manual'
+                    ? 'Seller-configured; provider availability unverified'
+                    : 'See provider link check'}
+                </p>
+              )}
               <Link className="link" to="/sales/channels">
                 Manage provider links
               </Link>
@@ -578,6 +627,7 @@ function ListingEditorView() {
                 <div className="sales-toolbar">
                   <button
                     type="button"
+                    disabled={action.busy}
                     onClick={() =>
                       void action.run(async () => {
                         await salesRequest(`/listings/${id}/pause`, 'POST', {
@@ -592,7 +642,14 @@ function ListingEditorView() {
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
+                    disabled={action.busy}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          'Unpublish this page? Its public URL will stop accepting inquiries. Your private draft is retained and can be reviewed and published again.',
+                        )
+                      )
+                        return;
                       void action.run(async () => {
                         await salesRequest(
                           `/listings/${id}/unpublish`,
@@ -605,10 +662,10 @@ function ListingEditorView() {
                         editor.saved(latest.draft, latest.revision);
                         await remote.reload();
                         action.setNotice(
-                          'Public sales page removed. Private draft retained.',
+                          'Public sales page removed. Private draft retained. Review changes to publish again.',
                         );
-                      })
-                    }
+                      });
+                    }}
                   >
                     Unpublish
                   </button>
@@ -633,4 +690,32 @@ function ListingEditorView() {
       )}
     </SalesShell>
   );
+}
+
+function draftFieldLabel(key: string) {
+  return (
+    (
+      {
+        displayName: 'Display capitalization',
+        publicPriceSource: 'Public price source',
+        description: 'Description',
+        sellerDisplayName: 'Seller display name',
+        allowQuestions: 'Allow questions',
+        destinationId: 'Provider destination',
+        shopSelected: 'Include in Sales shop',
+      } as Record<string, string>
+    )[key] ??
+    key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
+  );
+}
+function draftFieldValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'Not set';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value))
+    return value.map(draftFieldValue).join(', ') || 'None';
+  if (typeof value === 'object')
+    return Object.entries(value)
+      .map(([k, v]) => `${draftFieldLabel(k)}: ${draftFieldValue(v)}`)
+      .join(' · ');
+  return String(value);
 }

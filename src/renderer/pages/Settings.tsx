@@ -79,7 +79,10 @@ export default function Settings() {
           {/* Phones: a compact section picker that stays one line no matter how
               many sections there are. Desktop: the vertical sidebar list. */}
           <Select value={tab} onValueChange={setTab}>
-            <SelectTrigger className="w-full md:hidden">
+            <SelectTrigger
+              aria-label="Settings section"
+              className="w-full md:hidden"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -172,7 +172,13 @@ export function DomainTableScroll({
       ref={hostRef}
       className="domain-scroll-host relative min-h-0 min-w-0 flex-1"
     >
-      <div ref={scrollRef} className={className}>
+      <div
+        ref={scrollRef}
+        className={className}
+        role="region"
+        aria-label="Scrollable results"
+        tabIndex={0}
+      >
         {children}
       </div>
       <div

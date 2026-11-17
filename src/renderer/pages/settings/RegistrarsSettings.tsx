@@ -181,7 +181,6 @@ export default function RegistrarsSettings() {
           syncs that account&apos;s domains automatically.
         </p>
       </div>
-      <ParkioSources />
 
       <div className="flex flex-col gap-3">
         {/* Above the cards: Sync all on the left (it acts on the cards
@@ -225,6 +224,12 @@ export default function RegistrarsSettings() {
         ))}
         {loaded && cards.length === 0 && !draft && <EmptyRegistrars />}
       </div>
+      <details className="rounded-md border bg-card p-4">
+        <summary className="min-h-11 cursor-pointer font-medium">
+          Other inventory sources · Park.io
+        </summary>
+        <ParkioSources />
+      </details>
     </div>
   );
 }

@@ -49,8 +49,8 @@ export default function StatusBar() {
     : null;
 
   return (
-    <footer className="relative z-40 flex min-h-8 shrink-0 flex-wrap items-center justify-between gap-3 py-1 sm:py-0 border-t bg-background px-4 text-xs text-muted-foreground select-none">
-      <div className="flex items-center gap-4">
+    <footer className="app-statusbar relative z-40 flex min-h-8 shrink-0 items-center justify-between gap-3 border-t bg-background px-4 text-xs text-muted-foreground select-none">
+      <div className="hidden items-center gap-4 sm:flex">
         {isWeb() && <SessionStatus />}
         <button
           type="button"
@@ -77,8 +77,10 @@ export default function StatusBar() {
           Hidden on phones, where the side groups already fill the bar. */}
       <ModeToggle bare className="hidden sm:inline-flex" />
 
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <PricingStatus />
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
+        <span className="hidden min-w-0 truncate lg:inline">
+          <PricingStatus />
+        </span>
         <SyncStatus />
       </div>
     </footer>

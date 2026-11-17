@@ -141,6 +141,8 @@ export function notificationPreferenceRoutes() {
         ? notificationPreferencesSchema.parse(JSON.parse(saved.preferences))
         : notificationDefaults,
       revision: saved?.revision ?? null,
+      address: user.email,
+      workspaceId: user.workspace_id,
       verified: (await salesRecipient(c.env, user.workspace_id, user.email))
         .verified,
       deliveryEnabled: c.env.NOTIFICATION_MAIL_ENABLED === 'true',
