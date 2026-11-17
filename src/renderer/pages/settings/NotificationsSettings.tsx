@@ -173,6 +173,7 @@ export default function NotificationsSettings() {
                 variant="outline"
                 className="mt-2"
                 onClick={() => {
+                  setNotice('');
                   setPrefs(draft);
                   setDraft(null);
                 }}

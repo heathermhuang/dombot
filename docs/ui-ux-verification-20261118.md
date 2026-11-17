@@ -42,10 +42,10 @@ Pass here means the page was opened and the relevant responsive layout and chang
 - Typecheck and ESLint pass.
 - Full final serial unit suite: **322 files passed; 3,475 tests passed; 1 pre-existing skip**.
 - Security regression suite: 4 passed. Relay checks: 4 passed.
-- Final engine verification passes: candidate `2.2.2-hosted.4`, source SHA-256 `5940077762cbc27c9a0004572d025f2f0cd2427762c029bdc1b87f2f836ce232`, archive SHA-256 `d0c532571bddd3c24731b42229317fb1099e0443bd687491df89fa0905eb3859`.
+- Final engine verification passes: candidate `2.2.2-hosted.4`, source SHA-256 `41e948fb71a84302b0fc1cfb0ac05713e4be4ff97a1c0b2f4a05078bb553813b`, archive SHA-256 `aed8d161f7de96226abe4c3f04c0ae55055e0c6a2f39d6e8b38ec34249036e53`.
 - Final dry-run bundles: gateway, lander, tenant, provisioner, proxy scheduler and self-hosted Worker. Provisioner preparation, demo and site builds pass. No upload/deployment occurred.
 - New regression coverage includes forecast membership, public paging/query preservation, bounded history summaries without provider writes, authenticated notification recipient/workspace identity, unfinished draft isolation, inbox cursor navigation, exact indexed validation focus and provider destination labels.
-- Review follow-ups fixed hidden duplicate table mounting/presence requests, a populated desktop header overflow, workspace isolation of notification drafts, rapid inbox navigation and forecast/filter integration.
+- The final notification follow-up also clears saved confirmation when restored preferences are applied. Review follow-ups fixed hidden duplicate table mounting/presence requests, a populated desktop header overflow, workspace isolation of notification drafts, rapid inbox navigation and forecast/filter integration.
 
 ## Evidence and limits
 
