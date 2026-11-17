@@ -18,18 +18,29 @@ export default function McpClientsSettings() {
   const loadSettings = useAppStore((s) => s.loadSettings);
   const setMcpEnabled = useAppStore((s) => s.setMcpEnabled);
   const [toggling, setToggling] = useState(false);
+  const [error, setError] = useState('');
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings === null) void loadSettings();
   }, [settings, loadSettings]);
 
   const refresh = useCallback(async () => {
-    const [mcpInfo, list] = await Promise.all([
-      window.api.getMcpInfo(),
-      window.api.listMcpClients(),
-    ]);
-    setInfo(mcpInfo);
-    setClients(list);
+    setError('');
+    try {
+      const [mcpInfo, list] = await Promise.all([
+        window.api.getMcpInfo(),
+        window.api.listMcpClients(),
+      ]);
+      setInfo(mcpInfo);
+      setClients(list);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not load MCP access. Retry to check the current state.',
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -39,8 +50,21 @@ export default function McpClientsSettings() {
   }, [refresh]);
 
   const revoke = async (clientId: string) => {
-    await window.api.revokeMcpClient(clientId);
-    await refresh();
+    if (revoking) return;
+    setRevoking(clientId);
+    setError('');
+    try {
+      await window.api.revokeMcpClient(clientId);
+      await refresh();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Revocation could not be confirmed. Retry loading access.',
+      );
+    } finally {
+      setRevoking(null);
+    }
   };
 
   const toggle = async (enabled: boolean) => {
@@ -48,6 +72,12 @@ export default function McpClientsSettings() {
     try {
       await setMcpEnabled(enabled);
       await refresh();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Could not change MCP availability. Retry loading access.',
+      );
     } finally {
       setToggling(false);
     }
@@ -72,6 +102,14 @@ export default function McpClientsSettings() {
         </p>
       </div>
 
+      {error && (
+        <p role="alert">
+          {error}{' '}
+          <Button variant="outline" onClick={() => void refresh()}>
+            Retry loading access
+          </Button>
+        </p>
+      )}
       <SettingsCard title="MCP server">
         <div className="flex items-center justify-between gap-6">
           <div>
@@ -96,7 +134,9 @@ export default function McpClientsSettings() {
                 aria-hidden
               />
               {loading
-                ? 'Loading…'
+                ? error
+                  ? 'Unavailable'
+                  : 'Loading…'
                 : !enabled
                   ? 'Disabled'
                   : info?.running
@@ -153,7 +193,13 @@ export default function McpClientsSettings() {
       )}
 
       <SettingsCard title="Paired clients">
-        {clients.length === 0 ? (
+        {loading ? (
+          <p role="status">
+            {error
+              ? 'Client access could not be loaded.'
+              : 'Loading client access…'}
+          </p>
+        ) : clients.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No clients paired yet. Connect one and approve it when asked.
           </p>
@@ -167,16 +213,27 @@ export default function McpClientsSettings() {
                     <p className="text-sm font-medium">{c.clientName}</p>
                     <p className="text-xs text-muted-foreground">
                       Paired {formatDate(c.pairedAt)}
-                      {c.scopes &&
-                        ` · ${c.scopes.includes('domains:spend') ? 'Paid registrar access' : c.scopes.includes('domains:write') ? 'Management access' : 'Read only'}`}
+                      {' · '}
+                      {c.scopes
+                        ? c.scopes.includes('domains:spend')
+                          ? 'Paid registrar access'
+                          : c.scopes.includes('domains:write')
+                            ? 'Management access'
+                            : 'Read only'
+                        : 'Legacy grant · review access before using'}
+                      <span className="block">
+                        Connection {c.clientId.slice(0, 8)}
+                      </span>
                     </p>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
+                    aria-label={`Revoke ${c.clientName}, connection ${c.clientId.slice(0, 8)}`}
+                    disabled={revoking !== null}
                     onClick={() => void revoke(c.clientId)}
                   >
-                    Revoke
+                    {revoking === c.clientId ? 'Revoking…' : 'Revoke'}
                   </Button>
                 </div>
               </li>
@@ -195,15 +252,26 @@ export default function McpClientsSettings() {
  */
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const copy = () => {
-    if (!navigator.clipboard) return;
-    void navigator.clipboard.writeText(value).then(() => {
+  const copy = async () => {
+    setCopyError('');
+    try {
+      if (!navigator.clipboard)
+        throw new Error(
+          'Clipboard unavailable. Select and copy the full value below.',
+        );
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1600);
-    });
+    } catch {
+      setCopied(false);
+      setCopyError(
+        'Could not copy automatically. Select and copy the full value below.',
+      );
+    }
   };
 
   return (
@@ -213,7 +281,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
       </span>
       <div className="flex items-center gap-2 rounded-md border bg-muted/40 py-1.5 pr-1.5 pl-3">
         <code
-          className="min-w-0 flex-1 truncate font-mono text-xs text-foreground"
+          className="min-w-0 flex-1 break-all whitespace-pre-wrap select-text font-mono text-xs text-foreground"
           title={value}
         >
           {value}
@@ -221,7 +289,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={copy}
+          onClick={() => void copy()}
           aria-label={`Copy ${label}`}
           className={cn(
             'shrink-0 text-muted-foreground hover:text-foreground',
@@ -231,6 +299,16 @@ function CopyField({ label, value }: { label: string; value: string }) {
           {copied ? <Check /> : <Copy />}
         </Button>
       </div>
+      {copied && (
+        <p role="status" className="text-xs">
+          Copied {label}.
+        </p>
+      )}
+      {copyError && (
+        <p role="alert" className="text-xs">
+          {copyError}
+        </p>
+      )}
     </div>
   );
 }

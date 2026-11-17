@@ -35,7 +35,13 @@ export default function UseLander({
   const [job, setJob] = useState<LanderJobView | null>(null),
     [open, setOpen] = useState(false),
     [recent, setRecent] = useState<
-      { id: string; state: string; total: number; updated_at?: number }[]
+      {
+        id: string;
+        state: string;
+        total: number;
+        updated_at?: number;
+        domain?: string | null;
+      }[]
     >([]),
     [cursor, setCursor] = useState(-1),
     [resumeError, setResumeError] = useState(''),
@@ -302,7 +308,10 @@ export default function UseLander({
                   }
                 >
                   <span>
-                    {domainCount(j.total)} ·{' '}
+                    {j.domain
+                      ? `${j.domain}${j.total > 1 ? ` +${j.total - 1}` : ''}`
+                      : domainCount(j.total)}{' '}
+                    ·{' '}
                     {landerJobLabel({
                       state: j.state,
                       total: j.total,

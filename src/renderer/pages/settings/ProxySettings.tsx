@@ -1,3 +1,4 @@
+import { PasswordInput } from '@/components/ui/password-input';
 import { useEffect, useState } from 'react';
 import { CircleCheck, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
@@ -92,21 +93,11 @@ export default function ProxySettings() {
           egressIp: egressIp.trim(),
         });
         setTest(result);
-        // A clean connection with no address entered yet: adopt the one the
-        // test found and save it, so it's ready without retyping. Only a public
-        // IPv4 is storable, and a failed save must not erase the test result.
+        // Suggest the discovered public IP without changing saved routing.
+        // Only the separate Save action persists this configuration.
         if (result.matches && !egressIp.trim() && isPublicIpv4(result.ip)) {
           setEgressIp(result.ip);
-          try {
-            await window.api.saveProxySettings({
-              url: url.trim(),
-              egressIp: result.ip,
-            });
-            apply(await window.api.getProxySettings());
-            toast.success('Proxy saved');
-          } catch (err) {
-            setError(errorMessage(err));
-          }
+          toast.info('Outgoing IP found. Save to apply these proxy settings.');
         }
       } catch (err) {
         setTest(null);
@@ -182,8 +173,9 @@ export default function ProxySettings() {
               description="An HTTP or HTTPS CONNECT proxy, by hostname or public IPv4 address. Prefer HTTPS when the proxy needs a username and password; an HTTP proxy receives them unencrypted."
             >
               <div className="flex items-start gap-2">
-                <Input
+                <PasswordInput
                   id="proxy-url"
+                  revealLabel="proxy URL"
                   autoComplete="off"
                   spellCheck={false}
                   className="font-mono"
@@ -232,7 +224,7 @@ export default function ProxySettings() {
                 autoComplete="off"
                 spellCheck={false}
                 className="font-mono"
-                placeholder="123.456.789.001"
+                placeholder="Use Test to find it"
                 value={egressIp}
                 disabled={locked}
                 onChange={(e) => {

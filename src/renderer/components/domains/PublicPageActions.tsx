@@ -55,39 +55,44 @@ export function PublicPageActions({ domain }: { domain: string }) {
         {state}
       </span>
       {sale?.id ? (
-        <div className="flex flex-wrap gap-x-2 gap-y-1">
-          <Link
-            className="text-primary underline"
-            to={`/sales/listings/${sale.id}`}
-          >
-            Edit
-          </Link>
-          <a
-            className="text-primary underline"
-            href={hostPath(`/sales/listings/${sale.id}/preview`)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Preview
-          </a>
-          {sale.actionable && (
-            <button
-              className="underline"
-              onClick={() =>
-                void navigator.clipboard
-                  .writeText(
-                    new URL(
-                      publicDomainPath(hostPath('/'), domain),
-                      window.location.origin,
-                    ).href,
-                  )
-                  .catch((e) => setError(e.message))
-              }
+        <details className="public-page-actions">
+          <summary className="cursor-pointer text-primary underline">
+            Page actions
+          </summary>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              className="inline-flex min-h-11 items-center px-2 text-primary underline"
+              to={`/sales/listings/${sale.id}`}
             >
-              Copy page link
-            </button>
-          )}
-        </div>
+              Edit
+            </Link>
+            <a
+              className="inline-flex min-h-11 items-center px-2 text-primary underline"
+              href={hostPath(`/sales/listings/${sale.id}/preview`)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Preview
+            </a>
+            {sale.actionable && (
+              <button
+                className="underline"
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(
+                      new URL(
+                        publicDomainPath(hostPath('/'), domain),
+                        window.location.origin,
+                      ).href,
+                    )
+                    .catch((e) => setError(e.message))
+                }
+              >
+                Copy page link
+              </button>
+            )}
+          </div>
+        </details>
       ) : (
         <button
           className="text-primary underline text-left"

@@ -223,6 +223,7 @@ export function TabPill({
   if (!metric) return null;
   return (
     <span
+      data-slot="tab-metric"
       title={metric.title}
       className={cn(
         'inline-flex h-5 items-center rounded-full px-2 text-xs font-medium tabular-nums',

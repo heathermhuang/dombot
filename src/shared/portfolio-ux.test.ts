@@ -119,7 +119,7 @@ describe('portfolio UX contracts', () => {
     expect(preview).toContain('Inquire · disabled in draft');
     const live = renderPortfolio(snapshot, new URL('https://test/p/portfolio'));
     expect(live).toContain('USD 500');
-    expect(live).toContain('>Inquire ');
+    expect(live).toContain('>Email owner ');
     expect(live).toContain('readonly value="owner@example.com"');
     expect(live).not.toContain('<script>');
   });
@@ -190,4 +190,35 @@ it('default rendered order is identical even for previously saved snapshots with
   expect(first.indexOf('<h2>a.example')).toBeLessThan(
     first.indexOf('<h2>z.example'),
   );
+});
+
+describe('public portfolio paging', () => {
+  it('shows a bounded first page with a range and paging before the cards, preserving filters', () => {
+    const snapshot = previewSnapshot({
+      ...draft,
+      listings: Array.from({ length: 55 }, (_, i) => ({
+        ...privateListing(`name-${String(i).padStart(3, '0')}.example`),
+        visibility: 'inquiry' as const,
+      })),
+    });
+    const first = renderPortfolio(
+      snapshot,
+      new URL('https://test/p/portfolio?q=name&sort=short'),
+    );
+    expect((first.match(/<article class="domain-listing"/g) ?? []).length).toBe(
+      24,
+    );
+    expect(first).toContain('1–24 of 55 matches');
+    expect(first.indexOf('aria-label="Pagination"')).toBeLessThan(
+      first.indexOf('<article class="domain-listing"'),
+    );
+    expect(first).toContain('q=name&amp;sort=short&amp;page=2');
+    const second = renderPortfolio(
+      snapshot,
+      new URL('https://test/p/portfolio?page=2'),
+    );
+    expect(second).toContain('25–48 of 55 matches');
+    expect(second).toContain('name-024.example');
+    expect(second).not.toContain('<h2>name-023.example</h2>');
+  });
 });

@@ -19,7 +19,7 @@ export function ExpiryAttention({
   return (
     <section
       aria-label="Past reported expiry"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 p-3 text-sm"
+      className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 p-3 text-sm"
     >
       <div>
         <strong>

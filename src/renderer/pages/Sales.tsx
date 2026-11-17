@@ -1,6 +1,7 @@
+import { supportsPublishing } from '../lib/platform';
 import { DOWNLOAD_PREFIX } from '../../shared/product-brand';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   Building2,
@@ -739,7 +740,8 @@ export default function Sales() {
   if (records.length === 0) {
     return (
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6">
-        <h1 className="text-2xl font-bold sm:text-[32px]">Sales</h1>
+        <h1 className="text-2xl font-bold sm:text-[32px]">Sales reports</h1>
+        {supportsPublishing() && <SalesDestinations />}
         <EmptyState
           boxed
           title="No sales yet"
@@ -769,7 +771,8 @@ export default function Sales() {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      <div className="-m-1 flex min-h-0 flex-col gap-[13px] overflow-y-auto p-1 short:gap-[9px]">
+      {supportsPublishing() && <SalesDestinations />}
+      <div className="-m-1 flex shrink-0 flex-col gap-[13px] p-1 short:gap-[9px]">
         <div className="mb-1 flex min-h-9 items-start justify-between gap-4 short:mb-[7px]">
           <h1 className="mt-1.5 flex min-w-0 items-baseline gap-2.5 text-2xl font-bold leading-none sm:mt-0.5 sm:text-[32px]">
             Sales
@@ -933,5 +936,36 @@ function RowMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function SalesDestinations() {
+  return (
+    <nav aria-label="Selling workspace" className="mb-4 flex flex-wrap gap-2">
+      <Link
+        className="inline-flex min-h-11 items-center rounded-md border bg-card px-3 text-sm"
+        to="/public-listings"
+      >
+        Manage sales pages
+      </Link>
+      <Link
+        className="inline-flex min-h-11 items-center rounded-md border bg-card px-3 text-sm"
+        to="/sales/inbox"
+      >
+        Inquiry inbox
+      </Link>
+      <Link
+        className="inline-flex min-h-11 items-center rounded-md border bg-card px-3 text-sm"
+        to="/settings?tab=markets"
+      >
+        Connect a market
+      </Link>
+      <Link
+        className="inline-flex min-h-11 items-center rounded-md border bg-card px-3 text-sm"
+        to="/activity"
+      >
+        Record a private sale from Activity
+      </Link>
+    </nav>
   );
 }

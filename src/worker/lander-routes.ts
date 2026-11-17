@@ -129,15 +129,22 @@ export function createLanderRoutes(
       ).create(v.selection, v.id, () => salesInventoryNames(c.env)),
     );
   });
-  app.get('/jobs', async (c) =>
-    c.json({
-      items: (
-        await c.env.DB.prepare(
-          'SELECT id,state,total,updated_at FROM lander_jobs ORDER BY created_at DESC LIMIT 20',
-        ).all()
-      ).results,
-    }),
-  );
+  app.get('/jobs', async (c) => {
+    const jobs = (
+      await c.env.DB.prepare(
+        'SELECT id,state,total,updated_at FROM lander_jobs ORDER BY created_at DESC LIMIT 20',
+      ).all<{ id: string; state: string; total: number; updated_at: number }>()
+    ).results;
+    const reader = await controller(c.env);
+    return c.json({
+      items: await Promise.all(
+        jobs.map(async (job) => ({
+          ...job,
+          domain: await reader.summaryDomain(job.id),
+        })),
+      ),
+    });
+  });
   app.get('/jobs/:id', async (c) =>
     c.json(
       await (

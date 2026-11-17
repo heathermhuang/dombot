@@ -249,7 +249,7 @@ export interface MonthBucket {
 }
 
 /** The date a domain next comes up for renewal (renewalDate ?? expirationDate). */
-function renewalDate(d: Domain): Date | null {
+export function renewalDate(d: Domain): Date | null {
   const qualified = qualifyRenewalDate(d);
   const raw = qualified.renewalDate ?? qualified.expirationDate;
   if (!raw) return null;
@@ -375,4 +375,19 @@ export function leavesOut(
   if (count === 0) return null;
   const codes = leftOut.map((t) => t.currency).sort();
   return `Leaves out ${count} ${noun}${count === 1 ? '' : 's'} in ${codes.join(', ')}`;
+}
+
+/** The same future-date/month boundary used by upcomingByMonth. */
+export function matchesRenewalMonth(
+  domain: Domain,
+  month: string,
+  now = new Date(),
+): boolean {
+  const date = renewalDate(domain);
+  return (
+    !!date &&
+    date.getTime() >= now.getTime() &&
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` ===
+      month
+  );
 }

@@ -5,6 +5,8 @@ export const savedNotificationSchema = z.object({
   preferences: notificationPreferencesSchema,
   revision: z.string().uuid().nullable(),
   verified: z.boolean(),
+  address: z.string().email().optional(),
+  workspaceId: z.string().uuid().optional(),
   deliveryEnabled: z.boolean(),
   deliveries: z.array(z.object({ state: z.string(), count: z.number() })),
 });

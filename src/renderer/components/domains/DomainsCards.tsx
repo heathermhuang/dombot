@@ -387,7 +387,8 @@ export function DomainsCards({
           {
             value: total.toLocaleString(),
             unit: words(
-              !!cards.registrars && plural(cards.registrars, 'registrar'),
+              !!cards.registrars &&
+                plural(cards.registrars, 'connected registrar'),
             ),
           },
         ]}
@@ -418,7 +419,7 @@ export function DomainsCards({
         size="sm"
         icon={CalendarClock}
         accentClass="text-rose-400"
-        label="Expiring, 30 days"
+        label="Expiry, 30 days"
         // Off or unknown: either way, not renewing on its own.
         value={[
           { value: cards.expiring.toLocaleString(), words: 'auto-renew off' },
@@ -456,7 +457,9 @@ export function DomainsCards({
                   numberFormat,
                   true,
                 )
-              : '—',
+              : bin.leftOut
+                ? 'Unavailable'
+                : 'Not set',
             unit: bin.count
               ? `${compactMoney(bin.sum / bin.count, currency, currency, numberFormat)} avg`
               : undefined,

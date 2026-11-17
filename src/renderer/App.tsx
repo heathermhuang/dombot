@@ -10,6 +10,7 @@ import {
   CalendarClock,
   Globe,
   History,
+  Inbox,
   Receipt,
   Menu,
   RefreshCw,
@@ -91,7 +92,7 @@ export default function App() {
     document.documentElement.classList.add('hosted-theme');
     return () => document.documentElement.classList.remove('hosted-theme');
   }, []);
-  const { search } = useLocation();
+  const { search, pathname } = useLocation();
   const publication = usePortfolioEditor();
   useEffect(() => {
     if (!portfolioEditor.isDirty()) return;
@@ -256,14 +257,16 @@ export default function App() {
           )}
         >
           {NAV_ITEMS.filter(
-            (item) => item.to !== '/public-page' || supportsPublishing(),
+            (item) =>
+              !['/public-page', '/sales/inbox'].includes(item.to) ||
+              supportsPublishing(),
           ).map(({ to, label, icon }) => {
             const { metric, ...options } = TAB_OPTIONS[to] ?? {};
             return (
               <TabLink
                 key={to}
                 to={to}
-                end={to === '/'}
+                end={to === '/' || to === '/sales'}
                 label={label}
                 className={
                   supportsPublishing()
@@ -299,7 +302,7 @@ export default function App() {
             <ActivityBell />
           </span>
           <MobileNav />
-          {supportsPublishing() && <HostedSyncControl />}
+          {supportsPublishing() && pathname !== '/' && <HostedSyncControl />}
           {/* The running version, dim, tucked into the window's top-right
               corner; opens Settings → About. Hidden below lg, where the tab
               pills hide too and the header gets tight. */}
@@ -435,6 +438,7 @@ const NAV_ITEMS = [
   { to: '/public-page', label: 'Public profile', icon: Globe },
   { to: '/renewals', label: 'Renewals', icon: CalendarClock },
   { to: '/sales', label: 'Sales', icon: Receipt },
+  { to: '/sales/inbox', label: 'Inquiries', icon: Inbox },
   { to: '/activity', label: 'Activity', icon: History },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
@@ -448,7 +452,7 @@ function MobileNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isActive = (to: string) =>
-    to === '/' ? pathname === '/' : pathname.startsWith(to);
+    to === '/' || to === '/sales' ? pathname === to : pathname.startsWith(to);
   const {
     sync,
     syncing,
@@ -472,7 +476,9 @@ function MobileNav() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         {NAV_ITEMS.filter(
-          (item) => item.to !== '/public-page' || supportsPublishing(),
+          (item) =>
+            !['/public-page', '/sales/inbox'].includes(item.to) ||
+            supportsPublishing(),
         ).map(({ to, label, icon: Icon }) => {
           const active = isActive(to);
           const metric = TAB_OPTIONS[to]?.metric;

@@ -101,6 +101,15 @@ export default function Shop() {
               onChange={(e) => setDraft({ ...draft, handle: e.target.value })}
             />
           </Field>
+          <p className="small">
+            Future shop URL:{' '}
+            {
+              new URL(hostPath(`/shop/${draft.handle}`), window.location.origin)
+                .href
+            }
+            . Your Public profile address is separate. Saving a draft does not
+            publish it.
+          </p>
           <Field label="Title">
             <input
               value={draft.title}
