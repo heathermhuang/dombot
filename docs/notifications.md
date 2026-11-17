@@ -26,13 +26,12 @@ portfolio emails by a deployment, page view or import.
   can appear in an explicitly enabled overview. Enabled is not proof of renewal.
 
 Renewal candidates have a usable recorded review/expiry date within 30 days, or
-specific trusted provider-status evidence. A seven-day stage is distinct from the
+specific trusted provider-status evidence, or a fresh registrar-held reported expiry date that has passed. Past reported expiry is a verification alert, not proof of renewal failure or restore eligibility. It alerts even with auto-renew on, is deduplicated for the cycle, respects owner decisions and is baselined after restore. Stale or manually imported dates do not create this urgent stage. A seven-day stage is distinct from the
 initial review, but it is not a daily countdown. Same-stage events are deduplicated.
 Routine and urgent work have separate admission: an urgent event does not wait
 23 hours merely because a routine message was already sent that morning.
 
-The email lists up to 20 affected names with dates, renewal setup, source freshness
-and available estimates. The count covers the full qualified set. Missing prices
+The email uses a responsive table for up to 20 affected names, showing registrar and account separately, labelled renewal/expiry dates, renewal setup, source freshness and next steps. Expired-status and past-expiry recovery checks come first, including before the 20-row cutoff. Registrar links open the provider website for sign-in and manual action; they never submit a renewal. Recovery availability, fees and final deadlines require confirmation in the registrar account; ordinary renewal estimates are not presented as recovery prices. Older queued envelopes remain readable without inventing missing registrar or date provenance. The count covers the full qualified set. Missing prices
 are not zero; TLD estimates can miss premium renewals. Missing/conflicting dates
 remain review work in the app rather than definitive deadline claims. Links open
 the current authenticated view; no historical reporting portal is required.
@@ -42,7 +41,7 @@ the current authenticated view; no historical reporting portal is required.
 Settings → Notifications offers inquiry alerts, renewal reminders, optional weekly
 overview and an IANA timezone. New portfolio mail needs an explicit Save and an
 email-verified account recipient. A passkey alone is not email verification.
-Renewals → Renewal reminder choices provides Mark handled, Let expire and Resume.
+Renewals opens a renewal and recovery action table showing registrar/account, date/status, estimates, observation time and the next step. It uses the same factual presentation as the email. Registrar links open the provider website for manual renewal or recovery checks. Refresh review reads cached inventory; sync Domains after a provider action to confirm the updated expiry. Mark handled, Let expire and Resume remain reminder-only controls.
 These choices never renew a domain or change a registrar setting. Mark handled
 dismisses the current stage; Let expire mutes ordinary deadlines for that cycle.
 

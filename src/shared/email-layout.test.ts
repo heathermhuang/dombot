@@ -25,6 +25,49 @@ describe('shared email presentation and trust boundary', () => {
     expect(mail.html).toContain('max-width:600px');
     expect(mail.html).toContain('prefers-color-scheme:dark');
   });
+  it('escapes table data and validates table links with the same boundary as the primary action', () => {
+    const base = {
+      subject: 'Update',
+      preheader: 'Preview',
+      heading: 'Update',
+      reason: 'Requested',
+    };
+    const table = {
+      caption: '<Unsafe>',
+      columns: ['<Domain>'],
+      rows: [
+        [
+          {
+            text: '<img onerror=alert(1)>',
+            link: { label: '<Go>', url: 'https://domains.domains/' },
+          },
+        ],
+      ],
+    };
+    const mail = renderEmail({ ...base, tables: [table] });
+    expect(mail.html).not.toContain('<img onerror');
+    expect(mail.html).toContain('&lt;Unsafe&gt;');
+    expect(mail.html).toContain('scope="col"');
+    expect(mail.text).toContain('<Go>: https://domains.domains/');
+    expect(() =>
+      renderEmail({
+        ...base,
+        tables: [
+          {
+            ...table,
+            rows: [
+              [
+                {
+                  text: 'unsafe',
+                  link: { label: 'Go', url: 'javascript:alert(1)' },
+                },
+              ],
+            ],
+          },
+        ],
+      }),
+    ).toThrow();
+  });
   it('rejects unsafe links and header injection rather than sending them', () => {
     const base = {
       subject: 'Update',

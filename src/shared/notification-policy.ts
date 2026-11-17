@@ -33,6 +33,18 @@ export const renewalNoticeRowSchema = z
   .object({
     domain: z.string().min(1).max(253),
     account: z.string().max(200),
+    // Optional for envelopes prepared before these facts were projected.
+    registrar: z.string().max(200).optional(),
+    registrarId: z.string().max(100).optional(),
+    dateKind: z.enum(['renewal', 'expiry']).optional(),
+    expiryDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    expiryStatus: z
+      .enum(['expired', 'redemptionperiod', 'pendingdelete'])
+      .optional(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     autoRenew: z.boolean().nullable(),
     stale: z.boolean(),
@@ -53,7 +65,7 @@ export const renewalNoticeRowSchema = z
   })
   .strict();
 export type RenewalNoticeRow = z.infer<typeof renewalNoticeRowSchema>;
-export type NoticeStage = 'review' | 'soon' | 'failure';
+export type NoticeStage = 'review' | 'soon' | 'failure' | 'past-expiry';
 export interface RenewalCandidate {
   key: string;
   stage: NoticeStage;
@@ -132,7 +144,9 @@ export function renewalCandidates(
   for (const [domain, observations] of groups) {
     // Conflicting accounts cannot select a definitive deadline or auto-renew state.
     const signatures = new Set(
-      observations.map((r) => JSON.stringify([r.date, r.autoRenew])),
+      observations.map((r) =>
+        JSON.stringify([r.date, r.autoRenew, r.expiryDate, r.expiryStatus]),
+      ),
     );
     if (signatures.size !== 1) continue;
     const row = [...observations].sort(
@@ -156,6 +170,24 @@ export function renewalCandidates(
       });
       continue;
     }
+    const expiry = row.expiryDate
+      ? Date.parse(row.expiryDate + 'T00:00:00Z')
+      : NaN;
+    if (
+      !row.stale &&
+      !row.imported &&
+      Number.isFinite(expiry) &&
+      new Date(expiry).toISOString().slice(0, 10) === row.expiryDate &&
+      expiry < Math.floor(now / DAY) * DAY
+    ) {
+      out.push({
+        key: `${domain}|${row.date}|past-expiry`,
+        stage: 'past-expiry',
+        row,
+        urgent: true,
+      });
+      continue;
+    }
     if (days < 0 || days > 30) continue;
     const stage = days <= 7 ? 'soon' : 'review';
     // Routine reviews batch weekly. A real deadline that cannot wait is eligible now.
@@ -168,6 +200,13 @@ export function renewalCandidates(
   }
   return out.sort(
     (a, b) =>
+      Number(
+        b.stage === 'past-expiry' || b.row.failure?.reason === 'expired-status',
+      ) -
+        Number(
+          a.stage === 'past-expiry' ||
+            a.row.failure?.reason === 'expired-status',
+        ) ||
       Number(b.urgent) - Number(a.urgent) ||
       a.row.date.localeCompare(b.row.date) ||
       a.row.domain.localeCompare(b.row.domain),
@@ -196,7 +235,9 @@ export function selectRenewalNotice(
   const pending = prefs.renewalReminders
     ? candidates.filter(
         (c) =>
-          (c.row.autoRenew !== true || c.stage === 'failure') &&
+          (c.row.autoRenew !== true ||
+            c.stage === 'failure' ||
+            c.stage === 'past-expiry') &&
           !sent.has(c.key) &&
           decisions[`${c.row.domain}|${c.row.date}`] !== 'expire' &&
           decisions[c.key] !== 'handled',

@@ -101,6 +101,73 @@ describe('portfolio notification policy', () => {
       choose([row({ date: '2026-02-30' })], '2026-02-01T09:00:00Z'),
     ).toBeNull();
   });
+  it('alerts once for a fresh registrar-held past expiry, including auto-renew, without claiming failure', () => {
+    const now = Date.parse('2026-11-10T10:00:00Z');
+    const r = row({
+      date: '2026-11-01',
+      expiryDate: '2026-11-01',
+      autoRenew: true,
+    });
+    const candidates = renewalCandidates([r], now, 'UTC');
+    expect(candidates[0]).toMatchObject({ stage: 'past-expiry', urgent: true });
+    expect(candidates[0].row.failure).toBeNull();
+    const notice = choose([r], new Date(now).toISOString())!;
+    expect(notice.kind).toBe('urgent');
+    expect(
+      choose([r], new Date(now).toISOString(), new Set(notice.keys)),
+    ).toBeNull();
+    for (const overrides of [
+      { stale: true },
+      { imported: true },
+      { expiryDate: '2026-12-01' },
+    ])
+      expect(
+        choose([row({ ...r, ...overrides })], new Date(now).toISOString()),
+      ).toBeNull();
+    for (const decisions of [
+      { [candidates[0].key]: 'handled' as const },
+      { 'sample.example|2026-11-01': 'expire' as const },
+    ])
+      expect(
+        selectRenewalNotice(candidates, new Set(), decisions, prefs, now, null),
+      ).toBeNull();
+  });
+  it('uses the reported UTC expiry day consistently across saved timezones', () => {
+    const r = row({ date: '2026-11-10', expiryDate: '2026-11-10' });
+    expect(
+      renewalCandidates(
+        [r],
+        Date.parse('2026-11-10T23:00:00Z'),
+        'Asia/Singapore',
+      )[0]?.stage,
+    ).not.toBe('past-expiry');
+    expect(
+      renewalCandidates(
+        [r],
+        Date.parse('2026-11-11T01:00:00Z'),
+        'America/Los_Angeles',
+      )[0]?.stage,
+    ).toBe('past-expiry');
+  });
+  it('prioritizes past expiry ahead of upcoming dates even when a future renewal deadline is supplied', () => {
+    const now = Date.parse('2026-11-10T10:00:00Z');
+    const candidates = renewalCandidates(
+      [
+        row({ domain: 'upcoming.example', date: '2026-11-11' }),
+        row({
+          domain: 'recover.example',
+          date: '2026-12-01',
+          expiryDate: '2026-11-01',
+        }),
+      ],
+      now,
+      'UTC',
+    );
+    expect(candidates[0]).toMatchObject({
+      stage: 'past-expiry',
+      row: { domain: 'recover.example' },
+    });
+  });
   it('shows auto-renew names in an explicitly enabled overview', () => {
     const now = Date.parse('2026-11-09T09:00:00Z');
     expect(
