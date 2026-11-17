@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-240",
+      "date": "2026-11-17",
+      "layer": "saas",
+      "title": "Make renewal reminders and the app actionable for renewal and recovery",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #240 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #240",
+          "url": "https://github.com/heathermhuang/dombot/pull/240"
+        }
+      ]
+    },
+    {
       "id": "auto-core-source-5c0711da63ecbc2548b1466c4a39adf4ebd508f5",
       "date": "2026-11-16",
       "layer": "core",
