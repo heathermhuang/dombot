@@ -68,9 +68,11 @@ export function createNotificationRoutes(
       .min(0)
       .max(1000000)
       .parse(c.req.query('offset') ?? 0);
-    const items = currentRenewalCandidates(timeZone),
+    const at = Date.now();
+    const items = currentRenewalCandidates(timeZone, at),
       saved = decisionRecords();
     return c.json({
+      at,
       count: items.length,
       items: items.slice(offset, offset + 20).map((i) => ({
         key: i.key,

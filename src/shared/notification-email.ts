@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { registrars } from '@aoxborrow/registrar-client';
+import { needsRecoveryCheck, renewalReview } from './renewal-review';
 import {
   renewalNoticeRowSchema,
   type RenewalNoticeRow,
@@ -21,15 +21,6 @@ export const notificationEnvelopeSchema = z
   );
 export type NotificationEnvelope = z.infer<typeof notificationEnvelopeSchema>;
 
-function recovery(row: RenewalNoticeRow, at: number) {
-  return (
-    row.expiryStatus !== undefined ||
-    row.failure?.reason === 'expired-status' ||
-    (!!row.expiryDate &&
-      row.expiryDate < new Date(at).toISOString().slice(0, 10))
-  );
-}
-
 function renewalTable(
   rows: RenewalNoticeRow[],
   at: number,
@@ -46,78 +37,18 @@ function renewalTable(
       'Next step',
     ],
     rows: rows.map((row) => {
-      const registrar = row.registrar || 'Registrar not recorded';
-      const provider = Object.entries(registrars).find(
-        ([id, info]) =>
-          id === row.registrarId || info.displayName === row.registrar,
-      )?.[1];
-      const state =
-        row.expiryStatus === 'pendingdelete'
-          ? 'Pending deletion reported'
-          : row.expiryStatus === 'redemptionperiod'
-            ? 'Redemption reported'
-            : row.expiryStatus === 'expired' ||
-                row.failure?.reason === 'expired-status'
-              ? 'Expired status reported'
-              : recover
-                ? 'Reported expiry passed'
-                : row.failure
-                  ? 'Renewal problem reported'
-                  : row.date < new Date(at).toISOString().slice(0, 10)
-                    ? 'Renewal deadline passed'
-                    : row.date === new Date(at).toISOString().slice(0, 10)
-                      ? 'Due today'
-                      : 'Upcoming';
-      const dates = [
-        `${row.dateKind === 'renewal' ? 'Renewal deadline' : row.dateKind === 'expiry' ? 'Expiry' : 'Review date'}: ${row.date}`,
-        row.expiryDate &&
-        row.dateKind !== 'expiry' &&
-        row.expiryDate !== row.date
-          ? `Expiry: ${row.expiryDate}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join('\n');
-      const setup =
-        row.autoRenew === null
-          ? 'Auto-renew: unknown'
-          : row.autoRenew
-            ? 'Auto-renew: on'
-            : 'Auto-renew: off';
-      const next =
-        row.stale || row.imported
-          ? 'Verify dates and renewal options with the registrar.'
-          : row.expiryStatus === 'pendingdelete'
-            ? 'Contact the registrar immediately; restoration may no longer be possible.'
-            : recover
-              ? 'Check renewal or recovery now. If unavailable, contact registrar support.'
-              : row.failure
-                ? 'Check the recorded renewal problem with the registrar now.'
-                : row.autoRenew
-                  ? 'Verify auto-renew and billing with the registrar.'
-                  : 'Sign in and renew before the deadline.';
+      const review = renewalReview(row, at);
       return [
+        { text: `${row.domain}\n${review.estimate}` },
         {
-          text: `${row.domain}\n${recover ? 'Recovery fee: confirm with registrar' : row.price ? `Est. renewal: ${row.price}` : 'Renewal estimate unavailable'}`,
-        },
-        { text: `${registrar}\nAccount: ${row.account || 'Not recorded'}` },
-        {
-          text: `${state}\n${dates}\n${setup}${row.stale ? '\nNeeds refresh: previous observation' : ''}${row.imported ? '\nUser-supplied date; unverified' : ''}${row.observedAt ? `\nObserved: ${new Date(row.observedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` : ''}`,
+          text: `${review.registrar}\nAccount: ${row.account || 'Not recorded'}`,
         },
         {
-          text: next,
-          ...(provider
-            ? {
-                link: {
-                  label: recover
-                    ? `Check recovery at ${registrar}`
-                    : row.autoRenew || row.stale || row.imported || row.failure
-                      ? `Open ${registrar}`
-                      : `Renew at ${registrar}`,
-                  url: `https://${provider.website}/`,
-                },
-              }
-            : {}),
+          text: `${review.status}\n${review.dates.join('\n')}\n${review.setup}${row.stale ? '\nNeeds refresh: previous observation' : ''}${row.imported ? '\nUser-supplied date; unverified' : ''}${row.observedAt ? `\nObserved: ${review.observed}` : ''}`,
+        },
+        {
+          text: review.nextStep,
+          ...(review.link ? { link: review.link } : {}),
         },
       ];
     }),
@@ -133,8 +64,8 @@ export function renderRenewalEmail(
 ) {
   const attention =
     mail.attentionCount ?? (mail.kind === 'urgent' ? mail.count : 0);
-  const past = mail.rows.filter((row) => recovery(row, mail.at));
-  const upcoming = mail.rows.filter((row) => !recovery(row, mail.at));
+  const past = mail.rows.filter((row) => needsRecoveryCheck(row, mail.at));
+  const upcoming = mail.rows.filter((row) => !needsRecoveryCheck(row, mail.at));
   const label = past.length
     ? 'Check domain renewal and recovery'
     : attention > 0

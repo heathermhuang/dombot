@@ -41,7 +41,7 @@ the current authenticated view; no historical reporting portal is required.
 Settings → Notifications offers inquiry alerts, renewal reminders, optional weekly
 overview and an IANA timezone. New portfolio mail needs an explicit Save and an
 email-verified account recipient. A passkey alone is not email verification.
-Renewals → Renewal reminder choices provides Mark handled, Let expire and Resume.
+Renewals opens a renewal and recovery action table showing registrar/account, date/status, estimates, observation time and the next step. It uses the same factual presentation as the email. Registrar links open the provider website for manual renewal or recovery checks. Refresh review reads cached inventory; sync Domains after a provider action to confirm the updated expiry. Mark handled, Let expire and Resume remain reminder-only controls.
 These choices never renew a domain or change a registrar setting. Mark handled
 dismisses the current stage; Let expire mutes ordinary deadlines for that cycle.
 
