@@ -22,46 +22,51 @@ describe('shared email presentation and trust boundary', () => {
       expect(content).toContain('domains@domains.domains');
       expect(content).toContain('safe-reference');
     }
+    expect(mail.html).toContain('If the button does not work');
     expect(mail.html).toContain('max-width:600px');
     expect(mail.html).toContain('prefers-color-scheme:dark');
   });
-  it('escapes table data and validates table links with the same boundary as the primary action', () => {
+  it('escapes record content and validates registrar links like primary actions', () => {
     const base = {
       subject: 'Update',
       preheader: 'Preview',
       heading: 'Update',
       reason: 'Requested',
     };
-    const table = {
-      caption: '<Unsafe>',
-      columns: ['<Domain>'],
-      rows: [
-        [
-          {
-            text: '<img onerror=alert(1)>',
-            link: { label: '<Go>', url: 'https://domains.domains/' },
-          },
-        ],
-      ],
+    const record = {
+      title: '<Domain>',
+      status: '<Status>',
+      facts: [['<Registrar>', '<Registrar name>'] as [string, string]],
+      nextStep: '<img onerror=alert(1)>',
+      link: { label: '<Go>', url: 'https://domains.domains/' },
+      notes: ['<Note>'],
     };
-    const mail = renderEmail({ ...base, tables: [table] });
+    const group = { heading: '<Check>', records: [record] };
+    const mail = renderEmail({ ...base, recordGroups: [group] });
     expect(mail.html).not.toContain('<img onerror');
-    expect(mail.html).toContain('&lt;Unsafe&gt;');
-    expect(mail.html).toContain('scope="col"');
+    for (const field of [
+      'Domain',
+      'Status',
+      'Registrar',
+      'Registrar name',
+      'Go',
+      'Note',
+      'Check',
+    ])
+      expect(mail.html).toContain(`&lt;${field}&gt;`);
+    expect(mail.html).toContain('scope="row"');
     expect(mail.text).toContain('<Go>: https://domains.domains/');
     expect(() =>
       renderEmail({
         ...base,
-        tables: [
+        recordGroups: [
           {
-            ...table,
-            rows: [
-              [
-                {
-                  text: 'unsafe',
-                  link: { label: 'Go', url: 'javascript:alert(1)' },
-                },
-              ],
+            ...group,
+            records: [
+              {
+                ...record,
+                link: { ...record.link, url: 'javascript:alert(1)' },
+              },
             ],
           },
         ],

@@ -4,7 +4,7 @@ import {
   renewalNoticeRowSchema,
   type RenewalNoticeRow,
 } from './notification-policy';
-import { renderEmail, type EmailTable } from './email-layout';
+import { renderEmail, type EmailRecord } from './email-layout';
 
 export const notificationEnvelopeSchema = z
   .object({
@@ -21,37 +21,33 @@ export const notificationEnvelopeSchema = z
   );
 export type NotificationEnvelope = z.infer<typeof notificationEnvelopeSchema>;
 
-function renewalTable(
-  rows: RenewalNoticeRow[],
-  at: number,
-  recover: boolean,
-): EmailTable {
+function renewalRecord(row: RenewalNoticeRow, at: number): EmailRecord {
+  const review = renewalReview(row, at);
+  const expiry = row.dateKind === 'expiry' ? row.date : row.expiryDate;
+  const facts: EmailRecord['facts'] = [
+    ['Registrar', review.registrar],
+    ['Expiry date', expiry ?? 'Not recorded'],
+  ];
+  if (row.dateKind !== 'expiry')
+    facts.push([
+      row.dateKind === 'renewal' ? 'Renewal deadline' : 'Review date',
+      row.date,
+    ]);
+
   return {
-    caption: recover
-      ? 'Check expired or past-expiry domains first'
-      : 'Upcoming renewals',
-    columns: [
-      'Domain / estimate',
-      'Registrar / account',
-      'Date / status',
-      'Next step',
+    title: row.domain,
+    status: review.status,
+    facts,
+    nextStep: review.nextStep,
+    link: review.link ?? undefined,
+    notes: [
+      `Registrar account: ${row.account || 'Not recorded'}`,
+      review.setup,
+      review.estimate,
+      ...(row.stale ? ['Date needs a fresh registrar check'] : []),
+      ...(row.imported ? ['User-supplied date (unverified)'] : []),
+      ...(row.observedAt ? [`Observed: ${review.observed}`] : []),
     ],
-    rows: rows.map((row) => {
-      const review = renewalReview(row, at);
-      return [
-        { text: `${row.domain}\n${review.estimate}` },
-        {
-          text: `${review.registrar}\nAccount: ${row.account || 'Not recorded'}`,
-        },
-        {
-          text: `${review.status}\n${review.dates.join('\n')}\n${review.setup}${row.stale ? '\nNeeds refresh: previous observation' : ''}${row.imported ? '\nUser-supplied date; unverified' : ''}${row.observedAt ? `\nObserved: ${review.observed}` : ''}`,
-        },
-        {
-          text: review.nextStep,
-          ...(review.link ? { link: review.link } : {}),
-        },
-      ];
-    }),
   };
 }
 
@@ -73,22 +69,45 @@ export function renderRenewalEmail(
       : mail.kind === 'overview'
         ? 'Your renewal outlook'
         : 'Renewals to review';
+  const countLabel = `${mail.count} ${mail.count === 1 ? 'domain' : 'domains'}`;
+  const truncated = mail.count > mail.rows.length;
+  const summary = truncated
+    ? `Showing ${mail.rows.length} of ${countLabel}.`
+    : past.length
+      ? `${countLabel} to review. Check recovery options with the registrar.`
+      : `${countLabel} to review. Dates are shown in UTC.`;
+  const mixed = past.length > 0 && upcoming.length > 0;
+  const asOf = new Date(mail.at).toISOString().slice(0, 16).replace('T', ' ');
   return renderEmail({
-    subject: `${label} · ${mail.count} ${mail.count === 1 ? 'domain' : 'domains'}`,
+    subject: `${label} · ${countLabel}`,
     preheader: past.length
       ? 'Past-expiry domains need checking first. Renewal or recovery may still be possible.'
-      : `${mail.count} ${mail.count === 1 ? 'domain' : 'domains'} to review, with registrar details and next steps.`,
-    heading: label,
-    intro: past.length
-      ? 'Some domains have passed their reported expiry date or have an expired registrar status. Check them now: renewal or recovery may still be possible, but the registrar must confirm availability, fees and the final deadline.'
-      : 'Use the registrar and account below to check each domain and complete any renewal. Dates are shown in UTC.',
-    tables: [
-      ...(past.length ? [renewalTable(past, mail.at, true)] : []),
-      ...(upcoming.length ? [renewalTable(upcoming, mail.at, false)] : []),
+      : `${countLabel} to review, with registrar details and next steps.`,
+    heading: past.length ? 'Check renewal or recovery' : label,
+    intro: summary,
+    recordGroups: [
+      ...(past.length
+        ? [
+            {
+              heading: mixed ? 'Check first' : undefined,
+              priority: true,
+              records: past.map((row) => renewalRecord(row, mail.at)),
+            },
+          ]
+        : []),
+      ...(upcoming.length
+        ? [
+            {
+              heading: mixed ? 'Other renewals to review' : undefined,
+              records: upcoming.map((row) => renewalRecord(row, mail.at)),
+            },
+          ]
+        : []),
     ],
-    note: `${mail.count > mail.rows.length ? `Showing ${mail.rows.length} of ${mail.count} affected names, with recovery checks first. ` : ''}As of ${new Date(mail.at).toISOString().slice(0, 16).replace('T', ' ')} UTC. Dates are UTC. Auto-renew enabled is not confirmation of renewal. Estimates are not checkout prices; recovery eligibility, fees and deadlines must be confirmed by the registrar. Registrar links open its website; sign in to the named account and find the domain. The portfolio link shows current information, which may have changed. Names with missing or conflicting dates need checking in the app. No domain has been renewed by this email.`,
+    note: `As of ${asOf} UTC. Dates are UTC and may change. Sign in to the named registrar account to act and confirm availability, fees, and deadlines. Renewal prices are estimates. Auto-renew enabled is not confirmation of renewal.`,
+    actionBeforeRecords: truncated,
     action: {
-      label: 'View all renewals and recovery checks',
+      label: 'Open Renewals',
       url: `${origin}/w/${workspace}/#/renewals`,
     },
     reason: 'You enabled portfolio emails in your notification settings.',
