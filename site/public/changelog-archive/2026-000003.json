@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-242",
+      "date": "2026-11-20",
+      "layer": "saas",
+      "title": "Make renewal reminders easier to scan on mobile",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #242 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #242",
+          "url": "https://github.com/heathermhuang/dombot/pull/242"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-4c312492333361f8df1893b450f22f2c42432f3e-45",
       "date": "2026-11-18",
       "layer": "saas",
