@@ -31,7 +31,7 @@ initial review, but it is not a daily countdown. Same-stage events are deduplica
 Routine and urgent work have separate admission: an urgent event does not wait
 23 hours merely because a routine message was already sent that morning.
 
-The email uses a responsive table for up to 20 affected names, showing registrar and account separately, labelled renewal/expiry dates, renewal setup, source freshness and next steps. Expired-status and past-expiry recovery checks come first, including before the 20-row cutoff. Registrar links open the provider website for sign-in and manual action; they never submit a renewal. Recovery availability, fees and final deadlines require confirmation in the registrar account; ordinary renewal estimates are not presented as recovery prices. Older queued envelopes remain readable without inventing missing registrar or date provenance. The count covers the full qualified set. Missing prices
+The email shows up to 20 affected names as stacked domain summaries. Each leads with the domain, registrar, labelled expiry date and next step, and includes the known registrar account, renewal setup, available estimates and stale or unverified date warnings. Expired-status and past-expiry recovery checks come first, including before the 20-row cutoff. Registrar links open the provider website for sign-in and manual action; they never submit a renewal. Recovery availability, fees and final deadlines require confirmation in the registrar account; ordinary renewal estimates are not presented as recovery prices. Older queued envelopes remain readable without inventing missing registrar or date provenance. The count covers the full qualified set. Missing prices
 are not zero; TLD estimates can miss premium renewals. Missing/conflicting dates
 remain review work in the app rather than definitive deadline claims. Links open
 the current authenticated view; no historical reporting portal is required.
@@ -53,7 +53,7 @@ security and buyer replies remain independent. Token hashes expire after 90 days
 
 All account, inquiry, renewal, security and operator messages share one shell:
 HTML/text, full wordmark, system fonts, a 600px layout, mobile wrapping, descriptive
-actions, complete fallback links, support/privacy and appropriate preferences.
+actions, complete links in the text version, support/privacy and appropriate preferences.
 No open tracking or analytics redirects are added to private links.
 
 Control migration 0025 adds consent, due checkpoints, attempt evidence and committed
