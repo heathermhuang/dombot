@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-e9292f4234b3b1402c21b9f41cd291e63c202783-46",
+      "date": "2026-11-20",
+      "layer": "saas",
+      "title": "Hosted service update observed: Make renewal reminders easier to scan on mobile",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/e9292f4234b3b1402c21b9f41cd291e63c202783"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-242",
       "date": "2026-11-20",
       "layer": "saas",

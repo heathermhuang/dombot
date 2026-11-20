@@ -1,14 +1,14 @@
 {
   "version": 2,
-  "totalEntries": 254,
+  "totalEntries": 255,
   "parts": [
     {
       "id": "2026-000003",
       "path": "changelog-archive/2026-000003.json",
-      "sha256": "0fc9dab433e8af4f49bd5353e7def3238870a08921e71efce4a8261137dc239e",
-      "count": 54,
+      "sha256": "1ce07983c6d23011b82c10659eea7fcf1b10fa24af6eeb434e27575da45073f6",
+      "count": 55,
       "core": 5,
-      "saas": 49,
+      "saas": 50,
       "newest": "2026-11-20",
       "oldest": "2026-11-11"
     },
