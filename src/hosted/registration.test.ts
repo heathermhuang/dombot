@@ -130,6 +130,9 @@ describe('verified public account creation', () => {
     const response = await post('/signup', { email: 'NEW@example.test' });
     expect(response.status).toBe(202);
     expect(messages).toHaveLength(1);
+    expect(messages[0].html).toContain('>Verify email address</a>');
+    expect(messages[0].html).toContain('Expires in 20 minutes');
+    expect(messages[0].html).toContain('Copy the link if needed:');
     const code = new URL(
       messages[0].text!.match(/https:\/\/\S+/)![0],
     ).searchParams.get('code')!;

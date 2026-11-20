@@ -28,16 +28,23 @@ export interface EmailRecordGroup {
   records: EmailRecord[];
 }
 
+interface EmailSection {
+  label: string;
+  body: string;
+}
+
 export interface EmailContent {
   subject: string;
   preheader: string;
   heading: string;
   intro?: string;
   details?: [string, string][];
-  sections?: { label: string; body: string }[];
+  lead?: EmailSection;
+  sections?: EmailSection[];
   recordGroups?: EmailRecordGroup[];
   action?: EmailLink;
   actionBeforeRecords?: boolean;
+  showActionUrl?: boolean;
   code?: string;
   codeLabel?: string;
   note?: string;
@@ -79,29 +86,37 @@ export function renderEmail(c: EmailContent) {
   }));
   const hasRecords = c.recordGroups !== undefined;
   const actionText = action ? `\n${action.label}: ${action.url}` : undefined;
+  const detailText = details.map(([label, value]) => `${label}: ${value}`);
+  const sectionText = sections.flatMap(({ label, body }) => ['', label, body]);
+  const recordText = recordGroups.flatMap((group) => [
+    ...(group.heading ? ['', group.heading] : []),
+    ...group.records.flatMap((record) => [
+      '',
+      record.title,
+      record.status,
+      ...record.facts.map(([label, value]) => `${label}: ${value}`),
+      `Next step: ${record.nextStep}`,
+      ...(record.link ? [`${record.link.label}: ${record.link.url}`] : []),
+      ...record.notes,
+    ]),
+  ]);
+  const codeText = c.code ? `\n${c.codeLabel ?? 'Code'}: ${c.code}` : undefined;
   const text = [
     c.heading,
     c.intro,
     '',
-    ...details.map(([k, v]) => `${k}: ${v}`),
-    ...sections.flatMap((s) => ['', s.label, s.body]),
-    c.actionBeforeRecords ? actionText : undefined,
-    ...recordGroups.flatMap((group) => [
-      ...(group.heading ? ['', group.heading] : []),
-      ...group.records.flatMap((record) => [
-        '',
-        record.title,
-        record.status,
-        ...record.facts.map(([label, value]) => `${label}: ${value}`),
-        `Next step: ${record.nextStep}`,
-        ...(record.link ? [`${record.link.label}: ${record.link.url}`] : []),
-        ...record.notes,
-      ]),
-    ]),
-    c.code ? `\n${c.codeLabel ?? 'Code'}: ${c.code}` : undefined,
+    ...(c.lead ? [c.lead.label, c.lead.body] : []),
     ...(hasRecords
-      ? [c.actionBeforeRecords ? undefined : actionText, c.note]
-      : [c.note, actionText]),
+      ? [
+          ...detailText,
+          ...sectionText,
+          c.actionBeforeRecords ? actionText : undefined,
+          ...recordText,
+          codeText,
+          c.actionBeforeRecords ? undefined : actionText,
+        ]
+      : [actionText, codeText, ...detailText, ...sectionText]),
+    c.note,
     '',
     c.reason,
     preferences ? `Email preferences: ${preferences}` : undefined,
@@ -143,20 +158,50 @@ ${record.link ? `<a class="email-link" style="color:#234f3d;display:inline-block
   .join('')}</div>`;
     })
     .join('');
-  const noteHtml = c.note
-    ? hasRecords
-      ? `<p class="email-muted" style="font-size:14px;line-height:1.55;color:#475e50;margin:16px 0 0">${e(c.note)}</p>`
-      : `<p>${e(c.note)}</p>`
-    : '';
   const actionHtml = action
-    ? `<p style="margin:24px 0${hasRecords ? ' 16px' : ''}"><a href="${e(action.url)}" style="display:inline-block;background:#234f3d;color:#fff;min-height:24px;padding:12px 20px;text-decoration:underline;border-radius:${hasRecords ? '8px' : '4px'}">${e(action.label)}</a></p>${hasRecords ? '' : `<p class="email-muted" style="font-size:14px;color:#475e50;overflow-wrap:anywhere">If the button does not work, open:<br><a class="email-link" style="color:#234f3d;text-decoration:underline" href="${e(action.url)}">${e(action.url)}</a></p>`}`
+    ? `<p style="margin:24px 0 16px"><a href="${e(action.url)}" style="display:inline-block;background:#234f3d;color:#fff;min-height:24px;padding:12px 20px;text-decoration:underline;border-radius:8px">${e(action.label)}</a></p>`
     : '';
-  const bodyStyle = hasRecords
-    ? 'class="email-bg" style="overflow-wrap:anywhere;word-break:break-word"'
-    : 'class="email-card" style="background:#fff;border:1px solid #cbd6cd;padding:24px;overflow-wrap:anywhere;word-break:break-word"';
-  const headingStyle = hasRecords
-    ? 'font-size:30px;letter-spacing:-0.6px;line-height:1.15;margin:0 0 8px'
-    : 'font-size:26px;line-height:1.25;margin:0 0 20px';
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${e(c.subject)}</title><style>@media(prefers-color-scheme:dark){.email-bg{background:#10231b!important;color:#eff5ef!important}.email-card{background:#172e25!important;color:#eff5ef!important}.email-muted{color:#c1d0c4!important}.email-link{color:#c5e0d1!important}.email-inset{background:#243e31!important}.email-priority{color:#ffcf96!important}}</style></head><body class="email-bg" style="margin:0;background:#f7f8f4;color:#172e25;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6"><div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${e(c.preheader)}</div><table role="presentation" style="width:100%;border-collapse:collapse"><tr><td style="padding:24px ${hasRecords ? '16px' : '12px'}"><table role="presentation" style="width:100%;max-width:600px;margin:auto;border-collapse:collapse;table-layout:fixed"><tr><td style="padding:0 0 20px;font-size:${hasRecords ? '19px' : '22px'};font-weight:700">domains.domains</td></tr><tr><td ${bodyStyle}><h1 style="${headingStyle}">${e(c.heading)}</h1>${c.intro ? `<p${hasRecords ? ' style="margin:0;line-height:1.5"' : ''}>${e(c.intro)}</p>` : ''}${details.length ? `<table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed">${details.map(([k, v]) => `<tr><td class="email-muted" style="vertical-align:top;width:34%;padding:8px 12px 8px 0;color:#475e50;font-size:16px">${e(k)}</td><td style="padding:8px 0;overflow-wrap:anywhere;font-size:16px">${e(v)}</td></tr>`).join('')}</table>` : ''}${sections.map((s) => `<h2 style="font-size:18px;margin:24px 0 8px">${e(s.label)}</h2><div style="white-space:pre-wrap;overflow-wrap:anywhere">${e(s.body)}</div>`).join('')}${c.actionBeforeRecords ? actionHtml : ''}${recordHtml}${c.code ? `<p>${e(c.codeLabel ?? 'Code')}:</p><p style="font-size:28px;font-weight:bold;letter-spacing:4px">${e(c.code)}</p>` : ''}${hasRecords ? (c.actionBeforeRecords ? '' : actionHtml) + noteHtml : noteHtml + actionHtml}</td></tr><tr><td class="email-muted" style="padding:20px 0;color:#475e50;font-size:14px;overflow-wrap:anywhere">${e(c.reason)}${preferences ? `<br><a class="email-link" style="color:#234f3d" href="${e(preferences)}">Email preferences and unsubscribe</a>` : ''}${c.reference ? `<br>Reference: ${e(c.reference)}` : ''}<br>Support: <a class="email-link" style="color:#234f3d" href="mailto:domains@domains.domains">domains@domains.domains</a><br>domains.domains · <a class="email-link" style="color:#234f3d" href="https://domains.domains/privacy">Privacy</a></td></tr></table></td></tr></table></body></html>`;
+  const noteHtml = c.note
+    ? `<p class="email-muted" style="font-size:14px;line-height:1.55;color:#475e50;margin:16px 0 0">${e(c.note)}</p>`
+    : '';
+  const detailHtml = details.length
+    ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:16px"><tbody>${details.map(([label, value]) => `<tr><th scope="row" class="email-muted" style="vertical-align:top;text-align:left;width:34%;padding:5px 10px 5px 0;color:#475e50;font-size:14px;font-weight:normal">${e(label)}</th><td style="vertical-align:top;padding:4px 0;overflow-wrap:anywhere;font-size:16px">${e(value)}</td></tr>`).join('')}</tbody></table>`
+    : '';
+  const sectionHtml = sections
+    .map(
+      ({ label, body }) =>
+        `<h2 style="font-size:16px;margin:20px 0 4px">${e(label)}</h2><div style="white-space:pre-wrap;overflow-wrap:anywhere">${e(body)}</div>`,
+    )
+    .join('');
+  const leadHtml = c.lead
+    ? `<table role="presentation" style="width:100%;table-layout:fixed;border-spacing:0;margin-top:18px"><tr><td class="email-card" style="padding:16px;background:#fff;border:1px solid #cbd6cd;border-radius:12px;overflow-wrap:anywhere;word-break:break-word"><h2 style="font-size:14px;margin:0 0 4px">${e(c.lead.label)}</h2><div style="white-space:pre-wrap;overflow-wrap:anywhere">${e(c.lead.body)}</div></td></tr></table>`
+    : '';
+  const codeHtml = c.code
+    ? `<div class="email-inset" style="background:#eef3eb;border-radius:8px;margin-top:16px;padding:12px 16px"><p style="margin:0;font-size:14px;line-height:1.4">${e(c.codeLabel ?? 'Code')}</p><p style="margin:4px 0 0;font-family:monospace;font-size:28px;font-weight:bold;letter-spacing:4px;line-height:1.35">${e(c.code)}</p></div>`
+    : '';
+  const fallbackHtml =
+    action && c.showActionUrl
+      ? `<p class="email-muted" style="font-size:14px;line-height:1.55;color:#475e50;overflow-wrap:anywhere">Copy the link if needed:<br><a class="email-link" style="color:#234f3d;text-decoration:underline" href="${e(action.url)}">${e(action.url)}</a></p>`
+      : '';
+  const contentHtml = hasRecords
+    ? detailHtml +
+      sectionHtml +
+      (c.actionBeforeRecords ? actionHtml : '') +
+      recordHtml +
+      codeHtml +
+      (c.actionBeforeRecords ? '' : actionHtml)
+    : actionHtml + codeHtml + detailHtml + sectionHtml;
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${e(c.subject)}</title><style>@media(prefers-color-scheme:dark){.email-bg{background:#10231b!important;color:#eff5ef!important}.email-card{background:#172e25!important;color:#eff5ef!important}.email-muted{color:#c1d0c4!important}.email-link{color:#c5e0d1!important}.email-inset{background:#243e31!important}.email-priority{color:#ffcf96!important}}</style></head>
+<body class="email-bg" style="margin:0;background:#f7f8f4;color:#172e25;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${e(c.preheader)}</div>
+<table role="presentation" style="width:100%;border-collapse:collapse"><tr><td style="padding:24px 16px">
+<table role="presentation" style="width:100%;max-width:600px;margin:auto;border-collapse:collapse;table-layout:fixed">
+<tr><td style="padding:0 0 20px;font-size:19px;font-weight:700">domains.domains</td></tr>
+<tr><td class="email-bg" style="overflow-wrap:anywhere;word-break:break-word">
+<h1 style="font-size:30px;letter-spacing:-0.6px;line-height:1.15;margin:0 0 8px">${e(c.heading)}</h1>${c.intro ? `<p style="margin:0;line-height:1.5">${e(c.intro)}</p>` : ''}
+${leadHtml}${contentHtml}${noteHtml}${fallbackHtml}</td></tr>
+<tr><td class="email-muted" style="padding:20px 0;color:#475e50;font-size:14px;overflow-wrap:anywhere">${e(c.reason)}${preferences ? `<br><a class="email-link" style="color:#234f3d" href="${e(preferences)}">Email preferences and unsubscribe</a>` : ''}${c.reference ? `<br>Reference: ${e(c.reference)}` : ''}<br>Support: <a class="email-link" style="color:#234f3d" href="mailto:domains@domains.domains">domains@domains.domains</a><br>domains.domains · <a class="email-link" style="color:#234f3d" href="https://domains.domains/privacy">Privacy</a></td></tr>
+</table></td></tr></table></body></html>`;
   return { subject: c.subject, text, html };
 }

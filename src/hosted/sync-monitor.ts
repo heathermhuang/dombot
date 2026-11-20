@@ -8,6 +8,7 @@ import {
 import { z } from 'zod';
 import {
   syncDiagnosticsSchema,
+  syncEventSchema,
   SYNC_RETENTION_MS,
   type SyncEvent,
 } from '../shared/sync-monitor';
@@ -247,6 +248,20 @@ export function isEmailAlert(kind: string): boolean {
 }
 const EMAIL_COOLDOWN_MS = 30 * 60_000;
 
+const syncEmailFailureSchema = syncEventSchema.pick({ code: true });
+function syncAlertFailureLabel(diagnostic: string) {
+  try {
+    const event = syncEmailFailureSchema.safeParse(JSON.parse(diagnostic));
+    if (event.success && event.data.code !== 'none') {
+      const label = event.data.code.replaceAll('_', ' ');
+      return label[0].toUpperCase() + label.slice(1);
+    }
+  } catch {
+    // Older rows may have missing or malformed diagnostics.
+  }
+  return 'Unclassified failure';
+}
+
 export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
   const now = Date.now();
   await env.CONTROL_DB.prepare(
@@ -302,19 +317,25 @@ export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
     claimed.push(alert);
   }
   if (!claimed.length) return;
-  const test = claimed.every((alert) => alert.kind === 'test');
-  const title = test
-    ? 'Dynadot monitoring test'
-    : `Dynadot sync failures (${claimed.length})`;
-  const text = `${title}\n\n${claimed
-    .slice(0, 10)
-    .map(
-      (alert) =>
-        `Time: ${new Date(alert.at).toISOString()}\nAlert ID: ${alert.id}\nSanitized diagnostics: ${alert.diagnostic.slice(0, 2000)}`,
-    )
-    .join(
-      '\n\n',
-    )}\n\nReview: https://domains.domains/admin/sync-monitor\n\nNew failures are grouped into at most one email every 30 minutes. Monitoring availability, recovery and retention-gap notices stay in the dashboard.`;
+  const failures = claimed.filter((alert) => alert.kind === 'failure');
+  const title = failures.length
+    ? `Dynadot sync failures (${failures.length})`
+    : 'Dynadot monitoring test';
+  const counts = new Map<string, number>();
+  for (const alert of failures) {
+    const label = syncAlertFailureLabel(alert.diagnostic);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const details: [string, string][] = [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => [label, String(count)]);
+  if (failures.length) {
+    const latest = new Date(failures[failures.length - 1].at);
+    details.unshift([
+      'Latest failure',
+      latest.toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+    ]);
+  }
   let result: EmailSendResult;
   try {
     result = await env.EMAIL.send({
@@ -324,23 +345,18 @@ export async function deliverSyncAlerts(env: HostedEnv): Promise<void> {
         subject: '[domains.domains] ' + title,
         preheader: 'Recorded sync incidents need operator review.',
         heading: title,
-        sections: [
-          {
-            label: 'Recorded incidents',
-            body:
-              text +
-              (claimed.length > 10
-                ? '\n\nShowing 10 of ' +
-                  claimed.length +
-                  ' incidents. Open the dashboard for the complete record.'
-                : ''),
-          },
-        ],
+        intro: failures.length
+          ? undefined
+          : 'Test of the Dynadot sync alert email.',
+        details,
+        note: failures.length
+          ? 'At most one alert email every 30 minutes.'
+          : undefined,
         action: {
           label: 'Review sync incidents',
           url: 'https://domains.domains/admin/sync-monitor',
         },
-        reason: 'You are the configured platform incident administrator.',
+        reason: 'You receive platform incident alerts.',
       }),
       headers: { 'X-DomBot-Alert-ID': batchId },
     });

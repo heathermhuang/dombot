@@ -52,6 +52,12 @@ describe('inquiry email experience', () => {
       expect(content).toContain('My budget is flexible.');
       expect(content).toContain('Yes, tell me more.');
       expect(content).toContain('sample-reference');
+      expect(content.indexOf('Yes, tell me more.')).toBeLessThan(
+        content.indexOf('View conversation'),
+      );
+      expect(content.indexOf('View conversation')).toBeLessThan(
+        content.indexOf('Original inquiry'),
+      );
     }
     expect(mail.subject).toContain('sample.example');
     expect(mail.html).toContain('Sample &lt;Buyer&gt;');
@@ -81,6 +87,7 @@ describe('inquiry email experience', () => {
     );
     expect(mail.text).toContain('https://accounts.example/i/sample');
     expect(mail.html).toContain('Confirm email address');
+    expect(mail.html).not.toContain('Copy the link if needed:');
   });
   it('uses clear contact language and a primary inquiry action without seller wording', () => {
     const html = renderSalesLander(context.snapshot, '', 'test-only');
