@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-243",
+      "date": "2026-11-20",
+      "layer": "saas",
+      "title": "Redesign the remaining transactional emails for mobile",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #243 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #243",
+          "url": "https://github.com/heathermhuang/dombot/pull/243"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-4c312492333361f8df1893b450f22f2c42432f3e-45",
       "date": "2026-11-18",
       "layer": "saas",
