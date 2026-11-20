@@ -39,7 +39,12 @@ describe('renewal message projection', () => {
     );
     expect(mail.subject).toContain('renewal and recovery');
     expect(mail.text).toContain('Expired status reported');
-    expect(mail.text).toContain('not confirmation of renewal');
+    expect(mail.text).toContain('Auto-renew: on');
+    expect(mail.text).toContain(
+      'Confirm recovery options and fees with your registrar.',
+    );
+    expect(mail.text).not.toContain('1 domain to review');
+    expect(mail.text).not.toContain('Last checked:');
     expect(mail.text).not.toContain('provider-private-correlation');
     expect(mail.text).not.toContain('payment failed');
     expect(mail.html).toContain('synthetic-reference');
@@ -89,7 +94,7 @@ describe('renewal message projection', () => {
       'Check recovery at Dynadot',
       'upcoming.example',
       'Open Renewals',
-      'As of ',
+      'Dates in UTC.',
       'Email preferences and unsubscribe',
     ];
     const positions = ordered.map((part) => mail.html.indexOf(part));
@@ -149,6 +154,7 @@ describe('renewal message projection', () => {
     );
     expect(mail.text).toContain('Showing 20 of 22 domains.');
     expect(mail.text).toContain('Date needs a fresh registrar check');
+    expect(mail.text).toContain('Last checked: 2026-11-09 09:55 UTC');
     expect(mail.text).toContain(
       'Verify dates and renewal options with the registrar.',
     );

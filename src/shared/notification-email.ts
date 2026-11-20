@@ -41,12 +41,14 @@ function renewalRecord(row: RenewalNoticeRow, at: number): EmailRecord {
     nextStep: review.nextStep,
     link: review.link ?? undefined,
     notes: [
-      `Registrar account: ${row.account || 'Not recorded'}`,
+      ...(row.account ? [`Account: ${row.account}`] : []),
       review.setup,
-      review.estimate,
+      ...(!review.recovery && row.price ? [review.estimate] : []),
       ...(row.stale ? ['Date needs a fresh registrar check'] : []),
       ...(row.imported ? ['User-supplied date (unverified)'] : []),
-      ...(row.observedAt ? [`Observed: ${review.observed}`] : []),
+      ...(row.stale && row.observedAt
+        ? [`Last checked: ${review.observed}`]
+        : []),
     ],
   };
 }
@@ -73,15 +75,14 @@ export function renderRenewalEmail(
   const truncated = mail.count > mail.rows.length;
   const summary = truncated
     ? `Showing ${mail.rows.length} of ${countLabel}.`
-    : past.length
-      ? `${countLabel} to review. Check recovery options with the registrar.`
-      : `${countLabel} to review. Dates are shown in UTC.`;
+    : mail.count > 1
+      ? `${countLabel} to review`
+      : undefined;
   const mixed = past.length > 0 && upcoming.length > 0;
-  const asOf = new Date(mail.at).toISOString().slice(0, 16).replace('T', ' ');
   return renderEmail({
     subject: `${label} · ${countLabel}`,
     preheader: past.length
-      ? 'Past-expiry domains need checking first. Renewal or recovery may still be possible.'
+      ? 'Check recovery options with your registrar.'
       : `${countLabel} to review, with registrar details and next steps.`,
     heading: past.length ? 'Check renewal or recovery' : label,
     intro: summary,
@@ -104,13 +105,15 @@ export function renderRenewalEmail(
           ]
         : []),
     ],
-    note: `As of ${asOf} UTC. Dates are UTC and may change. Sign in to the named registrar account to act and confirm availability, fees, and deadlines. Renewal prices are estimates. Auto-renew enabled is not confirmation of renewal.`,
+    note: past.length
+      ? 'Dates in UTC. Confirm recovery options and fees with your registrar.'
+      : 'Dates in UTC. Open Renewals for current status.',
     actionBeforeRecords: truncated,
     action: {
       label: 'Open Renewals',
       url: `${origin}/w/${workspace}/#/renewals`,
     },
-    reason: 'You enabled portfolio emails in your notification settings.',
+    reason: 'You opted in to portfolio emails.',
     preferencesUrl: unsubscribe,
     reference,
   });

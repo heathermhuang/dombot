@@ -7,10 +7,10 @@
     "version": "2.2.2"
   },
   "archive": "vendor/domains-domains-dombot-engine-2.2.2-hosted.5.tgz",
-  "sourceSha256": "0341049eb57d6778ba092d12ffcd7c59956979018a0d92b46af789f796beda31",
+  "sourceSha256": "a9dfbd44912b82380a53569decd2eecdcec60ecc3600c7a2a0709bd135078660",
   "packageSha256": "5039cfeaad056ec246e0cd8e680b7a615f9ed41b42957224d608d278c191d264",
   "typesSha256": "1e1720f9499985f9db55a7fa2976b4112666a97b74f53c57286280e51108a333",
-  "manifestSha256": "c0d502d05335280f37948a6925eee2405e02595afd360c5dfd822145b73c8d6c",
-  "sha256": "b4e5188e66be09d1150d29899455f4419f1fdbca2c0eb208531cef3b05bc083a",
-  "integrity": "sha512-jVVp+bXw6T4yCDXfNOBgVqVe0pxfKKLV8JwbqxFBplQh1GRie7+oQqz+Wymow3tvvW8iXf0Chz9rCYA28ityHg=="
+  "manifestSha256": "66e359e3e7fd9b9f92f98cbbbb03a6c55405cac1b022687f1316e41e50eca63a",
+  "sha256": "2714a148aeb34396c03c30f54da17f68fcbb7319da5005566b2a0be6fc30f301",
+  "integrity": "sha512-HRXfWO/pR1YLpraXHOpj0X8csLv71Pqf/g+0MP1wodliDABA6SI7spvpUZvF9NLd4XTifqIEUNKelL3nIa1+rQ=="
 }
