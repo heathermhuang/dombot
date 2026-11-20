@@ -198,20 +198,13 @@ export async function sendAccountEmail(
           ? 'Verify your email to create your account.'
           : 'A single-use link to reset your password.',
       heading: kind === 'signup' ? 'Verify your email' : 'Reset your password',
-      intro:
-        kind === 'signup'
-          ? 'Verify your email to start using domains.domains.'
-          : 'Set a new password for your domains.domains sign-in.',
       action: {
         label: kind === 'signup' ? 'Verify email address' : 'Reset password',
         url: url.href,
       },
-      note:
-        'This link expires in ' +
-        (kind === 'signup' ? 20 : 15) +
-        ' minutes and can be used once. Do not share or forward this email.',
-      reason:
-        'You requested this account email. If you did not request this, ignore it. Your account has not been changed.',
+      showActionUrl: true,
+      note: `Single-use link. Expires in ${kind === 'signup' ? 20 : 15} minutes. Keep it private.`,
+      reason: 'If you didn’t request this email, you can ignore it.',
     }),
   );
 }

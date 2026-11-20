@@ -84,10 +84,9 @@ export async function drainSecurityNotifications(env: HostedEnv) {
               label: 'Review account security',
               url: `${env.CANONICAL_ORIGIN}/account`,
             },
-            note: 'If you did not make this change, review your account security and contact domains@domains.domains. This email does not grant access to your account.',
+            note: 'If this wasn’t you, contact support.',
             reference: item.id,
-            reason:
-              'This notice records a completed security change to your account.',
+            reason: 'You received this because a security setting changed.',
           }),
           headers: {
             'X-Notification-ID': item.id,

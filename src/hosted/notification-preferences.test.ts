@@ -434,9 +434,11 @@ describe('hosted notification preferences and admission', () => {
       )
       .bind(crypto.randomUUID(), user, Date.now())
       .run();
+    let sent: EmailMessageBuilder | undefined;
     let sends = 0;
     env.EMAIL = {
-      send: async () => {
+      send: async (message: EmailMessageBuilder) => {
+        sent = message;
         sends++;
         throw Error('Synthetic connection lost after send');
       },
@@ -447,6 +449,13 @@ describe('hosted notification preferences and admission', () => {
     ]);
     await drainSecurityNotifications(env);
     expect(sends).toBe(1);
+    expect(sent?.subject).toContain('Your password was changed');
+    for (const body of [sent?.html, sent?.text]) {
+      expect(body).toContain('Review account security');
+      expect(body!.indexOf('Review account security')).toBeLessThan(
+        body!.indexOf('Changed at'),
+      );
+    }
     expect(
       (await db
         .prepare('SELECT state FROM notification_security_outbox')

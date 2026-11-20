@@ -98,9 +98,6 @@ export class EmailAuth {
     const url = new URL('/auth/email/confirm', this.env.CANONICAL_ORIGIN);
     url.searchParams.set('id', id);
     url.searchParams.set('token', token);
-    const intro = user
-      ? 'Confirm it’s you to continue on domains.domains.'
-      : 'Sign in or create your domains.domains account.';
     const delivery = sendAuthEmail(
       this.env,
       email,
@@ -110,15 +107,15 @@ export class EmailAuth {
           : 'Your domains.domains sign-in link and code',
         preheader:
           'Your single-use sign-in link and code expire in 10 minutes.',
-        heading: user ? 'Confirm it’s you' : 'Sign in to domains.domains',
-        intro,
+        heading: user ? 'Confirm it’s you' : 'Sign in',
         code,
-        codeLabel:
-          'Or enter this six-digit code in the browser where you requested it',
-        action: { label: 'Continue to domains.domains', url: url.href },
-        note: 'The link and code expire in 10 minutes. Using either invalidates both. Do not share or forward this email.',
-        reason:
-          'You requested access to domains.domains. If you did not request this, ignore this email.',
+        codeLabel: 'Or enter this code in the browser that requested it',
+        action: {
+          label: user ? 'Confirm identity' : 'Continue to sign in',
+          url: url.href,
+        },
+        note: 'The link and code expire in 10 minutes. Use either once and keep both private.',
+        reason: 'If you didn’t request this email, you can ignore it.',
       }),
       true,
     ).then(async (sent) => {

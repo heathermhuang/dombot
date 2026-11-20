@@ -8,10 +8,11 @@ describe('shared email presentation and trust boundary', () => {
       heading: '<script>unsafe</script>',
       intro: 'Hello <Buyer>',
       details: [['Domain', 'sample.example']],
-      sections: [{ label: 'Message', body: '<img onerror=alert(1)>' }],
+      lead: { label: '<Message>', body: '<img onerror=alert(1)>' },
       action: { label: 'Review', url: 'https://domains.domains/account' },
       reason: 'You requested this.',
       reference: 'safe-reference',
+      showActionUrl: true,
     });
     expect(mail.html).not.toContain('<script>');
     expect(mail.html).not.toContain('<img onerror');
@@ -22,7 +23,14 @@ describe('shared email presentation and trust boundary', () => {
       expect(content).toContain('domains@domains.domains');
       expect(content).toContain('safe-reference');
     }
-    expect(mail.html).toContain('If the button does not work');
+    expect(mail.html).toContain('&lt;Message&gt;');
+    expect(mail.html).toContain('Copy the link if needed:');
+    expect(mail.html.indexOf('&lt;Message&gt;')).toBeLessThan(
+      mail.html.indexOf('>Review</a>'),
+    );
+    expect(mail.html.indexOf('>Review</a>')).toBeLessThan(
+      mail.html.indexOf('sample.example'),
+    );
     expect(mail.html).toContain('max-width:600px');
     expect(mail.html).toContain('prefers-color-scheme:dark');
   });

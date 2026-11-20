@@ -52,12 +52,18 @@ const post = (
     env,
   );
 function delivered() {
-  const text = messages.at(-1)!.text!;
-  const url = new URL(text.match(/https:\/\/\S+/)![0]);
+  const { text, html } = messages.at(-1)!;
+  const url = new URL(text!.match(/https:\/\/\S+/)![0]);
+  const code = text!.match(
+    /^Or enter this code in the browser that requested it: (\d{6})$/m,
+  )![1];
+  expect(html).toContain(`>${code}</p>`);
+  expect(html).toContain(`href="${url.href.replaceAll('&', '&amp;')}"`);
+  expect(html).not.toContain('Copy the link if needed:');
   return {
     id: url.searchParams.get('id')!,
     token: url.searchParams.get('token')!,
-    code: text.match(/browser where you requested it: (\d{6})/)![1],
+    code,
     url,
   };
 }

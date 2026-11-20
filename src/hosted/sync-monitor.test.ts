@@ -320,7 +320,14 @@ describe('production Dynadot collector and email outbox', () => {
       });
     await deliverSyncAlerts(env);
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0][0].text).toContain('30 minutes');
+    const { html, text } = send.mock.calls[0][0];
+    expect(text).toContain('30 minutes');
+    expect(text).toContain('Queue timeout: 12');
+    expect(text).not.toContain('account-1');
+    expect(html).toContain('Latest failure');
+    expect(html!.indexOf('Review sync incidents')).toBeLessThan(
+      html!.indexOf('Queue timeout'),
+    );
     const receipts = (
       await db
         .prepare(
