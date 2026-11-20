@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-6946f6cf1ce617e0c1957d8dfeb853c83e458c8e-47",
+      "date": "2026-11-20",
+      "layer": "saas",
+      "title": "Hosted service update observed: Redesign the remaining transactional emails for mobile",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/6946f6cf1ce617e0c1957d8dfeb853c83e458c8e"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-e9292f4234b3b1402c21b9f41cd291e63c202783-46",
       "date": "2026-11-20",
       "layer": "saas",
