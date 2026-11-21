@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-5a2689f9e2329cb09747d8900598262a1fec3be0-48",
+      "date": "2026-11-21",
+      "layer": "saas",
+      "title": "Hosted service update observed: Make Park.io recovery consistent across the portfolio and MCP",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/5a2689f9e2329cb09747d8900598262a1fec3be0"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-244",
       "date": "2026-11-21",
       "layer": "saas",
