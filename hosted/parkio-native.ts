@@ -1,6 +1,7 @@
 import { PARKIO_SETTINGS_PATH } from '../src/shared/parkio-status';
 import { parkioMobileConnection } from './parkio-mobile-contract';
 import {
+  canRecheckParkioSignIn,
   parkioNativeLogin,
   parkioNativeVerification,
   parkioNativeSnapshot,
@@ -88,6 +89,8 @@ function setup(root: HTMLElement) {
       },
       body: method === 'POST' ? '{}' : undefined,
       signal: AbortSignal.timeout(45000),
+    }).catch(() => {
+      throw Error('connection_unavailable');
     });
     if (
       response.type === 'opaqueredirect' ||
@@ -95,10 +98,11 @@ function setup(root: HTMLElement) {
       response.status === 401
     )
       throw Error('account_authentication_required');
-    const value = (await response.json()) as T & { error?: string };
-    if (!response.ok)
+    const value = (await response.json().catch(() => null)) as
+      (T & { error?: string }) | null;
+    if (!response.ok || value === null)
       throw Error(
-        value.error && /^[a-z_]{1,60}$/.test(value.error)
+        value?.error && /^[a-z_]{1,60}$/.test(value.error)
           ? value.error
           : 'proof_unavailable',
       );
@@ -523,7 +527,34 @@ function setup(root: HTMLElement) {
     try {
       await work();
     } catch (error) {
-      if (alive) explain(error);
+      let failure = error;
+      if (
+        alive &&
+        customer &&
+        connectionIntent &&
+        canRecheckParkioSignIn(error)
+      ) {
+        clearTimeout(timer);
+        clearSecrets();
+        disconnect();
+        panel('working');
+        root.querySelector<HTMLElement>('#native-working-refresh')!.hidden =
+          true;
+        root.querySelector<HTMLElement>('#native-heading')!.textContent =
+          'Checking your Park.io connection…';
+        root.querySelector<HTMLElement>('#native-progress')!.textContent =
+          'Looking up the result of your existing sign-in.';
+        message('');
+        // Use the same intent as Check connection. This reads its status
+        // before resuming verification, without replaying credentials.
+        try {
+          await resume(true);
+          return;
+        } catch (recheckError) {
+          failure = recheckError;
+        }
+      }
+      if (alive) explain(failure);
     } finally {
       busy = false;
       root.querySelectorAll<HTMLButtonElement>('form button').forEach((e) => {
@@ -531,7 +562,7 @@ function setup(root: HTMLElement) {
       });
     }
   }
-  async function resume() {
+  async function resume(rechecking = false) {
     const state = await api<{
       phase: string;
       error?: string;
@@ -554,13 +585,15 @@ function setup(root: HTMLElement) {
     if (state.phase === 'blocked')
       throw Error(state.error ?? 'proof_not_ready');
     if (!['login', 'checking'].includes(state.phase)) {
+      if (rechecking) throw Error('sign_in_outcome_unknown');
       panel('credentials');
       message('');
       return;
     }
     try {
       await connect(false);
-    } catch {
+    } catch (error) {
+      if (rechecking) throw error;
       panel('credentials');
       message('Enter your Park.io credentials to start a fresh sign-in.');
       return;

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parkioOrdersPage } from '../../hosted/parkio-native-contract';
+import {
+  canRecheckParkioSignIn,
+  parkioOrdersPage,
+} from '../../hosted/parkio-native-contract';
 describe('observed native proof Orders navigation', () => {
   it.each([
     'https://park.io/orders',
@@ -21,4 +24,24 @@ describe('observed native proof Orders navigation', () => {
   ])('holds unsafe/unqualified navigation %s', (url) => {
     expect(() => parkioOrdersPage(url)).toThrow();
   });
+});
+
+describe('Park.io existing-intent recovery', () => {
+  it.each([
+    'connection_unavailable',
+    'command_timed_out',
+    'sign_in_outcome_unknown',
+    'proof_unavailable',
+  ])('allows a status check after %s', (code) =>
+    expect(canRecheckParkioSignIn(new Error(code))).toBe(true),
+  );
+  it.each([
+    'account_mismatch',
+    'daily_browser_budget',
+    'cleanup_required',
+    'provider_contract_required',
+    'session_changed',
+  ])('preserves the action required for %s', (code) =>
+    expect(canRecheckParkioSignIn(new Error(code))).toBe(false),
+  );
 });
