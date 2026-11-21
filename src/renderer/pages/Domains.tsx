@@ -4,6 +4,11 @@ import {
   CollapsibleTrigger,
 } from '../components/ui/collapsible';
 import { matchesRenewalMonth } from '../lib/renewals';
+import {
+  PARKIO_SETTINGS_PATH,
+  PARKIO_STATUS,
+  parkioStatus,
+} from '../../shared/parkio-status';
 import { marketObservationRows } from '../../shared/market-observation-rows';
 import { PublicPageActions } from '../components/domains/PublicPageActions';
 import { supportsSales } from '../lib/platform';
@@ -1006,6 +1011,7 @@ export default function Domains() {
     portfolio,
     portfolioErrors,
     portfolioRegistrarLabels,
+    parkioSources,
     portfolioError,
     portfolioLoadedAt,
     refreshTick,
@@ -2599,6 +2605,14 @@ export default function Domains() {
     ),
     ...marketSyncProblems.map((p) => p.account),
   ];
+  const parkioAttention = parkioSources
+    .map(parkioStatus)
+    .filter(
+      (status) =>
+        status === 'reconnect_required' ||
+        status === 'review_required' ||
+        status === 'failed',
+    );
   const syncTrouble = [
     portfolioError && `Sync failed: ${portfolioError}`,
     failedAccounts.length > 0 && `${failedAccounts.join(', ')} failed to sync`,
@@ -2693,6 +2707,25 @@ export default function Domains() {
               },
             }}
           />
+        )}
+
+        {!archiveView && parkioAttention.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 px-3 py-2 text-sm">
+            <strong>
+              Park.io ·{' '}
+              {parkioAttention.length === 1
+                ? PARKIO_STATUS[parkioAttention[0]].label
+                : `${parkioAttention.length} connections need attention`}
+            </strong>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={PARKIO_SETTINGS_PATH}>
+                {parkioAttention.length === 1 &&
+                parkioAttention[0] === 'reconnect_required'
+                  ? 'Reconnect Park.io'
+                  : 'Manage Park.io'}
+              </Link>
+            </Button>
+          </div>
         )}
 
         {!archiveView && (

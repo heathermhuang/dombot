@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ParkioSourceView } from '../../shared/parkio';
+import { PARKIO_STATUS, parkioStatus } from '../../shared/parkio-status';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { hostPath, webAuthMode } from '../lib/platform';
@@ -12,9 +13,12 @@ const messages: Record<string, string> = {
   conflict: 'The connection changed. Its latest status is loaded below.',
   check_cooldown:
     'Park.io can be refreshed once an hour. Your saved domains are available.',
+  connection_not_ready:
+    'Refresh the Park.io status to see what is needed before updating.',
   account_mismatch:
     'This is a different Park.io account. Add it as a separate connection.',
-  sign_in_required: 'Park.io needs a new sign-in. Your saved domains are kept.',
+  sign_in_required:
+    'Reconnect Park.io to resume updates. Your saved domains are still available.',
   session_outcome_unknown:
     'The sign-in outcome is uncertain. Reconnect to continue safely.',
   check_outcome_unknown:
@@ -31,6 +35,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   gateway = false,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(gateway ? path : hostPath(path), {
     method: body === undefined ? 'GET' : 'POST',
@@ -41,23 +46,27 @@ async function request<T>(
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(45000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(45000)])
+      : AbortSignal.timeout(45000),
   });
   if (response.status === 303 || response.type === 'opaqueredirect') {
     window.location.assign('/login');
     throw Error('Sign in to Domains.Domains to continue.');
   }
-  const value = (await response.json()) as T & {
-    error?: string;
-    reauth?: string;
-  };
-  if (response.status === 428 && value.reauth?.startsWith('/account/reauth')) {
+  const value = (await response.json().catch(() => null)) as
+    | (T & {
+        error?: string;
+        reauth?: string;
+      })
+    | null;
+  if (response.status === 428 && value?.reauth?.startsWith('/account/reauth')) {
     window.location.assign(value.reauth);
     throw Error('Confirm your identity to continue.');
   }
-  if (!response.ok)
+  if (!response.ok || value === null)
     throw Error(
-      value.error && messages[value.error]
+      value?.error && messages[value.error]
         ? messages[value.error]
         : 'Park.io could not complete this request. Your saved inventory is kept.',
     );
@@ -74,13 +83,16 @@ type Review = {
     expirationDate: string | null;
   }[];
 };
-export function ParkioSources() {
+export function ParkioSources({ focused }: { focused: boolean }) {
   const [state, setState] = useState<{
     enabled: boolean;
     automaticUpdates?: boolean;
     sources: ParkioSourceView[];
   }>({ enabled: false, sources: [] });
   const [canConnect, setCanConnect] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const section = useRef<HTMLDetailsElement>(null);
+  const sourceRequest = useRef(0);
   const [saved, setSaved] = useState<{ available: boolean; count?: number }>({
     available: false,
   });
@@ -89,56 +101,73 @@ export function ParkioSources() {
     [review, setReview] = useState<{ sourceId: string; data: Review } | null>(
       null,
     );
-  const [initialKey] = useState(() => crypto.randomUUID());
-  const key = useRef(initialKey);
+  const intent = useRef<{ target: string; key: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const polls = useRef({ key: '', count: 0 });
-  const loadPortfolio = useAppStore((s) => s.loadPortfolio);
-  const load = useCallback(async () => {
-    const next = await request<typeof state>(root);
-    setNow(Date.now());
-    setState(next);
-    const gate = await request<{ enabled: boolean }>(
-      root + '/availability',
-      undefined,
-      true,
-    );
-    setCanConnect(gate.enabled);
-    if (gate.enabled)
-      setSaved(
-        await request<typeof saved>(root + '/saved-session', undefined, true),
-      );
+  const updatePortfolioCache = useAppStore((s) => s.applyPortfolioCacheUpdate);
+  const knownSources = useAppStore((s) => s.parkioSources.length);
+  const loadSources = useCallback(async (signal?: AbortSignal) => {
+    const revision = ++sourceRequest.current;
+    const next = await request<typeof state>(root, undefined, false, signal);
+    if (!signal?.aborted && revision === sourceRequest.current) {
+      setNow(Date.now());
+      setState(next);
+    }
+    return next;
   }, []);
-  useEffect(() => {
-    if (webAuthMode() !== 'gateway') return;
-    let alive = true;
-    void request<typeof state>(root)
-      .then(async (next) => {
-        if (!alive) return;
-        setNow(Date.now());
-        setState(next);
-        const gate = await request<{ enabled: boolean }>(
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const [inventory, availability] = await Promise.allSettled([
+        loadSources(signal),
+        request<{ enabled: boolean }>(
           root + '/availability',
           undefined,
           true,
-        );
-        if (alive) setCanConnect(gate.enabled);
-        if (gate.enabled) {
-          const existing = await request<typeof saved>(
-            root + '/saved-session',
-            undefined,
-            true,
-          );
-          if (alive) setSaved(existing);
-        }
+          signal,
+        ),
+      ]);
+      if (signal?.aborted) return;
+      if (availability.status === 'fulfilled') {
+        setCanConnect(availability.value.enabled);
+        const nextSaved = availability.value.enabled
+          ? await request<typeof saved>(
+              root + '/saved-session',
+              undefined,
+              true,
+              signal,
+            )
+          : { available: false };
+        if (!signal?.aborted) setSaved(nextSaved);
+      } else {
+        throw availability.reason;
+      }
+      if (inventory.status === 'rejected' && availability.value.enabled)
+        throw inventory.reason;
+    },
+    [loadSources],
+  );
+  const hosted = webAuthMode() === 'gateway';
+  const visible =
+    hosted &&
+    (focused || canConnect || state.sources.length > 0 || knownSources > 0);
+  useEffect(() => {
+    if (!hosted) return;
+    const controller = new AbortController();
+    void load(controller.signal)
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : 'Could not load Park.io.');
       })
-      .catch(() => {
-        /* Older engines do not expose this connector. */
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
       });
-    return () => {
-      alive = false;
-    };
-  }, []);
+    return () => controller.abort();
+  }, [hosted, load]);
+  useEffect(() => {
+    if (!focused || !visible) return;
+    section.current?.scrollIntoView({ block: 'start' });
+    section.current?.querySelector('summary')?.focus({ preventScroll: true });
+  }, [focused, visible]);
   useEffect(() => {
     const next = state.sources
       .map((s) => (s.lastAttemptAt ?? 0) + 3600000)
@@ -164,15 +193,20 @@ export function ParkioSources() {
       polls.current = { key: pending, count: 0 };
     if (polls.current.count++ >= 20) return;
     const timer = setTimeout(() => {
-      void load().catch(() => {});
+      void loadSources()
+        .then((next) => {
+          if (!next.sources.some((source) => source.sync === 'running'))
+            return updatePortfolioCache();
+        })
+        .catch(() => {
+          setError(
+            'Could not load the latest Park.io status. Refresh status to retry.',
+          );
+        });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [state.sources, load]);
-  if (
-    (!state.enabled && !state.sources.length) ||
-    (!canConnect && !state.sources.length)
-  )
-    return null;
+  }, [state.sources, loadSources, updatePortfolioCache]);
+  if (!visible) return null;
   const run = async (id: string, work: () => Promise<void>) => {
     if (busy) return;
     setBusy(id);
@@ -195,10 +229,13 @@ export function ParkioSources() {
   };
   const connect = (source?: ParkioSourceView) =>
     run(source?.id ?? 'connect', async () => {
+      const target = source ? `${source.id}/${source.revision}` : 'new';
+      if (intent.current?.target !== target)
+        intent.current = { target, key: crypto.randomUUID() };
       const value = await request<{ url: string }>(
         root + '/start',
         {
-          intentKey: key.current,
+          intentKey: intent.current.key,
           ...(source ? { sourceId: source.id, revision: source.revision } : {}),
         },
         true,
@@ -209,7 +246,7 @@ export function ParkioSources() {
         )
       )
         throw Error('The sign-in could not be opened.');
-      key.current = crypto.randomUUID();
+      intent.current = null;
       window.location.assign(value.url);
     });
   const action = (source: ParkioSourceView, kind: string) =>
@@ -218,8 +255,8 @@ export function ParkioSources() {
         revision: source.revision,
       });
       setReview(null);
-      await load();
-      await loadPortfolio();
+      await loadSources();
+      await updatePortfolioCache();
     });
   const showReview = (sourceId: string, offset = 0) =>
     run('review', async () => {
@@ -230,19 +267,52 @@ export function ParkioSources() {
         ),
       });
     });
+  const status =
+    state.sources.length === 1
+      ? PARKIO_STATUS[parkioStatus(state.sources[0])].label
+      : state.sources.length > 1
+        ? `${state.sources.length} accounts`
+        : loading
+          ? 'Loading…'
+          : '';
   return (
-    <section aria-label="Park.io inventory" className="flex flex-col gap-4">
-      <div>
-        <h3 className="text-lg font-semibold">Park.io</h3>
-        <p className="text-sm text-muted-foreground">
-          Active domains and expiry dates, updated about once a day. Manage
-          domain settings in Park.io.
-        </p>
-      </div>
+    <details
+      aria-label="Park.io inventory"
+      className="space-y-4 rounded-md border bg-card p-4"
+      open={focused || undefined}
+      ref={section}
+    >
+      <summary className="min-h-11 cursor-pointer font-medium">
+        Park.io
+        {status && (
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            · {status}
+          </span>
+        )}
+      </summary>
+      <p className="text-sm text-muted-foreground">
+        Read-only inventory of active domains and expiry dates. Automatic
+        updates run about once a day.
+      </p>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
+      )}
+      {(error || state.sources.some((source) => source.sync === 'running')) && (
+        <Button
+          variant="outline"
+          className="min-h-11 self-start"
+          disabled={!!busy}
+          onClick={() =>
+            void run('status', async () => {
+              await load();
+              await updatePortfolioCache();
+            })
+          }
+        >
+          Refresh status
+        </Button>
       )}
       {saved.available && (
         <Card className="flex flex-col gap-3 p-5">
@@ -254,7 +324,7 @@ export function ParkioSources() {
           </p>
           <Button
             className="min-h-11 w-full sm:w-auto sm:self-start"
-            disabled={!!busy}
+            disabled={!!busy || !state.enabled}
             onClick={() =>
               void run('saved', async () => {
                 const result = await request<{ pending?: boolean }>(
@@ -269,7 +339,7 @@ export function ParkioSources() {
                   return;
                 }
                 await load();
-                await loadPortfolio();
+                await updatePortfolioCache();
                 toast.success('Park.io connected');
               })
             }
@@ -281,8 +351,9 @@ export function ParkioSources() {
         </Card>
       )}
       {state.sources.map((source) => {
-        const pending = source.sync === 'running',
-          needsSignIn = source.connection !== 'connected';
+        const status = parkioStatus(source);
+        const pending = status === 'running';
+        const needsSignIn = source.connection !== 'connected';
         return (
           <Card key={source.id} className="flex flex-col gap-3 p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -291,19 +362,7 @@ export function ParkioSources() {
                 {state.sources.length > 1 ? ` · ${source.id.slice(0, 4)}` : ''}
               </h4>
               <span className="text-sm text-muted-foreground">
-                {needsSignIn
-                  ? source.connection === 'disconnected'
-                    ? 'Disconnected'
-                    : 'Sign in again'
-                  : source.paused
-                    ? 'Updates paused'
-                    : source.sync === 'review_required'
-                      ? 'Review changes'
-                      : pending
-                        ? 'Checking Park.io…'
-                        : source.error
-                          ? 'Needs attention'
-                          : 'Connected'}
+                {PARKIO_STATUS[status].label}
               </span>
             </div>
             <p className="text-sm">
@@ -312,19 +371,23 @@ export function ParkioSources() {
               {when(source.lastSuccessfulCheckAt)}
             </p>
             <p className="text-sm text-muted-foreground">
-              {state.automaticUpdates === false
-                ? 'Automatic sync is off in Settings. Manual updates remain available.'
-                : source.nextAttemptAt
-                  ? `Next update ${when(source.nextAttemptAt)}`
-                  : needsSignIn
-                    ? 'Your last saved inventory is kept.'
+              {pending
+                ? 'Checking for changes to your Park.io domains.'
+                : needsSignIn
+                  ? canConnect
+                    ? 'Your saved domains are still available.'
+                    : 'Your saved domains are available. Reconnecting is currently unavailable.'
+                  : source.pending
+                    ? 'Review changes before updating your saved domains.'
                     : source.paused
-                      ? 'Resume when you want automatic updates.'
-                      : source.pending
-                        ? 'Review the new export before changing your saved inventory.'
-                        : 'No update is scheduled.'}
+                      ? 'Resume updates to check for changes again.'
+                      : state.automaticUpdates === false
+                        ? 'Automatic sync is off. You can still update manually.'
+                        : source.nextAttemptAt
+                          ? `Next update ${when(source.nextAttemptAt)}`
+                          : 'No update is scheduled.'}
             </p>
-            {source.error && (
+            {source.error && !needsSignIn && !pending && (
               <p className="text-sm text-muted-foreground">
                 {messages[source.error] ??
                   'The last check needs attention. Your saved inventory is kept.'}
@@ -339,12 +402,11 @@ export function ParkioSources() {
                   export. Missing names remain saved.
                 </p>
                 <Button
-                  variant="outline"
-                  className="min-h-11"
+                  className="min-h-11 self-start"
                   disabled={!!busy}
                   onClick={() => void showReview(source.id)}
                 >
-                  Review domain changes
+                  Review Park.io changes
                 </Button>
                 <Button
                   variant="outline"
@@ -352,7 +414,7 @@ export function ParkioSources() {
                   disabled={!!busy}
                   onClick={() => void action(source, 'reject_review')}
                 >
-                  Keep the saved inventory
+                  Keep saved domains
                 </Button>
               </div>
             )}
@@ -360,10 +422,10 @@ export function ParkioSources() {
               {needsSignIn ? (
                 <Button
                   className="min-h-11"
-                  disabled={!!busy || !canConnect}
+                  disabled={!!busy || !canConnect || !state.enabled || pending}
                   onClick={() => void connect(source)}
                 >
-                  Sign in again
+                  Reconnect Park.io
                 </Button>
               ) : (
                 <>
@@ -372,6 +434,8 @@ export function ParkioSources() {
                     className="min-h-11"
                     disabled={
                       !!busy ||
+                      !state.enabled ||
+                      source.paused ||
                       pending ||
                       !!source.pending ||
                       (source.lastAttemptAt !== null &&
@@ -379,12 +443,17 @@ export function ParkioSources() {
                     }
                     onClick={() => void action(source, 'refresh')}
                   >
-                    Update now
+                    Update Park.io
                   </Button>
                   <Button
-                    variant="outline"
+                    variant={source.paused ? 'default' : 'outline'}
                     className="min-h-11"
-                    disabled={!!busy || pending || !!source.pending}
+                    disabled={
+                      !!busy ||
+                      pending ||
+                      !!source.pending ||
+                      (source.paused && !state.enabled)
+                    }
                     onClick={() =>
                       void action(source, source.paused ? 'resume' : 'pause')
                     }
@@ -401,14 +470,6 @@ export function ParkioSources() {
                   </Button>
                 </>
               )}
-              <Button
-                variant="ghost"
-                className="min-h-11"
-                disabled={!!busy}
-                onClick={() => void run('status', load)}
-              >
-                Refresh status
-              </Button>
               <a
                 href="https://park.io/orders/index/active"
                 target="_blank"
@@ -418,11 +479,15 @@ export function ParkioSources() {
                 Open Park.io ↗
               </a>
             </div>
-            {source.lastAttemptAt !== null &&
+            {!needsSignIn &&
+              !pending &&
+              !source.paused &&
+              !source.pending &&
+              source.lastAttemptAt !== null &&
               now - source.lastAttemptAt < 3600000 && (
                 <p className="text-xs text-muted-foreground">
-                  Manual updates are available once an hour. Refreshing status
-                  does not request another export.
+                  Next manual update after{' '}
+                  {when(source.lastAttemptAt + 3600000)}.
                 </p>
               )}
             {review?.sourceId === source.id && (
@@ -485,7 +550,7 @@ export function ParkioSources() {
           </Card>
         );
       })}
-      {!saved.available && canConnect && (
+      {!saved.available && canConnect && state.enabled && (
         <Button
           variant="outline"
           className="min-h-11 w-full sm:w-auto sm:self-start"
@@ -494,9 +559,9 @@ export function ParkioSources() {
         >
           {state.sources.length
             ? 'Add another Park.io account'
-            : 'Connect Park.io →'}
+            : 'Connect Park.io'}
         </Button>
       )}
-    </section>
+    </details>
   );
 }

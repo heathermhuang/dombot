@@ -1,5 +1,6 @@
 import { mergeDomainDetail } from '../../shared/creation-date';
 import { domainKey } from '../../shared/account-key';
+import type { ParkioCacheStatus } from '../../shared/parkio';
 import { toAscii } from '../../shared/domain-name';
 import { create } from 'zustand';
 import { ExchangeRates } from '../../shared/exchange-rates';
@@ -135,6 +136,7 @@ interface AppState {
   portfolioRegistrars: string[];
   /** Map of registrar id → nicely capitalized display name. */
   portfolioRegistrarLabels: Record<string, string>;
+  parkioSources: ParkioCacheStatus[];
   portfolioLoading: boolean;
   portfolioError: string | null;
   /** When the portfolio data was last fetched from the registrars (ms epoch),
@@ -384,6 +386,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   portfolio: [],
+  parkioSources: [],
   portfolioErrors: [],
   renewalPricing: null,
   portfolioRegistrars: [],
@@ -421,6 +424,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       renewalPricing: result.renewalPricing ?? null,
       portfolioRegistrars: result.registrars,
       portfolioRegistrarLabels: result.registrarLabels,
+      parkioSources: result.parkioSources ?? [],
       portfolioLoadedAt: result.fetchedAt ?? Date.now(),
       portfolioSource: state.portfolioSource ?? 'live',
       refreshTick: state.refreshTick + 1,
@@ -458,6 +462,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       renewalPricing: result.renewalPricing ?? null,
       portfolioRegistrars: result.registrars,
       portfolioRegistrarLabels: result.registrarLabels,
+      parkioSources: result.parkioSources ?? [],
       portfolioLoadedAt:
         result.fetchedAt ?? state.portfolioLoadedAt ?? Date.now(),
       portfolioSource: state.portfolioSource ?? 'live',
@@ -496,6 +501,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       renewalPricing: portfolio.renewalPricing ?? null,
       portfolioRegistrars: portfolio.registrars,
       portfolioRegistrarLabels: portfolio.registrarLabels,
+      parkioSources: portfolio.parkioSources ?? [],
       portfolioLoadedAt: portfolio.fetchedAt,
       portfolioSource: 'cache',
       enriched,
@@ -526,6 +532,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!portfolio) {
       set({
         portfolio: [],
+        parkioSources: [],
         portfolioErrors: [],
         renewalPricing: null,
         portfolioRegistrars: [],
@@ -557,6 +564,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         renewalPricing: portfolio.renewalPricing ?? null,
         portfolioRegistrars: portfolio.registrars,
         portfolioRegistrarLabels: portfolio.registrarLabels,
+        parkioSources: portfolio.parkioSources ?? [],
         portfolioLoadedAt: portfolio.fetchedAt,
         enriched,
       };
@@ -569,6 +577,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     resetEnrich();
     set({
       portfolio: [],
+      parkioSources: [],
       portfolioErrors: [],
       renewalPricing: null,
       portfolioRegistrars: [],
@@ -598,6 +607,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         renewalPricing: result.renewalPricing ?? null,
         portfolioRegistrars: result.registrars,
         portfolioRegistrarLabels: result.registrarLabels,
+        parkioSources: result.parkioSources ?? [],
         portfolioLoading: false,
         portfolioLoadedAt: result.fetchedAt ?? Date.now(),
         portfolioSource: 'live',

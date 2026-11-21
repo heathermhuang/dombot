@@ -6,6 +6,7 @@ import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
 import { activateWorkspace, pendingWorkspace } from './on-demand';
 import { PROOF_HEADER, signGatewayRequest } from '../shared/gateway-proof';
 import { page } from './views';
+import { PARKIO_SETTINGS_PATH } from '../shared/parkio-status';
 import { parkioNativeContent } from './parkio-native-view';
 import {
   parkioCredentialSchema,
@@ -187,7 +188,7 @@ export function parkioConnectorRoutes(
     c.html(
       page(
         'Connect Park.io',
-        `<section class="account"><h1>Connect Park.io</h1><p>Bring your active Park.io domains and expiration dates into your private portfolio. Background updates run about once a day.</p><p>Sign in once using native fields. Your password is not saved. The encrypted login session is kept for up to 30 days, or until it expires or you disconnect.</p><form method="post" action="${base}/start"><input type="hidden" name="intentKey" value="${crypto.randomUUID()}"><button>Connect Park.io →</button></form><p><a href="/w/${c.get('user').workspace_id}/#/settings?tab=registrars">Back to Registrars →</a></p></section>`,
+        `<section class="account"><h1>Connect Park.io</h1><p>Bring your active Park.io domains and expiration dates into your private portfolio. Background updates run about once a day.</p><p>Sign in once using native fields. Your password is not saved. The encrypted login session is kept for up to 30 days, or until it expires or you disconnect.</p><form method="post" action="${base}/start"><input type="hidden" name="intentKey" value="${crypto.randomUUID()}"><button>Connect Park.io →</button></form><p><a href="/w/${c.get('user').workspace_id}/#${PARKIO_SETTINGS_PATH}">Back to Park.io settings</a></p></section>`,
       ),
     ),
   );
