@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-ac3ff6484986faa1768cb6a09d90c5c56be37b18-49",
+      "date": "2026-11-21",
+      "layer": "saas",
+      "title": "Hosted service update observed: Recover Park.io sign-in from mobile and cleanup failures",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/ac3ff6484986faa1768cb6a09d90c5c56be37b18"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-244",
       "date": "2026-11-21",
       "layer": "saas",
@@ -46,6 +62,22 @@
         {
           "label": "Change #245",
           "url": "https://github.com/heathermhuang/dombot/pull/245"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-246",
+      "date": "2026-11-21",
+      "layer": "saas",
+      "title": "Recover Park.io sign-in from mobile and cleanup failures",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #246 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #246",
+          "url": "https://github.com/heathermhuang/dombot/pull/246"
         }
       ]
     },
