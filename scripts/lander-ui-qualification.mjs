@@ -192,30 +192,36 @@ try {
     .getByRole('button', { name: 'Use our lander', exact: true })
     .click();
   const reauth = page.getByRole('link', {
-    name: 'Confirm your identity, then return to this selection',
+    name: 'Confirm identity',
     exact: true,
   });
   await reauth.waitFor();
-  assert(
-    (await reauth.getAttribute('href')).startsWith('/account/reauth?next='),
-  );
+  const reauthUrl = new URL(await reauth.getAttribute('href'), origin);
+  assert.equal(reauthUrl.pathname, '/account/reauth');
+  assert.equal(reauthUrl.searchParams.get('reason'), 'domain-setup');
+  assert.equal(reauthUrl.origin, origin);
+  const reauthReturn = reauthUrl.searchParams.get('next');
+  assert(reauthReturn);
+  const returnUrl = new URL(reauthReturn, origin);
+  assert.equal(returnUrl.origin, origin);
+  assert.equal(returnUrl.pathname, `/w/${status.workspace}/`);
   await page.reload();
   await page
     .getByRole('button', { name: 'Continue lander review', exact: true })
     .click();
   results.push('reauthentication return retains selection and idempotency key');
   await page
-    .getByRole('heading', { name: 'Connect your domains', exact: true })
+    .getByRole('heading', { name: 'Review connection', exact: true })
     .waitFor();
   assert.equal(selection.kind, 'domains');
   assert.equal(selection.domains.length, 60);
   assert.equal(new Set(selection.domains).size, 60);
   await page
-    .getByText('lander-fixture-000.example · ready', { exact: true })
+    .getByText('lander-fixture-000.example · Ready to review', { exact: true })
     .click();
   assert(
     await page
-      .getByText('No public price · inquiry · questions enabled', {
+      .getByText('No public price · Open to inquiries · Questions accepted', {
         exact: true,
       })
       .first()
@@ -223,7 +229,7 @@ try {
   );
   await page
     .getByRole('button', {
-      name: 'Confirm publication and DNS for 60 domains',
+      name: 'Confirm and connect 60 domains',
       exact: true,
     })
     .focus();
@@ -246,10 +252,10 @@ try {
   await page.goto(`${origin}/w/${status.workspace}/#/public-listings`);
   await page.getByText('Recent lander connections', { exact: true }).click();
   await page
-    .getByRole('button', { name: '60 domains · running', exact: true })
+    .getByRole('button', { name: '60 domains · Connecting', exact: true })
     .click();
   await page
-    .getByRole('heading', { name: 'Lander connections', exact: true })
+    .getByRole('heading', { name: 'Connecting', exact: true })
     .waitFor();
   results.push('job reopened after tab closure');
   await page.setViewportSize({ width: 390, height: 844 });
@@ -263,11 +269,11 @@ try {
     })
     .click();
   await page
-    .getByRole('heading', { name: 'Connect your domains', exact: true })
+    .getByRole('heading', { name: 'Review connection', exact: true })
     .waitFor();
   assert.equal(selection.kind, 'matching-listings');
   await page
-    .getByRole('heading', { name: 'Connect your domains', exact: true })
+    .getByRole('heading', { name: 'Review connection', exact: true })
     .scrollIntoViewIfNeeded();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth + 1,
