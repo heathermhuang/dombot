@@ -194,6 +194,7 @@ export class ParkioPilot {
       captureRetentionMs?: number;
       automaticFollowups?: boolean;
       acceptCookieRotation?: boolean;
+      browserStartLimit?: 4;
     } = {},
   ) {}
   /** Internal Fetcher boundary keeps storage helpers unexposed and the
@@ -381,7 +382,8 @@ export class ParkioPilot {
         throw new PilotError('cleanup_required');
       const day = new Date().toISOString().slice(0, 10);
       const starts = old?.day === day ? old.starts + 1 : 1;
-      if (starts > 3) throw new PilotError('daily_browser_budget');
+      if (starts > (this.policy.browserStartLimit ?? 3))
+        throw new PilotError('daily_browser_budget');
       const a: Attempt = {
         id: crypto.randomUUID(),
         phase: 'creating',

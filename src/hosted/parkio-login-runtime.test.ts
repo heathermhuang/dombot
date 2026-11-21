@@ -11,10 +11,12 @@ const owner = '11111111-1111-4111-8111-111111111111',
   workspace = '22222222-2222-4222-8222-222222222222',
   other = '33333333-3333-4333-8333-333333333333',
   third = '44444444-4444-4444-8444-444444444444';
+const recoverySource = '55555555-5555-4555-8555-555555555555';
 let mf: Miniflare;
 const cases = [
   'basic',
   'budget',
+  'recovery',
   'scope',
   'completed',
   'integration',
@@ -57,6 +59,15 @@ beforeAll(async () => {
         },
         bindings: {
           PARKIO_LOGIN_SECRET: 'test-only-root-'.repeat(4),
+          ...(name === 'recovery'
+            ? {
+                PARKIO_RECONNECT_RECOVERY: JSON.stringify({
+                  workspace,
+                  sourceId: recoverySource,
+                  utcDay: new Date().toISOString().slice(0, 10),
+                }),
+              }
+            : {}),
           TEST_MODE:
             name === 'unknown-close'
               ? 'close-fails'
@@ -251,6 +262,35 @@ describe('temporary Park.io login broker', () => {
     await call('budget', 'cancel', { intent: a.data.intentId });
     expect((await start('budget', crypto.randomUUID(), third)).status).toBe(
       200,
+    );
+  });
+  it('allows one dated recovery start only for the existing saved source', async () => {
+    for (let n = 0; n < 3; n++)
+      expect((await start('recovery')).status).toBe(200);
+
+    const reconnect = (sourceId: string, expectedEpoch: number | null) =>
+      call('recovery', 'start', {
+        body: { sourceId, intentKey: crypto.randomUUID(), expectedEpoch },
+      });
+    expect((await (await reconnect(crypto.randomUUID(), 1)).json()).error).toBe(
+      'daily_browser_budget',
+    );
+    expect((await (await reconnect(recoverySource, null)).json()).error).toBe(
+      'daily_browser_budget',
+    );
+    expect((await reconnect(recoverySource, 1)).status).toBe(200);
+    expect((await (await reconnect(recoverySource, 1)).json()).error).toBe(
+      'daily_browser_budget',
+    );
+    const reply = await gateway('recovery', '/start', {
+      intentKey: crypto.randomUUID(),
+    });
+    expect(reply.status).toBe(429);
+    expect(Number(reply.headers.get('Retry-After'))).toBeGreaterThan(0);
+    const detail = await reply.json();
+    expect(detail.error).toBe('daily_browser_budget');
+    expect(new Date(detail.retryAt).toISOString().slice(11)).toBe(
+      '00:00:00.000Z',
     );
   });
   it('rejects another owner, another session and a replaced intent before issuing view access', async () => {

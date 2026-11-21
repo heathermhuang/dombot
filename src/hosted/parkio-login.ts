@@ -12,6 +12,32 @@ const intentSchema = z
   })
   .strict();
 type Intent = z.infer<typeof intentSchema>;
+const reconnectRecoverySchema = z
+  .object({
+    workspace: identity,
+    sourceId: identity,
+    utcDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
+
+function hasReconnectRecovery(
+  raw: string | undefined,
+  workspace: string,
+  intent: Intent | undefined,
+) {
+  if (!raw || !intent || intent.expectedEpoch === null) return false;
+  try {
+    const approval = reconnectRecoverySchema.parse(JSON.parse(raw));
+    return (
+      approval.workspace === workspace &&
+      approval.sourceId === intent.sourceId &&
+      approval.utcDay === new Date().toISOString().slice(0, 10)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** One temporary, owner/session-bound sign-in per workspace. No permanent browser. */
 export class ParkioLogin {
   #tail: Promise<unknown> = Promise.resolve();
@@ -24,7 +50,7 @@ export class ParkioLogin {
     private readonly ctx: DurableObjectState,
     private readonly env: HostedEnv,
   ) {}
-  private async context() {
+  private async context(intent?: Intent) {
     const scope = await this.ctx.storage.get<{
       workspace: string;
       owner: string;
@@ -44,6 +70,13 @@ export class ParkioLogin {
         captureRetentionMs: 15 * 60000,
         automaticFollowups: false,
         acceptCookieRotation: true,
+        ...(hasReconnectRecovery(
+          this.env.PARKIO_RECONNECT_RECOVERY,
+          scope.workspace,
+          intent,
+        )
+          ? { browserStartLimit: 4 as const }
+          : {}),
       },
     );
     return { scope, pilot };
@@ -173,12 +206,13 @@ export class ParkioLogin {
             .first())
         )
           throw new PilotError('browser_capacity');
+        const { pilot: browser } = await this.context(intent);
         try {
-          const state = await pilot.start();
-          await this.release(pilot);
+          const state = await browser.start();
+          await this.release(browser);
           return Response.json({ ...state, intentId: intent.id });
         } catch (error) {
-          await this.release(pilot);
+          await this.release(browser);
           throw error;
         }
       }

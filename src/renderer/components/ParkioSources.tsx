@@ -26,6 +26,12 @@ const messages: Record<string, string> = {
   schema_changed:
     'Park.io changed its export format. Your saved domains are kept.',
   request_limit: 'Too many connection requests. Please try again later.',
+  cleanup_required:
+    'The previous Park.io sign-in browser is still closing. Try again in a few minutes. Your saved domains are still available.',
+  browser_cleanup_failed:
+    'The previous Park.io sign-in browser is still closing. Try again in a few minutes. Your saved domains are still available.',
+  daily_browser_budget:
+    'Park.io has reached today’s sign-in limit. Try again after the daily reset. Your saved domains are still available.',
   browser_capacity:
     'Sign-in is temporarily at capacity. Please try again shortly.',
   review_expired:
@@ -58,11 +64,27 @@ async function request<T>(
     | (T & {
         error?: string;
         reauth?: string;
+        retryAt?: number;
       })
     | null;
   if (response.status === 428 && value?.reauth?.startsWith('/account/reauth')) {
     window.location.assign(value.reauth);
     throw Error('Confirm your identity to continue.');
+  }
+  if (
+    value?.error === 'daily_browser_budget' &&
+    typeof value.retryAt === 'number' &&
+    Number.isFinite(value.retryAt) &&
+    value.retryAt > 0 &&
+    value.retryAt <= Date.now() + 2 * 86400_000
+  ) {
+    const next = new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(value.retryAt);
+    throw Error(
+      `Park.io has reached today’s sign-in limit. Try again after ${next}. Your saved domains are still available.`,
+    );
   }
   if (!response.ok || value === null)
     throw Error(
