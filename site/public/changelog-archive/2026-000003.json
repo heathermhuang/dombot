@@ -82,6 +82,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-247",
+      "date": "2026-11-21",
+      "layer": "saas",
+      "title": "Explain Park.io reconnect limits and restore one scoped attempt",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #247 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #247",
+          "url": "https://github.com/heathermhuang/dombot/pull/247"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-6946f6cf1ce617e0c1957d8dfeb853c83e458c8e-47",
       "date": "2026-11-20",
       "layer": "saas",
