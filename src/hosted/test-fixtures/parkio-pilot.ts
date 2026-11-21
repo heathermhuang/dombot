@@ -84,7 +84,7 @@ export class TestParkioPilot extends ParkioPilot {
         }),
       );
     }
-    if (new URL(request.url).pathname === '/fixture-idle') {
+    if (path === '/fixture-idle' || path === '/fixture-expire') {
       const env = this.testEnv;
       const sealed = await this.testContext.storage.get<string>('sealed');
       const data = await openPilot<Record<string, unknown>>(
@@ -95,7 +95,7 @@ export class TestParkioPilot extends ParkioPilot {
       data.expiresAt = Date.now() - 1;
       data.phase = 'cleanup_required';
       data.cleanupAttempts = 3;
-      this.idleFixture();
+      if (path === '/fixture-idle') this.idleFixture();
       await this.testContext.storage.put(
         'sealed',
         await sealPilot(

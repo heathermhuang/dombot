@@ -569,6 +569,28 @@ describe('owner-only Park.io pilot runtime', () => {
     expect(html).toContain('Could not open Park.io');
     expect(html).toContain('Return to Park.io connection');
     expect(html).not.toContain('"error":');
+
+    await action('launch-fails', 'cancel');
+    expect((await state('launch-fails')).browserClosed).toBe(false);
+    const ns = await mf.getDurableObjectNamespace(
+      'PARKIO_PILOT',
+      'launch-fails',
+    );
+    const actor = ns.get(ns.idFromName('owner/' + owner));
+    const expire = (path: string) =>
+      actor.fetch('https://parkio-pilot.internal' + path, { method: 'POST' });
+    expect((await expire('/fixture-expire')).status).toBe(200);
+    await action('launch-fails', 'cancel');
+    expect(await state('launch-fails')).toMatchObject({
+      phase: 'cleanup_required',
+      browserClosed: false,
+    });
+    expect((await expire('/fixture-idle')).status).toBe(200);
+    await action('launch-fails', 'cancel');
+    expect(await state('launch-fails')).toMatchObject({
+      phase: 'cancelled',
+      browserClosed: true,
+    });
   });
   it('does not claim portability or allow a Worker read if browser closure fails', async () => {
     await action('close-fails', 'start');

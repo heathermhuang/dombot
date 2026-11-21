@@ -17,6 +17,8 @@ const sameOrigin = (r: Request) =>
   r.headers.get('Origin') === new URL(r.url).origin;
 const uuid = z.string().uuid();
 const base = '/connectors/parkio';
+const settingsPath = (user?: SessionUser) =>
+  user ? '/w/' + user.workspace_id + '/#' + PARKIO_SETTINGS_PATH : '/app';
 export function parkioEnabled(env: HostedEnv, workspace: string) {
   try {
     const ids = z
@@ -174,14 +176,25 @@ export function parkioConnectorRoutes(
         : /^[a-z_]{1,80}$/.test(error.message)
           ? error.message
           : 'connection_unavailable';
-    if (c.req.method === 'GET' && c.req.header('accept')?.includes('text/html'))
+    const navigation =
+      c.req.header('accept')?.includes('text/html') &&
+      (c.req.method === 'GET' ||
+        (c.req.method === 'POST' &&
+          c.req.path === base + '/start' &&
+          !c.req.header('content-type')?.includes('application/json')));
+    if (navigation) {
+      const message =
+        code === 'cleanup_required' || code === 'browser_cleanup_failed'
+          ? 'The previous sign-in browser is still closing. Your saved domains are still available. Return to Park.io settings and try again in a few minutes.'
+          : 'Your saved domains are still available. Return to Park.io settings to see the connection status and try again.';
       return c.html(
         page(
           'Park.io sign-in',
-          '<section class="account"><h1>This sign-in could not continue.</h1><p>Your saved domains are kept. Return to Registrars and connect again.</p><a class="button" href="/app">Open your portfolio →</a></section>',
+          `<section class="account"><h1>Park.io sign-in could not continue</h1><p>${message}</p><a class="button" href="${settingsPath(c.get('user'))}">Back to Park.io settings</a></section>`,
         ),
         409,
       );
+    }
     return c.json({ error: code }, 409);
   });
   app.get('/', async (c) =>
@@ -246,6 +259,10 @@ export function parkioConnectorRoutes(
         `<section id="parkio-native" data-native-base="${base}" data-native-mode="connector" data-native-intent="${c.get('intentId')}">`,
       )
       .replaceAll('/admin/parkio-pilot', base)
+      .replace(
+        `href="${base}">Connection details →`,
+        `href="${settingsPath(c.get('user'))}">Back to Park.io settings`,
+      )
       .replace(
         'href="' + base + '/sign-in"',
         'href="' + base + '/sign-in?intent=' + c.get('intentId') + '"',

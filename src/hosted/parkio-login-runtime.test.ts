@@ -392,6 +392,9 @@ describe('Park.io gateway-to-private-tenant handoff', () => {
     expect(native.headers.get('Content-Security-Policy')).toContain(
       'wss://live.browser.run',
     );
+    const nativeHtml = await native.text();
+    expect(nativeHtml).toContain('/connectors/parkio/sign-in?intent=' + key);
+    expect(nativeHtml).toContain('/#/settings?tab=registrars&source=parkio');
     expect(
       (await gateway('integration', '/native-complete', {}, key)).status,
     ).toBe(200);
@@ -482,6 +485,27 @@ describe('Park.io gateway-to-private-tenant handoff', () => {
     ).json();
     expect(state.browserClosed).toBe(false);
     expect(state.phase).toBe('cleanup_required');
+    const worker = await mf.getWorker('unknown-close');
+    const navigation = await worker.fetch(
+      new MfRequest('http://localhost/connectors/parkio/start', {
+        method: 'POST',
+        headers: {
+          'X-Test-User': owner,
+          'X-Test-Workspace': workspace,
+          'X-Test-Session': 'fixture-session',
+          Origin: 'http://localhost',
+          Accept: 'text/html',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ intentKey: crypto.randomUUID() }),
+      }),
+    );
+    expect(navigation.status).toBe(409);
+    expect(navigation.headers.get('content-type')).toContain('text/html');
+    const html = await navigation.text();
+    expect(html).toContain('The previous sign-in browser is still closing');
+    expect(html).toContain('/#/settings?tab=registrars&source=parkio');
+    expect(html).not.toContain('"error":');
     await start('unknown-close', crypto.randomUUID(), other);
     expect(
       (await start('unknown-close', crypto.randomUUID(), third)).data.error,
