@@ -20,7 +20,8 @@ export { SalesStore } from '${root}/src/worker/sales-store';
 export { PublicationChangeSets } from '${root}/src/worker/publication-change-sets';
 export { bindSiteLinks } from '${root}/src/worker/publication-links';
 export { emptyOwnerSite, convertOwnerSiteV3 } from '${root}/src/shared/owner-site';
-export { emptySale } from '${root}/src/shared/sales';
+export { BUNDLE_VERSION } from '${root}/src/core/storage/bundle';
+export { emptySale } from '${root}/src/shared/hosted-sales';
 export { sourcePriceFingerprint } from '${root}/src/core/publication/sales';
 export { configureStore, hydrateStores } from '${root}/src/core/storage/namespace';
 export { MemoryDocStore } from '${root}/src/core/storage/doc-store';`,
@@ -130,7 +131,7 @@ try {
       .publicationBackupMethods(publication, true, sales)
       .exportData.handler(),
     backup = JSON.parse(text);
-  assert.equal(backup.version, 9);
+  assert.equal(backup.version, f.BUNDLE_VERSION);
   assert(!('publicationChangeSets' in backup));
   const rotatedPublication = new f.PublicationStore(
       db,
@@ -163,7 +164,7 @@ try {
   console.log(
     JSON.stringify({
       localOnly: true,
-      backupVersion: 9,
+      backupVersion: f.BUNDLE_VERSION,
       v3PrivateRestore: true,
       rootRotation: true,
       liveProjectionsRevoked: true,
