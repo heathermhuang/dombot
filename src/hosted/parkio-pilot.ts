@@ -315,7 +315,7 @@ export class ParkioPilot {
     }
   }
   async #close(a: Attempt): Promise<boolean> {
-    if (!a.sessionId || a.browserClosed) return true;
+    if (a.browserClosed) return true;
     const markClosed = async () => {
       a.browserClosed = true;
       delete a.sessionId;
@@ -323,6 +323,16 @@ export class ParkioPilot {
       await this.#save(a);
       return true;
     };
+    if (!a.sessionId) {
+      // An acquire can succeed even when its response is lost. Wait for the
+      // attempt to expire and verify that there are no active browser sessions
+      // before freeing its slot. Never guess which active session to close.
+      if (a.expiresAt > Date.now()) return false;
+      a.cleanupAttempts = Math.min((a.cleanupAttempts ?? 0) + 1, 3);
+      await this.#save(a);
+      const active = await this.#browser().listSessions({ limit: 1 });
+      return active.length === 0 ? markClosed() : false;
+    }
     const existing = await this.#session(a.sessionId);
     if (!existing || existing.endTime) return markClosed();
     if ((a.cleanupAttempts ?? 0) >= 3)
@@ -363,8 +373,10 @@ export class ParkioPilot {
         if (!(await this.#close(old))) throw new PilotError('cleanup_required');
       }
       if (
-        old?.phase === 'creating' ||
-        (old?.phase === 'cleanup_required' && !old.browserClosed)
+        old &&
+        !old.browserClosed &&
+        (old.phase === 'creating' || old.phase === 'cleanup_required') &&
+        !(await this.#close(old))
       )
         throw new PilotError('cleanup_required');
       const day = new Date().toISOString().slice(0, 10);
@@ -1339,9 +1351,14 @@ export class ParkioPilot {
       a.phase = 'cleanup_required';
     }
     await this.#save(a);
-    if (a.browserClosed || !a.sessionId || (a.cleanupAttempts ?? 0) >= 3)
+    if (a.browserClosed || (a.cleanupAttempts ?? 0) >= 3)
       await this.ctx.storage.deleteAlarm();
-    else await this.ctx.storage.setAlarm(Date.now() + 30_000);
+    else
+      await this.ctx.storage.setAlarm(
+        a.sessionId
+          ? Date.now() + 30_000
+          : Math.max(a.expiresAt, Date.now() + 30_000),
+      );
     return safeState(a);
   }
   async alarm() {

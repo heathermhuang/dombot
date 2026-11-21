@@ -47,6 +47,16 @@ function setup(root: HTMLElement) {
     panel('error');
     message('');
   };
+  const showProviderBrowser = (verification: boolean) => {
+    root.querySelector<HTMLElement>('#native-browser-heading')!.textContent =
+      verification ? 'Park.io needs verification' : 'Continue on Park.io';
+    root.querySelector<HTMLElement>('#native-browser-hint')!.textContent =
+      verification
+        ? 'Complete the verification requested by Park.io in the secure browser.'
+        : 'Open the secure browser to continue on Park.io’s own sign-in page.';
+    panel('challenge');
+    message('');
+  };
   const clearSecrets = () => {
     password.value = '';
     code.value = '';
@@ -434,9 +444,11 @@ function setup(root: HTMLElement) {
         );
         return;
       }
-      if (state.kind === 'challenge') {
-        panel('challenge');
-        message('');
+      if (
+        state.kind === 'challenge' ||
+        (customer && state.kind === 'unqualified')
+      ) {
+        showProviderBrowser(state.kind === 'challenge');
         return;
       }
       if (state.kind === 'unqualified')
@@ -448,6 +460,10 @@ function setup(root: HTMLElement) {
   }
   function explain(error: unknown) {
     const key = error instanceof Error ? error.message : '';
+    if (customer && key === 'provider_contract_required') {
+      showProviderBrowser(false);
+      return;
+    }
     const messages: Record<string, string> = {
       account_authentication_required:
         'Confirm your domains.domains account, then reopen the connection proof.',
@@ -484,6 +500,8 @@ function setup(root: HTMLElement) {
       source_limit: 'This portfolio has reached its Park.io source limit.',
       inventory_limit:
         'This portfolio has reached its saved-inventory limit. Your existing domains are kept.',
+      cleanup_required:
+        'The previous sign-in browser is still closing. Return to Park.io settings and try again in a few minutes. Your saved domains are still available.',
       close_browser_first:
         'The temporary browser has not finished closing. Check the connection again shortly.',
       check_in_progress:
@@ -532,6 +550,7 @@ function setup(root: HTMLElement) {
       await settle();
       return;
     }
+    if (state.phase === 'cleanup_required') throw Error('cleanup_required');
     if (state.phase === 'blocked')
       throw Error(state.error ?? 'proof_not_ready');
     if (!['login', 'checking'].includes(state.phase)) {

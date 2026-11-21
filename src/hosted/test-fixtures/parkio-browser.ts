@@ -36,6 +36,8 @@ export function fixtureBrowser(
       closed = true;
       return { status: 'closed' };
     },
+    listSessions: async () =>
+      closed ? [] : [{ sessionId: 'synthetic-browser' }],
     getSession: async () => {
       if (closed && mode === 'native-not-found')
         throw Error('BrowserBindingError: Session not found (status=404)');
