@@ -1,3 +1,21 @@
+const recheckableParkioErrors = new Set([
+  'browser_command_failed',
+  'browser_unavailable',
+  'check_in_progress',
+  'close_browser_first',
+  'command_timed_out',
+  'connection_closed',
+  'connection_timed_out',
+  'connection_unavailable',
+  'proof_not_ready',
+  'proof_unavailable',
+  'sign_in_outcome_unknown',
+]);
+
+export function canRecheckParkioSignIn(error: unknown): boolean {
+  return error instanceof Error && recheckableParkioErrors.has(error.message);
+}
+
 export interface ParkioNativeSnapshot {
   kind:
     | 'credentials'
