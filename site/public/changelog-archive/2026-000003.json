@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-d8269167335311db1cc39d3c0c82edf9aefc49c3-50",
+      "date": "2026-11-21",
+      "layer": "saas",
+      "title": "Hosted service update observed: Explain Park.io reconnect limits and restore one scoped attempt",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/d8269167335311db1cc39d3c0c82edf9aefc49c3"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-244",
       "date": "2026-11-21",
       "layer": "saas",
