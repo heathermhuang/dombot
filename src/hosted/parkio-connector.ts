@@ -182,9 +182,18 @@ export function parkioConnectorRoutes(
         (c.req.method === 'POST' &&
           c.req.path === base + '/start' &&
           !c.req.header('content-type')?.includes('application/json')));
+    let retryAt: number | undefined;
+    if (code === 'daily_browser_budget') {
+      const utc = new Date();
+      utc.setUTCHours(24, 0, 0, 0);
+      retryAt = utc.getTime();
+      c.header('Retry-After', String(Math.ceil((retryAt - Date.now()) / 1000)));
+    }
+    const status = retryAt ? 429 : 409;
     if (navigation) {
-      const message =
-        code === 'cleanup_required' || code === 'browser_cleanup_failed'
+      const message = retryAt
+        ? `Park.io has reached today’s sign-in limit. Try again after ${new Date(retryAt).toUTCString()}. Your saved domains are still available.`
+        : code === 'cleanup_required' || code === 'browser_cleanup_failed'
           ? 'The previous sign-in browser is still closing. Your saved domains are still available. Return to Park.io settings and try again in a few minutes.'
           : 'Your saved domains are still available. Return to Park.io settings to see the connection status and try again.';
       return c.html(
@@ -192,10 +201,10 @@ export function parkioConnectorRoutes(
           'Park.io sign-in',
           `<section class="account"><h1>Park.io sign-in could not continue</h1><p>${message}</p><a class="button" href="${settingsPath(c.get('user'))}">Back to Park.io settings</a></section>`,
         ),
-        409,
+        status,
       );
     }
-    return c.json({ error: code }, 409);
+    return c.json({ error: code, ...(retryAt ? { retryAt } : {}) }, status);
   });
   app.get('/', async (c) =>
     c.html(
