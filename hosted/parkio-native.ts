@@ -1,3 +1,4 @@
+import { PARKIO_SETTINGS_PATH } from '../src/shared/parkio-status';
 import { parkioMobileConnection } from './parkio-mobile-contract';
 import {
   parkioNativeLogin,
@@ -241,16 +242,21 @@ function setup(root: HTMLElement) {
         !/^\/w\/[a-f0-9-]{36}\/$/.test(saved.portfolio)
       )
         throw Error('connection_unavailable');
+      const reviewRequired = saved.source.sync === 'review_required';
       root.querySelector<HTMLElement>('#native-summary')!.textContent =
-        saved.source.sync === 'review_required'
+        reviewRequired
           ? 'Your connection is saved. Review the inventory changes in Registrars before applying them.'
           : `${saved.source.count.toLocaleString()} domains are ready in your portfolio.`;
       const list = root.querySelector<HTMLElement>('#native-holdings')!;
       list.replaceChildren();
       const link = document.createElement('a');
       link.className = 'button';
-      link.href = saved.portfolio;
-      link.textContent = 'Open your portfolio →';
+      link.href = reviewRequired
+        ? saved.portfolio + '#' + PARKIO_SETTINGS_PATH
+        : saved.portfolio;
+      link.textContent = reviewRequired
+        ? 'Review Park.io changes'
+        : 'Open your portfolio';
       list.append(link);
       root.querySelector<HTMLElement>('#native-check-history')!.textContent =
         saved.source.nextAttemptAt

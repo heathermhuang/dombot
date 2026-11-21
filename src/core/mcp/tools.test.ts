@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { localDay, type DomainEvent } from '../../shared/domain-events';
 import type { ImportedDomain } from '../../shared/ipc';
+import type { ParkioCacheStatus } from '../../shared/parkio';
 
 vi.mock('../services/registry-creation', () => ({
   recoverCreationDates: async (domains: unknown[]) =>
@@ -27,6 +28,11 @@ const getRegistrarClient = vi.fn((name: string) => {
 const registerDomainCached = vi.fn();
 const getDomainDetail = vi.fn();
 const getMergedPortfolio = vi.fn();
+const getPortfolio = vi.fn();
+const parkioSourceStatus = vi.fn((): ParkioCacheStatus[] => []);
+vi.mock('../services/parkio-projection', () => ({
+  parkioSourceStatus: () => parkioSourceStatus(),
+}));
 const getPortfolioPricing = vi.fn(() => ({}));
 const setRegistrarEnabledCached = vi.fn();
 const getRegistrarMetadata = vi.fn<() => unknown[]>(() => []);
@@ -95,7 +101,7 @@ vi.mock('../services/registrars', () => ({
   registerDomainCached: (...a: unknown[]) => registerDomainCached(...a),
   getDomainDetail: (...a: unknown[]) => getDomainDetail(...a),
   getMergedPortfolio: () => getMergedPortfolio(),
-  getPortfolio: vi.fn(),
+  getPortfolio: () => getPortfolio(),
   getPortfolioPricing: () => getPortfolioPricing(),
   setRegistrarEnabledCached: (...a: unknown[]) =>
     setRegistrarEnabledCached(...a),
@@ -278,6 +284,7 @@ const schema = (name: string) => z.object(tools.get(name)!.config.inputSchema);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  parkioSourceStatus.mockReturnValue([]);
   getRegistrarClient.mockReturnValue({ setDnsRecords, getDomain, listDomains });
   getConfiguredRegistrars.mockReturnValue(['dynadot']);
   getActiveRegistrars.mockReturnValue(['dynadot']);
@@ -601,6 +608,41 @@ describe('input schemas', () => {
 });
 
 describe('end-to-end handlers', () => {
+  it('identifies a Park.io reconnect in query and sync results without flagging a registrar', async () => {
+    const portfolio = {
+      domains: [],
+      fetchedAt: Date.now(),
+      registrars: [],
+      errors: [],
+    };
+    getMergedPortfolio.mockReturnValue(portfolio);
+    getPortfolio.mockResolvedValue(portfolio);
+    parkioSourceStatus.mockReturnValue([
+      {
+        sourceId: 'parkio-test',
+        label: 'Park.io',
+        lastSuccessfulCheckAt: Date.now() - 2 * 3600_000,
+        connection: 'reconnect_required',
+        paused: false,
+        error: 'sign_in_required',
+        nextCheckAt: null,
+        count: 0,
+        sync: 'blocked',
+      },
+    ]);
+
+    const expected = {
+      stale: true,
+      staleAccounts: [],
+      errors: [],
+      parkioSources: [{ sourceId: 'parkio-test', nextAction: 'reconnect' }],
+    };
+    expect(await call('portfolio_query')).toMatchObject(expected);
+    expect(getPortfolio).not.toHaveBeenCalled();
+    expect(await call('portfolio_sync')).toMatchObject(expected);
+    expect(getPortfolio).toHaveBeenCalledOnce();
+  });
+
   it('portfolio_query runs the query over the merged portfolio + folders', async () => {
     getMergedPortfolio.mockReturnValue({
       domains: [

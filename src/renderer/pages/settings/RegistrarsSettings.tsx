@@ -89,7 +89,8 @@ export default function RegistrarsSettings() {
   const loadRegistrars = useAppStore((s) => s.loadRegistrars);
   const syncRegistrar = useAppStore((s) => s.syncRegistrar);
   // A link to one account's card (a market account's registrar link).
-  const focusId = useSearchParams()[0].get('account');
+  const [params] = useSearchParams();
+  const focusId = params.get('account');
   const [catalog, setCatalog] = useState<RegistrarDefinition[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   // The one unsaved account being added. It lives only here: nothing is
@@ -224,12 +225,7 @@ export default function RegistrarsSettings() {
         ))}
         {loaded && cards.length === 0 && !draft && <EmptyRegistrars />}
       </div>
-      <details className="rounded-md border bg-card p-4">
-        <summary className="min-h-11 cursor-pointer font-medium">
-          Other inventory sources · Park.io
-        </summary>
-        <ParkioSources />
-      </details>
+      <ParkioSources focused={params.get('source') === 'parkio'} />
     </div>
   );
 }

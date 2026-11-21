@@ -72,6 +72,7 @@ import {
   AuthEmailUnavailable,
 } from './auth-policy';
 import { Passkeys, passkeyNameSchema } from './passkeys';
+import { PARKIO_SETTINGS_PATH } from '../shared/parkio-status';
 import {
   authScript,
   importStartScript,
@@ -1536,7 +1537,7 @@ app.all('/w/:workspace/*', async (c) => {
           error: 'Confirm your identity before disconnecting.',
           reauth:
             '/account/reauth?next=' +
-            encodeURIComponent(base + '/#/settings?tab=registrars'),
+            encodeURIComponent(base + '/#' + PARKIO_SETTINGS_PATH),
         },
         428,
       );

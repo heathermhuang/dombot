@@ -19,6 +19,7 @@ export function withParkioProjection(portfolio: Portfolio): Portfolio {
   const held = new Set(portfolio.domains.map((r) => toAscii(r.domainName)));
   return {
     ...portfolio,
+    ...(sources.length ? { parkioSources: sources } : {}),
     fetchedAt:
       Math.max(
         portfolio.fetchedAt ?? 0,

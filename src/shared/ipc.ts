@@ -5,6 +5,7 @@
  */
 
 import type { ReleaseFeed } from './releases';
+import type { ParkioCacheStatus } from './parkio';
 import type { RateRows } from './exchange-rates';
 import type {
   Domain as ProviderDomain,
@@ -936,6 +937,8 @@ export interface Portfolio {
   /** When this portfolio was fetched from the registrars (ms epoch). Null for
    * a live result that predates caching; set for cached and freshly-fetched. */
   fetchedAt: number | null;
+  /** Status of read-only Park.io connections, including sources without rows. */
+  parkioSources?: ParkioCacheStatus[];
   /** Hosted renewal quotes refresh separately from the domain inventory. */
   renewalPricing?: RenewalPricingProgress;
 }

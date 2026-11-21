@@ -1,6 +1,6 @@
 import {
   withParkioProjection,
-  parkioProjection,
+  parkioSourceStatus,
 } from '../services/parkio-projection';
 import { z } from 'zod';
 import type { DombotApi, DomainTarget } from '../../shared/ipc';
@@ -264,7 +264,7 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
       clearRegistrarCaches();
       // Imported names aren't registrar data: their pricing stays.
       return {
-        portfolio: parkioProjection().length
+        portfolio: parkioSourceStatus().length
           ? withParkioProjection({
               domains: [],
               fetchedAt: null,
@@ -280,7 +280,7 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
     return {
       portfolio: getCachedPortfolio()
         ? withParkioProjection(getCachedPortfolio()!)
-        : parkioProjection().length
+        : parkioSourceStatus().length
           ? withParkioProjection({
               domains: [],
               fetchedAt: null,
