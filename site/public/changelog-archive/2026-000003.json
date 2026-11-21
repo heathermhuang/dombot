@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-244",
+      "date": "2026-11-21",
+      "layer": "saas",
+      "title": "Make Park.io recovery consistent across the portfolio and MCP",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #244 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #244",
+          "url": "https://github.com/heathermhuang/dombot/pull/244"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-6946f6cf1ce617e0c1957d8dfeb853c83e458c8e-47",
       "date": "2026-11-20",
       "layer": "saas",
