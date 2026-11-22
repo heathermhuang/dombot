@@ -4,11 +4,11 @@ import { createHash } from 'node:crypto';
 export const landingExamples = [
   {
     id: 'expiry',
-    label: 'What expires next?',
+    label: 'Expirations',
     prompt: 'Which domains need my attention?',
     tool: 'portfolio_query',
     summary: 'Two domains expire within 60 days with auto-renew off.',
-    detail: 'data.app · 12 days   sdk.io · 46 days',
+    detail: 'data.app in 12 days · sdk.io in 46 days',
     params: { expiringWithinDays: 60, autoRenew: false },
   },
   {
