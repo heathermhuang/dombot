@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-249",
+      "date": "2026-11-22",
+      "layer": "saas",
+      "title": "Polish the public homepage and mobile inventory preview",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #249 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #249",
+          "url": "https://github.com/heathermhuang/dombot/pull/249"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-5a2689f9e2329cb09747d8900598262a1fec3be0-48",
       "date": "2026-11-21",
       "layer": "saas",
