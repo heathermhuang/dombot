@@ -5,9 +5,9 @@ export const landingAStyles = `
 .landing-page .hero-a{display:grid;grid-template-columns:1fr 1.42fr;gap:56px;align-items:center;padding:42px 0 58px}.landing-page .hero-a h1{max-width:450px;font-size:50px;letter-spacing:-2.1px;line-height:1.12}.landing-page .hero-a .lead{max-width:34ch}.landing-page .portfolio-window{background:white;border:1px solid #d7e1d5;border-radius:14px;box-shadow:0 16px 40px -24px #183c2c35;overflow:hidden}.landing-page .window-header{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid var(--line);gap:20px}.landing-page .window-brand{display:flex;gap:9px;align-items:center;font-size:12px;font-weight:600}.landing-page .window-brand .glyph{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:var(--mint);color:var(--forest)}.landing-page .window-brand .glyph svg{width:13px;height:13px}.landing-page .window-tools{display:flex;align-items:center;gap:14px;color:#829187}.landing-page .window-tools svg{width:14px;height:14px}.landing-page .portfolio-body{display:grid;grid-template-columns:112px minmax(0,1fr)}.landing-page .side-nav{padding:22px 10px;background:#fafbf8;border-right:1px solid #e8eee5;font-size:10px;color:var(--muted);display:flex;flex-direction:column;gap:7px}.landing-page .side-nav span{display:flex;align-items:center;gap:6px;padding:8px 6px;white-space:nowrap}.landing-page .side-nav svg{width:13px;height:13px}.landing-page .side-nav .active{background:#eaf1e5;border-radius:6px;color:var(--forest);font-weight:600}.landing-page .side-bottom{margin-top:auto;color:#869488;font-size:9px}.landing-page .portfolio-main{padding:16px 20px 14px;min-width:0}.landing-page .window-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.landing-page .window-title h3{font-size:20px;letter-spacing:-.8px}.landing-page .window-title .small{font-size:10px}.landing-page .mini-search{display:flex;align-items:center;gap:7px;color:#869188;font-size:10px;border:1px solid #e1e7de;padding:5px 8px;border-radius:5px;margin-bottom:10px}.landing-page .mini-search svg{width:12px;height:12px}.landing-page .data-table{width:100%;border-collapse:collapse;text-align:left;font-size:12px;white-space:nowrap}.landing-page .data-table th{font-size:10px;font-weight:500;color:#7c8a80;padding:9px 4px;border-bottom:1px solid var(--line)}.landing-page .data-table td{padding:8px 4px;border-bottom:1px solid #edf1eb}.landing-page .data-table td:first-child{font-weight:600;letter-spacing:-.2px}.landing-page .data-table td:not(:first-child){color:var(--muted)}.landing-page .data-table .renew-soon{color:#b17b34!important}.landing-page .data-table .cell-price{text-align:right}.landing-page .data-table .selected-row{background:#f3f7ef}.landing-page .domain-symbol{color:#75917b;font-size:10px;margin-right:6px}.landing-page .inline-note{margin-top:10px;color:var(--muted);font-size:10px}.landing-page .brand-strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:28px 0;display:flex;align-items:center;gap:34px}.landing-page .brand-strip p{font-size:12px;max-width:180px;color:var(--muted);line-height:1.5}.landing-page .brand-list{flex:1;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}.landing-page .brand-list span{font-size:15px;letter-spacing:-.5px;font-weight:600;color:#577160}.landing-page .brand-list .count{font-size:11px;color:var(--muted);font-weight:400;letter-spacing:0}
 .landing-page .inquiry-section{padding:86px 0 82px;display:grid;grid-template-columns:.85fr 1.15fr;gap:90px;align-items:center}.landing-page .section-copy .lead{margin-top:19px;font-size:15px;max-width:36ch}.landing-page .section-kicker{font-size:12px;color:var(--forest);font-weight:500;margin-bottom:16px}.landing-page .inquiry-note{margin-top:27px;display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--muted)}.landing-page .inquiry-note svg{flex:none;color:var(--forest);margin-top:2px;width:15px;height:15px}.landing-page .inquiry-product{display:grid;grid-template-columns:.9fr 1.1fr;gap:0;min-width:0;border:1px solid #d6e1d4;background:white;border-radius:14px;overflow:hidden;box-shadow:0 17px 36px -30px #1d412d45}.landing-page .domain-landing{padding:27px 22px 25px;background:#edf3e7;display:flex;flex-direction:column;align-items:flex-start;min-width:0}.landing-page .domain-landing .small{font-size:9px}.landing-page .domain-landing h3{font-size:33px;font-weight:500;letter-spacing:-1.4px;line-height:1.1;margin:41px 0 13px}.landing-page .domain-landing p{font-size:11px;line-height:1.7;color:#6a7f6c;max-width:22ch}.landing-page .domain-landing button{border:0;border-radius:6px;background:#2b603f;color:white;padding:10px 13px;font-size:10px;font-weight:500;min-height:37px;margin-top:23px;display:flex;align-items:center;gap:12px}.landing-page .domain-landing button svg{width:12px;height:12px}.landing-page .public-domain-caption{margin-top:42px;font-size:8px;color:#8a9c88}.landing-page .inquiry-owner{padding:22px 20px}.landing-page .inquiry-owner-header{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;padding-bottom:17px;border-bottom:1px solid #e3e9df;margin-bottom:18px}.landing-page .inquiry-owner-header span:last-child{font-size:9px;background:#edf3e7;border-radius:4px;padding:2px 5px;color:var(--forest)}.landing-page .inquiry-domain{font-size:10px;color:var(--muted);margin-bottom:8px}.landing-page .inquiry-message{border:1px solid #e3e9df;border-radius:7px;background:#fafbf8;padding:13px;font-size:11px;line-height:1.65;color:#536b5b}.landing-page .inquiry-message .meta{font-size:8px;color:#89968b;margin-bottom:7px}.landing-page .inquiry-status{display:flex;align-items:center;gap:5px;color:var(--forest);font-size:9px;margin-top:16px}.landing-page .inquiry-status svg{width:12px;height:12px}.landing-page .inquiry-bottom{border-top:1px solid #e5ebe1;padding-top:14px;margin-top:24px;font-size:9px;color:#8a978e}.landing-page .sample-form label{font-size:9px;display:block;color:var(--muted);margin-top:8px}.landing-page .sample-form input,.landing-page .sample-form textarea{width:100%;border:1px solid #dce5d9;border-radius:4px;padding:7px 8px;background:#fff;font-size:11px;color:var(--ink);min-height:33px}.landing-page .sample-form textarea{height:58px;resize:none}.landing-page .sample-form button{font-size:10px;padding:7px 10px;margin-top:9px;min-height:32px}.landing-page .sample-feedback{font-size:10px;color:var(--forest);margin-top:12px}.landing-page .inquiry-owner [hidden]{display:none}.landing-page .product-caption{font-size:10px;color:var(--muted);margin-top:13px;display:flex;justify-content:space-between;gap:14px}.landing-page .inquiry-visual{min-width:0}.landing-page .simple-close{border-top:1px solid var(--line);padding:48px 0;display:flex;justify-content:space-between;align-items:center;gap:30px}.landing-page .simple-close h2{font-size:29px}.landing-page .simple-close p{font-size:13px;color:var(--muted);margin-top:10px}.landing-page .simple-close .btn{flex:none}
 @media(min-width:1400px){.landing-page .hero-a{gap:74px}}
-@media(max-width:1050px){.landing-page .container{width:calc(100% - 64px)}.landing-page .hero-a{gap:32px;grid-template-columns:.85fr 1.15fr}.landing-page .hero-a h1{font-size:48px;letter-spacing:-2px}.landing-page .portfolio-body{grid-template-columns:1fr}.landing-page .side-nav{display:none}.landing-page .portfolio-main{padding:16px 18px 14px}.landing-page .inquiry-section{gap:45px}.landing-page .inquiry-product{grid-template-columns:1fr 1fr}.landing-page .nav-center{gap:20px}}
+@media(max-width:1050px){.landing-page .container{width:calc(100% - 64px)}.landing-page .hero-a{gap:32px;grid-template-columns:.85fr 1.15fr}.landing-page .hero-a h1{font-size:48px;letter-spacing:-2px}.landing-page .portfolio-body{grid-template-columns:1fr}.landing-page .side-nav{display:none}.landing-page .portfolio-main{padding:16px 18px 14px}.landing-page .inquiry-section{gap:45px}.landing-page .inquiry-product{grid-template-columns:1fr 1fr}}
 @media(max-width:800px){.landing-page .hero-a{grid-template-columns:1fr;padding-top:35px;gap:42px}.landing-page .hero-a h1{font-size:52px;max-width:600px}.landing-page .hero-a .lead{max-width:50ch}.landing-page .brand-strip{display:block}.landing-page .brand-strip p{max-width:none;margin-bottom:20px}.landing-page .brand-list{justify-content:flex-start;gap:22px 30px}.landing-page .inquiry-section{grid-template-columns:1fr;gap:35px;padding:55px 0}.landing-page .section-copy h2{max-width:560px}.landing-page .section-copy .lead{max-width:52ch}.landing-page .inquiry-product{max-width:630px}.landing-page .inquiry-note{margin-top:18px}}
-@media(max-width:600px){.landing-page .container{width:calc(100% - 40px)}.landing-page .site-nav{height:80px;gap:15px}.landing-page .brand{font-size:23px}.landing-page .nav-center{display:none}.landing-page .nav-actions{gap:13px;font-size:12px}.landing-page .nav-actions .btn{display:none}.landing-page .concept-notice{font-size:10px;margin-top:7px}.landing-page .hero-a{padding-top:22px;padding-bottom:32px;gap:26px}.landing-page .eyebrow{font-size:11px;margin-bottom:18px}.landing-page .hero-a h1{font-size:clamp(34px,11vw,43px);line-height:1.1;letter-spacing:-1.8px}.landing-page .hero-a .lead{font-size:15px;margin-top:19px;max-width:36ch}.landing-page .hero-actions{gap:17px;flex-wrap:wrap;margin-top:23px}.landing-page .free-note{font-size:10px}.landing-page .portfolio-body{min-height:0}.landing-page .portfolio-main{padding:16px 13px}.landing-page .window-header{padding:0 13px;height:42px}.landing-page .window-title{margin-bottom:14px}.landing-page .window-title h3{font-size:18px}.landing-page .data-table{font-size:10px}.landing-page .data-table th{font-size:8px}.landing-page .data-table td{padding:11px 3px}.landing-page .data-table .registrar-col{display:none}.landing-page .brand-strip{padding:22px 0}.landing-page .brand-list{gap:15px 22px}.landing-page .brand-list span{font-size:13px}.landing-page .brand-list .count{font-size:10px}.landing-page .inquiry-section{padding:43px 0;gap:27px}.landing-page h2{font-size:31px;letter-spacing:-1px}.landing-page .section-copy .lead{font-size:14px;max-width:38ch}.landing-page .inquiry-product{grid-template-columns:1fr}.landing-page .domain-landing{padding:24px}.landing-page .domain-landing h3{margin-top:22px;font-size:37px}.landing-page .domain-landing p{font-size:12px;max-width:32ch}.landing-page .public-domain-caption{margin-top:22px}.landing-page .domain-landing button{font-size:12px;min-height:43px}.landing-page .inquiry-owner{padding:23px}.landing-page .inquiry-owner-header{font-size:13px}.landing-page .inquiry-message{font-size:12px}.landing-page .inquiry-domain{font-size:11px}.landing-page .inquiry-status{font-size:11px}.landing-page .inquiry-bottom{margin-top:20px}.landing-page .product-caption{font-size:9px;flex-wrap:wrap;gap:4px}.landing-page .simple-close{display:block;padding:35px 0}.landing-page .simple-close h2{font-size:27px}.landing-page .simple-close .btn{margin-top:22px}.landing-page .site-footer{align-items:flex-start;flex-direction:column;gap:16px}.landing-page .site-footer p{max-width:47ch;font-size:10px}.landing-page .sample-form label{font-size:11px}.landing-page .sample-form input,.landing-page .sample-form textarea{font-size:13px;min-height:42px}.landing-page .sample-form textarea{height:80px}.landing-page .sample-form button{min-height:42px;font-size:12px}}
+@media(max-width:600px){.landing-page .container{width:calc(100% - 40px)}.landing-page .brand{font-size:23px}.landing-page .nav-actions{gap:13px;font-size:12px}.landing-page .nav-actions .btn{display:none}.landing-page .concept-notice{font-size:10px;margin-top:7px}.landing-page .hero-a{padding-top:22px;padding-bottom:32px;gap:26px}.landing-page .eyebrow{font-size:11px;margin-bottom:18px}.landing-page .hero-a h1{font-size:clamp(34px,11vw,43px);line-height:1.1;letter-spacing:-1.8px}.landing-page .hero-a .lead{font-size:15px;margin-top:19px;max-width:36ch}.landing-page .hero-actions{gap:17px;flex-wrap:wrap;margin-top:23px}.landing-page .free-note{font-size:10px}.landing-page .portfolio-body{min-height:0}.landing-page .portfolio-main{padding:16px 13px}.landing-page .window-header{padding:0 13px;height:42px}.landing-page .window-title{margin-bottom:14px}.landing-page .window-title h3{font-size:18px}.landing-page .data-table{font-size:10px}.landing-page .data-table th{font-size:8px}.landing-page .data-table td{padding:11px 3px}.landing-page .data-table .registrar-col{display:none}.landing-page .brand-strip{padding:22px 0}.landing-page .brand-list{gap:15px 22px}.landing-page .brand-list span{font-size:13px}.landing-page .brand-list .count{font-size:10px}.landing-page .inquiry-section{padding:43px 0;gap:27px}.landing-page h2{font-size:31px;letter-spacing:-1px}.landing-page .section-copy .lead{font-size:14px;max-width:38ch}.landing-page .inquiry-product{grid-template-columns:1fr}.landing-page .domain-landing{padding:24px}.landing-page .domain-landing h3{margin-top:22px;font-size:37px}.landing-page .domain-landing p{font-size:12px;max-width:32ch}.landing-page .public-domain-caption{margin-top:22px}.landing-page .domain-landing button{font-size:12px;min-height:43px}.landing-page .inquiry-owner{padding:23px}.landing-page .inquiry-owner-header{font-size:13px}.landing-page .inquiry-message{font-size:12px}.landing-page .inquiry-domain{font-size:11px}.landing-page .inquiry-status{font-size:11px}.landing-page .inquiry-bottom{margin-top:20px}.landing-page .product-caption{font-size:9px;flex-wrap:wrap;gap:4px}.landing-page .simple-close{display:block;padding:35px 0}.landing-page .simple-close h2{font-size:27px}.landing-page .simple-close .btn{margin-top:22px}.landing-page .site-footer{align-items:flex-start;flex-direction:column;gap:16px}.landing-page .site-footer p{max-width:47ch;font-size:10px}.landing-page .sample-form label{font-size:11px}.landing-page .sample-form input,.landing-page .sample-form textarea{font-size:13px;min-height:42px}.landing-page .sample-form textarea{height:80px}.landing-page .sample-form button{min-height:42px;font-size:12px}}
 @media(prefers-reduced-motion:reduce){.landing-page *{scroll-behavior:auto!important;transition:none!important}}
 
 .landing-page .sample-form [data-close-inquiry]{border:0;background:transparent;color:var(--muted);padding:0;margin:8px 0 0;min-height:36px;font-size:11px;text-decoration:underline;text-underline-offset:3px}
@@ -41,18 +41,104 @@ export const landingAStyles = `
 .landing-page .sample-form label{font-weight:400;margin:8px 0 0;font-size:10px}
 .landing-page .sample-form input,.landing-page .sample-form textarea{display:block;margin-top:2px;border:1px solid #dce5d9;border-radius:4px;padding:7px 8px;background:#fff;font-size:11px;line-height:1.5;color:var(--ink);width:100%;min-height:33px}
 .landing-page .sample-form textarea{height:58px;resize:vertical}
-.landing-page .sample-form .sample-feedback{font-size:10px;line-height:1.6;color:var(--forest);margin-top:12px}
 .landing-page .sample-form .demo-disclosure{font-size:10px;line-height:1.6;color:var(--muted);margin-bottom:9px}
 .landing-page .sample-form [data-close-inquiry]{border:0;background:transparent;color:var(--muted);padding:0;margin:8px 0 0;min-height:36px;font-size:11px;text-decoration:underline;text-underline-offset:3px}
 .landing-page .empty-sample{font-size:11px;color:var(--muted);padding:18px 4px}
 .landing-page .collection-link{margin:0 0 24px;font-size:11px;color:var(--muted)}
 .landing-page button:focus-visible,.landing-page a:focus-visible,.landing-page input:focus-visible,.landing-page textarea:focus-visible,.landing-page summary:focus-visible{outline:3px solid var(--forest);outline-offset:4px}
 
-@media(max-width:800px){.landing-page .nav-center{display:none}}
 @media(max-width:600px){.landing-page .mini-search{min-height:44px}.landing-page .mini-search input{font-size:16px;min-height:30px}.landing-page button,.landing-page .domain-landing button,.landing-page .sample-form button,.landing-page .sample-form [data-close-inquiry]{min-height:44px}.landing-page .sample-form input,.landing-page .sample-form textarea{font-size:16px;min-height:44px}.landing-page .sample-form textarea{height:80px}.landing-page .sample-form label{font-size:11px}.landing-page .brand-list{gap:14px 20px}.landing-page .brand-list span{font-size:12px}.landing-page .brand-list img{width:18px;height:18px}.landing-page .access-detail{font-size:10px}}
 /* A column footer must not inherit the shared desktop 440px flex basis as height. */
 @media(max-width:600px){.landing-page>footer.site-footer .software-credit{flex:none;max-width:100%}}
-@media(pointer:coarse){.landing-page button,.landing-page .domain-landing button,.landing-page .sample-form button,.landing-page .sample-form [data-close-inquiry],.landing-page .site-footer a,.landing-page .nav-center a{min-height:44px}.landing-page .nav-center a{display:inline-flex;align-items:center}.landing-page .mini-search{min-height:44px}.landing-page .mini-search input{font-size:16px;min-height:30px}}
+@media(pointer:coarse){.landing-page button,.landing-page .domain-landing button,.landing-page .sample-form button,.landing-page .sample-form [data-close-inquiry],.landing-page .site-footer a,.landing-page .nav-center a{min-height:44px}.landing-page .mini-search{min-height:44px}.landing-page .mini-search input{font-size:16px;min-height:30px}}
+/* Section links, informed by Rare UI Rail TOC. */
+.landing-page .nav-center {
+  align-items:center;
+  justify-content:center;
+  gap:clamp(6px,1.25vw,18px);
+}
+.landing-page .nav-center a {
+  position:relative;
+  display:grid;
+  place-items:center;
+  min-height:44px;
+  border-radius:7px;
+  padding-inline:10px;
+  color:var(--muted);
+  font-weight:500;
+  transition:background-color .18s ease,color .18s ease;
+}
+.landing-page .nav-center a:hover,.landing-page .nav-center a[aria-current] {
+  background:#eaf1e5;
+  color:var(--forest);
+}
+.landing-page .nav-center a[aria-current]::after {
+  content:"";
+  position:absolute;
+  inset:auto 10px 6px;
+  height:2px;
+  border-radius:2px;
+  background:currentColor;
+}
+.landing-page :is(#features,#renewals,#inquiries) {scroll-margin-block-start:24px}
+
+@media(max-width:920px) {
+  .landing-page>header.site-nav {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    height:auto;
+    padding-block:13px 0;
+    gap:6px 12px;
+  }
+  .landing-page .nav-center {
+    grid-column:1 / -1;
+    grid-row:2;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:4px;
+    padding-block:4px;
+    border-block:1px solid var(--line);
+  }
+  .landing-page .nav-center a {padding-inline:3px}
+  .landing-page .nav-actions {justify-self:end}
+}
+
+/* Inquiry feedback. The Toast reference stays beside its control in this example. */
+.landing-page .sample-form .sample-feedback {
+  color:var(--forest);
+  font-size:12px;
+  line-height:1.5;
+}
+.landing-page .sample-form .sample-feedback:not(:empty) {
+  display:grid;
+  grid-template-columns:12px minmax(0,1fr);
+  align-items:start;
+  gap:8px;
+  margin-top:10px;
+  padding:9px 10px;
+  border:1px solid #c8d9c8;
+  border-radius:7px;
+  background:var(--mint);
+  animation:inquiry-feedback-in .2s ease-out;
+}
+.landing-page .sample-feedback:not(:empty)::before {
+  content:"";
+  justify-self:center;
+  width:6px;
+  height:10px;
+  margin-top:2px;
+  border:solid currentColor;
+  border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
+@keyframes inquiry-feedback-in {
+  from {opacity:0;transform:translateY(3px)}
+  to {opacity:1;transform:none}
+}
+@media(prefers-reduced-motion:reduce) {
+  .landing-page .sample-form .sample-feedback:not(:empty) {animation:none}
+}
+
 /* MCP example. Interaction references: Rare UI Gooey nav, Inline AI Status and Code Block. */
 .landing-page .stage {
   display:grid;

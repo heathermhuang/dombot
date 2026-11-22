@@ -57,6 +57,16 @@ export const landingExamples = [
 export const landingScript = `(() => {
   const root = document.querySelector('.landing-page');
   if (!root) return;
+  const sectionLinks = root.querySelectorAll('.nav-center a');
+  const markSection = () => {
+    sectionLinks.forEach(link => {
+      if (link.hash === location.hash) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+  };
+  markSection();
+  window.addEventListener('hashchange', markSection);
+
   const examples = ${JSON.stringify(landingExamples)};
   const buttons = root.querySelectorAll('[data-agent]');
   buttons.forEach(button => {
