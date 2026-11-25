@@ -233,7 +233,24 @@ app.use('*', async (c, next) => {
   if (redirect) return redirect;
   const domainResponse = await publicDomainRequest(c.req.raw, c.env);
   if (domainResponse) return domainResponse;
-  c.header('Cache-Control', 'no-store');
+  // Keep gateway-rendered pages under their own script policy when the edge
+  // has automatic HTML injection enabled.
+  const preserveHtml =
+    c.req.method === 'GET' &&
+    [
+      '/',
+      '/signup',
+      '/login',
+      '/recover',
+      '/changelog',
+      '/terms',
+      '/privacy',
+      '/source',
+    ].includes(c.req.path);
+  c.header(
+    'Cache-Control',
+    preserveHtml ? 'no-store, no-transform' : 'no-store',
+  );
   c.header('X-Content-Type-Options', 'nosniff');
   // Native POST forms may send Origin:null under no-referrer. same-origin
   // preserves their CSRF signal while suppressing cross-origin referrers.

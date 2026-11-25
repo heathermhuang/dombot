@@ -24,6 +24,9 @@ describe('public changelog', () => {
     expect(response.headers.get('Content-Type')).toContain('text/html');
     expect(response.headers.get('X-Robots-Tag')).toBeNull();
     expect(response.headers.get('Set-Cookie')).toBeNull();
+    expect(response.headers.get('Cache-Control')).toBe(
+      'no-store, no-transform',
+    );
     const html = await response.text();
     expect(html).toContain('<title>Changelog · domains.domains</title>');
     expect(html).toContain('DomBot 2.1.0');
