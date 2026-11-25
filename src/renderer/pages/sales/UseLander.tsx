@@ -278,10 +278,10 @@ export default function UseLander({
     !!job &&
     ['finished', 'cancelled'].includes(job.state) &&
     job.counts.some((c) => ['held', 'conflict'].includes(c.state));
-  const canContinue = enabled && pending && !job;
+  const pendingReview = enabled && !job ? pending : null;
   if (
     !(enabled && (selection || matching)) &&
-    !canContinue &&
+    !pendingReview &&
     !recent.length &&
     !open &&
     !action.error &&
@@ -350,10 +350,10 @@ export default function UseLander({
           Use our lander for all matching
         </button>
       )}
-      {canContinue && (
+      {pendingReview && (
         <button
           disabled={action.busy}
-          onClick={() => prepare(canContinue.selection)}
+          onClick={() => prepare(pendingReview.selection)}
         >
           Continue lander review
         </button>

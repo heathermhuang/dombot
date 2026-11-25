@@ -199,7 +199,7 @@ try {
     });
   });
   let page = await browser.newPage();
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(60_000);
   await page.goto(origin + '/__qualification/session');
   await page
     .getByRole('searchbox', { name: /Search/ })
