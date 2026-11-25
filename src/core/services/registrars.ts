@@ -19,7 +19,6 @@ import {
   RateLimitError,
   RegistrarError,
   RegistrarClient,
-  createRegistrar,
   listPortfolio,
   redactSecrets,
   registrars,
@@ -52,6 +51,10 @@ import { recordSync } from './domain-history';
 import { serialByKey } from './serial-by-key';
 import { getStoredCredentials, setStoredCredentials } from './credentials';
 import { createProxiedRegistrar, proxyFailureMessage } from './proxy-transport';
+import {
+  createRegistrationAwareRegistrar,
+  NamecomRegistrationCheck,
+} from './namecom-registration';
 import {
   createDynadotFetch,
   clearDynadotPricingCapabilities,
@@ -219,6 +222,7 @@ type CachedDomain = Omit<Domain, 'source'>;
  */
 export interface RegistrarPortfolioEntry {
   domains: CachedDomain[];
+  externalRegistrations?: string[];
   lastSyncedAt: number | null;
   lastError: string | null;
   /** Absent in entries written before it was recorded. */
@@ -567,7 +571,7 @@ function buildProvider(
       : undefined;
   return proxy
     ? createProxiedRegistrar(name, credentials, proxy, wrapFetch)
-    : createRegistrar(name, credentials, {
+    : createRegistrationAwareRegistrar(name, credentials, {
         timeout: API_TIMEOUT_MS,
         ...(wrapFetch
           ? { fetch: wrapFetch(globalThis.fetch.bind(globalThis)) }
@@ -952,6 +956,13 @@ function registrarLabelMap(): Record<string, string> {
  * data); a configured registrar that only ever errored still contributes its
  * error. No network — pure cache read.
  */
+function ownedRegistrarRows(entry: RegistrarPortfolioEntry): CachedDomain[] {
+  const external = new Set(entry.externalRegistrations);
+  return entry.domains.filter(
+    (row) => hasDomainName(row) && !external.has(toAscii(row.domainName)),
+  );
+}
+
 function assemblePortfolio(): Portfolio {
   const domains: Domain[] = [];
   const errors: PortfolioErrorInfo[] = [];
@@ -963,7 +974,7 @@ function assemblePortfolio(): Portfolio {
     const entry = readRegistrarEntry(account.id);
     if (!entry) continue;
     domains.push(
-      ...entry.domains.map((d): Domain => ({
+      ...ownedRegistrarRows(entry).map((d): Domain => ({
         ...qualifyRenewalDate(d, name),
         registrar: name,
         accountId: account.id,
@@ -1038,10 +1049,14 @@ async function performInventorySync(
       ? []
       : await recoverCreationDates(domains.filter(hasDomainName));
     const error = errors[0]?.error;
+    const reportedNames = prev?.externalRegistrations?.length
+      ? new Set(recovered.map((domain) => toAscii(domain.domainName)))
+      : null;
     syncError = error;
     entry = error
       ? {
           domains: prev?.domains ?? [],
+          externalRegistrations: prev?.externalRegistrations,
           lastSyncedAt: prev?.lastSyncedAt ?? null,
           lastError: registrarErrorMessage(error),
           lastErrorAt: Date.now(),
@@ -1053,6 +1068,9 @@ async function performInventorySync(
               d,
             ),
           ),
+          externalRegistrations: prev?.externalRegistrations?.filter((domain) =>
+            reportedNames?.has(domain),
+          ),
           lastSyncedAt: Date.now(),
           lastError: null,
           lastErrorAt: null,
@@ -1061,6 +1079,7 @@ async function performInventorySync(
     syncError = err;
     entry = {
       domains: prev?.domains ?? [],
+      externalRegistrations: prev?.externalRegistrations,
       lastSyncedAt: prev?.lastSyncedAt ?? null,
       lastError: registrarErrorMessage(err),
       lastErrorAt: Date.now(),
@@ -1203,7 +1222,12 @@ async function performInventorySync(
     if (incrementalRenewalPricing && name === 'dynadot') {
       await renewalJobs.set(accountId, currentRenewalJob(accountId, entry)!);
     } else {
-      await syncRenewalQuotes(name, entry.domains, accountId, generation);
+      await syncRenewalQuotes(
+        name,
+        ownedRegistrarRows(entry),
+        accountId,
+        generation,
+      );
     }
   }
 }
@@ -1588,6 +1612,71 @@ function holdingsOf(
   };
 }
 
+/** Preserve Name.com's raw account records, including DNS access and history.
+ * Require a validated reply about the exact name before changing its status. */
+async function reconcileNamecomRegistrations(
+  accounts: RegistrarAccount[],
+): Promise<void> {
+  if (!accounts.some((account) => account.registrar === 'namecom')) return;
+  const otherNames = new Set(
+    getActiveAccounts()
+      .filter((account) => account.registrar !== 'namecom')
+      .flatMap((account) =>
+        (readRegistrarEntry(account.id)?.domains ?? []).map((row) =>
+          toAscii(row.domainName),
+        ),
+      ),
+  );
+  for (const account of accounts.filter((row) => row.registrar === 'namecom')) {
+    const entry = readRegistrarEntry(account.id);
+    if (!entry || entry.lastError || entry.lastSyncedAt == null) continue;
+    const external = new Set(entry.externalRegistrations);
+    const names = [
+      ...new Set(entry.domains.map((row) => toAscii(row.domainName))),
+    ];
+    const candidates = names.filter(
+      (name) => otherNames.has(name) || external.has(name),
+    );
+    if (!candidates.length) continue;
+    const provider = getRegistrarClient(account.registrar, account.id).provider;
+    if (!(provider instanceof NamecomRegistrationCheck)) continue;
+    const generation = generations.get(account.id) ?? 0;
+    // Rotate the starting point for large overlapping inventories so each
+    // refresh makes progress while provider traffic remains bounded.
+    const offset =
+      (Math.floor(entry.lastSyncedAt / 86_400_000) * 24) % candidates.length;
+    const batch = [
+      ...candidates.slice(offset),
+      ...candidates.slice(0, offset),
+    ].slice(0, 24);
+    for (let start = 0; start < batch.length; start += 4) {
+      await Promise.all(
+        batch.slice(start, start + 4).map(async (name) => {
+          try {
+            const registered = await provider.isRegisteredAtName(name);
+            if (registered === false) external.add(name);
+            if (registered === true) external.delete(name);
+          } catch {
+            // An unavailable check preserves the last confirmed ownership.
+          }
+        }),
+      );
+    }
+    if ((generations.get(account.id) ?? 0) !== generation) continue;
+    patchEntryData<RegistrarPortfolioEntry>(
+      'portfolio',
+      account.id,
+      (current) =>
+        current.lastSyncedAt === entry.lastSyncedAt && !current.lastError
+          ? {
+              ...current,
+              externalRegistrations: names.filter((name) => external.has(name)),
+            }
+          : current,
+    );
+  }
+}
+
 /** Pull these accounts, then record arrivals, departures, moves, and renewals. */
 async function syncAccounts(
   accounts: RegistrarAccount[],
@@ -1596,6 +1685,7 @@ async function syncAccounts(
   await Promise.all(
     accounts.map((account) => syncRegistrarInto(account, trigger)),
   );
+  await reconcileNamecomRegistrations(accounts);
   const attempted = new Set(accounts.map((account) => account.id));
   const after = getActiveAccounts().map((account) =>
     holdingsOf(account, attempted.has(account.id)),
@@ -1918,7 +2008,7 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
           ? registrarErrorMessage(sync.lastError)
           : null,
         lastErrorAt: sync?.lastError ? (sync.lastErrorAt ?? null) : null,
-        domainCount: sync?.domains.filter(hasDomainName).length ?? 0,
+        domainCount: sync ? ownedRegistrarRows(sync).length : 0,
         trackedSince: account.trackedSince ?? null,
         ...(sync?.recovery ? { recovery: sync.recovery } : {}),
       },
