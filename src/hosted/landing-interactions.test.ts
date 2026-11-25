@@ -76,6 +76,7 @@ describe('approved MCP-first landing page', () => {
       {} as HostedEnv,
     );
     const policy = page.headers.get('Content-Security-Policy');
+    expect(page.headers.get('Cache-Control')).toBe('no-store, no-transform');
     expect(policy).toContain("default-src 'none'");
     expect(policy).toContain("script-src 'self'");
     expect(policy).not.toContain('connect-src');
