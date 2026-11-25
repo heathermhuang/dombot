@@ -236,7 +236,9 @@ describe('canonical public domain routing', () => {
     expect(html).toContain(`href="${origin}/working.io"`);
     expect(html).toContain('action="/working.io/inquiries"');
     expect(html).not.toContain('/w/');
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Cache-Control')).toBe(
+      'no-store, no-transform',
+    );
     expect(response.headers.get('Set-Cookie')).toBeNull();
     expect(calls).toHaveBeenCalledTimes(2);
   });

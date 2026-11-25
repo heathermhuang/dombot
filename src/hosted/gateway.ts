@@ -232,7 +232,13 @@ app.use('*', async (c, next) => {
   const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
   if (redirect) return redirect;
   const domainResponse = await publicDomainRequest(c.req.raw, c.env);
-  if (domainResponse) return domainResponse;
+  if (domainResponse) {
+    if (!domainResponse.headers.get('Content-Type')?.startsWith('text/html'))
+      return domainResponse;
+    const listing = new Response(domainResponse.body, domainResponse);
+    listing.headers.append('Cache-Control', 'no-transform');
+    return listing;
+  }
   // Keep gateway-rendered pages under their own script policy when the edge
   // has automatic HTML injection enabled.
   const preserveHtml =
