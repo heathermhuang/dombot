@@ -85,8 +85,8 @@ describe('public portfolio scanner', () => {
       'unverified',
     );
     expect(
-      send.mock.calls.some(([url]) =>
-        String(url).startsWith('https://other.example.com'),
+      send.mock.calls.some(
+        ([url]) => new URL(String(url)).hostname === 'other.example.com',
       ),
     ).toBe(false);
   });

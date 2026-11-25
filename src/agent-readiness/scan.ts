@@ -352,7 +352,9 @@ export async function scanReadiness(domain: string, send: ProbeFetch = fetch) {
 
   if (page) {
     const payloads = [
-      ...page.text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi),
+      ...page.text.matchAll(
+        /<script\b([^>]*)>([\s\S]*?)<\/script(?=[\s/>])[^>]*>/gi,
+      ),
     ]
       .filter(
         (match) =>
@@ -366,7 +368,10 @@ export async function scanReadiness(domain: string, send: ProbeFetch = fetch) {
         (item) => item.additionalType === 'DomainName' && item.forSale === true,
       );
     const visible = page.text
-      .replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+      .replace(
+        /<(script|style|template)\b[^>]*>[\s\S]*?<\/\1(?=[\s/>])[^>]*>/gi,
+        ' ',
+      )
       .replace(/<!--[^]*?-->|<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ');
     if (
