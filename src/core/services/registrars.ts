@@ -55,6 +55,7 @@ import {
   createRegistrationAwareRegistrar,
   NamecomRegistrationCheck,
 } from './namecom-registration';
+import { namecomTransferEvidence } from './namecom-transfer-evidence';
 import {
   createDynadotFetch,
   clearDynadotPricingCapabilities,
@@ -956,8 +957,39 @@ function registrarLabelMap(): Record<string, string> {
  * data); a configured registrar that only ever errored still contributes its
  * error. No network — pure cache read.
  */
-function ownedRegistrarRows(entry: RegistrarPortfolioEntry): CachedDomain[] {
+function ownedRegistrarRows(
+  entry: RegistrarPortfolioEntry,
+  account: RegistrarAccount,
+): CachedDomain[] {
   const external = new Set(entry.externalRegistrations);
+  const evidence =
+    account.registrar === 'namecom'
+      ? namecomTransferEvidence(account.id)
+      : undefined;
+  if (evidence?.size) {
+    const holdings = new Map(
+      getActiveAccounts()
+        .filter((row) => row.registrar === 'dynadot')
+        .map((row) => [
+          row.id,
+          new Map(
+            (readRegistrarEntry(row.id)?.domains ?? []).map((domain) => [
+              toAscii(domain.domainName),
+              expiryDay(domain.expirationDate),
+            ]),
+          ),
+        ]),
+    );
+    for (const row of entry.domains) {
+      const name = toAscii(row.domainName);
+      const proof = evidence.get(name);
+      if (!proof || expiryDay(row.expirationDate) !== proof.namecomExpiry)
+        continue;
+      const sponsorExpiry = holdings.get(proof.dynadotAccount)?.get(name);
+      if (sponsorExpiry && sponsorExpiry >= proof.dynadotExpiry)
+        external.add(name);
+    }
+  }
   return entry.domains.filter(
     (row) => hasDomainName(row) && !external.has(toAscii(row.domainName)),
   );
@@ -974,7 +1006,7 @@ function assemblePortfolio(): Portfolio {
     const entry = readRegistrarEntry(account.id);
     if (!entry) continue;
     domains.push(
-      ...ownedRegistrarRows(entry).map((d): Domain => ({
+      ...ownedRegistrarRows(entry, account).map((d): Domain => ({
         ...qualifyRenewalDate(d, name),
         registrar: name,
         accountId: account.id,
@@ -1224,7 +1256,7 @@ async function performInventorySync(
     } else {
       await syncRenewalQuotes(
         name,
-        ownedRegistrarRows(entry),
+        ownedRegistrarRows(entry, account),
         accountId,
         generation,
       );
@@ -2008,7 +2040,7 @@ export function getRegistrarMetadata(): RegistrarMeta[] {
           ? registrarErrorMessage(sync.lastError)
           : null,
         lastErrorAt: sync?.lastError ? (sync.lastErrorAt ?? null) : null,
-        domainCount: sync ? ownedRegistrarRows(sync).length : 0,
+        domainCount: sync ? ownedRegistrarRows(sync, account).length : 0,
         trackedSince: account.trackedSince ?? null,
         ...(sync?.recovery ? { recovery: sync.recovery } : {}),
       },
