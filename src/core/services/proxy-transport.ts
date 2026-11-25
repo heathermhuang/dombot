@@ -1,5 +1,4 @@
 import {
-  createRegistrar,
   markNotSent,
   registrars,
   type Registrar,
@@ -9,6 +8,7 @@ import {
 } from '@aoxborrow/registrar-client';
 import { parseProxy, type ProxyRoute } from '../../shared/proxy';
 import { API_TIMEOUT_MS } from '../api-timeout';
+import { createRegistrationAwareRegistrar } from './namecom-registration';
 
 // Routing a registrar account through the fixed IP proxy.
 //
@@ -253,7 +253,7 @@ export function createProxiedRegistrar(
 
   const fetch = pinnedProxyFetch(proxy, () => apiOrigin, displayName);
 
-  const provider = createRegistrar(
+  const provider = createRegistrationAwareRegistrar(
     name,
     // Through the proxy, its outgoing address is the Client IP Namecheap sees.
     name === 'namecheap' ? { ...credentials, clientIp: proxy.ip } : credentials,

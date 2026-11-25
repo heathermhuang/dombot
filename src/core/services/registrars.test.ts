@@ -79,7 +79,7 @@ vi.mock('@aoxborrow/registrar-client', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@aoxborrow/registrar-client')>();
   class RegistrarClient {
-    constructor() {
+    constructor(public readonly provider: unknown) {
       Object.assign(this, clientMethods);
     }
   }
@@ -108,6 +108,14 @@ vi.mock('@aoxborrow/registrar-client', async (importOriginal) => {
         displayName: 'GoDaddy',
         features: [],
         configFields: [{ name: 'apiToken', required: true }],
+      },
+      namecom: {
+        displayName: 'Name.com',
+        features: [],
+        configFields: [
+          { name: 'username', required: true },
+          { name: 'apiToken', required: true },
+        ],
       },
       namecheap: {
         displayName: 'Namecheap',
@@ -178,6 +186,8 @@ import {
   syncRegistrar,
 } from './registrars';
 
+import { NamecomRegistrationCheck } from './namecom-registration';
+
 function domain(
   partial: Partial<Domain> & { domainName: string; registrar: string },
 ): Domain {
@@ -225,6 +235,67 @@ beforeEach(async () => {
   storedCredentials.porkbun = { apiKey: 'y' };
   listPortfolio.mockResolvedValue({ domains: [], errors: [] });
   resolveNs.mockResolvedValue([]);
+});
+
+describe('Name.com registration reconciliation', () => {
+  it('excludes confirmed transfer remnants, retains raw rows and recovers after a later transfer', async () => {
+    storedCredentials.namecom = {
+      username: 'fixture',
+      apiToken: 'fixture-token',
+    };
+    const moved = domain({ domainName: 'moved.example', registrar: 'namecom' });
+    const uncertain = domain({
+      domainName: 'uncertain.example',
+      registrar: 'namecom',
+    });
+    const only = domain({ domainName: 'only.example', registrar: 'namecom' });
+    seedSlice(
+      'dynadot',
+      [moved, uncertain].map((row) => ({ ...row, registrar: 'dynadot' })),
+    );
+    listPortfolio.mockResolvedValue({
+      domains: [moved, uncertain, only],
+      errors: [],
+    });
+    const sponsor = vi
+      .spyOn(NamecomRegistrationCheck.prototype, 'isRegisteredAtName')
+      .mockImplementation(async (name) =>
+        name === 'moved.example' ? false : null,
+      );
+    try {
+      await syncRegistrar('namecom');
+      expect(sponsor.mock.calls.map(([name]) => name).sort()).toEqual([
+        'moved.example',
+        'uncertain.example',
+      ]);
+      expect(findRegistrarsForDomain('moved.example')).toEqual(['dynadot']);
+      expect(findRegistrarsForDomain('uncertain.example')).toEqual([
+        'dynadot',
+        'namecom',
+      ]);
+      expect(findRegistrarsForDomain('only.example')).toEqual(['namecom']);
+      expect(store.portfolio.namecom.data).toMatchObject({
+        domains: [moved, uncertain, only],
+      });
+      expect(
+        getRegistrarMetadata().find((row) => row.name === 'namecom')?.sync
+          .domainCount,
+      ).toBe(2);
+
+      sponsor.mockRejectedValue(new Error('provider temporarily unavailable'));
+      await syncRegistrar('namecom');
+      expect(findRegistrarsForDomain('moved.example')).toEqual(['dynadot']);
+
+      sponsor.mockResolvedValue(true);
+      await syncRegistrar('namecom');
+      expect(findRegistrarsForDomain('moved.example')).toEqual([
+        'dynadot',
+        'namecom',
+      ]);
+    } finally {
+      sponsor.mockRestore();
+    }
+  });
 });
 
 describe('findRegistrarsForDomain', () => {
