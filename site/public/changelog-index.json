@@ -33,7 +33,7 @@
     "signatures": {
       "aoxborrow/dombot:releases": "6b01dde09a8d89cc6f9aa679f2fe8831f94f304875c121c9300e882c13296632",
       "heathermhuang/dombot:releases": "21c94b981c98e89d6e301599c1d12c5d3b928cc7d7c1e469efe30fb6ac74d0f7",
-      "pulls": "e7275a4f25b3fa383fc36490708847fef5fa90dc1f1795d6db934844980cb2d4"
+      "pulls": "ae05477d50e9f664b1a026f51037994b96385fb01543af96fe413a95b3849694"
     },
     "upstreamHead": "5c0711da63ecbc2548b1466c4a39adf4ebd508f5",
     "mainHead": "778877798bda7019831c8ae00beb8d7611d135a4",
@@ -52,6 +52,6 @@
       "heathermhuang/dombot:422392606": "saas-desktop-1-5-2",
       "heathermhuang/dombot:422382156": "saas-desktop-1-5-1"
     },
-    "archiveParent": "0b3af0d7443903d51c2b5d3088cb844a8708f27d"
+    "archiveParent": "15954a1abe7c6d0d956b86bf274cbeedddad30c9"
   }
 }
