@@ -1,9 +1,17 @@
 /** Fetch preserves the Origin signal under no-referrer; capabilities never enter analytics. */
-export const salesFormScript = `const challengeSize=widget=>widget.getBoundingClientRect().width<300?'compact':'flexible';
+const salesFormAsset = (
+  offerChoice: boolean,
+) => `const challengeSize=widget=>widget.getBoundingClientRect().width<300?'compact':'flexible';
 const challengeResize=new ResizeObserver(entries=>{for(const {target:widget} of entries){if(!widget.isConnected){challengeResize.unobserve(widget);continue;}if(widget.dataset.widgetId&&widget.dataset.widgetSize!==challengeSize(widget)){window.salesChallengeState(widget.closest('form'),false);window.turnstile.remove(widget.dataset.widgetId);delete widget.dataset.widgetId;window.salesChallengeReady();}}});
 window.salesChallengeState=(form,ready)=>{form?.querySelectorAll('[data-challenge-submit]').forEach(button=>button.disabled=!ready);const status=form?.querySelector('[data-challenge-status]');if(status)status.textContent=ready?'Ready to send.':'Complete the security check to send.';};
 window.salesChallengeReady=()=>{if(!window.turnstile)return;document.querySelectorAll('.cf-turnstile').forEach(widget=>{if(widget.dataset.widgetId)return;const form=widget.closest('form');window.salesChallengeState(form,false);widget.dataset.widgetSize=challengeSize(widget);widget.dataset.widgetId=window.turnstile.render(widget,{sitekey:widget.dataset.sitekey,action:'sales-inquiry',size:widget.dataset.widgetSize,callback:()=>window.salesChallengeState(form,true),'expired-callback':()=>window.salesChallengeState(form,false),'error-callback':()=>window.salesChallengeState(form,false)});challengeResize.observe(widget);});};
-document.addEventListener('input',event=>{const field=event.target;if(field instanceof HTMLInputElement||field instanceof HTMLTextAreaElement||field instanceof HTMLSelectElement){if(['name','email','message','amount','profileUrl','company','companyWebsite','inquiryRole'].includes(field.name)){const key=field.form?.querySelector('input[name=idempotencyKey]');if(key)key.value=crypto.randomUUID();}}});document.addEventListener('submit',async event=>{
+${
+  offerChoice
+    ? `const setInquiryIntent=form=>{const intent=form.querySelector('.inquiry-intent input:checked');const amount=form.querySelector('.inquiry-amount input[name=amount]');if(intent&&amount){amount.disabled=intent.value!=='offer';amount.required=!amount.disabled;}};
+document.querySelectorAll('.inquiry-intent').forEach(choice=>setInquiryIntent(choice.closest('form')));
+`
+    : ''
+}document.addEventListener('input',event=>{const field=event.target;if(field instanceof HTMLInputElement||field instanceof HTMLTextAreaElement||field instanceof HTMLSelectElement){${offerChoice ? "if(field.name==='intent'&&field.form)setInquiryIntent(field.form);" : ''}if([${offerChoice ? "'intent'," : ''}'name','email','message','amount','profileUrl','company','companyWebsite','inquiryRole'].includes(field.name)){const key=field.form?.querySelector('input[name=idempotencyKey]');if(key)key.value=crypto.randomUUID();}}});document.addEventListener('submit',async event=>{
   const form=event.target;
   if(!(form instanceof HTMLFormElement)||form.method.toLowerCase()!=='post')return;
   event.preventDefault();
@@ -17,7 +25,7 @@ document.addEventListener('input',event=>{const field=event.target;if(field inst
     const response=await fetch(form.action,{method:'POST',body,credentials:'omit',mode:'cors',referrerPolicy:'no-referrer'});
     const html=await response.text();
     const page=new DOMParser().parseFromString(html,'text/html');
-    if(response.status===409&&page.querySelector('[data-sales-revision-conflict]')){const main=document.querySelector('main');if(main){main.replaceChildren(...page.querySelector('main').childNodes);window.salesChallengeReady();main.querySelector('[role=alert]')?.scrollIntoView();}return;}
+    if(response.status===409&&page.querySelector('[data-sales-revision-conflict]')){const main=document.querySelector('main');if(main){main.replaceChildren(...page.querySelector('main').childNodes);${offerChoice ? "main.querySelectorAll('.inquiry-intent').forEach(choice=>setInquiryIntent(choice.closest('form')));" : ''}window.salesChallengeReady();main.querySelector('[role=alert]')?.scrollIntoView();}return;}
     if(!response.ok){
       let alert=form.querySelector('[role=alert]');if(!alert){alert=document.createElement('p');alert.setAttribute('role','alert');alert.className='error';form.prepend(alert);}
       alert.textContent=page.querySelector('[role=alert]')?.textContent||page.querySelector('main')?.textContent||page.body.textContent?.slice(0,300)||'Please check your message and try again.';
@@ -36,13 +44,25 @@ document.addEventListener('input',event=>{const field=event.target;if(field inst
 });`;
 
 // This fingerprints a public asset for cache invalidation; it is not a security token.
-const assetHash = (seed: number) =>
-  Array.from(salesFormScript)
+const assetHash = (body: string, seed: number) =>
+  Array.from(body)
     .reduce(
       (hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0,
       seed,
     )
     .toString(16)
     .padStart(8, '0');
-export const salesFormScriptPath =
-  '/sales-public-' + assetHash(2166136261) + assetHash(2246822519) + '.js';
+const salesFormPath = (body: string) =>
+  '/sales-public-' +
+  assetHash(body, 2166136261) +
+  assetHash(body, 2246822519) +
+  '.js';
+
+export const salesFormScript = salesFormAsset(true);
+export const salesFormScriptPath = salesFormPath(salesFormScript);
+
+// The current tenant bundle may still emit this URL during a gateway rollout.
+export const preOfferChoiceSalesFormScript = salesFormAsset(false);
+export const preOfferChoiceSalesFormScriptPath = salesFormPath(
+  preOfferChoiceSalesFormScript,
+);

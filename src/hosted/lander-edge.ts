@@ -4,6 +4,8 @@ import {
 } from './sales-form-previous';
 import { captureInquiryRequest } from '../shared/inquiry-identity';
 import {
+  preOfferChoiceSalesFormScript,
+  preOfferChoiceSalesFormScriptPath,
   salesFormScript,
   salesFormScriptPath,
 } from '../shared/sales-form-script';
@@ -40,6 +42,7 @@ export default {
     if (
       [
         salesFormScriptPath,
+        preOfferChoiceSalesFormScriptPath,
         previousSalesFormScriptPath,
         legacySalesFormScriptPath,
       ].includes(url.pathname) &&
@@ -48,9 +51,11 @@ export default {
       return new Response(
         url.pathname === salesFormScriptPath
           ? salesFormScript
-          : url.pathname === previousSalesFormScriptPath
-            ? previousSalesFormScript
-            : legacySalesFormScript,
+          : url.pathname === preOfferChoiceSalesFormScriptPath
+            ? preOfferChoiceSalesFormScript
+            : url.pathname === previousSalesFormScriptPath
+              ? previousSalesFormScript
+              : legacySalesFormScript,
         {
           headers: {
             'Content-Type': 'text/javascript',

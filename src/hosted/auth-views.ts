@@ -7,13 +7,21 @@ export const withAuthScript = (html: string) =>
   );
 const legal = (required = false) =>
   `<input type="hidden" name="legalVersion" value="${legalVersion}"><label class="check"><input type="checkbox" name="accept" value="yes"${required ? ' required' : ''}><span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and acknowledge the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>`;
-export const emailStart = (next = '/app', notice = '') =>
-  withAuthScript(
+export const emailStart = (
+  next = '/app',
+  notice = '',
+  mode: 'login' | 'signup' = 'login',
+) => {
+  const signup = mode === 'signup';
+  return withAuthScript(
     page(
-      'Sign in or create an account',
-      `<form action="/auth/email/request" method="post"><span class="eyebrow">Your domain portfolio</span><h1>Continue with email.</h1><p>One email address for your portfolio. We’ll send a sign-in link and a six-digit code. No password or Google account needed.</p>${notice ? `<p class="notice" role="status">${e(notice)}</p>` : ''}<input type="hidden" name="next" value="${e(next)}"><label>Email<input name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="254"></label><button type="submit">Email me a sign-in link</button><p class="note">New here? Your account is created after you verify your email and accept the Terms, subject to early-access capacity.</p><p><button type="button" data-passkey="login">Use a passkey</button></p><p id="auth-status" role="status" aria-live="polite"></p><details><summary>Other sign-in options</summary><p><a href="/login/password?next=${encodeURIComponent(next)}">Sign in with a password you previously set</a></p></details></form>`,
+      signup ? 'Create your account' : 'Sign in or create an account',
+      `<form action="/auth/email/request" method="post"><span class="eyebrow">Your domain portfolio</span><h1>${signup ? 'Create your account.' : 'Continue with email.'}</h1><p>${signup ? 'Verify your email and accept the Terms to create your account, subject to early-access capacity. We’ll send a link and a six-digit code.' : 'One email address for your portfolio. We’ll send a sign-in link and a six-digit code. No password or Google account needed.'}</p>${notice ? `<p class="notice" role="status">${e(notice)}</p>` : ''}<input type="hidden" name="next" value="${e(next)}"><label>Email<input name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="254"></label><button type="submit">${signup ? 'Verify my email' : 'Email me a sign-in link'}</button>${signup ? '<p><a href="/login">Already have an account? Sign in</a></p>' : '<p class="note">New here? Your account is created after you verify your email and accept the Terms, subject to early-access capacity.</p>'}<p><button type="button" data-passkey="login">Use a passkey</button></p><p id="auth-status" role="status" aria-live="polite"></p><details><summary>Other sign-in options</summary><p><a href="/login/password?next=${encodeURIComponent(next)}">Sign in with a password you previously set</a></p></details></form>`,
+      undefined,
+      { href: '/', label: 'Product home' },
     ),
   );
+};
 export const emailCode = (id: string, error = '', next = '/app') =>
   withAuthScript(
     page(

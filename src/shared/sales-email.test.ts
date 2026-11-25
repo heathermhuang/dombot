@@ -95,5 +95,25 @@ describe('inquiry email experience', () => {
     expect(html).toContain('Get in touch');
     expect(html).toContain('Send inquiry');
     expect(html).toContain('email-hint');
+    expect(html.indexOf('After sending, confirm your email')).toBeLessThan(
+      html.indexOf('id="name"'),
+    );
+  });
+
+  it('asks buyers whether they have a question or an offer before showing the price field', () => {
+    const snapshot = {
+      ...context.snapshot,
+      mode: 'offer' as const,
+      allowQuestions: true,
+    };
+    const html = renderSalesLander(snapshot, '', 'test-only');
+    expect(html).toContain('name="intent" value="question" checked');
+    expect(html.indexOf('name="intent" value="offer"')).toBeLessThan(
+      html.indexOf('id="offer"'),
+    );
+    const retried = renderSalesLander(snapshot, '', 'test-only', {
+      fields: { amount: '2500' },
+    });
+    expect(retried).toContain('name="intent" value="offer" checked');
   });
 });

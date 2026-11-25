@@ -390,8 +390,16 @@ describe('role-scoped email relay grants', () => {
     const text = JSON.stringify(await inbox.thread(f.leadId, true));
     expect(text).not.toContain(f.raw);
     expect(text).not.toContain('x'.repeat(43));
-    for (let i = 0; i < 20; i++) await inbox.checkRelay(f.request);
-    await expect(inbox.checkRelay(f.request)).rejects.toThrow();
+    // Keep all checks in one clock-hour bucket, even when CI runs on the hour.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      for (let i = 0; i < 20; i++) await inbox.checkRelay(f.request);
+      await expect(inbox.checkRelay(f.request)).rejects.toMatchObject({
+        code: 'RATE_LIMIT',
+      });
+    } finally {
+      clock.mockRestore();
+    }
   });
 });
 describe('sales transaction and privacy boundary', () => {

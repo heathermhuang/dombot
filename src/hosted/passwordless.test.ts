@@ -646,6 +646,21 @@ describe('one email flow for sign-in and signup', () => {
     ).toBe(400);
   });
 
+  it('explains account creation before the shared email action on signup', async () => {
+    const response = await gateway.fetch(
+      new Request('https://domains.domains/signup'),
+      env,
+    );
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('<h1>Create your account.</h1>');
+    expect(html).toContain('action="/auth/email/request"');
+    expect(html).toContain('<a href="/">Product home</a>');
+    expect(html.indexOf('Verify your email and accept the Terms')).toBeLessThan(
+      html.indexOf('Verify my email'),
+    );
+  });
+
   it('keeps login email-first with self-hosted passkeys and an explicit password fallback', async () => {
     const r = await gateway.fetch(
         new Request('https://domains.domains/login'),

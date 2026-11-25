@@ -103,6 +103,12 @@ export const landingAStyles = `
   .landing-page .nav-actions {justify-self:end}
 }
 
+.landing-page [data-sample-inbox-preview] {
+  margin-top:10px;
+  overflow-wrap:anywhere;
+}
+.landing-page [data-sample-message] {white-space:pre-wrap}
+
 /* Inquiry feedback. The Toast reference stays beside its control in this example. */
 .landing-page .sample-form .sample-feedback {
   color:var(--forest);
