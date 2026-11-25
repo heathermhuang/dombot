@@ -187,6 +187,7 @@ import {
 } from './registrars';
 
 import { NamecomRegistrationCheck } from './namecom-registration';
+import { configureNamecomTransferEvidence } from './namecom-transfer-evidence';
 
 function domain(
   partial: Partial<Domain> & { domainName: string; registrar: string },
@@ -238,6 +239,67 @@ beforeEach(async () => {
 });
 
 describe('Name.com registration reconciliation', () => {
+  it('uses exact workspace evidence while both registrar observations match', async () => {
+    const workspace = '11111111-1111-4111-8111-111111111111';
+    const evidence = JSON.stringify({
+      workspace,
+      transfers: [
+        {
+          domain: 'moved.example',
+          namecomAccount: 'namecom',
+          dynadotAccount: 'dynadot',
+          namecomExpiry: '2026-12-01',
+          dynadotExpiry: '2027-12-01',
+        },
+      ],
+    });
+    storedCredentials.namecom = {
+      username: 'fixture',
+      apiToken: 'fixture-token',
+    };
+    const namecomRow = domain({
+      domainName: 'moved.example',
+      registrar: 'namecom',
+      expirationDate: new Date('2026-12-01T12:00:00Z'),
+    });
+    seedSlice('namecom', [namecomRow]);
+    seedSlice('dynadot', [
+      {
+        ...namecomRow,
+        registrar: 'dynadot',
+        expirationDate: new Date('2027-12-01T12:00:00Z'),
+      },
+    ]);
+    try {
+      configureNamecomTransferEvidence(
+        '22222222-2222-4222-8222-222222222222',
+        evidence,
+      );
+      expect(findRegistrarsForDomain('moved.example')).toEqual([
+        'dynadot',
+        'namecom',
+      ]);
+      configureNamecomTransferEvidence(workspace, evidence);
+      expect(findRegistrarsForDomain('moved.example')).toEqual(['dynadot']);
+      expect(
+        getRegistrarMetadata().find((row) => row.name === 'namecom')?.sync
+          .domainCount,
+      ).toBe(0);
+      seedSlice('namecom', [
+        { ...namecomRow, expirationDate: new Date('2028-12-01T12:00:00Z') },
+      ]);
+      expect(findRegistrarsForDomain('moved.example')).toEqual([
+        'dynadot',
+        'namecom',
+      ]);
+      seedSlice('namecom', [namecomRow]);
+      seedSlice('dynadot', []);
+      expect(findRegistrarsForDomain('moved.example')).toEqual(['namecom']);
+    } finally {
+      configureNamecomTransferEvidence(undefined, undefined);
+    }
+  });
+
   it('excludes confirmed transfer remnants, retains raw rows and recovers after a later transfer', async () => {
     storedCredentials.namecom = {
       username: 'fixture',

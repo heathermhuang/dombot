@@ -1,3 +1,4 @@
+import { configureNamecomTransferEvidence } from '../core/services/namecom-transfer-evidence';
 import { hasParkio } from './parkio-backup';
 import { parkioFetch } from './parkio-routes';
 import { ParkioSync } from './parkio-sync';
@@ -123,6 +124,7 @@ function bootFingerprint(env: Env): string {
     env.DOMBOT_PARKIO_ENABLED,
     env.DOMBOT_GATEWAY_SECRET,
     env.DOMBOT_WORKSPACE_ID,
+    Reflect.get(env, 'DOMBOT_NAMECOM_TRANSFER_EVIDENCE'),
     env.DOMBOT_PASSWORD,
     env.DOMBOT_AUTH,
     env.DOMBOT_MANAGED_PROXY_URL,
@@ -185,6 +187,10 @@ async function bootOnce(env: Env): Promise<Boot> {
     configureManagedProxy(
       env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_URL : undefined,
       env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_MANAGED_PROXY_IP : undefined,
+    );
+    configureNamecomTransferEvidence(
+      env.DOMBOT_AUTH === 'gateway' ? env.DOMBOT_WORKSPACE_ID : undefined,
+      Reflect.get(env, 'DOMBOT_NAMECOM_TRANSFER_EVIDENCE'),
     );
     configureIncrementalRenewalPricing(true);
     configureSyncDiagnostics(env.DOMBOT_AUTH === 'gateway');

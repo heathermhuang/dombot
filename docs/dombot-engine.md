@@ -69,3 +69,14 @@ Verify a real Namecheap read through a hosted tenant before rollout, verify that
 owner API responses and exports contain no managed credentials, then preserve
 live tenant bindings, keys, data, alarms and registration eligibility during the
 staged release. A replacement IP must be allowlisted by customers before cutover.
+
+## Verified Name.com transfer remnants
+
+The hosted tenant can use protected, workspace-specific registry evidence when
+Name.com continues reporting a transferred registration. The
+`DOMBOT_NAMECOM_TRANSFER_EVIDENCE` Worker secret identifies each exact name,
+both account IDs, and the observed expiry dates. A row is excluded from owned
+inventory only while the Name.com row still matches the evidence and the active
+Dynadot account still reports the same name at the observed or a later expiry.
+The original registrar data stays available for history and explicitly routed
+operations. Keep the evidence out of source, release logs, and public receipts.
