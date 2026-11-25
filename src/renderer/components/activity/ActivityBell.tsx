@@ -167,7 +167,7 @@ export function ActivityBell() {
             className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-accent/50"
           >
             <History className="size-3.5" />
-            View activity
+            Review activity
           </Link>
         </div>
 

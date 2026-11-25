@@ -114,7 +114,12 @@ export const landingScript = `(() => {
   });
   root.querySelectorAll('[data-preview-inquiry]').forEach(button => {
     button.addEventListener('click', () => {
-      button.closest('[data-sample-form]').querySelector('[role="status"]').textContent =
+      const form = button.closest('[data-sample-form]');
+      const preview = form.querySelector('[data-sample-inbox-preview]');
+      const message = form.querySelector('textarea').value.trim();
+      preview.querySelector('[data-sample-message]').textContent = message;
+      preview.hidden = !message;
+      form.querySelector('[role="status"]').textContent =
         'Example preview only. No message was sent.';
     });
   });
@@ -127,6 +132,8 @@ export const landingScript = `(() => {
         field.value = field.defaultValue;
       });
       preview.querySelector('[role="status"]').textContent = '';
+      preview.querySelector('[data-sample-inbox-preview]').hidden = true;
+      preview.querySelector('[data-sample-message]').textContent = '';
       panel.querySelector('[data-example-inbox]').hidden = false;
       const opener = panel.querySelector('[data-open-inquiry]');
       opener.setAttribute('aria-expanded', 'false');

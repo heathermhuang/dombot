@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import gateway from './gateway';
 import edge from './lander-edge';
 import {
+  preOfferChoiceSalesFormScript,
+  preOfferChoiceSalesFormScriptPath,
   salesFormScript,
   salesFormScriptPath,
 } from '../shared/sales-form-script';
@@ -15,6 +17,7 @@ describe('rolling public sales asset compatibility', () => {
     expect(salesFormScriptPath).not.toBe(legacySalesFormScriptPath);
     for (const [path, body] of [
       [salesFormScriptPath, salesFormScript],
+      [preOfferChoiceSalesFormScriptPath, preOfferChoiceSalesFormScript],
       [legacySalesFormScriptPath, legacySalesFormScript],
     ])
       for (const worker of [gateway, edge]) {

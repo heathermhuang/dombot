@@ -59,6 +59,8 @@ import {
   refreshDomainControls,
 } from './sales-domain-control';
 import {
+  preOfferChoiceSalesFormScript,
+  preOfferChoiceSalesFormScriptPath,
   salesFormScript,
   salesFormScriptPath,
 } from '../shared/sales-form-script';
@@ -150,6 +152,7 @@ type GatewayEnv = { Bindings: HostedEnv; Variables: GatewayVariables };
 const app = new Hono<GatewayEnv>();
 for (const [path, script] of [
   [salesFormScriptPath, salesFormScript],
+  [preOfferChoiceSalesFormScriptPath, preOfferChoiceSalesFormScript],
   [previousSalesFormScriptPath, previousSalesFormScript],
   [legacySalesFormScriptPath, legacySalesFormScript],
 ])
@@ -710,10 +713,12 @@ app.post('/auth/passkeys/:action', bodyLimit({ maxSize: 32768 }), async (c) => {
 app.get('/signup', (c) =>
   c.html(
     registrationReady(c.env)
-      ? emailStart()
+      ? emailStart('/app', '', 'signup')
       : page(
           'Request free access',
           `<form action="/signup" method="post"><span class="eyebrow">Free early access</span><h1>Request early access.</h1><p>The hosted service is free during early access, by invitation and subject to capacity. We review requests before issuing a private invitation. Registrar charges are separate.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button type="submit">Request free access</button><p class="note">We use this address to review your request and arrange an invitation. Pending requests expire after 30 days. No account is created by submitting this form.</p><p><a href="/login">Already have an account? Sign in</a></p></form>`,
+          undefined,
+          { href: '/', label: 'Product home' },
         ),
   ),
 );

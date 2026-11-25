@@ -61,6 +61,21 @@ describe('public changelog', () => {
       expect(html).toContain(`id="${entry.id}"`);
   });
 
+  it('puts filters and month jumps before the release feed', () => {
+    const html = changelogPage();
+    const filters = html.indexOf('aria-label="Filter updates"');
+    const months = html.indexOf('aria-label="Jump to month"');
+    const feed = html.indexOf('<article class="changelog-entry"');
+    expect(filters).toBeGreaterThan(0);
+    expect(months).toBeGreaterThan(filters);
+    expect(feed).toBeGreaterThan(months);
+    for (const [, id] of html.matchAll(
+      /href="#([a-z0-9-]+)">[A-Za-z]+ 20\d{2}<\/a>/g,
+    )) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+
   it('keeps upstream releases separate from SaaS availability', () => {
     const html = changelogPage('core');
     expect(html).toContain('Deployed as SaaS 2.1.0-hosted.1');
