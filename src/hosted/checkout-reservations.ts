@@ -75,7 +75,8 @@ const activeRoute = `
       AND r.revision=checkout_reservations.listing_revision
       AND r.generation=checkout_reservations.listing_generation
       AND r.state='active' AND w.enabled=1
-      AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id))`;
+      AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)
+      AND NOT EXISTS(SELECT 1 FROM checkout_domain_holds h WHERE h.domain=r.domain))`;
 
 /**
  * Durable hosted checkout state. The caller must authenticate the seller and
@@ -117,6 +118,7 @@ export class CheckoutReservations {
           AND r.state='active' AND w.enabled=1
           AND EXISTS(SELECT 1 FROM users u WHERE u.id=?2 AND u.workspace_id=r.workspace_id)
           AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)
+          AND NOT EXISTS(SELECT 1 FROM checkout_domain_holds h WHERE h.domain=r.domain)
         ON CONFLICT DO NOTHING RETURNING *`,
       )
       .bind(
@@ -209,6 +211,38 @@ export class CheckoutReservations {
     if (!row)
       throw new CheckoutConflict('The provider session cannot be attached.');
     return row;
+  }
+
+  handoff(id: string, session: string, now = Date.now()) {
+    return this.db
+      .prepare(
+        `SELECT * FROM checkout_reservations WHERE id=? AND provider_session=?
+           AND state='open' AND expires_at>? AND ${activeRoute}`,
+      )
+      .bind(id, session, now)
+      .first<CheckoutReservation>();
+  }
+
+  async holdAfterRelease(id: string, now = Date.now()) {
+    await this.db.batch([
+      this.db
+        .prepare(
+          `INSERT INTO checkout_domain_holds(domain,reservation_id,observed_at)
+             SELECT domain,id,? FROM checkout_reservations WHERE id=? AND state='released'
+             ON CONFLICT(domain) DO NOTHING`,
+        )
+        .bind(now, id),
+      this.db
+        .prepare(
+          `UPDATE checkout_reservations SET state='canceling'
+             WHERE state IN ('creating','open') AND domain IN (
+               SELECT old.domain FROM checkout_reservations old
+               JOIN checkout_domain_holds h ON h.domain=old.domain
+               WHERE old.id=? AND old.state='released'
+             )`,
+        )
+        .bind(id),
+    ]);
   }
 
   async requestCancellation(id: string) {

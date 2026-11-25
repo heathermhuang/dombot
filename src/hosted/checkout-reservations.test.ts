@@ -48,7 +48,7 @@ beforeEach(async () => {
   listing = crypto.randomUUID();
   revision = crypto.randomUUID();
   await db.exec(
-    'DELETE FROM checkout_observations; DELETE FROM checkout_reservations; DELETE FROM public_domain_routes; DELETE FROM users; DELETE FROM workspaces;',
+    'DELETE FROM checkout_domain_holds; DELETE FROM checkout_observations; DELETE FROM checkout_reservations; DELETE FROM public_domain_routes; DELETE FROM users; DELETE FROM workspaces;',
   );
   await db.batch([
     db
@@ -311,4 +311,77 @@ it('reconciles a lost creation response and requires authenticated canonical pro
   });
   expect((await coordinator.callback(signed))?.state).toBe('transferred');
   expect((await coordinator.callback(signed))?.state).toBe('transferred');
+});
+
+it('retains the hold when a provider snapshot reports late payment and cancellation in reverse order', async () => {
+  const row = await open();
+  await store.requestCancellation(row.id);
+  const adapter: CheckoutProvider = {
+    id: provider,
+    authenticateCallback: async () => row.id,
+    find: async () => ({
+      merchantReference: row.id,
+      session: 'fixture-session',
+      price,
+      url: null,
+      observations: [observation('cancel-final'), observation('payment')],
+    }),
+    create: vi.fn(),
+    cancel: vi.fn(),
+  };
+  const coordinator = new CheckoutCoordinator(store, adapter, async () => true);
+  const request = new Request('https://checkout.example.test/callback', {
+    method: 'POST',
+  });
+  expect((await coordinator.callback(request))?.state).toBe('paid');
+  await expect(store.reserve(approve(), currentTime)).rejects.toThrow(
+    CheckoutConflict,
+  );
+});
+
+it('blocks a new handoff when a provider contradicts a previous final release', async () => {
+  const row = await open();
+  await store.requestCancellation(row.id);
+  await store.observe(row.id, observation('cancel-final'));
+  const replacement = await store.reserve(approve(), currentTime);
+  await store.beginCreation(replacement.id, currentTime);
+  await store.attachSession(
+    replacement.id,
+    provider,
+    'replacement-session',
+    currentTime,
+  );
+  expect(
+    await store.handoff(replacement.id, 'replacement-session', currentTime),
+  ).toMatchObject({
+    id: replacement.id,
+  });
+  const adapter: CheckoutProvider = {
+    id: provider,
+    authenticateCallback: async () => row.id,
+    find: async () => ({
+      merchantReference: row.id,
+      session: 'fixture-session',
+      price,
+      url: null,
+      observations: [observation('payment')],
+    }),
+    create: vi.fn(),
+    cancel: vi.fn(),
+  };
+  const coordinator = new CheckoutCoordinator(store, adapter, async () => true);
+  await expect(
+    coordinator.callback(new Request('https://checkout.example.test/callback')),
+  ).rejects.toThrow('Provider reports activity after final release');
+  expect(
+    await store.handoff(replacement.id, 'replacement-session', currentTime),
+  ).toBeNull();
+  expect((await store.get(replacement.id))?.state).toBe('canceling');
+  await store.observe(replacement.id, {
+    ...observation('cancel-final'),
+    session: 'replacement-session',
+  });
+  await expect(store.reserve(approve(), currentTime)).rejects.toThrow(
+    CheckoutConflict,
+  );
 });

@@ -33,3 +33,11 @@ CREATE TABLE checkout_observations (
   observed_at INTEGER NOT NULL,
   PRIMARY KEY (provider, event_id)
 );
+
+-- An authoritative event contradicting an earlier release requires review
+-- before this canonical domain can enter checkout again.
+CREATE TABLE checkout_domain_holds (
+  domain TEXT PRIMARY KEY REFERENCES public_domain_routes(domain),
+  reservation_id TEXT NOT NULL REFERENCES checkout_reservations(id),
+  observed_at INTEGER NOT NULL
+);

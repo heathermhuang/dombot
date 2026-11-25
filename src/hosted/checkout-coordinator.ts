@@ -6,6 +6,13 @@ import {
   type CheckoutReservation,
 } from './checkout-reservations';
 
+const settlementOrder: Record<CheckoutObservation['type'], number> = {
+  transfer: 0,
+  payment: 1,
+  'cancel-final': 2,
+  'refund-final': 3,
+};
+
 type ProviderSession = {
   merchantReference: string;
   session: string;
@@ -79,7 +86,13 @@ export class CheckoutCoordinator {
       throw new CheckoutConflict(
         'The provider did not return an HTTPS checkout URL.',
       );
-    return { reservation: current, checkoutUrl: url.href };
+    const admitted = await this.reservations.handoff(
+      current.id,
+      remote.session,
+    );
+    return admitted
+      ? { reservation: admitted, checkoutUrl: url.href }
+      : { reservation: await this.requireReservation(id), checkoutUrl: null };
   }
 
   async cancel(id: string) {
@@ -125,7 +138,14 @@ export class CheckoutCoordinator {
       remote.price.amount !== reservation.amount ||
       remote.price.currency !== reservation.currency ||
       (reservation.provider_session &&
-        reservation.provider_session !== remote.session)
+        reservation.provider_session !== remote.session) ||
+      remote.observations.some(
+        (event) =>
+          event.provider !== reservation.provider ||
+          event.session !== remote.session ||
+          event.price.amount !== reservation.amount ||
+          event.price.currency !== reservation.currency,
+      )
     )
       throw new CheckoutConflict(
         'Provider state differs from the approved case.',
@@ -139,10 +159,12 @@ export class CheckoutCoordinator {
             event.reference !== reservation.payment_reference) ||
           (event.type === 'transfer' &&
             event.reference !== reservation.transfer_reference)
-        )
+        ) {
+          await this.reservations.holdAfterRelease(reservation.id);
           throw new CheckoutConflict(
             'Provider reports activity after final release.',
           );
+        }
       return reservation;
     }
     let current = await this.reservations.attachSession(
@@ -150,7 +172,12 @@ export class CheckoutCoordinator {
       this.provider.id,
       remote.session,
     );
-    for (const observation of remote.observations)
+    // Preserve positive settlement evidence before applying a final release
+    // from the same snapshot, regardless of the provider's event ordering.
+    const observations = remote.observations.toSorted(
+      (a, b) => settlementOrder[a.type] - settlementOrder[b.type],
+    );
+    for (const observation of observations)
       current =
         (await this.reservations.observe(current.id, observation)) ?? current;
     return current;
