@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import './sales.css';
 import {
   salesRequest,
@@ -23,6 +24,14 @@ import {
   landerHostStatus,
 } from '../../lib/lander-presentation';
 
+type RecentLanderJob = {
+  id: string;
+  state: string;
+  total: number;
+  updated_at?: number;
+  domain?: string | null;
+};
+
 export default function UseLander({
   selection,
   matching,
@@ -34,15 +43,7 @@ export default function UseLander({
 }) {
   const [job, setJob] = useState<LanderJobView | null>(null),
     [open, setOpen] = useState(false),
-    [recent, setRecent] = useState<
-      {
-        id: string;
-        state: string;
-        total: number;
-        updated_at?: number;
-        domain?: string | null;
-      }[]
-    >([]),
+    [recent, setRecent] = useState<RecentLanderJob[]>([]),
     [cursor, setCursor] = useState(-1),
     [resumeError, setResumeError] = useState(''),
     [now, setNow] = useState(() => Date.now());
@@ -87,7 +88,12 @@ export default function UseLander({
             r.id === value.id ? { ...r, state: value.state } : r,
           )
         : [
-            { id: value.id, state: value.state, total: value.total },
+            {
+              id: value.id,
+              state: value.state,
+              total: value.total,
+              domain: value.items.find((item) => item.ordinal === 0)?.domain,
+            },
             ...rows,
           ].slice(0, 20),
     );
@@ -269,6 +275,52 @@ export default function UseLander({
     job.counts.some((c) => ['held', 'conflict'].includes(c.state));
   if (!enabled && !recent.length && !open && !action.error && !resumeError)
     return null;
+
+  // History arrives newest first. Only exact single-domain jobs are known to
+  // cover the same selection; a batch summary names just its first domain.
+  const groupedHistory = new Map<string, RecentLanderJob[]>();
+  for (const attempt of recent) {
+    const key =
+      attempt.total === 1 && attempt.domain
+        ? `domain:${attempt.domain}`
+        : `job:${attempt.id}`;
+    const group = groupedHistory.get(key);
+    if (group) group.push(attempt);
+    else groupedHistory.set(key, [attempt]);
+  }
+  const historyButton = (attempt: RecentLanderJob) => (
+    <button
+      type="button"
+      disabled={action.busy}
+      onClick={() =>
+        void action.run(async () => {
+          if (await read(attempt.id)) setOpen(true);
+        })
+      }
+    >
+      <span>
+        {attempt.domain
+          ? `${attempt.domain}${attempt.total > 1 ? ` +${attempt.total - 1}` : ''}`
+          : domainCount(attempt.total)}{' '}
+        ·{' '}
+        {landerJobLabel({
+          state: attempt.state,
+          total: attempt.total,
+          counts: job?.id === attempt.id ? job.counts : [],
+        })}
+      </span>
+      {typeof attempt.updated_at === 'number' && attempt.updated_at > 0 && (
+        <time dateTime={new Date(attempt.updated_at).toISOString()}>
+          {new Date(attempt.updated_at).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </time>
+      )}
+    </button>
+  );
   return (
     <div className="sales sales-lander-action">
       {enabled && selection && (
@@ -293,42 +345,32 @@ export default function UseLander({
           Continue lander review
         </button>
       )}
-      {!!recent.length && (
-        <details>
-          <summary>Recent lander connections</summary>
+      {!!groupedHistory.size && (
+        <details className="sales-lander-history-disclosure">
+          <summary>
+            <ChevronRight aria-hidden="true" size={16} />
+            Recent lander connections
+          </summary>
           <ul className="sales-lander-history">
-            {recent.map((j) => (
-              <li key={j.id}>
-                <button
-                  disabled={action.busy}
-                  onClick={() =>
-                    void action.run(async () => {
-                      if (await read(j.id)) setOpen(true);
-                    })
-                  }
-                >
-                  <span>
-                    {j.domain
-                      ? `${j.domain}${j.total > 1 ? ` +${j.total - 1}` : ''}`
-                      : domainCount(j.total)}{' '}
-                    ·{' '}
-                    {landerJobLabel({
-                      state: j.state,
-                      total: j.total,
-                      counts: job?.id === j.id ? job.counts : [],
-                    })}
-                  </span>
-                  {typeof j.updated_at === 'number' && j.updated_at > 0 && (
-                    <time dateTime={new Date(j.updated_at).toISOString()}>
-                      {new Date(j.updated_at).toLocaleString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </time>
-                  )}
-                </button>
+            {[...groupedHistory].map(([key, [latest, ...earlier]]) => (
+              <li key={key}>
+                {historyButton(latest)}
+                {!!earlier.length && (
+                  <details className="sales-lander-history-disclosure sales-lander-earlier-attempts">
+                    <summary>
+                      <ChevronRight aria-hidden="true" size={16} />
+                      {earlier.length === 1
+                        ? '1 earlier attempt'
+                        : `${earlier.length} earlier attempts`}
+                      <span className="sr-only"> for {latest.domain}</span>
+                    </summary>
+                    <ul className="sales-lander-history">
+                      {earlier.map((attempt) => (
+                        <li key={attempt.id}>{historyButton(attempt)}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </li>
             ))}
           </ul>

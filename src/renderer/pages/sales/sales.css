@@ -14,18 +14,56 @@
 .sales-lander-panel .sales-heading h2 {
   margin: 0;
 }
+.sales.sales-lander-action {
+  padding-bottom: 0;
+}
+.sales-lander-history-disclosure > summary {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+}
+.sales-lander-history-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.sales-lander-history-disclosure > summary > svg {
+  flex: none;
+}
+.sales-lander-history-disclosure[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.sales-lander-earlier-attempts {
+  margin-inline-start: 12px;
+}
+.sales-lander-earlier-attempts > summary {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
 .sales-lander-history {
   list-style: none;
-  margin: 8px 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
-.sales-lander-history button {
+.sales .sales-lander-history button {
   width: 100%;
+  padding-inline: 12px;
   justify-content: space-between;
   text-align: left;
   flex-wrap: wrap;
+  column-gap: 12px;
+}
+.sales-lander-history button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .sales-lander-history time {
   color: var(--muted-foreground);

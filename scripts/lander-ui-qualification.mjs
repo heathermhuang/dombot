@@ -62,9 +62,24 @@ const browser = await chromium.launchPersistentContext(profile, {
 let job = null,
   approved = 0,
   selection = null,
+  historyFixture = false,
   reauthOnce = true,
   rejectedRequestId = null;
 const results = [];
+const domain = domains[0];
+const historyJobs = [
+  { domain, total: 1, state: 'finished' },
+  { domain, total: 2, state: 'finished' },
+  { domain, total: 1, state: 'finished' },
+  { domain, total: 1, state: 'cancelled' },
+  { domain, total: 2, state: 'cancelled' },
+  { domain: domains[1], total: 1, state: 'finished' },
+].map((attempt, index) => ({
+  ...attempt,
+  id: crypto.randomUUID(),
+  updated_at: Date.UTC(2026, 10, 15, 14 - index),
+}));
+let openedAttempt;
 try {
   await browser.route('**/*', async (route) => {
     const request = route.request(),
@@ -76,9 +91,25 @@ try {
     if (suffix === 'config') value = { enabled: true, provider: 'cloudflare' };
     else if (suffix === 'jobs' && request.method() === 'GET')
       value = {
-        items: job ? [{ id: job.id, state: job.state, total: job.total }] : [],
+        items: historyFixture
+          ? historyJobs
+          : job
+            ? [{ id: job.id, state: job.state, total: job.total }]
+            : [],
       };
-    else if (suffix === 'jobs') {
+    else if (historyFixture) {
+      assert.equal(request.method(), 'GET', 'History opens a read-only view.');
+      const id = suffix.split('/')[1];
+      const attempt = historyJobs.find((item) => item.id === id);
+      assert(attempt);
+      openedAttempt = id;
+      value = {
+        ...attempt,
+        counts: [{ state: 'cancelled', count: 1 }],
+        items: [{ ordinal: 0, domain, state: 'cancelled', reason: null }],
+        cursor: null,
+      };
+    } else if (suffix === 'jobs') {
       const input = request.postDataJSON();
       if (reauthOnce) {
         reauthOnce = false;
@@ -281,6 +312,67 @@ try {
   assert.equal(overflow, false, 'Mobile content must fit the viewport.');
   await page.screenshot({ path: path.join(out, 'mobile.png'), fullPage: true });
   results.push('mobile all-matching review without horizontal overflow');
+  await page.close();
+
+  historyFixture = true;
+  page = await browser.newPage();
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto(`${origin}/w/${status.workspace}/#/`);
+  const history = page.getByText('Recent lander connections', { exact: true });
+  const tableView = page.getByRole('button', {
+    name: 'Table view',
+    exact: true,
+  });
+  await history.waitFor();
+  await tableView.waitFor();
+  const summaryBox = await history.boundingBox();
+  const tableBox = await tableView.boundingBox();
+  const gap = tableBox.y - (summaryBox.y + summaryBox.height);
+  assert(summaryBox.height >= 44, 'History has a full-size touch target.');
+  assert(
+    gap >= 0 && gap <= 20,
+    `Expected normal spacing below collapsed history, measured ${gap}px.`,
+  );
+  const latest = page.getByRole('button', {
+    name: `${domain} · Finished`,
+    exact: false,
+  });
+  assert.equal(await latest.count(), 0, 'History starts collapsed.');
+  await history.click();
+  assert.equal(
+    await latest.count(),
+    1,
+    'Show the latest single-domain attempt.',
+  );
+  assert.equal(
+    await latest.locator('time').getAttribute('datetime'),
+    new Date(historyJobs[0].updated_at).toISOString(),
+  );
+  assert.equal(
+    await page
+      .getByRole('button', { name: `${domain} +1`, exact: false })
+      .count(),
+    2,
+    'Keep separate batches that name the same first domain.',
+  );
+  const earlier = page.getByText('2 earlier attempts', { exact: false });
+  await earlier.click();
+  assert.equal(await latest.count(), 2);
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    ),
+    false,
+    'Expanded history fits the phone viewport.',
+  );
+  await page
+    .getByRole('button', { name: `${domain} · Stopped`, exact: false })
+    .click();
+  await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor();
+  assert.equal(openedAttempt, historyJobs[3].id);
+  results.push(
+    'mobile compact history groups retries, preserves batches and reopens exact earlier receipt',
+  );
   await fs.writeFile(
     path.join(out, 'receipt.json'),
     JSON.stringify(
