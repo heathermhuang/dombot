@@ -1,5 +1,9 @@
 interface HostedEnv {
   AGENT_CATALOG_ENABLED?: string;
+  AGENT_REFERRAL_PARTNER_ID?: string;
+  AGENT_REFERRAL_PARTNER_NAME?: string;
+  AGENT_REFERRAL_PARTNER_TOKEN?: string;
+  AGENT_REFERRAL_SIGNING_KEY?: string;
   PARKIO_LOGIN?: DurableObjectNamespace;
   PARKIO_LOGIN_SECRET?: string;
   PARKIO_CONNECTOR_ENABLED?: string;
