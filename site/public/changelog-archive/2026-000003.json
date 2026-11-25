@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-250",
+      "date": "2026-11-25",
+      "layer": "saas",
+      "title": "Close out signup, inquiry and changelog audit follow-ups",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #250 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #250",
+          "url": "https://github.com/heathermhuang/dombot/pull/250"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-778877798bda7019831c8ae00beb8d7611d135a4-52",
       "date": "2026-11-22",
       "layer": "saas",
