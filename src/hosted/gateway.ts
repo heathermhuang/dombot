@@ -1,3 +1,13 @@
+import { agentConnectPath } from './agent-connect';
+import {
+  agentCatalogEnabled,
+  pruneAgentEvents,
+  readAgentListing,
+  refreshAgentCatalog,
+} from './agent-catalog';
+import { agentDiscovery, agentRoutes, trackBrowserOffer } from './agent-routes';
+import { addAgentMetadata, agentOwnerPage } from './agent-views';
+import { saleDomainSchema } from '../shared/hosted-sales';
 import {
   previousSalesFormScript,
   previousSalesFormScriptPath,
@@ -192,6 +202,7 @@ const safeNext = (value: unknown) =>
         value === '/admin/parkio-pilot' ||
         value === '/account' ||
         value === '/account/close' ||
+        value === '/account/agent-listings' ||
         sharedMcpNext(value)
       ? value
       : '/app';
@@ -231,12 +242,54 @@ app.use('*', async (c, next) => {
   if (publicSiteResponse) return publicSiteResponse;
   const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
   if (redirect) return redirect;
-  const domainResponse = await publicDomainRequest(c.req.raw, c.env);
+  const request = c.req.raw;
+  const url = new URL(request.url);
+  const agentEnabled = agentCatalogEnabled(c.env);
+  const handoff = agentEnabled && url.searchParams.get('from') === 'agent';
+  const offerRequest =
+    handoff &&
+    request.method === 'POST' &&
+    /^\/[^/]+\/inquiries$/.test(url.pathname)
+      ? request.clone()
+      : null;
+  const domainResponse = await publicDomainRequest(request, c.env);
+  if (offerRequest && domainResponse?.status === 202) {
+    const analytics = trackBrowserOffer(
+      c.env,
+      offerRequest,
+      domainResponse.clone(),
+    ).catch(() => {
+      console.warn('Agent browser offer activity could not be recorded');
+    });
+    try {
+      c.executionCtx.waitUntil(analytics);
+    } catch {
+      await analytics;
+    }
+  } else if (offerRequest) {
+    void offerRequest.body?.cancel().catch(() => {});
+  }
   if (domainResponse) {
     if (!domainResponse.headers.get('Content-Type')?.startsWith('text/html'))
       return domainResponse;
     const listing = new Response(domainResponse.body, domainResponse);
     listing.headers.append('Cache-Control', 'no-transform');
+    if (
+      agentEnabled &&
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      listing.ok &&
+      /^\/[^/]+\.[^/]+$/.test(url.pathname)
+    ) {
+      const domain = saleDomainSchema.safeParse(
+        decodeURIComponent(url.pathname.slice(1)),
+      );
+      if (domain.success) {
+        const live = await readAgentListing(c.env, domain.data).catch(
+          () => null,
+        );
+        if (live) return addAgentMetadata(listing, live, handoff);
+      }
+    }
     return listing;
   }
   // Keep gateway-rendered pages under their own script policy when the edge
@@ -275,7 +328,8 @@ app.use('*', async (c, next) => {
       (c.req.path.startsWith('/auth/') ||
       c.req.path.startsWith('/account') ||
       c.req.path.startsWith('/login') ||
-      c.req.path === '/signup'
+      c.req.path === '/signup' ||
+      c.req.path === agentConnectPath
         ? "; script-src 'self'; connect-src 'self'"
         : ''),
   );
@@ -337,9 +391,15 @@ app.get('/', (c) =>
         portfolioAlias(c.env.PUBLIC_PORTFOLIO_PATH),
       ),
       registrationReady(c.env),
+      agentCatalogEnabled(c.env),
     ),
   ),
 );
+app.route('/', agentRoutes);
+app.get('/:domain/llms.txt', (c) =>
+  agentDiscovery(c.req.raw, c.env, c.req.param('domain')),
+);
+
 app.get('/source', (c) => c.html(sourcePage(c.env.SOURCE_COMMIT)));
 app.get('/changelog', async (c) => {
   const snapshot = await loadChangelog({
@@ -1278,6 +1338,11 @@ app.get('/account', async (c) => {
     .bind(user.id)
     .first<{ password_hash: string }>();
   let html = accountSecurity(user);
+  if (agentCatalogEnabled(c.env))
+    html = html.replace(
+      '<section class="session-actions"',
+      '<p><a href="/account/agent-listings">Agent listings and activity →</a></p><section class="session-actions"',
+    );
   if (isAdmin(c.env, user))
     html = html.replace(
       '<section class="session-actions"',
@@ -1294,6 +1359,23 @@ app.get('/account', async (c) => {
         '<section class="session-actions"',
         passkeyPanel(keys) + '<section class="session-actions"',
       ),
+    ),
+  );
+});
+app.get('/account/agent-listings', async (c) => {
+  if (!agentCatalogEnabled(c.env)) return c.notFound();
+  const user = await account(c.env).session(readSession(c.req.raw));
+  if (!user) return c.redirect('/login?next=%2Faccount%2Fagent-listings', 303);
+  const cursor = c.req.query('cursor');
+  const dns = c.req.query('dns');
+  const after = saleDomainSchema.safeParse(cursor);
+  const check = saleDomainSchema.safeParse(dns);
+  return c.html(
+    await agentOwnerPage(
+      c.env,
+      user.workspace_id,
+      after.success ? after.data : '',
+      check.success ? check.data : '',
     ),
   );
 });
@@ -2079,9 +2161,10 @@ app.all('/w/:workspace/*', async (c) => {
   const resultHeaders = new Headers(response.headers);
   if (
     c.req.method === 'POST' &&
-    response.ok &&
-    (salesPublicPath(path, c.req.method) ||
-      /^\/sales\/inbox\/[^/]+\/messages$/.test(path))
+    ((response.ok &&
+      (salesPublicPath(path, c.req.method) ||
+        /^\/sales\/inbox\/[^/]+\/messages$/.test(path))) ||
+      (response.status === 303 && salesPublicPath(path, c.req.method)))
   ) {
     // Scheduled recovery owns reliability; this only shortens time to first attempt.
     try {
@@ -2159,6 +2242,7 @@ export default {
       refreshPortfolioDomains,
       drainLanderConnections,
       continueRenewalPricing,
+      refreshAgentCatalog,
     ]) {
       try {
         await task(env);
@@ -2197,6 +2281,7 @@ export default {
         'DELETE FROM password_resets WHERE expires_at<?1',
       ).bind(Date.now()),
     ]);
+    await pruneAgentEvents(env);
     if (env.NOTIFICATION_POLICY_ENABLED === 'true')
       await env.CONTROL_DB.batch([
         env.CONTROL_DB.prepare(

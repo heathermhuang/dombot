@@ -19,7 +19,8 @@ export const salesEscape = (value: unknown) =>
   );
 export const salesHeaders = {
   'Cache-Control': 'no-store',
-  'Referrer-Policy': 'no-referrer',
+  // Keep native POST Origin intact while withholding private paths across origins.
+  'Referrer-Policy': 'same-origin',
   'X-Content-Type-Options': 'nosniff',
   'X-Robots-Tag': 'noindex, nofollow',
   'Content-Security-Policy':

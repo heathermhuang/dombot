@@ -188,16 +188,21 @@ it('qualifies submit, captured confirmation mail, conversation/reply, replay, ra
   )[0];
   expect((await app.request(verifyUrl, {}, tenantEnv)).status).toBe(200);
   expect((await inbox.lead(receipt.id)).verification).toBe('pending');
-  for (let n = 0; n < 2; n++)
-    expect(
-      (
-        await app.request(
-          verifyUrl + '/confirm',
-          { method: 'POST', headers: { Origin: origin } },
-          tenantEnv,
-        )
-      ).status,
-    ).toBe(200);
+  const confirm = () =>
+    app.request(
+      verifyUrl + '/confirm',
+      { method: 'POST', headers: { Origin: origin } },
+      tenantEnv,
+    );
+  const confirmations = await Promise.all([confirm(), confirm()]);
+  expect(confirmations.map((response) => response.status)).toEqual([303, 303]);
+  const firstThreadPath = confirmations[0].headers.get('Location');
+  expect(firstThreadPath).toMatch(/^\/w\/[a-f0-9-]+\/t\/[A-Za-z0-9_-]+$/);
+  expect(confirmations[1].headers.get('Location')).toBe(firstThreadPath);
+  const firstThreadUrl = new URL(firstThreadPath, origin).href;
+  expect(
+    await (await app.request(firstThreadUrl, {}, tenantEnv)).text(),
+  ).toContain('Awaiting seller review');
   await drainSalesWorkspace(env, workspace);
   expect(mail).toHaveLength(2);
   expect(mail[1].to).toBe('owner@fixture.invalid');
@@ -222,9 +227,12 @@ it('qualifies submit, captured confirmation mail, conversation/reply, replay, ra
   const threadUrl = mail[2].text.match(
     /https:\/\/inquiry\.fixture\.invalid\/w\/[a-f0-9-]+\/t\/[A-Za-z0-9_-]+/,
   )[0];
-  const thread = await (await app.request(threadUrl, {}, tenantEnv)).text();
-  expect(thread).toContain('Synthetic owner reply.');
-  expect(thread).not.toContain('PRIVATE_NOTE_SENTINEL');
+  for (const url of [firstThreadUrl, threadUrl]) {
+    const thread = await (await app.request(url, {}, tenantEnv)).text();
+    expect(thread).toContain('Synthetic owner reply.');
+    expect(thread).toContain('Seller replied');
+    expect(thread).not.toContain('PRIVATE_NOTE_SENTINEL');
+  }
   const body = new URLSearchParams({
     body: 'Synthetic sender follow-up.',
     idempotencyKey: crypto.randomUUID(),

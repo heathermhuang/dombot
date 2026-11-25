@@ -53,6 +53,7 @@
     },
   ],
   "vars": {
+    "AGENT_CATALOG_ENABLED": "false",
     "LANDER_CONNECTIONS_ENABLED": "false",
     "LANDER_CONNECTION_WORKSPACES": "[]",
     "LANDER_QUALIFIED_CNAME_TARGET": "",

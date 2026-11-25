@@ -1,4 +1,5 @@
 interface HostedEnv {
+  AGENT_CATALOG_ENABLED?: string;
   PARKIO_LOGIN?: DurableObjectNamespace;
   PARKIO_LOGIN_SECRET?: string;
   PARKIO_CONNECTOR_ENABLED?: string;

@@ -37,6 +37,8 @@ export default {
       [
         '/platform-internal/public-domain',
         '/platform-internal/public-domain-backfill',
+        '/platform-internal/agent-listing',
+        '/platform-internal/agent-activity',
       ].includes(platformPath)
     ) {
       return publicDomainEligibility(request, env);
