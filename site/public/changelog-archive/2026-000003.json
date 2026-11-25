@@ -18,6 +18,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-94defe2e6a5ba5188ddc8a6b7d39029f568a3adc-54",
+      "date": "2026-11-25",
+      "layer": "saas",
+      "title": "Hosted service update observed: Prevent blocked analytics injection on audited public pages",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/94defe2e6a5ba5188ddc8a6b7d39029f568a3adc"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-250",
       "date": "2026-11-25",
       "layer": "saas",
