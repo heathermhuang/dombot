@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import './sales.css';
 import {
   salesRequest,
@@ -35,17 +36,19 @@ type RecentLanderJob = {
 export default function UseLander({
   selection,
   matching,
+  showHistory = false,
   onChange,
 }: {
   selection: LanderSelection | null;
   matching?: LanderSelection;
+  showHistory?: boolean;
   onChange?: () => void;
 }) {
   const [job, setJob] = useState<LanderJobView | null>(null),
     [open, setOpen] = useState(false),
     [recent, setRecent] = useState<RecentLanderJob[]>([]),
     [cursor, setCursor] = useState(-1),
-    [resumeError, setResumeError] = useState(''),
+    [resumeFailed, setResumeFailed] = useState(false),
     [now, setNow] = useState(() => Date.now());
   const action = useSalesAction();
   const identityLink = useRef<HTMLAnchorElement>(null);
@@ -79,25 +82,30 @@ export default function UseLander({
   useEffect(() => {
     if (open && jobId) reviewHeading.current?.focus();
   }, [open, jobId]);
-  const accept = useCallback((value: LanderJobView) => {
-    setJob(value);
-    setResumeError('');
-    setRecent((rows) =>
-      rows.some((r) => r.id === value.id)
-        ? rows.map((r) =>
-            r.id === value.id ? { ...r, state: value.state } : r,
-          )
-        : [
-            {
-              id: value.id,
-              state: value.state,
-              total: value.total,
-              domain: value.items.find((item) => item.ordinal === 0)?.domain,
-            },
-            ...rows,
-          ].slice(0, 20),
-    );
-  }, []);
+  const accept = useCallback(
+    (value: LanderJobView) => {
+      setJob(value);
+      setResumeFailed(false);
+      if (showHistory)
+        setRecent((rows) =>
+          rows.some((r) => r.id === value.id)
+            ? rows.map((r) =>
+                r.id === value.id ? { ...r, state: value.state } : r,
+              )
+            : [
+                {
+                  id: value.id,
+                  state: value.state,
+                  total: value.total,
+                  domain: value.items.find((item) => item.ordinal === 0)
+                    ?.domain,
+                },
+                ...rows,
+              ].slice(0, 20),
+        );
+    },
+    [showHistory],
+  );
   const read = async (id: string, after = -1) => {
     const epoch = ++viewEpoch.current;
     let v: LanderJobView;
@@ -136,13 +144,9 @@ export default function UseLander({
         accept(value);
         setCursor(saved.cursor);
         setOpen(true);
-        setResumeError('');
       })
       .catch(() => {
-        if (!stopped && epoch === viewEpoch.current)
-          setResumeError(
-            'Your saved connection could not be reopened. Use recent connections to try again.',
-          );
+        if (!stopped && epoch === viewEpoch.current) setResumeFailed(true);
       });
     return () => {
       stopped = true;
@@ -178,15 +182,16 @@ export default function UseLander({
         if (!stopped) setEnabled(v.enabled);
       })
       .catch(() => {});
-    void salesRequest<{ items: typeof recent }>('/lander/jobs')
-      .then((v) => {
-        if (!stopped) setRecent(v.items);
-      })
-      .catch(() => {});
+    if (showHistory)
+      void salesRequest<{ items: RecentLanderJob[] }>('/lander/jobs')
+        .then((v) => {
+          if (!stopped) setRecent(v.items);
+        })
+        .catch(() => {});
     return () => {
       stopped = true;
     };
-  }, []);
+  }, [showHistory]);
   useEffect(() => {
     if (
       !jobId ||
@@ -273,7 +278,15 @@ export default function UseLander({
     !!job &&
     ['finished', 'cancelled'].includes(job.state) &&
     job.counts.some((c) => ['held', 'conflict'].includes(c.state));
-  if (!enabled && !recent.length && !open && !action.error && !resumeError)
+  const canContinue = enabled && pending && !job;
+  if (
+    !(enabled && (selection || matching)) &&
+    !canContinue &&
+    !recent.length &&
+    !open &&
+    !action.error &&
+    !resumeFailed
+  )
     return null;
 
   // History arrives newest first. Only exact single-domain jobs are known to
@@ -337,10 +350,10 @@ export default function UseLander({
           Use our lander for all matching
         </button>
       )}
-      {enabled && pending && !job && (
+      {canContinue && (
         <button
           disabled={action.busy}
-          onClick={() => prepare(pending.selection)}
+          onClick={() => prepare(canContinue.selection)}
         >
           Continue lander review
         </button>
@@ -376,7 +389,18 @@ export default function UseLander({
           </ul>
         </details>
       )}
-      {resumeError && <p role="alert">{resumeError}</p>}
+      {resumeFailed && (
+        <p role="alert">
+          Your saved connection could not be reopened.{' '}
+          {showHistory ? (
+            'Use recent connections to try again.'
+          ) : (
+            <Link className="link" to="/public-listings">
+              Find it in Sales pages
+            </Link>
+          )}
+        </p>
+      )}
       {action.error && !action.reauth && <p role="alert">{action.error}</p>}
       {action.reauth && (
         <div className="sales-lander-auth" role="alert">

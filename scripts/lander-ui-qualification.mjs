@@ -67,6 +67,7 @@ let job = null,
   rejectedRequestId = null;
 const results = [];
 const domain = domains[0];
+const missingAttempt = crypto.randomUUID();
 const historyJobs = [
   { domain, total: 1, state: 'finished' },
   { domain, total: 2, state: 'finished' },
@@ -80,6 +81,7 @@ const historyJobs = [
   updated_at: Date.UTC(2026, 10, 15, 14 - index),
 }));
 let openedAttempt;
+let historyListReads = 0;
 try {
   await browser.route('**/*', async (route) => {
     const request = route.request(),
@@ -89,7 +91,8 @@ try {
     const suffix = url.pathname.split('/sales/lander/')[1];
     let value;
     if (suffix === 'config') value = { enabled: true, provider: 'cloudflare' };
-    else if (suffix === 'jobs' && request.method() === 'GET')
+    else if (suffix === 'jobs' && request.method() === 'GET') {
+      if (historyFixture) historyListReads++;
       value = {
         items: historyFixture
           ? historyJobs
@@ -97,9 +100,11 @@ try {
             ? [{ id: job.id, state: job.state, total: job.total }]
             : [],
       };
-    else if (historyFixture) {
+    } else if (historyFixture) {
       assert.equal(request.method(), 'GET', 'History opens a read-only view.');
       const id = suffix.split('/')[1];
+      if (id === missingAttempt)
+        return route.fulfill({ status: 404, json: { error: 'Unknown job' } });
       const attempt = historyJobs.find((item) => item.id === id);
       assert(attempt);
       openedAttempt = id;
@@ -278,6 +283,12 @@ try {
   results.push(
     '60 selected across pages; exact neutral review; one keyboard confirmation',
   );
+  await page.reload();
+  await page
+    .getByRole('heading', { name: 'Connecting', exact: true })
+    .waitFor();
+  assert.equal(approved, 1, 'Reloading inventory does not repeat approval.');
+  results.push('an in-progress connection reopens on inventory reload');
   await page.close();
   page = await browser.newPage();
   await page.goto(`${origin}/w/${status.workspace}/#/public-listings`);
@@ -319,20 +330,27 @@ try {
   await page.setViewportSize({ width: 393, height: 852 });
   await page.goto(`${origin}/w/${status.workspace}/#/`);
   const history = page.getByText('Recent lander connections', { exact: true });
-  const tableView = page.getByRole('button', {
-    name: 'Table view',
+  await page.getByRole('button', { name: 'Table view', exact: true }).waitFor();
+  assert.equal(await history.count(), 0, 'History is absent from inventory.');
+  await page.goto(
+    `${origin}/w/${status.workspace}/#/?landerConnection=${missingAttempt}`,
+  );
+  // Reload the route to exercise reopening a saved address from a new document.
+  await page.reload();
+  const recovery = page.getByRole('link', {
+    name: 'Find it in Sales pages',
     exact: true,
   });
+  await recovery.waitFor();
+  assert.equal(historyListReads, 0, 'Inventory never polls for history.');
+  await recovery.click();
+  await page
+    .getByRole('heading', { name: 'Sales pages', exact: true })
+    .waitFor();
   await history.waitFor();
-  await tableView.waitFor();
+  assert(historyListReads > 0, 'Sales pages loads the connection history.');
   const summaryBox = await history.boundingBox();
-  const tableBox = await tableView.boundingBox();
-  const gap = tableBox.y - (summaryBox.y + summaryBox.height);
   assert(summaryBox.height >= 44, 'History has a full-size touch target.');
-  assert(
-    gap >= 0 && gap <= 20,
-    `Expected normal spacing below collapsed history, measured ${gap}px.`,
-  );
   const latest = page.getByRole('button', {
     name: `${domain} · Finished`,
     exact: false,
@@ -371,7 +389,7 @@ try {
   await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor();
   assert.equal(openedAttempt, historyJobs[3].id);
   results.push(
-    'mobile compact history groups retries, preserves batches and reopens exact earlier receipt',
+    'mobile inventory has no history and failed resume links to grouped receipts on Sales pages',
   );
   await fs.writeFile(
     path.join(out, 'receipt.json'),
