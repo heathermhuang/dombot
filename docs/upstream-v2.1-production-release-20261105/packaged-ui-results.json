@@ -1,0 +1,50 @@
+{
+  "status": "passed",
+  "results": [
+    {
+      "case": "select-all then filter then single pricing",
+      "targets": ["fixture-003.invalid"]
+    },
+    {
+      "case": "shift selection resets across filters",
+      "targets": 1
+    },
+    {
+      "case": "pagination preserves explicit selection",
+      "targets": 2
+    },
+    {
+      "case": "navigation clears",
+      "selected": 0
+    },
+    {
+      "case": "pricing actual synthetic save targets",
+      "targets": 1
+    },
+    {
+      "case": "notes actual synthetic save targets",
+      "targets": 1
+    },
+    {
+      "case": "CSV export targets",
+      "targets": 1
+    },
+    {
+      "case": "folder targets and delayed completion after filter change",
+      "targets": 1,
+      "newSelectionPreserved": true
+    },
+    {
+      "case": "ownership dialog targets; no sale/deletion submitted",
+      "targets": 1
+    },
+    {
+      "case": "Activity bulk selection after filter",
+      "targets": 1
+    },
+    {
+      "case": "mobile touch selection after filter",
+      "targets": 1
+    }
+  ]
+}

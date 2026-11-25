@@ -1,0 +1,216 @@
+{
+  "date": "2026-11-05",
+  "status": "deployed_runtime_import_and_preservation_verified_with_acceptance_holds",
+  "pullRequest": "https://github.com/heathermhuang/dombot/pull/167",
+  "releaseCommit": "26e3933f0afa05e6c29337b219b7d8a546328143",
+  "checkedHead": "52b122f878f3e1ee5a86863ab0e7528cb45de000",
+  "upstreamRevision": "e93d5210707f706451310e0a85c147a44c3177c1",
+  "engine": "2.1.0-hosted.1",
+  "sourceSha256": "feb778f11b9d7cdb145cc71347a9ea17868314a450b61624e7ea4cd8f5c2345a",
+  "archiveSha256": "1327a38d75b446642fe1b49317467767ca78d1f074e3152ddf4bf4e6a16df232",
+  "templateSha256": "8efda208073b86a80608303c20983038e17296f825139fe5959ea7a6fd823293",
+  "mergedCiRun": "https://github.com/heathermhuang/dombot/actions/runs/42021751206",
+  "mergedSecurityRun": "https://github.com/heathermhuang/dombot/actions/runs/42021751136",
+  "verification": {
+    "at": "2026-11-05T12:41:51.482Z",
+    "engine": "2.1.0-hosted.1",
+    "source": "feb778f11b9d7cdb145cc71347a9ea17868314a450b61624e7ea4cd8f5c2345a",
+    "releaseCommit": "26e3933f0afa05e6c29337b219b7d8a546328143",
+    "servingTenants": 44,
+    "usersPreserved": 55,
+    "originalWorkspaceIdentitiesPreserved": 544,
+    "platformMappingsPreserved": 39,
+    "credentialNamespacesPreserved": 44,
+    "publishedSalesPreserved": 2,
+    "publishedProfilesPreserved": 2,
+    "canonicalAndLegacyRoutesVerified": 2,
+    "existingActiveHostsVerified": 2,
+    "directoryConflicts": 0,
+    "existingBackfillCompleted": 43,
+    "activeQaRuns": 0,
+    "unfinishedAllocations": 0,
+    "templateHashAgreement": true,
+    "cronPreserved": true,
+    "originalAllocationRestored": true,
+    "sourceOfferCorrect": true,
+    "registrarMutations": 0
+  },
+  "httpChecks": {
+    "passed": 38,
+    "total": 38
+  },
+  "rollback": {
+    "at": "2026-11-05T12:19:23.136Z",
+    "databases": 45,
+    "codeSettingsSnapshots": 46,
+    "complete": true,
+    "rootKeysExported": false
+  },
+  "holdings": {
+    "at": "2026-11-05T12:42:17.448Z",
+    "portfolios": 44,
+    "namespaces": [
+      "imported-domains",
+      "domain-list-prices",
+      "domain-notes",
+      "domain-events",
+      "folders",
+      "domain-folders",
+      "settings",
+      "domain-prices",
+      "registrar-domains"
+    ],
+    "manualAndCachedHoldingsPreserved": true,
+    "rawRecordsEmitted": false
+  },
+  "readOnlyProviderChecks": {
+    "at": "2026-11-05T12:37:54.041Z",
+    "engine": "2.1.0-hosted.1",
+    "mcpRegistrarCount": 12,
+    "unstoppableDiscoverable": true,
+    "namecheapConnection": true,
+    "dynadotConnection": true,
+    "managedRouteDefaultsVerified": true,
+    "providerMutations": 0,
+    "unstoppableProviderAcceptance": "held_no_controlled_credentials"
+  },
+  "managedImport": {
+    "runId": "0c0f6f16-35bc-4443-8f0b-79a3b225baf0",
+    "passed": true,
+    "production": true,
+    "source": "26e3933f0afa05e6c29337b219b7d8a546328143",
+    "openAndPreview": {
+      "workers": 0,
+      "databases": 0
+    },
+    "validSubmission": {
+      "workers": 1,
+      "databases": 1
+    },
+    "retries": 2,
+    "readback": true,
+    "at": "2026-11-05T12:42:46.822Z",
+    "servedUI": {
+      "at": "2026-11-05T12:42:46.815Z",
+      "title": "domains.domains",
+      "engine": "2.1.0-hosted.1",
+      "source": "feb778f11b9d7cdb145cc71347a9ea17868314a450b61624e7ea4cd8f5c2345a",
+      "assetsVerified": 2,
+      "registrars": 12,
+      "unstoppableCatalog": true,
+      "syntheticUnconfiguredAccounts": true,
+      "settingsReadApi": true,
+      "managedNamecheapAndDynadotRouting": true,
+      "providerCalls": 0,
+      "renderedBrowserAcceptance": false
+    },
+    "cleanup": {
+      "complete": true,
+      "workers": 0,
+      "databases": 0,
+      "setupKeys": 0
+    },
+    "runnerPreservation": {
+      "users": 55,
+      "platformRows": 39,
+      "workspaceIdentities": 532,
+      "preserved": true
+    }
+  },
+  "postCleanup": {
+    "at": "2026-11-05T12:44:55.820Z",
+    "runId": "0c0f6f16-35bc-4443-8f0b-79a3b225baf0",
+    "realUsersPreserved": 55,
+    "originalWorkspaceIdentitiesPreserved": 544,
+    "independentWorkerAbsence": true,
+    "independentDatabaseAbsence": true,
+    "qaAccountSessionsAndMappingsAbsent": true,
+    "setupKeys": 0,
+    "activeQaRuns": 0,
+    "unfinishedAllocations": 0,
+    "temporaryPasswordScrubbed": true
+  },
+  "transport": {
+    "connectionResets": 2,
+    "remoteOriginalsReconciledBeforeRetry": 2,
+    "originalAdmissionRestoredBeforeRetry": true
+  },
+  "qualificationHarness": {
+    "initialIndependentVerifierFailure": "Expected HTTP 404; provider returned success with explicit script:null for the absent dispatch script.",
+    "correctedVerifierPassedOnSameCompletedLease": true,
+    "additionalQaRunsCreated": 0
+  },
+  "localBrowser": {
+    "priorExactPackageScenarios": 11,
+    "additionalLocalCua": {
+      "at": "2026-11-05T12:23:58.610980+00:00",
+      "method": "CUA in-app browser; isolated local synthetic fixture, exact installed package",
+      "engine": "2.1.0-hosted.1",
+      "desktopViewport": [1440, 1000],
+      "mobileViewport": [390, 844],
+      "syntheticImportSaved": true,
+      "registrarCatalogCount": 12,
+      "unstoppableDraftDesktopAndMobile": true,
+      "emptyKeySubmitDisabled": true,
+      "draftCancelledWithoutProviderCall": true,
+      "syncSettingsDesktopAndMobile": true,
+      "unconfiguredSyncDisabled": true,
+      "productionBrowserAcceptance": false,
+      "ownerNativeBrowserHold": "Mac locked; no bypass attempted"
+    }
+  },
+  "acceptanceHolds": [
+    "Real Unstoppable provider acceptance: no controlled credential available."
+  ],
+  "schemaMigrationsApplied": 0,
+  "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0,
+  "nativeOwnerBrowserFollowup": {
+    "at": "2026-11-06T02:20:28Z",
+    "method": "Native owner Chrome via CUA after user unlock",
+    "engine": "2.1.0-hosted.1",
+    "observedGatewaySource": "a18d81712c173a98127b654aa40c09c419762ab4",
+    "gatewayFollowup": "Public changelog PR #168; no tenant engine rollouts in its operator receipt",
+    "documentTitle": "domains.domains",
+    "selectAllBeforeFilter": 940,
+    "selectionAfterFilter": 0,
+    "singleRowSelected": 1,
+    "pricingTargets": 1,
+    "notesTargets": 1,
+    "paginationExplicitTargets": 2,
+    "paginationPricingNamesMatched": true,
+    "productionDataChangesSubmitted": 0,
+    "registrarMarketplaceDnsPublicationPaymentOrMessagingWrites": 0,
+    "registrarPageAcceptance": "passed: 12-provider catalog, Unstoppable blank-key submission disabled, draft cancelled without save",
+    "mobileProductionBrowserAcceptance": "passed within the recorded emulator and responsive probe coverage",
+    "browserInterferenceObserved": true,
+    "complete": true,
+    "desktopChecksObservedAt": "2026-11-05T13:11:12.391917+00:00",
+    "registrarMobileCompletedAt": "2026-11-06T02:20:28Z",
+    "productionRegistrarOptions": 12,
+    "productionUnstoppableBlankKeySubmitDisabled": true,
+    "productionUnstoppableDraftCancelled": true,
+    "productionSyncSettingsLoaded": true,
+    "productionSyncScheduleChanged": false,
+    "mobileEmulatorViewport": [390, 844],
+    "mobileSyncLayoutVerified": true,
+    "mobileRegistrarMenuTapped": true,
+    "mobileUnstoppableFormOpened": true,
+    "mobileBlankKeySubmitDisabled": true,
+    "mobileNavigationToDomainsVerified": true,
+    "narrowerResponsiveFilterProbe": {
+      "viewportWidth": 146,
+      "selectedBeforeFilter": 940,
+      "selectedAfterFilter": 0,
+      "method": "Native accessibility text control in the real owner browser"
+    },
+    "physicalDeviceAcceptance": false,
+    "temporaryOwnerTestTabClosed": true,
+    "engineArtifactUnchangedSinceRollout": true,
+    "freshPublicHealth": {
+      "at": "2026-11-06T02:20:28Z",
+      "status": 200,
+      "source": "568e45abd0f5689aa0e0370b445e04dec83515e5"
+    },
+    "loadedOwnerUiBadgeSource": "a18d81712c173a98127b654aa40c09c419762ab4"
+  }
+}
