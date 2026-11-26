@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-258",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Reserve the Summit agent setup route",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #258 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #258",
+          "url": "https://github.com/heathermhuang/dombot/pull/258"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-3f2c304e1a0e794c25c33348bbea1a802c575d38-53",
       "date": "2026-11-25",
       "layer": "saas",
