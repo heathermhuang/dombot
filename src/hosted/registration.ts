@@ -38,11 +38,18 @@ export function registrationPoolIds(ids: string[]) {
   return JSON.stringify(ids.filter((id) => id !== PLATFORM_POOL));
 }
 export function emailReady(env: HostedEnv): boolean {
+  const origin = env.CANONICAL_ORIGIN ?? '';
+  const isolatedStaging =
+    env.PUBLIC_REGISTRATION_ENABLED === 'false' &&
+    origin === env.AUTH_EMAIL_STAGING_ORIGIN &&
+    /^https:\/\/domains-[a-z0-9-]+-qa-[a-f0-9]{8}[.][a-z0-9-]+[.]workers[.]dev$/.test(
+      origin,
+    );
   return Boolean(
     env.EMAIL &&
     env.EMAIL_FROM === 'accounts@mail.domains.domains' &&
     env.EMAIL_DELIVERY_VERIFIED === 'true' &&
-    env.CANONICAL_ORIGIN === 'https://domains.domains',
+    (origin === 'https://domains.domains' || isolatedStaging),
   );
 }
 export function registrationReady(env: HostedEnv): boolean {

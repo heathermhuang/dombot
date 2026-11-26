@@ -86,6 +86,7 @@ interface HostedEnv {
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
   EMAIL_DELIVERY_VERIFIED?: string;
+  AUTH_EMAIL_STAGING_ORIGIN?: string;
   AUTH_EMAIL_DAILY_LIMIT?: string;
   AUTH_EMAIL_MONTHLY_LIMIT?: string;
   AUTH_EMAIL_IP_LIMIT?: string;
