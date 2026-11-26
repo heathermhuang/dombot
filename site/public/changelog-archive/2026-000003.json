@@ -114,6 +114,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-260",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Receive unlisted-domain inquiries in the Sales Inbox",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #260 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #260",
+          "url": "https://github.com/heathermhuang/dombot/pull/260"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-261",
       "date": "2026-11-26",
       "layer": "saas",
