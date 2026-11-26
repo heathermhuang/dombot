@@ -1,3 +1,12 @@
+import { execFileSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import {
+  launchReferralBrowser,
+  runReferralQualification,
+} from '../../scripts/referral-browser-qualification.mjs';
+import { Accounts } from './accounts';
+import { salesRecipientHash } from './sales-notifications';
 import { tokenHash } from './crypto';
 import { ownerReferralActivity, saveReferralConsent } from './agent-referrals';
 import { agentListingSchema } from './agent-openapi';
@@ -144,6 +153,7 @@ beforeAll(async () => {
           bindings: {
             ...partnerFixture,
             AGENT_CATALOG_ENABLED: 'true',
+            SALES_MAIL_ENABLED: 'true',
             CANONICAL_ORIGIN: origin,
             AUTH_PEPPER: 'synthetic-pepper'.repeat(4),
             WORKSPACES: JSON.stringify([
@@ -169,12 +179,48 @@ beforeAll(async () => {
               useSQLite: true,
             },
           },
+          outboundService: (req) =>
+            new URL(req.url).hostname === 'challenges.cloudflare.com'
+              ? Response.json({
+                  success: true,
+                  hostname: 'localhost',
+                  action: 'sales-inquiry',
+                })
+              : new Response('External calls are unavailable in this fixture', {
+                  status: 503,
+                }),
+          serviceBindings: {
+            ASSETS: async (req) => {
+              const pathname = new URL(req.url).pathname;
+              const root = resolve(
+                'node_modules/@domains-domains/dombot-engine/web',
+              );
+              const file = pathname.startsWith('/assets/')
+                ? join(root, pathname)
+                : join(root, 'index.html');
+              if (!file.startsWith(root + '/'))
+                return new Response(null, { status: 404 });
+              const content = await readFile(file).catch(() => null);
+              return content
+                ? new Response(content, {
+                    headers: {
+                      'Content-Type': file.endsWith('.js')
+                        ? 'text/javascript'
+                        : file.endsWith('.css')
+                          ? 'text/css'
+                          : 'text/html',
+                    },
+                  })
+                : new Response(null, { status: 404 });
+            },
+          },
           bindings: {
             DOMBOT_AUTH: 'gateway',
             DOMBOT_WORKSPACE_ID: id,
             DOMBOT_GATEWAY_SECRET: keys[i],
             DOMBOT_PUBLIC_BASE_PATH: `/w/${id}`,
             DOMBOT_SALES_ORIGIN: `${origin}/w/${id}`,
+            DOMBOT_SALES_V1: 'true',
             SALES_INQUIRIES_ENABLED: 'true',
             SALES_PRIVACY_REVIEWED: 'true',
             SALES_TURNSTILE_SITEKEY: 'synthetic-site-key',
@@ -208,13 +254,9 @@ beforeAll(async () => {
         .replace(/\n/g, ' '),
     );
   for (const db of dbs)
-    for (const file of [
-      '0002_publication.sql',
-      '0004_sales.sql',
-      '0009_sales_lifecycle.sql',
-      '0005_sales_inquiries.sql',
-      '0006_sales_control_leases.sql',
-    ])
+    for (const file of readdirSync('migrations')
+      .filter((name) => name.endsWith('.sql'))
+      .sort())
       await db.exec(
         readFileSync('migrations/' + file, 'utf8')
           .replace(/^--.*$/gm, '')
@@ -287,7 +329,7 @@ beforeEach(async () => {
       .run();
   for (const db of dbs)
     await db.exec(
-      'DELETE FROM sales_reviews; DELETE FROM sales_leads; DELETE FROM published_sales; DELETE FROM sale_drafts;',
+      'DELETE FROM sales_events; DELETE FROM sales_journey_receipts; DELETE FROM sales_journey_daily; DELETE FROM sales_reviews; DELETE FROM sales_leads; DELETE FROM published_sales; DELETE FROM sale_drafts;',
     );
 });
 
@@ -1275,3 +1317,247 @@ describe('public agent catalog', () => {
     );
   });
 });
+
+it.skipIf(!process.env.DOMBOT_UI_QA_TOOLS)(
+  'qualifies the referral handoff and Sales Inbox in desktop and mobile Chrome',
+  async () => {
+    const workspace = ids[2];
+    const domain =
+      'referral-qa-' + crypto.randomUUID().slice(0, 8) + '.example';
+    const store = await SalesStore.from({
+      DB: dbs[2],
+      DOMBOT_SECRET: btoa('x'.repeat(32)),
+    });
+    const inbox = new SalesInquiryStore(store, origin + '/w/' + workspace);
+    const directory = new PublicDomainDirectory(control);
+    const browserGateway = await mf.getWorker('referral-browser-gateway');
+    const request = (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      headers.set('CF-Connecting-IP', '192.0.2.82');
+      return browserGateway.fetch(url, {
+        ...init,
+        headers,
+        redirect: 'manual',
+      });
+    };
+    const initialPrice = { amount: '4200.55', currency: 'USD' };
+    const revisedPrice = { amount: '4500.30', currency: 'USD' };
+    const buyer = 'browser-referral-buyer@fixture.invalid';
+    const reviewer = crypto.randomUUID();
+    const email = 'browser-referral-seller@fixture.invalid';
+    const accounts = new Accounts(control, env.AUTH_PEPPER);
+    let listing: string | undefined;
+    const evidence = { checks: [], passed: false };
+    const browser = await launchReferralBrowser(process.env.DOMBOT_UI_QA_TOOLS);
+    try {
+      await runReferralQualification(
+        browser,
+        {
+          async prepare() {
+            await control
+              .prepare(
+                "INSERT INTO users(id,email,workspace_id,password_hash,created_at) VALUES(?,?,?,'synthetic-browser',?)",
+              )
+              .bind(reviewer, email, workspace, Date.now())
+              .run();
+            await control
+              .prepare(
+                'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,?)',
+              )
+              .bind(workspace, salesRecipientHash(env, email), Date.now())
+              .run();
+            const token = await accounts.newSession({
+              id: reviewer,
+              email,
+              workspace_id: workspace,
+              label: 'Synthetic seller',
+              credentialHash: 'synthetic-browser',
+            });
+            expect(token).toBeTruthy();
+            listing = await publish(2, domain, {
+              mode: 'offer',
+              priceSource: {
+                kind: 'override',
+                price: initialPrice,
+                reason: 'Synthetic fixture',
+              },
+            });
+            return {
+              synthetic: true,
+              source: execFileSync('git', ['rev-parse', 'HEAD'], {
+                encoding: 'utf8',
+              }).trim(),
+              origin,
+              domain,
+              buyer,
+              workspace,
+              initialPrice,
+              revisedPrice,
+              partnerToken: partnerFixture.AGENT_REFERRAL_PARTNER_TOKEN,
+              partnerName: partnerFixture.AGENT_REFERRAL_PARTNER_NAME,
+              request,
+              trackReceipt() {},
+              async signIn(context) {
+                await context.addCookies([
+                  {
+                    name: '__Host-dd_session',
+                    value: token!,
+                    url: origin,
+                    secure: true,
+                    httpOnly: true,
+                  },
+                ]);
+              },
+              async browserTransport(context) {
+                await context.route('**/*', async (route) => {
+                  const issued = route.request();
+                  const target = new URL(issued.url());
+                  if (target.hostname === 'challenges.cloudflare.com') {
+                    return route.fulfill({
+                      contentType: 'text/javascript',
+                      body: `
+                  window.turnstile={render(widget,{callback}){const input=document.createElement('input');input.type='hidden';input.name='cf-turnstile-response';input.value='staging-fixture-token';widget.append(input);callback();return 'fixture'},remove(){},reset(){}};
+                  window.salesChallengeReady();
+                `,
+                    });
+                  }
+                  if (target.origin !== origin) return route.abort();
+                  const response = await request(target.href, {
+                    method: issued.method(),
+                    headers: await issued.allHeaders(),
+                    body: issued.postDataBuffer() ?? undefined,
+                  });
+                  return route.fulfill({
+                    status: response.status,
+                    headers: Object.fromEntries(response.headers),
+                    body: Buffer.from(await response.arrayBuffer()),
+                  });
+                });
+              },
+              async verification(receipt: string) {
+                const item = (await inbox.lease()).find(
+                  (mail) =>
+                    mail.leadId === receipt && mail.kind === 'verification',
+                );
+                expect(item).toBeDefined();
+                return item!.mail.url;
+              },
+              async counts(receipt: string) {
+                expect(
+                  await dbs[2]
+                    .prepare(
+                      'SELECT id FROM sales_leads WHERE id=? AND listing_id=?',
+                    )
+                    .bind(receipt, listing)
+                    .first('id'),
+                ).toBe(receipt);
+                expect(
+                  await control
+                    .prepare(
+                      'SELECT receipt FROM agent_referral_receipts WHERE receipt=? AND listing_id=?',
+                    )
+                    .bind(receipt, listing)
+                    .first('receipt'),
+                ).toBe(receipt);
+                return {
+                  cases: await dbs[2]
+                    .prepare(
+                      'SELECT count(*) AS n FROM sales_leads WHERE listing_id=?',
+                    )
+                    .bind(listing)
+                    .first('n'),
+                  attributions: await control
+                    .prepare(
+                      'SELECT count(*) AS n FROM agent_referral_receipts WHERE listing_id=?',
+                    )
+                    .bind(listing)
+                    .first('n'),
+                };
+              },
+              async reprice(nextPrice: typeof revisedPrice) {
+                const saved = await store.get(listing!);
+                const revision = await store.save(
+                  {
+                    ...saved.draft,
+                    priceSource: {
+                      kind: 'override',
+                      price: nextPrice,
+                      reason: 'Revised fixture price',
+                    },
+                  },
+                  saved.revision,
+                );
+                const review = await store.prepare(
+                  [{ id: listing!, revision }],
+                  observation,
+                );
+                await directory.reserve(workspace, {
+                  domain,
+                  listing: listing!,
+                  revision: review.items[0].after.revision,
+                });
+                await store.publish(review.id, observation);
+              },
+              async withdraw() {
+                const saved = await store.get(listing!);
+                await store.unpublish(listing!, saved.revision);
+              },
+            };
+          },
+          async cleanup() {
+            if (listing) {
+              await control.batch([
+                ...[
+                  'agent_referral_receipts',
+                  'agent_referral_optins',
+                  'agent_catalog_events',
+                  'agent_catalog_index',
+                  'agent_catalog_search',
+                  'public_domain_routes',
+                ].map((table) =>
+                  control
+                    .prepare('DELETE FROM ' + table + ' WHERE domain=?')
+                    .bind(domain),
+                ),
+              ]);
+              await dbs[2].batch([
+                dbs[2]
+                  .prepare('DELETE FROM sales_leads WHERE listing_id=?')
+                  .bind(listing),
+                dbs[2]
+                  .prepare('DELETE FROM sale_drafts WHERE id=?')
+                  .bind(listing),
+              ]);
+            }
+            await control
+              .prepare('DELETE FROM users WHERE id=?')
+              .bind(reviewer)
+              .run();
+            const cases = await dbs[2]
+              .prepare(
+                'SELECT count(*) AS n FROM sales_leads WHERE listing_id=?',
+              )
+              .bind(listing ?? '')
+              .first('n');
+            const attributions = await control
+              .prepare(
+                'SELECT count(*) AS n FROM agent_referral_receipts WHERE domain=?',
+              )
+              .bind(domain)
+              .first('n');
+            expect({ cases, attributions }).toEqual({
+              cases: 0,
+              attributions: 0,
+            });
+            return { cases, attributions };
+          },
+        },
+        evidence,
+      );
+    } finally {
+      await browser.close();
+      console.info(JSON.stringify(evidence));
+    }
+  },
+  120000,
+);

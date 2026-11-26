@@ -33,3 +33,9 @@ The optional pilot uses one verified partner. Apply control migration `0029_agen
 Owners choose **Share this revision** in **Account → Agent listings**. Opt-out revokes existing links. A price change requires the seller to opt in the newly published revision. Buyers submit and verify each offer through Sales. **Referred offers** links owners to the original Inbox case. An accepted referral is recorded before the buyer receives a successful response. Identical retries use the same Sales request key and attribution.
 
 The pilot can run independently of checkout. Before enabling a real partner, test the partner credential, live price, revision change, withdrawal, opt-out, browser offer and matching verified Sales case in staging.
+
+### Referral browser qualification
+
+Install `playwright-core` in a temporary tool directory and set `DOMBOT_UI_QA_TOOLS` to its absolute path. Use `DOMBOT_UI_QA_CHROME` if Chrome is installed outside the default macOS path. Run `npx vitest run src/hosted/public-domain-routes.test.ts` for Chrome desktop and mobile against disposable Miniflare data and captured verification mail.
+
+To run against isolated Summit staging, invoke `node scripts/referral-browser-qualification.mjs PRIVATE_FIXTURE_DRIVER EVIDENCE_JSON`. The private driver allocates one `referral-qa-<8 hex>.example` fixture, signs in the controlled seller, finds the verification email in the controlled buyer inbox, and checks the listing-wide case and referral counts. It must republish the planned price, withdraw through the scoped fixture, and independently confirm cleanup in `finally`, including if preparation fails. The driver and output stay private. Browser, feed, consent, replay and conversation checks are shared with the local run.
