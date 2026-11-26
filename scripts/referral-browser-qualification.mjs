@@ -19,7 +19,7 @@ export async function launchReferralBrowser(tools) {
     executablePath:
       process.env.DOMBOT_UI_QA_CHROME ??
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
+    headless: process.env.DOMBOT_UI_QA_HEADFUL !== '1',
     args: ['--disable-extensions', '--no-first-run'],
   });
 }
@@ -98,48 +98,50 @@ export async function qualifyReferrals(browser, fixture, evidence) {
     return url.href;
   };
   const checked = (name) => evidence.checks.push(name);
-  const sellerPage = await openPage({ width: 1366, height: 820 }, true);
-  const desktop = await openPage({ width: 1366, height: 820 });
-  const mobile = await openPage({ width: 390, height: 844 });
-  const card = sellerPage.locator('article').filter({
-    has: sellerPage.getByRole('link', { name: domain, exact: true }),
-  });
-  const dashboard = origin + '/account/agent-listings';
-  const consent = async (label) => {
-    await sellerPage.goto(dashboard);
-    const posted = sellerPage.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' && r.url() === dashboard + '/referrals',
-    );
-    await card.getByRole('button', { name: label, exact: true }).click();
-    const result = await posted;
-    assert.equal(
-      result.status(),
-      303,
-      'Seller consent POST must redirect after saving',
-    );
-    await sellerPage.waitForURL(dashboard);
-  };
-  const listing = async (page, url) => {
-    assert.equal((await page.goto(url)).status(), 200);
-    await page
-      .getByText(
-        'This offer will be marked as a referral from ' + partnerName + '.',
-        { exact: true },
-      )
-      .waitFor();
-    const radio = page.getByRole('radio', { name: 'Make an offer' });
-    if (await radio.count()) await radio.check();
-    await page.locator('#offer').waitFor();
-    assert(
-      await page
-        .locator('main')
-        .evaluate(
-          (el) => el.scrollWidth <= document.documentElement.clientWidth,
-        ),
-    );
-  };
   try {
+    const sellerPage = await openPage({ width: 1366, height: 820 }, true);
+    const desktop = await openPage({ width: 1366, height: 820 });
+    const mobile = await openPage({ width: 390, height: 844 });
+    const card = sellerPage.locator('article').filter({
+      has: sellerPage.getByRole('link', { name: domain, exact: true }),
+    });
+    const dashboard = origin + '/account/agent-listings';
+    const consent = async (label) => {
+      await sellerPage.goto(dashboard);
+      const [result] = await Promise.all([
+        sellerPage.waitForResponse(
+          (r) =>
+            r.request().method() === 'POST' &&
+            r.url() === dashboard + '/referrals',
+        ),
+        card.getByRole('button', { name: label, exact: true }).click(),
+      ]);
+      assert.equal(
+        result.status(),
+        303,
+        'Seller consent POST must redirect after saving',
+      );
+      await sellerPage.waitForURL(dashboard);
+    };
+    const listing = async (page, url) => {
+      assert.equal((await page.goto(url)).status(), 200);
+      await page
+        .getByText(
+          'This offer will be marked as a referral from ' + partnerName + '.',
+          { exact: true },
+        )
+        .waitFor();
+      const radio = page.getByRole('radio', { name: 'Make an offer' });
+      if (await radio.count()) await radio.check();
+      await page.locator('#offer').waitFor();
+      assert(
+        await page
+          .locator('main')
+          .evaluate(
+            (el) => el.scrollWidth <= document.documentElement.clientWidth,
+          ),
+      );
+    };
     assert.equal((await feed('invalid-synthetic-partner-token')).status, 401);
     assert.deepEqual(await entries(), []);
     await consent('Share this revision');
@@ -174,13 +176,21 @@ export async function qualifyReferrals(browser, fixture, evidence) {
     await mobile.locator('#email').fill(buyer);
     await mobile.locator('#offer').fill(initialPrice.amount);
     await mobile.locator('#message').fill('Synthetic referral qualification.');
-    const pendingPost = mobile.waitForRequest(
-      (r) =>
-        r.method() === 'POST' &&
-        new URL(r.url()).pathname === '/' + domain + '/inquiries',
-    );
-    await mobile.getByRole('button', { name: /Send (inquiry|offer)/i }).click();
-    const submitted = await pendingPost;
+    const submit = mobile.getByRole('button', {
+      name: /Send (inquiry|offer)/i,
+    });
+    await submit.click({
+      trial: true,
+      timeout: fixture.challengeTimeout ?? 20000,
+    });
+    const [submitted] = await Promise.all([
+      mobile.waitForRequest(
+        (r) =>
+          r.method() === 'POST' &&
+          new URL(r.url()).pathname === '/' + domain + '/inquiries',
+      ),
+      submit.click(),
+    ]);
     const receiptLabel = mobile.locator('.receipt');
     await receiptLabel.waitFor();
     const receipt = (await receiptLabel.textContent()).match(
@@ -235,18 +245,20 @@ export async function qualifyReferrals(browser, fixture, evidence) {
       .waitFor();
     const reply = 'Synthetic seller reply from the Sales Inbox.';
     await sellerPage.locator('#inquiry-reply').fill(reply);
-    const replyResponse = sellerPage.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        new URL(r.url()).pathname.endsWith(
-          '/sales/inbox/' + receipt + '/messages',
-        ),
-    );
-    await sellerPage
-      .getByRole('button', { name: 'Queue email reply', exact: true })
-      .click();
+    const [replyResponse] = await Promise.all([
+      sellerPage.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith(
+            '/sales/inbox/' + receipt + '/messages',
+          ),
+      ),
+      sellerPage
+        .getByRole('button', { name: 'Queue email reply', exact: true })
+        .click(),
+    ]);
     assert.equal(
-      (await replyResponse).status(),
+      replyResponse.status(),
       200,
       'Expected the Sales Inbox reply to be saved',
     );
