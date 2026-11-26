@@ -1,9 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "types": [
       "node",
       "./hosted-configuration.d.ts",
@@ -15,6 +13,7 @@
     "src/hosted/gateway.ts",
     "src/agent-readiness/worker.ts",
     "src/hosted/gateway-worker.ts",
+    "src/hosted/checkout-simulator-worker.ts",
     "src/hosted/lander-edge.ts",
     "src/hosted/accounts.ts",
     "src/hosted/crypto.ts",
@@ -27,7 +26,5 @@
     "src/hosted/provisioner.ts",
     "provisioning-configuration.d.ts"
   ],
-  "exclude": [
-    "src/**/*.test.ts"
-  ]
+  "exclude": ["src/**/*.test.ts"]
 }

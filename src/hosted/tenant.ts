@@ -1,3 +1,4 @@
+import { readCheckoutCase } from './checkout-case-reader';
 import { publicSite } from './public-site';
 import { publicDomainEligibility } from './public-domain-reader';
 import {
@@ -33,6 +34,8 @@ export default {
       );
     }
     const platformPath = new URL(request.url).pathname;
+    if (platformPath === '/platform-internal/checkout-case')
+      return readCheckoutCase(request, env);
     if (
       [
         '/platform-internal/public-domain',

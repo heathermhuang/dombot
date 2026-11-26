@@ -1,4 +1,9 @@
 import {
+  checkoutRoutes,
+  reconcileStagingCheckout,
+  stagingBuyerCheckout,
+} from './checkout-routes';
+import {
   bindReferralOffer,
   pruneReferralActivity,
   recordReferral,
@@ -451,6 +456,10 @@ app.get('/', (c) =>
   ),
 );
 app.route('/', agentRoutes);
+app.route(
+  '/',
+  checkoutRoutes((request, env) => account(env).session(readSession(request))),
+);
 app.get('/:domain/llms.txt', (c) =>
   agentDiscovery(c.req.raw, c.env, c.req.param('domain')),
 );
@@ -2274,6 +2283,27 @@ app.all('/w/:workspace/*', async (c) => {
     status: response.status,
     headers: resultHeaders,
   });
+  const threadToken = /^\/t\/([A-Za-z0-9_-]{43})$/.exec(path)?.[1];
+  if (threadToken && c.req.method === 'GET' && response.ok) {
+    const checkout = await stagingBuyerCheckout(c.env, id, threadToken).catch(
+      () => '',
+    );
+    if (checkout) {
+      resultHeaders.delete('content-length');
+      return new HTMLRewriter()
+        .on('section.conversation', {
+          element: (section) => {
+            section.append(checkout, { html: true });
+          },
+        })
+        .transform(
+          new Response(proxied.body, {
+            status: proxied.status,
+            headers: resultHeaders,
+          }),
+        );
+    }
+  }
   if (
     !publicRequest &&
     owner &&
@@ -2326,6 +2356,7 @@ export default {
       drainLanderConnections,
       continueRenewalPricing,
       refreshAgentCatalog,
+      reconcileStagingCheckout,
     ]) {
       try {
         await task(env);
