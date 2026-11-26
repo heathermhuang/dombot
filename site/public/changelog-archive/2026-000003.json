@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-255",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Add the public agent catalog and verified buyer conversations",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #255 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #255",
+          "url": "https://github.com/heathermhuang/dombot/pull/255"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-3f2c304e1a0e794c25c33348bbea1a802c575d38-53",
       "date": "2026-11-25",
       "layer": "saas",
