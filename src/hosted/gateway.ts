@@ -1,3 +1,4 @@
+import { offMarketIntake } from './off-market-intake';
 import {
   bindReferralOffer,
   pruneReferralActivity,
@@ -451,6 +452,25 @@ app.get('/', (c) =>
   ),
 );
 app.route('/', agentRoutes);
+app.on(
+  ['GET', 'POST'],
+  '/request-domain',
+  bodyLimit({ maxSize: 16_384 }),
+  async (c) => {
+    const result = await offMarketIntake(c.req.raw, c.env);
+    if (result instanceof Response) return result;
+    if (c.req.method === 'POST' && result.response.status === 202) {
+      try {
+        c.executionCtx.waitUntil(
+          drainSalesWorkspace(c.env, result.workspace).catch(() => {}),
+        );
+      } catch {
+        /* No Worker context in route fixtures. */
+      }
+    }
+    return result.response;
+  },
+);
 app.get('/:domain/llms.txt', (c) =>
   agentDiscovery(c.req.raw, c.env, c.req.param('domain')),
 );
@@ -1676,6 +1696,7 @@ app.all('/w/:workspace/*', async (c) => {
     /^\/p\/[a-z0-9-]+(?:\/c\/[a-z0-9-]+)?$/.test(path) ||
     salesPublicPath(path, c.req.method);
   if (
+    path === '/request-domain' ||
     path.startsWith('/sales-internal') ||
     path.startsWith('/platform-internal')
   )

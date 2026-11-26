@@ -2,7 +2,10 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Miniflare, convertV4MiniflareOptions, Request } from 'miniflare';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync } from 'node:fs';
-import { sqlStatements } from '../../scripts/prepare-on-demand.mjs';
+import {
+  bootstrapStatements,
+  sqlStatements,
+} from '../../scripts/prepare-on-demand.mjs';
 import { tokenHash } from './crypto';
 import { signGatewayRequest, PROOF_HEADER } from '../shared/gateway-proof';
 
@@ -21,12 +24,12 @@ beforeAll(async () => {
     })
   ).outputFiles[0].text;
   schema = JSON.stringify({
-    statements: readdirSync('migrations')
-      .filter((f) => f.endsWith('.sql'))
-      .sort()
-      .flatMap((file) =>
-        sqlStatements(readFileSync('migrations/' + file, 'utf8')),
-      ),
+    statements: bootstrapStatements(
+      readdirSync('migrations')
+        .filter((f) => f.endsWith('.sql'))
+        .sort()
+        .map((file) => [file, readFileSync('migrations/' + file, 'utf8')]),
+    ),
   });
 });
 afterEach(async () => {
@@ -125,6 +128,63 @@ describe('new tenant schema bootstrap', () => {
         .first('n'),
     ).toBe(0);
   });
+  it('preserves listed cases, messages, links and outbox rows across the unlisted tenant migration', async () => {
+    const db = await create();
+    const apply = (file: string) =>
+      db.batch(
+        sqlStatements(readFileSync('migrations/' + file, 'utf8')).map((sql) =>
+          db.prepare(sql),
+        ),
+      );
+    for (const file of readdirSync('migrations')
+      .filter((file) => file.endsWith('.sql') && !file.startsWith('0013'))
+      .sort())
+      await apply(file);
+    await db.batch([
+      db.prepare(
+        "INSERT INTO sale_drafts(id,domain_hash,revision,operational_revision,availability,updated_at,sealed) VALUES('listing','digest','revision','operational','available',1,'draft')",
+      ),
+      db.prepare(
+        "INSERT INTO sales_leads(id,listing_id,request_hash,payload_hash,email_hash,revision,verification,created_at,updated_at,sealed) VALUES('case','listing','request','payload','email','state','verified',1,1,'case cipher')",
+      ),
+      db.prepare(
+        "INSERT INTO sales_messages(id,lead_id,request_hash,payload_hash,direction,created_at,sealed,sequence) VALUES('reply','case','message-request','message-payload','reply',1,'reply cipher',1)",
+      ),
+      db.prepare(
+        "INSERT INTO sales_tokens(token_hash,purpose,lead_id,expires_at,grant_id) VALUES('token','thread','case',2,'confirmation-thread')",
+      ),
+      db.prepare(
+        "INSERT INTO sales_outbox(id,dedupe_key,lead_id,kind,state,due_at,sealed,updated_at) VALUES('mail','dedupe','case','buyer-reply','accepted',1,'mail cipher',1)",
+      ),
+    ]);
+    const tables = [
+      'sales_leads',
+      'sales_messages',
+      'sales_tokens',
+      'sales_outbox',
+    ];
+    const read = async () =>
+      (
+        await Promise.all(
+          tables.map((table) => db.prepare('SELECT * FROM ' + table).all()),
+        )
+      ).map(({ results }) => results);
+    const before = await read();
+    await apply('0013_unlisted_domain_inquiries.sql');
+    expect(await read()).toEqual(before);
+    expect(
+      (
+        await db
+          .prepare(
+            `SELECT "notnull" AS required FROM pragma_table_info('sales_leads') WHERE name='listing_id'`,
+          )
+          .first()
+      ).required,
+    ).toBe(0);
+    await db.prepare("DELETE FROM sale_drafts WHERE id='listing'").run();
+    expect(await read()).toEqual([[], [], [], []]);
+  });
+
   it('refuses an existing database and preserves its records', async () => {
     const db = await create();
     await db.exec(

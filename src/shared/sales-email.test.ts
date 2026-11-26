@@ -6,7 +6,7 @@ import {
 } from './sales-email';
 import { renderSalesLander } from './render-sales-lander';
 
-const context: SalesEmailContext = {
+const context = {
   name: 'Sample <Buyer>',
   email: 'buyer@example.com',
   message: 'Can we discuss this domain?\nMy budget is flexible.',
@@ -33,7 +33,7 @@ const context: SalesEmailContext = {
     direction: 'reply',
     createdAt: 1792382401000,
   },
-};
+} satisfies SalesEmailContext;
 describe('inquiry email experience', () => {
   it('includes full inquiry details and the relevant message in HTML and plain text', () => {
     const mail = renderSalesEmail(

@@ -78,7 +78,8 @@ export const BUNDLE_FORMAT = 'dombot-data';
 // v16 retains inquiry identity details and private submission metadata.
 // v17 retains private DNS recovery snapshots; imported jobs never resume.
 // v18 retains Dynadot provider recovery; older readers must not discard it.
-export const BUNDLE_VERSION = 18;
+// v19 retains private unlisted-domain inquiries without sale drafts.
+export const BUNDLE_VERSION = 19;
 
 export interface DataBundle {
   format: typeof BUNDLE_FORMAT;
@@ -100,6 +101,7 @@ export interface DataBundle {
     | 15
     | 16
     | 17
+    | 18
     | typeof BUNDLE_VERSION;
   exportedAt: string;
   /** Which DomBot wrote it (informational). */
@@ -173,6 +175,7 @@ export function parseBundle(
       15,
       16,
       17,
+      18,
       BUNDLE_VERSION,
     ].includes(head.version as number)
   ) {

@@ -32,6 +32,7 @@ export const salesBackupSchema = z
       z.literal(4),
       z.literal(5),
       z.literal(6),
+      z.literal(7),
     ]),
     dnsRecovery: z.array(landerRecoverySchema).max(100000).default([]),
     journey: z.array(journeyRowSchema).max(100000).default([]),
@@ -54,7 +55,7 @@ export const salesBackupSchema = z
         z
           .object({
             id: z.string().uuid(),
-            listingId: z.string().uuid(),
+            listingId: z.string().uuid().nullable(),
             verification: z.enum(['pending', 'verified', 'blocked', 'expired']),
             status: conversationStatusSchema,
             createdAt: z.number().int().nonnegative(),
@@ -95,7 +96,7 @@ export const salesBackupSchema = z
     if (
       drafts.size !== v.drafts.length ||
       leads.size !== v.leads.length ||
-      v.leads.some((l) => !drafts.has(l.listingId)) ||
+      v.leads.some((l) => l.listingId !== null && !drafts.has(l.listingId)) ||
       v.messages.some((m) => !leads.has(m.leadId))
     )
       ctx.addIssue({
@@ -122,11 +123,13 @@ export const salesBackupSchema = z
       new Set(v.messages.map((m) => `${m.leadId}:${m.sequence}`)).size !==
         v.messages.length ||
       new Set(v.events.map((e) => e.id)).size !== v.events.length ||
-      v.leads.some(
-        (l) =>
-          l.payload.snapshot.id !== l.listingId ||
-          l.payload.snapshot.domain !== draftsById.get(l.listingId)?.domain,
-      ) ||
+      v.leads.some((l) => {
+        const snapshot = l.payload.snapshot;
+        return 'kind' in snapshot
+          ? v.version < 7 || l.listingId !== null || l.payload.offer !== null
+          : snapshot.id !== l.listingId ||
+              snapshot.domain !== draftsById.get(snapshot.id)?.domain;
+      }) ||
       v.messages.some((m) =>
         m.direction === 'reply'
           ? m.payload.recipient !== leadsById.get(m.leadId)?.payload.email
@@ -199,7 +202,7 @@ export async function exportSales(
   const open = async (r: Record<string, unknown>) =>
     JSON.parse(await store.cipher.open(String(r.sealed)));
   return salesBackupSchema.parse({
-    version: 6,
+    version: 7,
     dnsRecovery: await exportLanderRecovery(store),
     journey: (await journeyReady(store.db))
       ? (await read('sales_journey_daily')).map((r) => ({

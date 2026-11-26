@@ -11,13 +11,16 @@ import {
 import { z } from 'zod';
 import {
   inquirySchema,
-  publishedSaleSchema,
+  salesCaseSnapshotSchema,
+  unlistedInquirySchema,
   conversationStatusSchema,
   saleMoneySchema,
   saleMinorUnits,
   messageSchema,
   type SaleInquiry,
   type PublishedSale,
+  type UnlistedInquiry,
+  type SalesCaseSnapshot,
   type DeliveryState,
 } from '../shared/hosted-sales';
 import { conflict, SalesError } from '../shared/sales-review';
@@ -37,7 +40,7 @@ export const leadPayloadSchema = z
     email: z.string().email().max(254),
     message: z.string().max(4000),
     offer: saleMoneySchema.nullable(),
-    snapshot: publishedSaleSchema,
+    snapshot: salesCaseSnapshotSchema,
     buyerDetails: buyerDetailsSchema.optional(),
     requestMetadata: inquiryRequestSchema.optional(),
   })
@@ -62,7 +65,7 @@ const token = () => toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
 const confirmationThreadGrant = 'confirmation-thread';
 type LeadRow = {
   id: string;
-  listing_id: string;
+  listing_id: string | null;
   revision: string;
   verification: string;
   status: string;
@@ -71,6 +74,9 @@ type LeadRow = {
   follow_up_at: number | null;
   sealed: string;
 };
+type InquiryInput = SaleInquiry | UnlistedInquiry;
+const inquiryScope = (input: InquiryInput, listing: string | null) =>
+  listing ?? ('domain' in input ? 'unlisted-domain' : '');
 export class SalesInquiryStore {
   constructor(
     readonly sales: SalesStore,
@@ -109,12 +115,12 @@ export class SalesInquiryStore {
       );
   }
   async receipt(
-    input: SaleInquiry,
-    listing: string,
+    input: InquiryInput,
+    listing: string | null,
   ): Promise<{ id: string; status: 'verification-pending' } | null> {
     const request = await this.sales.hash(
       'request',
-      `${listing}:${input.idempotencyKey}`,
+      `${inquiryScope(input, listing)}:${input.idempotencyKey}`,
     );
     const r = await this.db
       .prepare('SELECT id,payload_hash FROM sales_leads WHERE request_hash=?')
@@ -127,14 +133,14 @@ export class SalesInquiryStore {
       );
     return { id: r.id, status: 'verification-pending' };
   }
-  payloadHash(v: SaleInquiry) {
+  payloadHash(v: InquiryInput) {
     return this.sales.hash(
       'payload',
       JSON.stringify([
-        v.observedRevision,
+        'domain' in v ? v.domain : v.observedRevision,
         v.name,
         v.email,
-        v.offer,
+        'offer' in v ? v.offer : null,
         v.message,
         ...(v.buyerDetails ? [v.buyerDetails] : []),
       ]),
@@ -218,6 +224,28 @@ export class SalesInquiryStore {
         'QUESTIONS_DISABLED',
         'Questions are currently unavailable for this listing.',
       );
+    return this.saveInquiry(input, snapshot, requestMetadata);
+  }
+  async intakeUnlisted(
+    value: UnlistedInquiry,
+    requestMetadata?: InquiryRequest,
+  ) {
+    const input = unlistedInquirySchema.parse(value);
+    return this.saveInquiry(
+      input,
+      { kind: 'unlisted-domain', domain: input.domain },
+      requestMetadata,
+    );
+  }
+  private async saveInquiry(
+    input: InquiryInput,
+    snapshot: SalesCaseSnapshot,
+    requestMetadata?: InquiryRequest,
+  ): Promise<{ id: string; status: 'verification-pending' }> {
+    const listing = 'id' in snapshot ? snapshot.id : null;
+    const previous = await this.receipt(input, listing);
+    if (previous) return previous;
+    const offer = 'offer' in input ? input.offer : null;
     await this.reserve(`recipient:${input.email}`, 10, 86400_000);
     await this.reserve('workspace-intake', 100, 86400_000);
     const emailHash = await this.sales.hash('email', input.email);
@@ -248,20 +276,22 @@ export class SalesInquiryStore {
     });
     try {
       await this.sales.atomic([
-        ...this.sales.guard(
-          "EXISTS(SELECT 1 FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id=? AND p.revision=? AND d.availability IN ('available','source-stale') AND d.control_expires_at>? AND (?=0 OR (d.availability='available' AND COALESCE(json_extract(p.payload,'$.sourceValidUntil'),9223372036854775807)>?)))",
-          [snapshot.id, input.observedRevision, now, input.offer ? 1 : 0, now],
-        ),
+        ...('observedRevision' in input
+          ? this.sales.guard(
+              "EXISTS(SELECT 1 FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id=? AND p.revision=? AND d.availability IN ('available','source-stale') AND d.control_expires_at>? AND (?=0 OR (d.availability='available' AND COALESCE(json_extract(p.payload,'$.sourceValidUntil'),9223372036854775807)>?)))",
+              [listing, input.observedRevision, now, offer ? 1 : 0, now],
+            )
+          : []),
         this.db
           .prepare(
             "INSERT INTO sales_leads(id,listing_id,request_hash,payload_hash,email_hash,revision,verification,created_at,updated_at,sealed) VALUES(?,?,?,?,?,?,'pending',?,?,?)",
           )
           .bind(
             id,
-            snapshot.id,
+            listing,
             await this.sales.hash(
               'request',
-              `${snapshot.id}:${input.idempotencyKey}`,
+              `${inquiryScope(input, listing)}:${input.idempotencyKey}`,
             ),
             await this.payloadHash(input),
             emailHash,
@@ -272,7 +302,7 @@ export class SalesInquiryStore {
               name: input.name,
               email: input.email,
               message: input.message,
-              offer: input.offer,
+              offer,
               snapshot,
               ...(input.buyerDetails
                 ? { buyerDetails: input.buyerDetails }
@@ -289,7 +319,7 @@ export class SalesInquiryStore {
         mail,
       ]);
     } catch (e) {
-      const raced = await this.receipt(input, snapshot.id);
+      const raced = await this.receipt(input, listing);
       if (raced) return raced;
       throw e;
     }
@@ -370,12 +400,13 @@ export class SalesInquiryStore {
       }
     }
     const lead = await this.lead(grant.lead_id);
-    await recordJourney(
-      this.db,
-      lead.listing_id,
-      'inquiry-verified',
-      grant.lead_id,
-    );
+    if (lead.listing_id)
+      await recordJourney(
+        this.db,
+        lead.listing_id,
+        'inquiry-verified',
+        grant.lead_id,
+      );
     const active = await this.token(thread, 'thread');
     return active?.lead_id === lead.id &&
       active.verification === 'verified' &&
@@ -425,6 +456,7 @@ export class SalesInquiryStore {
         return {
           id: l.id,
           domain: l.payload.snapshot.domain,
+          ...(!l.listing_id ? { kind: 'unlisted-domain' as const } : {}),
           name: l.payload.name,
           offer: l.payload.offer,
           revision: l.revision,
@@ -585,7 +617,9 @@ export class SalesInquiryStore {
       followUpAt: l.follow_up_at,
       deliveries: deliveries.results,
       outcomes,
-      saleEvidence: saleEvidenceChoices(l.payload.snapshot.domain),
+      saleEvidence: l.listing_id
+        ? saleEvidenceChoices(l.payload.snapshot.domain)
+        : [],
     };
   }
   async message(
@@ -759,6 +793,11 @@ export class SalesInquiryStore {
         this.db
           .prepare('DELETE FROM sales_suppression WHERE email_hash=?')
           .bind(await this.sales.hash('suppression-email', l.payload.email)),
+      );
+    if (!l.listing_id && (outcome || status === 'agreed'))
+      throw new SalesError(
+        'UNLISTED_INQUIRY',
+        'This inquiry has no sale listing.',
       );
     if (outcome) {
       outcome = saleOutcomeSchema.parse(outcome);

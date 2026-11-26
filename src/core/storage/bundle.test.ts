@@ -58,7 +58,7 @@ describe('buildBundle', () => {
     );
     expect(b.namespaces.meta).toBeUndefined();
     expect(b.namespaces.auth).toBeUndefined();
-    expect(b.version).toBe(18);
+    expect(b.version).toBe(19);
     expect(b.namespaces['registrar-credentials'].godaddy).toEqual({
       apiToken: 'k',
     });
@@ -269,7 +269,7 @@ describe('export → import', () => {
     const v4 = { ...buildBundle(APP), version: 4 };
     await importBundle(JSON.stringify(v4));
     expect(getFolders().folders.map((f) => f.name)).toEqual(['Keepers']);
-    expect(buildBundle(APP).version).toBe(18);
+    expect(buildBundle(APP).version).toBe(19);
     expect(() =>
       parseBundle(JSON.stringify({ ...v4, version: BUNDLE_VERSION + 1 })),
     ).toThrow(/newer Domains\.Domains/);
@@ -310,7 +310,7 @@ describe('export → import', () => {
     };
     await importBundle(JSON.stringify(bundle));
     const restored = buildBundle(APP);
-    expect(restored.version).toBe(18);
+    expect(restored.version).toBe(19);
     expect(restored.namespaces['market-accounts']).toEqual(
       bundle.namespaces['market-accounts'],
     );

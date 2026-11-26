@@ -172,6 +172,18 @@ export const publishedSaleSchema = z
   })
   .strict();
 export type PublishedSale = z.infer<typeof publishedSaleSchema>;
+export const unlistedDomainSnapshotSchema = z
+  .object({
+    kind: z.literal('unlisted-domain'),
+    domain: saleDomainSchema,
+  })
+  .strict();
+export const salesCaseSnapshotSchema = z.union([
+  publishedSaleSchema,
+  unlistedDomainSnapshotSchema,
+]);
+export type SalesCaseSnapshot = z.infer<typeof salesCaseSnapshotSchema>;
+
 export const shopDraftSchema = z
   .object({
     version: z.literal(1),
@@ -186,7 +198,7 @@ export const shopDraftSchema = z
     'Select each listing once.',
   );
 export type SaleShop = z.infer<typeof shopDraftSchema>;
-export const inquirySchema = z
+const inquiryFields = z
   .object({
     observedRevision: z.string().uuid(),
     idempotencyKey: z.string().uuid(),
@@ -207,9 +219,17 @@ export const inquirySchema = z
     turnstileToken: z.string().max(2048),
     website: z.literal(''),
   })
-  .strict()
-  .refine((v) => !!v.offer || !!v.message, 'Enter a message or offer.');
+  .strict();
+export const inquirySchema = inquiryFields.refine(
+  (v) => !!v.offer || !!v.message,
+  'Enter a message or offer.',
+);
 export type SaleInquiry = z.infer<typeof inquirySchema>;
+export const unlistedInquirySchema = inquiryFields
+  .omit({ observedRevision: true, offer: true })
+  .extend({ domain: saleDomainSchema })
+  .refine((value) => !!value.message, 'Enter a message.');
+export type UnlistedInquiry = z.infer<typeof unlistedInquirySchema>;
 export const conversationStatusSchema = z.enum([
   'new',
   'negotiating',

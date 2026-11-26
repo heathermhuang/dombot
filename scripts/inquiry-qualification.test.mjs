@@ -7,6 +7,12 @@ import { sqlStatements } from './prepare-on-demand.mjs';
 import { SalesStore, readPublicSale } from '../src/worker/sales-store';
 import { SalesInquiryStore } from '../src/worker/sales-inquiry-store';
 import { createPublicSalesRoutes } from '../src/worker/public-sales';
+import gateway from '../src/hosted/gateway';
+import {
+  exportSales,
+  restoreSales,
+  salesBackupSchema,
+} from '../src/worker/sales-backup';
 import { createSalesInternalRoutes } from '../src/worker/sales-internal';
 import { emptySale } from '../src/shared/hosted-sales';
 import { sourcePriceFingerprint } from '../src/core/publication/sales';
@@ -16,14 +22,18 @@ import {
   drainSalesWorkspace,
   salesRecipientHash,
 } from '../src/hosted/sales-notifications';
-let mf, db, control;
+let mf, db, control, unlisted;
 beforeAll(async () => {
   mf = new Miniflare(
     convertV4MiniflareOptions({
       cf: false,
       modules: true,
       script: 'export default {fetch(){return new Response("fixture")}}',
-      d1Databases: { DB: 'inquiry-local', CONTROL: 'inquiry-control-local' },
+      d1Databases: {
+        DB: 'inquiry-local',
+        CONTROL: 'inquiry-control-local',
+        UNLISTED: 'unlisted-local',
+      },
       outboundService: () => {
         throw Error('External access forbidden');
       },
@@ -31,9 +41,11 @@ beforeAll(async () => {
   );
   db = await mf.getD1Database('DB');
   control = await mf.getD1Database('CONTROL');
+  unlisted = await mf.getD1Database('UNLISTED');
   for (const [directory, target] of [
     ['migrations', db],
     ['hosted/migrations', control],
+    ['migrations', unlisted],
   ])
     for (const name of readdirSync(directory)
       .filter((n) => n.endsWith('.sql'))
@@ -279,3 +291,266 @@ it('qualifies submit, captured confirmation mail, conversation/reply, replay, ra
     ),
   ).toBeGreaterThan(0);
 }, 15000);
+
+it('accepts one private unlisted-domain case in the designated queue and preserves the verified conversation', async () => {
+  configureStore(new MemoryDocStore());
+  await hydrateStores();
+  const workspace = crypto.randomUUID(),
+    reviewer = crypto.randomUUID();
+  const other = crypto.randomUUID();
+  const key = 'synthetic-unlisted-gateway'.repeat(3);
+  const origin = 'https://domains-intake-qa-abcdef01.fixture.workers.dev';
+  const buyer = 'unlisted-buyer@fixture.invalid';
+  const owner = 'unlisted-reviewer@fixture.invalid';
+  const tenantEnv = {
+    DB: unlisted,
+    DOMBOT_SECRET: btoa('u'.repeat(32)),
+    DOMBOT_GATEWAY_SECRET: key,
+    DOMBOT_WORKSPACE_ID: workspace,
+    DOMBOT_AUTH: 'gateway',
+    DOMBOT_SALES_ORIGIN: origin + '/w/' + workspace,
+    DOMBOT_PUBLIC_BASE_PATH: '/w/' + workspace,
+    SALES_INQUIRIES_ENABLED: 'true',
+    SALES_PRIVACY_REVIEWED: 'true',
+    SALES_TURNSTILE_SECRET: 'synthetic-only',
+    SALES_TURNSTILE_SITEKEY: 'synthetic-only',
+    SALES_MAIL_ENABLED: 'true',
+  };
+  const sales = await SalesStore.from(tenantEnv);
+  const inbox = new SalesInquiryStore(sales, tenantEnv.DOMBOT_SALES_ORIGIN);
+  const saved = emptySale('private-fixture.example', 'private fixture');
+  await sales.save(saved, null);
+  const app = new Hono();
+  app.route('/sales-internal', createSalesInternalRoutes());
+  app.route('/', createPublicSalesRoutes());
+  const mail = [];
+  const env = {
+    CONTROL_DB: control,
+    AUTH_PEPPER: 'synthetic-intake-pepper'.repeat(3),
+    CANONICAL_ORIGIN: origin,
+    OFF_MARKET_STAGING_REVIEWER: reviewer,
+    OFF_MARKET_STAGING_BUYER_EMAIL: buyer,
+    PUBLIC_REGISTRATION_ENABLED: 'false',
+    WORKSPACES: JSON.stringify([
+      {
+        id: workspace,
+        label: 'Controlled local reviewer',
+        binding: 'WORKSPACE_0',
+      },
+      { id: other, label: 'Other test account', binding: 'WORKSPACE_1' },
+    ]),
+    GATEWAY_KEYS: JSON.stringify({ [workspace]: key, [other]: key + '-other' }),
+    WORKSPACE_0: { fetch: (r) => app.fetch(r, tenantEnv) },
+    WORKSPACE_1: {
+      fetch: (r) =>
+        app.fetch(r, {
+          ...tenantEnv,
+          DB: db,
+          DOMBOT_WORKSPACE_ID: other,
+          DOMBOT_GATEWAY_SECRET: key + '-other',
+        }),
+    },
+    SALES_MAIL_ENABLED: 'true',
+    SALES_MAIL_DELIVERY_VERIFIED: 'true',
+    SALES_EMAIL_FROM: 'sales@mail.domains.domains',
+    SALES_MAIL_DAILY_LIMIT: '100',
+    SALES_MAIL_MONTHLY_LIMIT: '1000',
+    SALES_EMAIL: {
+      send: async (message) => {
+        mail.push(message);
+        return { messageId: 'unlisted-capture-' + mail.length };
+      },
+    },
+  };
+  await control.batch([
+    ...[workspace, other].map((id) =>
+      control
+        .prepare('INSERT INTO workspaces(id,label) VALUES(?,?)')
+        .bind(id, 'Local qualification'),
+    ),
+    control
+      .prepare(
+        'INSERT INTO users(id,email,workspace_id,password_hash,created_at) VALUES(?,?,?,?,?)',
+      )
+      .bind(reviewer, owner, workspace, 'fixture-only', Date.now()),
+    control
+      .prepare(
+        'INSERT INTO sales_verified_recipients(workspace_id,email_hash,verified_at) VALUES(?,?,?)',
+      )
+      .bind(workspace, salesRecipientHash(env, owner), Date.now()),
+  ]);
+  vi.stubGlobal('fetch', async (url) => {
+    expect(String(url)).toBe(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+    );
+    return Response.json({
+      success: true,
+      hostname: new URL(origin).hostname,
+      action: 'sales-inquiry',
+    });
+  });
+  const send = (path, options = {}, bindings = env) =>
+    gateway.fetch(new Request(origin + path, options), bindings);
+  const get = (path) => send(path);
+  const input = {
+    idempotencyKey: crypto.randomUUID(),
+    domain: 'private-fixture.example',
+    name: 'Synthetic inquirer',
+    email: buyer,
+    message: 'Private synthetic request.',
+    turnstileToken: 'fixture-only',
+    website: '',
+  };
+  const post = (path, data = input, caller = origin) =>
+    send(path, {
+      method: 'POST',
+      headers: {
+        Origin: caller,
+        'Content-Type': 'application/json',
+        'cf-connecting-ip': '192.0.2.47',
+      },
+      body: JSON.stringify(data),
+    });
+  const requestPath = '/request-domain';
+  try {
+    expect(
+      (
+        await send(
+          requestPath,
+          {},
+          { ...env, OFF_MARKET_STAGING_REVIEWER: undefined },
+        )
+      ).status,
+    ).toBe(404);
+    const form = await get(requestPath);
+    expect(form.status).toBe(200);
+    expect(await form.text()).not.toContain(saved.domain);
+    expect(
+      (await post(requestPath, input, 'https://other.example')).status,
+    ).toBe(403);
+    expect(
+      (await post(requestPath, { ...input, email: 'outside@fixture.invalid' }))
+        .status,
+    ).toBe(404);
+    expect((await get('/w/' + other + requestPath)).status).toBe(404);
+    const receipt = await post(requestPath);
+    expect(receipt.status).toBe(202);
+    const { id } = await receipt.json();
+    expect(await (await post(requestPath)).json()).toMatchObject({ id });
+    expect(
+      (await post(requestPath, { ...input, domain: 'other.example' })).status,
+    ).toBe(409);
+    const raw = await unlisted
+      .prepare('SELECT listing_id,sealed FROM sales_leads WHERE id=?')
+      .bind(id)
+      .first();
+    expect(raw.listing_id).toBeNull();
+    expect(raw.sealed).not.toContain(input.domain);
+    expect(
+      await unlisted
+        .prepare('SELECT count(*) AS n FROM sales_leads')
+        .first('n'),
+    ).toBe(1);
+    await drainSalesWorkspace(env, workspace);
+    expect(mail.map((message) => message.to)).toEqual([buyer]);
+    const verification = new URL(
+      mail[0].text.match(/https:\/\/[^\s]+\/i\/[A-Za-z0-9_-]{43}/)[0],
+    );
+    expect((await get(verification.pathname)).status).toBe(200);
+    const confirm = () =>
+      send(verification.pathname + '/confirm', {
+        method: 'POST',
+        headers: { Origin: origin },
+      });
+    const confirmed = await Promise.all([confirm(), confirm()]);
+    expect(confirmed.map((response) => response.status)).toEqual([303, 303]);
+    const thread = confirmed[0].headers.get('Location');
+    expect(confirmed[1].headers.get('Location')).toBe(thread);
+    expect((await get(thread.replace(workspace, other))).status).toBe(403);
+    expect(await (await get(thread)).text()).toContain(input.message);
+    const cases = (await inbox.list()).items;
+    expect(cases).toHaveLength(1);
+    expect(cases[0]).toMatchObject({
+      id,
+      domain: input.domain,
+      verification: 'verified',
+      kind: 'unlisted-domain',
+    });
+    const reply = 'Synthetic reviewer reply.';
+    await inbox.message(id, {
+      direction: 'reply',
+      body: reply,
+      revision: cases[0].revision,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    await drainSalesWorkspace(env, workspace);
+    expect(mail.map((message) => message.to)).toEqual([buyer, owner, buyer]);
+    expect(await (await get(thread)).text()).toContain(reply);
+    await inbox.freshLink(id);
+    await drainSalesWorkspace(env, workspace);
+    const renewed = new URL(
+      mail.at(-1).text.match(/https:\/\/[^\s]+\/t\/[A-Za-z0-9_-]{43}/)[0],
+    ).pathname;
+    expect(renewed).not.toBe(thread);
+    expect((await get(thread)).status).toBe(403);
+    expect(await (await get(renewed)).text()).toContain(reply);
+    const backup = await exportSales(sales);
+    expect(backup).toMatchObject({
+      version: 7,
+      leads: [
+        {
+          id,
+          listingId: null,
+          payload: {
+            snapshot: { kind: 'unlisted-domain', domain: input.domain },
+          },
+        },
+      ],
+    });
+    expect(salesBackupSchema.safeParse({ ...backup, version: 6 }).success).toBe(
+      false,
+    );
+    const current = await inbox.lead(id);
+    await inbox.update(id, current.revision, 'spam', null);
+    expect((await get(renewed)).status).toBe(403);
+    expect(
+      (
+        await post(requestPath, {
+          ...input,
+          idempotencyKey: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(503);
+    await inbox.remove(id, (await inbox.lead(id)).revision);
+    for (const table of [
+      'sales_leads',
+      'sales_messages',
+      'sales_tokens',
+      'sales_outbox',
+    ])
+      expect(
+        await unlisted.prepare('SELECT count(*) AS n FROM ' + table).first('n'),
+      ).toBe(0);
+    await restoreSales(sales, backup);
+    expect((await inbox.lead(id)).verification).toBe('expired');
+    expect((await inbox.thread(id)).messages[0].body).toBe(reply);
+    expect(
+      await unlisted
+        .prepare('SELECT count(*) AS n FROM sales_tokens')
+        .first('n'),
+    ).toBe(0);
+  } finally {
+    await unlisted.batch([
+      ...['sales_leads', 'sales_suppression', 'sale_drafts'].map((table) =>
+        unlisted.prepare('DELETE FROM ' + table),
+      ),
+      unlisted.prepare('DELETE FROM sales_events'),
+    ]);
+    expect(
+      await unlisted
+        .prepare('SELECT count(*) AS n FROM sales_leads')
+        .first('n'),
+    ).toBe(0);
+    vi.unstubAllGlobals();
+  }
+}, 20000);

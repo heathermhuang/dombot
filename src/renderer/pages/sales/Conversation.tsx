@@ -55,6 +55,8 @@ export default function Conversation({
       undefined,
     );
   const thread = remote.data;
+  const snapshot = thread?.original.snapshot;
+  const listed = snapshot && 'id' in snapshot ? snapshot : null;
   useEffect(() => {
     setOlder([]);
     setOlderCursor(undefined);
@@ -93,13 +95,16 @@ export default function Conversation({
               );
             }}
           />
-          <p className="small">
-            Original public terms:{' '}
-            {salePriceLabel(thread.original.snapshot.publicPrice)} ·{' '}
-            {saleModeLabel(thread.original.snapshot.mode)}
-            {thread.original.offer &&
-              ` · Buyer offer ${salePriceLabel(thread.original.offer)}`}
-          </p>
+          {listed ? (
+            <p className="small">
+              Original public terms: {salePriceLabel(listed.publicPrice)} ·{' '}
+              {saleModeLabel(listed.mode)}
+              {thread.original.offer &&
+                ` · Buyer offer ${salePriceLabel(thread.original.offer)}`}
+            </p>
+          ) : (
+            <p className="small">Unlisted-domain inquiry</p>
+          )}
           <div className="sales-toolbar">
             <span className="badge">
               {thread.verification === 'verified'
@@ -130,11 +135,13 @@ export default function Conversation({
                 'agreed',
                 'closed',
                 'spam',
-              ].map((s) => (
-                <option key={s} value={s}>
-                  {conversationStatusLabel(s)}
-                </option>
-              ))}
+              ]
+                .filter((s) => listed || s !== 'agreed')
+                .map((s) => (
+                  <option key={s} value={s}>
+                    {conversationStatusLabel(s)}
+                  </option>
+                ))}
             </select>
             <button onClick={() => downloadSales(`inquiry-${id}.json`, thread)}>
               Export loaded thread page
@@ -148,7 +155,9 @@ export default function Conversation({
           </button>
           <div className="message">
             <p className="small">
-              Buyer inquiry · snapshot {thread.original.snapshot.revision}
+              {listed
+                ? `Buyer inquiry · snapshot ${listed.revision}`
+                : 'Buyer inquiry'}
             </p>
             <p>
               {thread.original.message ||
@@ -364,115 +373,114 @@ export default function Conversation({
               </button>
             )}
           </section>
-          <details className="sales-section">
-            <summary>
-              Record a provider handoff or seller-entered outcome
-            </summary>
-            <p className="small">
-              Price agreed does not mean paid. A checkout click never marks a
-              sale paid automatically.
-            </p>
-            <p className="small">
-              Reports do not create completed revenue. Payment and transfer
-              reports hold new selling actions. Record actual transaction terms
-              in core Sales, then explicitly link the evidence here.
-            </p>
-            <Field label="Link a recorded sale (optional)">
-              <select
-                value={coreSale}
-                onChange={(e) => setCoreSale(e.target.value)}
-              >
-                <option value="">Keep as a seller report</option>
-                {thread.saleEvidence?.map((candidate) => (
-                  <option
-                    key={JSON.stringify(candidate.reference)}
-                    value={JSON.stringify(candidate.reference)}
-                  >
-                    {candidate.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Observed outcome">
-              <select
-                value={outcome}
-                onChange={(e) => setOutcome(e.target.value)}
-              >
-                {[
-                  'handed-off',
-                  'payment-reported',
-                  'transfer-reported',
-                  'completed',
-                  'canceled',
-                  'unknown',
-                ].map((v) => (
-                  <option key={v} value={v}>
-                    {outcomeLabel(v)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="grid-two">
-              <Field label="Reported price (optional)">
-                <input
-                  inputMode="decimal"
-                  value={outcomeAmount}
-                  onChange={(e) => setOutcomeAmount(e.target.value)}
+          {listed && (
+            <details className="sales-section">
+              <summary>
+                Record a provider handoff or seller-entered outcome
+              </summary>
+              <p className="small">
+                Price agreed does not mean paid. A checkout click never marks a
+                sale paid automatically.
+              </p>
+              <p className="small">
+                Reports do not create completed revenue. Payment and transfer
+                reports hold new selling actions. Record actual transaction
+                terms in core Sales, then explicitly link the evidence here.
+              </p>
+              <Field label="Link a recorded sale (optional)">
+                <select
+                  value={coreSale}
+                  onChange={(e) => setCoreSale(e.target.value)}
+                >
+                  <option value="">Keep as a seller report</option>
+                  {thread.saleEvidence?.map((candidate) => (
+                    <option
+                      key={JSON.stringify(candidate.reference)}
+                      value={JSON.stringify(candidate.reference)}
+                    >
+                      {candidate.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Observed outcome">
+                <select
+                  value={outcome}
+                  onChange={(e) => setOutcome(e.target.value)}
+                >
+                  {[
+                    'handed-off',
+                    'payment-reported',
+                    'transfer-reported',
+                    'completed',
+                    'canceled',
+                    'unknown',
+                  ].map((v) => (
+                    <option key={v} value={v}>
+                      {outcomeLabel(v)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="grid-two">
+                <Field label="Reported price (optional)">
+                  <input
+                    inputMode="decimal"
+                    value={outcomeAmount}
+                    onChange={(e) => setOutcomeAmount(e.target.value)}
+                  />
+                </Field>
+                <Field label="Currency">
+                  <input
+                    maxLength={3}
+                    value={outcomeCurrency}
+                    placeholder={listed.publicPrice?.currency ?? 'USD'}
+                    onChange={(e) =>
+                      setOutcomeCurrency(e.target.value.toUpperCase())
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Evidence / provider reference (private)">
+                <textarea
+                  value={evidence}
+                  maxLength={1000}
+                  onChange={(e) => setEvidence(e.target.value)}
                 />
               </Field>
-              <Field label="Currency">
-                <input
-                  maxLength={3}
-                  value={outcomeCurrency}
-                  placeholder={
-                    thread.original.snapshot.publicPrice?.currency ?? 'USD'
-                  }
-                  onChange={(e) =>
-                    setOutcomeCurrency(e.target.value.toUpperCase())
-                  }
-                />
-              </Field>
-            </div>
-            <Field label="Evidence / provider reference (private)">
-              <textarea
-                value={evidence}
-                maxLength={1000}
-                onChange={(e) => setEvidence(e.target.value)}
-              />
-            </Field>
-            <p className="small">
-              Reporting payment or transfer pauses all public sales controls for
-              this domain.
-            </p>
-            <button
-              disabled={!evidence.trim() || action.busy}
-              onClick={() =>
-                void action.run(async () => {
-                  await salesRequest(`/inbox/${id}`, 'PATCH', {
-                    revision: thread.revision,
-                    status: thread.status,
-                    followUpAt: thread.followUpAt,
-                    outcome: {
-                      state: outcome,
-                      ...(coreSale ? { coreSale: JSON.parse(coreSale) } : {}),
-                      source: 'seller-entered',
-                      evidence,
-                      price: outcomeAmount
-                        ? { amount: outcomeAmount, currency: outcomeCurrency }
-                        : null,
-                      provider:
-                        thread.original.snapshot.destination?.provider ??
-                        'Manual handoff',
-                    },
-                  });
-                  await remote.reload();
-                  action.setNotice('Seller-entered outcome recorded.');
-                })
-              }
-            >
-              Record outcome
-            </button>
-          </details>
+              <p className="small">
+                Reporting payment or transfer pauses all public sales controls
+                for this domain.
+              </p>
+              <button
+                disabled={!evidence.trim() || action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    await salesRequest(`/inbox/${id}`, 'PATCH', {
+                      revision: thread.revision,
+                      status: thread.status,
+                      followUpAt: thread.followUpAt,
+                      outcome: {
+                        state: outcome,
+                        ...(coreSale ? { coreSale: JSON.parse(coreSale) } : {}),
+                        source: 'seller-entered',
+                        evidence,
+                        price: outcomeAmount
+                          ? { amount: outcomeAmount, currency: outcomeCurrency }
+                          : null,
+                        provider:
+                          listed.destination?.provider ?? 'Manual handoff',
+                      },
+                    });
+                    await remote.reload();
+                    action.setNotice('Seller-entered outcome recorded.');
+                  })
+                }
+              >
+                Record outcome
+              </button>
+            </details>
+          )}
           <section className="sales-section">
             <button onClick={() => setDeleting(!deleting)}>
               Delete inquiry…
