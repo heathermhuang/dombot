@@ -114,6 +114,7 @@ export const reservedPortfolioHandles = new Set([
   'c',
   'confirm',
   'connect',
+  'connect-agent',
   'console',
   'export',
   'forgot-password',

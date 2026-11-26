@@ -1,17 +1,17 @@
 {
   "version": 3,
-  "totalEntries": 274,
+  "totalEntries": 278,
   "core": 81,
-  "saas": 193,
+  "saas": 197,
   "years": [
     {
       "year": "2026",
-      "count": 274,
+      "count": 278,
       "core": 81,
-      "saas": 193,
+      "saas": 197,
       "lastPart": 3,
       "oldest": "2026-08-30",
-      "newest": "2026-11-25",
+      "newest": "2026-11-26",
       "latest": {
         "all": "2026-000003",
         "core": "2026-000003",
@@ -23,7 +23,7 @@
     {
       "id": "2026-000000",
       "path": "changelog-archive-index/2026-000000.json",
-      "sha256": "7c32d50a992649e1b70e7cd7afb85a0a87b1d898b5e15b1603d286958217e410",
+      "sha256": "b70968f19e88c3557571fa8474eb88e12ae93fa3674195b788d13504c392a0e7",
       "year": "2026",
       "firstPart": 1,
       "lastPart": 3
@@ -33,13 +33,13 @@
     "signatures": {
       "aoxborrow/dombot:releases": "6b01dde09a8d89cc6f9aa679f2fe8831f94f304875c121c9300e882c13296632",
       "heathermhuang/dombot:releases": "21c94b981c98e89d6e301599c1d12c5d3b928cc7d7c1e469efe30fb6ac74d0f7",
-      "pulls": "db16084d6391eb8c0782f8f320cf09b1643587332b96505509517ede0fc307ba"
+      "pulls": "555d86eda26b53cc648e2e56f0b6147e99becf88ad9dc0663f09cbcf00f92397"
     },
     "upstreamHead": "5c0711da63ecbc2548b1466c4a39adf4ebd508f5",
-    "mainHead": "13b45e2aef4b7473dd4f5b06bed23800ef1525eb",
-    "gatewaySource": "94defe2e6a5ba5188ddc8a6b7d39029f568a3adc",
+    "mainHead": "de031da5177d60585773308c36b1a4d1db6c80c8",
+    "gatewaySource": "de031da5177d60585773308c36b1a4d1db6c80c8",
     "curationFingerprint": "cbc903f1301dc436abaa0869de5fdc2cba75396170c8d5918e1558f1536206d3",
-    "gatewayObservationSerial": 54,
+    "gatewayObservationSerial": 56,
     "releaseIds": {
       "aoxborrow/dombot:434617227": "core-2-1-0",
       "aoxborrow/dombot:432149358": "core-2-0-0",
@@ -52,6 +52,6 @@
       "heathermhuang/dombot:422392606": "saas-desktop-1-5-2",
       "heathermhuang/dombot:422382156": "saas-desktop-1-5-1"
     },
-    "archiveParent": "13b45e2aef4b7473dd4f5b06bed23800ef1525eb"
+    "archiveParent": "df56d50827e9ad8846a0454fcc0f5c18663c90f2"
   }
 }

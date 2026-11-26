@@ -6,6 +6,7 @@ import { Accounts } from './accounts';
 import {
   Registration,
   registrationReady,
+  emailReady,
   sendAccountEmail,
   issueRecovery,
 } from './registration';
@@ -101,6 +102,37 @@ beforeEach(async () => {
   registration = new Registration(db, env.AUTH_PEPPER, ids.slice(0, 2));
 });
 describe('verified public account creation', () => {
+  it('allows opted-in email sign-in for existing accounts on an exact isolated staging host', () => {
+    const origin = 'https://domains-summit-qa-123abcde.fixture.workers.dev';
+    const staging = {
+      ...env,
+      AUTH_EMAIL_STAGING_ORIGIN: origin,
+      CANONICAL_ORIGIN: origin,
+      PUBLIC_REGISTRATION_ENABLED: 'false',
+    };
+    expect(emailReady(staging)).toBe(true);
+    expect(registrationReady(staging)).toBe(false);
+    expect(
+      emailReady({ ...staging, AUTH_EMAIL_STAGING_ORIGIN: undefined }),
+    ).toBe(false);
+    expect(
+      emailReady({ ...staging, PUBLIC_REGISTRATION_ENABLED: 'true' }),
+    ).toBe(false);
+    expect(
+      emailReady({
+        ...staging,
+        CANONICAL_ORIGIN:
+          'https://domains-summit-qa-123abcde.fixture.workers.dev.evil.test',
+      }),
+    ).toBe(false);
+    expect(
+      emailReady({
+        ...staging,
+        EMAIL_DELIVERY_VERIFIED: 'false',
+      }),
+    ).toBe(false);
+  });
+
   it('keeps registration closed without operator identity, verified mail or prequalified mappings', async () => {
     expect(registrationReady(env)).toBe(true);
     for (const override of [

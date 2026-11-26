@@ -698,6 +698,26 @@ describe('public agent catalog', () => {
     },
   };
 
+  it('keeps the agent setup and copy script reachable when public portfolio handles are enabled', async () => {
+    const productionEnv = {
+      ...env,
+      AGENT_CATALOG_ENABLED: 'true',
+      PUBLIC_SITE_ADDRESSES_ENABLED: 'true',
+    };
+    const setup = await gateway.fetch(
+      new Request(origin + '/connect-agent'),
+      productionEnv,
+    );
+    expect(setup.status).toBe(200);
+    expect(await setup.text()).toContain('Connect your agent');
+    const script = await gateway.fetch(
+      new Request(origin + '/connect-agent/copy-v1.js'),
+      productionEnv,
+    );
+    expect(script.status).toBe(200);
+    expect(script.headers.get('Content-Type')).toContain('text/javascript');
+  });
+
   it('provides no-auth setup instructions and a read-only JSON catalog contract', async () => {
     expect((await fetchGateway('/connect-agent')).status).toBe(404);
     expect((await fetchGateway('/api/agent/openapi.json')).status).toBe(404);
