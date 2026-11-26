@@ -50,6 +50,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-257",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Pilot seller-controlled referrals through the existing Sales Inbox",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #257 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #257",
+          "url": "https://github.com/heathermhuang/dombot/pull/257"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-258",
       "date": "2026-11-26",
       "layer": "saas",
