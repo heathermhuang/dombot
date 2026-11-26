@@ -131,6 +131,27 @@ it('grants one active reservation for a canonical domain and recovers identical 
   expect((await store.reserve(approve(), currentTime)).state).toBe('held');
 });
 
+it('reclaims an expired unused approval while retaining an uncertain creation', async () => {
+  const initial = approve();
+  const old = await store.reserve(initial, currentTime);
+  const nextAt = initial.expiresAt;
+  const next = await store.reserve(
+    { ...approve(), expiresAt: nextAt + 60_000 },
+    nextAt,
+  );
+  expect((await store.get(old.id))?.state).toBe('released');
+  expect(next.state).toBe('held');
+  await store.beginCreation(next.id, nextAt);
+
+  await expect(
+    store.reserve(
+      { ...approve(), expiresAt: next.expires_at + 60_000 },
+      next.expires_at,
+    ),
+  ).rejects.toThrow(CheckoutConflict);
+  expect((await store.get(next.id))?.state).toBe('creating');
+});
+
 it('rejects stale approval and prevents another session when withdrawal races provider creation', async () => {
   const approved = approve();
   const row = await store.reserve(approved, currentTime);

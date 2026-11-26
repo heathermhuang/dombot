@@ -1,6 +1,6 @@
 # Hosted checkout reservations
 
-The reservation store uses the control database to enforce one active hold per canonical domain across hosted workspaces. An approval binds the case, seller, listing, publication revision and directory generation, exact amount and currency, provider, and expiry. Replaying an approval returns the same reservation. Changing the submitted terms requires another approval.
+The reservation store uses the control database to enforce one active hold per canonical domain across hosted workspaces. An approval binds the case, seller, listing, publication revision and directory generation, exact amount and currency, provider, and expiry. Replaying an approval returns the same reservation. Changing the submitted terms requires another approval. A fresh approval can reclaim an expired hold that never entered provider creation.
 
 The store persists the creation intent before the provider call and gives retries one stable key. A timed-out or withdrawn quote with a creation intent stays held while the provider session is reconciled. When a creation response arrives after withdrawal, the stored session is available for cancellation. The buyer must receive a checkout link only while the current reservation and publication are eligible.
 

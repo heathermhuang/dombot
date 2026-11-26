@@ -105,9 +105,16 @@ export class CheckoutReservations {
     if (approved.expiresAt <= now || approved.expiresAt - now > 30 * 60_000)
       throw new CheckoutConflict('Approve a current quote before checkout.');
 
-    const reservation = await this.db
-      .prepare(
-        `INSERT INTO checkout_reservations(
+    const [, inserted] = await this.db.batch<CheckoutReservation>([
+      this.db
+        .prepare(
+          `UPDATE checkout_reservations SET state='released'
+           WHERE domain=? AND state='held' AND provider_session IS NULL AND expires_at<=?`,
+        )
+        .bind(approved.domain, now),
+      this.db
+        .prepare(
+          `INSERT INTO checkout_reservations(
           id,domain,workspace_id,seller_id,listing_id,listing_revision,
           listing_generation,case_id,approval_id,currency,amount,provider,state,
           expires_at,created_at
@@ -122,23 +129,24 @@ export class CheckoutReservations {
           AND NOT EXISTS(SELECT 1 FROM sales_domain_controls s WHERE s.workspace_id=w.id AND s.domain=r.domain AND s.status IN ('lost','recovering'))
           AND NOT EXISTS(SELECT 1 FROM checkout_domain_holds h WHERE h.domain=r.domain)
         ON CONFLICT DO NOTHING RETURNING *`,
-      )
-      .bind(
-        crypto.randomUUID(),
-        approved.seller,
-        approved.case,
-        approved.approval,
-        approved.price.currency,
-        approved.price.amount,
-        approved.provider,
-        approved.expiresAt,
-        now,
-        approved.domain,
-        approved.workspace,
-        approved.listing,
-        approved.revision,
-      )
-      .first<CheckoutReservation>();
+        )
+        .bind(
+          crypto.randomUUID(),
+          approved.seller,
+          approved.case,
+          approved.approval,
+          approved.price.currency,
+          approved.price.amount,
+          approved.provider,
+          approved.expiresAt,
+          now,
+          approved.domain,
+          approved.workspace,
+          approved.listing,
+          approved.revision,
+        ),
+    ]);
+    const reservation = inserted.results[0];
     if (reservation) return reservation;
     const raced = await this.byApproval(approved.approval);
     if (raced) return this.requireSameApproval(raced, approved);
