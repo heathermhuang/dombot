@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { canonicalDomain } from '../shared/publication';
 import {
   inquirySchema,
+  unlistedInquirySchema,
   salePriceLabel,
   saleModeLabel,
 } from '../shared/hosted-sales';
@@ -60,7 +61,7 @@ export function createPublicSalesRoutes() {
         },
       }),
   );
-  const patterns = ['/d/*', '/i/*', '/t/*', '/shop/*'];
+  const patterns = ['/d/*', '/i/*', '/t/*', '/shop/*', '/request-domain'];
   for (const path of patterns)
     app.use(path, async (c, next) => {
       c.set('salesBase', c.env.DOMBOT_PUBLIC_BASE_PATH ?? '');
@@ -172,6 +173,120 @@ export function createPublicSalesRoutes() {
     );
   };
   const base = (c: { get: (key: 'salesBase') => string }) => c.get('salesBase');
+  const challenge = async (
+    request: Request,
+    secret: string,
+    token: string,
+    ip: string,
+  ) => {
+    const checked = await fetch(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      {
+        method: 'POST',
+        body: new URLSearchParams({ secret, response: token, remoteip: ip }),
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    const result = (await checked.json()) as {
+      success?: boolean;
+      hostname?: string;
+      action?: string;
+    };
+    return (
+      result.success &&
+      result.hostname === new URL(request.url).hostname &&
+      result.action === 'sales-inquiry'
+    );
+  };
+  app.use('/request-domain', async (c, next) => {
+    if (
+      c.env.DOMBOT_AUTH !== 'gateway' ||
+      c.get('customSalesHost') ||
+      new URL(c.env.DOMBOT_SALES_ORIGIN ?? 'https://invalid.invalid').origin !==
+        new URL(c.req.url).origin ||
+      c.env.SALES_INQUIRIES_ENABLED !== 'true' ||
+      c.env.SALES_PRIVACY_REVIEWED !== 'true' ||
+      c.env.SALES_MAIL_ENABLED !== 'true' ||
+      !c.env.SALES_TURNSTILE_SITEKEY ||
+      !c.env.SALES_TURNSTILE_SECRET
+    )
+      return c.notFound();
+    await next();
+  });
+  app.get('/request-domain', (c) =>
+    c.html(
+      salesPage(
+        'Request a domain',
+        `
+      <section class="flow"><h1>Request a domain</h1>
+      <p>Send a private inquiry about a domain you’re interested in. Confirm your email so the Domains.Domains team can reply.</p>
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=salesChallengeReady" defer></script>
+      <form class="panel" method="post" action="/request-domain">
+        <input type="hidden" name="idempotencyKey" value="${crypto.randomUUID()}">
+        <label for="domain">Domain name</label><input id="domain" name="domain" placeholder="example.com" maxlength="253" autocapitalize="none" required>
+        <label for="name">Full name</label><input id="name" name="name" maxlength="100" autocomplete="name" required>
+        <label for="email">Email</label><input id="email" name="email" type="email" maxlength="254" autocomplete="email" required>
+        <label for="message">Message</label><textarea id="message" name="message" maxlength="4000" required></textarea>
+        <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <div class="cf-turnstile" data-sitekey="${e(c.env.SALES_TURNSTILE_SITEKEY!)}" data-action="sales-inquiry"></div>
+        <p class="note" data-challenge-status role="status">Complete the security check to send.</p>
+        <button data-challenge-submit disabled>Send inquiry</button>
+        <p class="note">The review team can see your inquiry, contact details, IP address, browser and approximate IP location. <a href="/privacy" rel="noreferrer">Privacy Policy</a></p>
+      </form></section>`,
+        true,
+      ),
+      200,
+      salesHeaders,
+    ),
+  );
+  app.post('/request-domain', async (c) => {
+    const json = c.req.header('content-type')?.includes('application/json');
+    const fields = json ? null : await c.req.parseBody();
+    const input = unlistedInquirySchema.parse(
+      json
+        ? await c.req.json()
+        : {
+            domain: fields!.domain,
+            idempotencyKey: fields!.idempotencyKey,
+            name: fields!.name,
+            email: fields!.email,
+            message: fields!.message,
+            website: fields!.website,
+            turnstileToken: fields!['cf-turnstile-response'] ?? '',
+          },
+    );
+    const db = await inbox(c.env);
+    const ip = c.req.header('cf-connecting-ip');
+    if (!ip) return c.text('Cannot identify request source.', 503);
+    await db.reserve(`unlisted-intake:${ip}`, 5, 3600_000);
+    const previous = await db.receipt(input, null);
+    if (
+      !previous &&
+      (!input.turnstileToken ||
+        !(await challenge(
+          c.req.raw,
+          c.env.SALES_TURNSTILE_SECRET!,
+          input.turnstileToken,
+          ip,
+        )))
+    )
+      throw new SalesError(
+        'CHALLENGE_REQUIRED',
+        'Complete a fresh security check before sending.',
+      );
+    const receipt =
+      previous ?? (await db.intakeUnlisted(input, c.get('inquiryRequest')));
+    return json
+      ? c.json({ ...receipt, delivery: 'queued' }, 202)
+      : c.html(
+          salesPage(
+            'Check your email',
+            `<section class="flow"><h1>Check your inbox.</h1><p>Open the confirmation email to start your private conversation.</p><p class="receipt">Inquiry reference: ${e(receipt.id)}</p></section>`,
+          ),
+          202,
+          salesHeaders,
+        );
+  });
   app.get('/d/:domain/provider', async (c) => {
     const snapshot = await readPublicSale(
       c.env.DB,
@@ -329,27 +444,13 @@ export function createPublicSalesRoutes() {
           'CHALLENGE_REQUIRED',
           'Wait for the security check to finish, then try again. Your message is still here.',
         );
-      const checked = await fetch(
-        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-        {
-          method: 'POST',
-          body: new URLSearchParams({
-            secret: c.env.SALES_TURNSTILE_SECRET,
-            response: input.turnstileToken,
-            remoteip: ip,
-          }),
-          signal: AbortSignal.timeout(10_000),
-        },
-      );
-      const result = (await checked.json()) as {
-        success?: boolean;
-        hostname?: string;
-        action?: string;
-      };
       if (
-        !result.success ||
-        result.hostname !== new URL(c.req.url).hostname ||
-        result.action !== 'sales-inquiry'
+        !(await challenge(
+          c.req.raw,
+          c.env.SALES_TURNSTILE_SECRET,
+          input.turnstileToken,
+          ip,
+        ))
       ) {
         if (!json)
           return c.html(

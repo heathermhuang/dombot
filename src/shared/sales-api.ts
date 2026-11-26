@@ -3,6 +3,7 @@ import type { CoreSaleReference } from './sales-events';
 import type { MarketPublicOffer } from './market-public-offer';
 import type {
   PublishedSale,
+  SalesCaseSnapshot,
   SaleDraft,
   SaleDestination,
   SaleMoney,
@@ -49,6 +50,7 @@ export interface SalesInventory {
   reason: string | null;
 }
 export interface SalesInboxItem {
+  kind?: 'unlisted-domain';
   id: string;
   domain: string;
   name: string;
@@ -96,7 +98,7 @@ export interface SalesThread {
     name: string;
     message: string;
     offer: SaleMoney | null;
-    snapshot: PublishedSale;
+    snapshot: SalesCaseSnapshot;
   };
   messages: {
     id: string;

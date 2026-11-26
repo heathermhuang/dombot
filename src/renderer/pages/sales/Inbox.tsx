@@ -85,7 +85,12 @@ export default function Inbox() {
               <strong>{r.domain}</strong>
               <p>{r.name}</p>
               <p className="small">
-                {r.offer ? salePriceLabel(r.offer) : 'Question'} ·{' '}
+                {r.kind === 'unlisted-domain'
+                  ? 'Unlisted-domain inquiry'
+                  : r.offer
+                    ? salePriceLabel(r.offer)
+                    : 'Question'}{' '}
+                ·{' '}
                 {r.verification === 'verified'
                   ? 'Email confirmed'
                   : 'Pending verification'}
