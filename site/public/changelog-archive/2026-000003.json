@@ -34,6 +34,22 @@
       ]
     },
     {
+      "id": "auto-saas-gateway-d89b4e0e4805936da7948ae21a8bc06c35592be9-58",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Hosted service update observed: Receive unlisted-domain inquiries in the Sales Inbox",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/d89b4e0e4805936da7948ae21a8bc06c35592be9"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-de031da5177d60585773308c36b1a4d1db6c80c8-56",
       "date": "2026-11-26",
       "layer": "saas",
