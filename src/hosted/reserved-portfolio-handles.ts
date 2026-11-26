@@ -83,6 +83,7 @@ export const reservedPortfolioHandles = new Set([
   'renewals',
   'report',
   'resources',
+  'request-domain',
   'roadmap',
   'sales',
   'search',
