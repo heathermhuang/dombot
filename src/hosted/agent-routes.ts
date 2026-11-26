@@ -5,6 +5,7 @@ import {
   agentCopyScriptPath,
   agentOpenApiPath,
 } from './agent-connect';
+import { partnerListings } from './agent-referrals';
 import { agentOpenApi } from './agent-openapi';
 import { boundedText } from '../agent-readiness/scan';
 import { Hono } from 'hono';
@@ -200,6 +201,10 @@ agentRoutes.get('/api/agent', (c) =>
     200,
     readHeaders,
   ),
+);
+
+agentRoutes.get('/api/agent/referrals', (c) =>
+  partnerListings(c.env, c.req.raw),
 );
 
 agentRoutes.get('/api/agent/listings', async (c) => {

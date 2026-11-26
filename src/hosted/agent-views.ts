@@ -4,6 +4,7 @@ import {
   scoreReadiness,
 } from '../agent-readiness/scan';
 import { salesEscape as e, salesPage } from '../shared/render-sales-lander';
+import { ownerReferralActivity } from './agent-referrals';
 import { salePriceLabel } from '../shared/hosted-sales';
 import {
   ownerAgentRows,
@@ -16,6 +17,7 @@ export function addAgentMetadata(
   response: Response,
   live: LiveAgentListing,
   buyerHandoff = false,
+  referral?: { ticket: string; partnerName: string },
 ) {
   const { listing } = live;
   if (response.headers.get('X-Domains-Sales-Revision') !== listing.revision)
@@ -61,15 +63,47 @@ export function addAgentMetadata(
       );
     },
   });
-  if (buyerHandoff)
+  if (buyerHandoff || referral)
     rewriter.on('form[action$="/inquiries"]', {
       element(form) {
         form.setAttribute(
           'action',
-          '/' + listing.domain + '/inquiries?from=agent',
+          '/' +
+            listing.domain +
+            '/inquiries?' +
+            (referral
+              ? 'referral=' + encodeURIComponent(referral.ticket)
+              : 'from=agent'),
         );
+        if (referral)
+          form.prepend(
+            `<p class="note">This offer will be marked as a referral from ${e(referral.partnerName)}.</p>`,
+            { html: true },
+          );
       },
     });
+  if (referral) {
+    rewriter
+      .on('.inquiry-intent input[value="offer"]', {
+        element(input) {
+          input.setAttribute('checked', '');
+        },
+      })
+      .on('.inquiry-intent input[value="question"]', {
+        element(input) {
+          input.removeAttribute('checked');
+          input.setAttribute('disabled', '');
+        },
+      })
+      .on('head', {
+        element(head) {
+          head.append(
+            '<style>.inquiry-intent label:has(input[value=question]){display:none}</style>',
+            { html: true },
+          );
+        },
+      });
+  }
   return rewriter.transform(
     new Response(response.body, { status: response.status, headers }),
   );
@@ -158,9 +192,10 @@ export async function agentOwnerPage(
   cursor: string,
   dnsDomain: string,
 ) {
-  const [{ rows, recent, counts }, activity] = await Promise.all([
+  const [{ rows, recent, counts }, activity, referrals] = await Promise.all([
     ownerAgentRows(env, owner, cursor),
     ownerReceiptActivity(env, owner).catch(() => null),
+    ownerReferralActivity(env, owner),
   ]);
   const visible = rows.slice(0, 10);
   const results: PromiseSettledResult<
@@ -225,6 +260,18 @@ export async function agentOwnerPage(
         ? submissions.filter((row) => row.event === 'broker').length
         : '—';
       const receiptSuffix = activity?.partial ? '+' : '';
+      const referred = referrals?.approvals.get(current.listing_id);
+      const referralForm =
+        referrals &&
+        (referred || (listing.route?.type === 'offer' && listing.askingPrice))
+          ? `<form method="post" action="/account/agent-listings/referrals">
+          <input type="hidden" name="domain" value="${e(listing.domain)}">
+          <input type="hidden" name="listing" value="${e(current.listing_id)}">
+          <input type="hidden" name="revision" value="${e(listing.revision)}">
+          <p>Referral listing for ${e(referrals.partnerName)}. ${referred === listing.revision ? 'Current revision shared.' : 'Choose whether to share these terms.'}</p>
+          <button name="enabled" value="${referred === listing.revision ? 'false' : 'true'}">${referred === listing.revision ? 'Stop sharing' : 'Share this revision'}</button>
+        </form>`
+          : '';
       return `<article class="panel report-card">
       <header><h3><a href="${e(listing.urls.listing)}">${e(listing.domain)}</a></h3><strong>${row.score}/100</strong></header>
       <p>${e(listing.priceStatus === 'needs-reconfirmation' ? 'Price needs review' : salePriceLabel(listing.askingPrice))}
@@ -239,6 +286,7 @@ export async function agentOwnerPage(
         <p><a href="?cursor=${encodeURIComponent(cursor)}&amp;dns=${encodeURIComponent(listing.domain)}">Check DNS</a> ·
         <a href="${e(listing.urls.detail)}">View listing JSON</a> · <a href="${e(listing.urls.discovery)}">Discovery file</a></p>
       </details>
+      ${referralForm}
     </article>`;
     })
     .join('');
@@ -262,6 +310,7 @@ export async function agentOwnerPage(
     <div class="interest"><section><h2>Most interest</h2>
       ${leaders.length ? `<ol>${leaders.map(([domain, total]) => `<li><strong>${e(domain)}</strong><br><span>${total.price} price checks · ${total.query} search appearances</span></li>`).join('')}</ol>` : '<p>No agent activity yet.</p>'}
     </section><section><h2>Recent activity</h2>${recentHtml ? '<ul>' + recentHtml + '</ul>' : '<p>No recent activity.</p>'}</section></div>
+    ${referrals?.recent.length ? `<section><h2>Referred offers</h2><ul>${referrals.recent.map((row) => `<li><a href="/w/${e(owner)}/#/sales/inbox/${e(row.receipt)}">${e(row.domain)} · ${e(row.partner_name)}</a></li>`).join('')}</ul></section>` : ''}
     <h2>Published names</h2>
     ${results.some((result) => result.status === 'rejected') ? '<p role="status">Some listing details are temporarily unavailable.</p>' : ''}
     ${cards || '<p>No eligible published listings on this page.</p>'}
