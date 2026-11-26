@@ -24,6 +24,8 @@ The offer and broker-brief routes use the existing buyer challenge, email confir
 
 For the Domain Summit Asia demo, connect an MCP client to `/mcp/catalog`, call `domain_search` using a business type represented in the approved demo portfolio, then call `domain_price` with a returned domain. The agent can show the current price, seller terms, confirmation date and human handoff without initiating a transaction.
 
+For a real-mail staging rehearsal, set `AUTH_EMAIL_STAGING_ORIGIN` to the exact isolated `domains-*-qa-<8 hex>.<account>.workers.dev` origin. Keep public registration explicitly disabled and bind both mail senders to the approved recipient only. Sign in with the controlled seller mailbox to prove recipient ownership before enabling inquiry intake. Leave this staging-only option unset on production.
+
 ## Referral pilot
 
 The optional pilot uses one verified partner. Apply control migration `0029_agent_referrals.sql` before setting `AGENT_REFERRAL_PARTNER_ID` and `AGENT_REFERRAL_PARTNER_NAME`. Set a dedicated bearer credential in `AGENT_REFERRAL_PARTNER_TOKEN` and a separate signing key in `AGENT_REFERRAL_SIGNING_KEY`. The feed is `GET /api/agent/referrals` and accepts the partner’s bearer credential. The feed supplies live prices and expiring buyer links for seller-approved offer listings. The partner receives no buyer data.
