@@ -98,6 +98,38 @@
       ]
     },
     {
+      "id": "auto-saas-pr-259",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Qualify the referral buyer and seller flows in Chrome",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #259 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #259",
+          "url": "https://github.com/heathermhuang/dombot/pull/259"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-261",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Keep referral fixture cleanup active when Chrome times out",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #261 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #261",
+          "url": "https://github.com/heathermhuang/dombot/pull/261"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-3f2c304e1a0e794c25c33348bbea1a802c575d38-53",
       "date": "2026-11-25",
       "layer": "saas",
