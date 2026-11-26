@@ -76,6 +76,7 @@ const activeRoute = `
       AND r.generation=checkout_reservations.listing_generation
       AND r.state='active' AND w.enabled=1
       AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)
+      AND NOT EXISTS(SELECT 1 FROM sales_domain_controls s WHERE s.workspace_id=w.id AND s.domain=r.domain AND s.status IN ('lost','recovering'))
       AND NOT EXISTS(SELECT 1 FROM checkout_domain_holds h WHERE h.domain=r.domain))`;
 
 /**
@@ -118,6 +119,7 @@ export class CheckoutReservations {
           AND r.state='active' AND w.enabled=1
           AND EXISTS(SELECT 1 FROM users u WHERE u.id=?2 AND u.workspace_id=r.workspace_id)
           AND NOT EXISTS(SELECT 1 FROM closure_requests c WHERE c.workspace_id=w.id)
+          AND NOT EXISTS(SELECT 1 FROM sales_domain_controls s WHERE s.workspace_id=w.id AND s.domain=r.domain AND s.status IN ('lost','recovering'))
           AND NOT EXISTS(SELECT 1 FROM checkout_domain_holds h WHERE h.domain=r.domain)
         ON CONFLICT DO NOTHING RETURNING *`,
       )
@@ -202,8 +204,11 @@ export class CheckoutReservations {
         `UPDATE checkout_reservations SET provider_session=?1,
          state=CASE WHEN state='creating' AND expires_at>?2 AND ${activeRoute}
            THEN 'open' WHEN state='creating' THEN 'canceling' ELSE state END
-         WHERE id=?3 AND provider=?4 AND state IN ('creating','open','canceling','paid','transferred')
-           AND (provider_session IS NULL OR provider_session=?1)
+         WHERE id=?3 AND provider=?4 AND (
+           (state IN ('creating','open','canceling','paid','transferred')
+             AND (provider_session IS NULL OR provider_session=?1))
+           OR (state='released' AND provider_session=?1)
+         )
          RETURNING *`,
       )
       .bind(validated, now, id, providerId.parse(provider))
@@ -221,28 +226,6 @@ export class CheckoutReservations {
       )
       .bind(id, session, now)
       .first<CheckoutReservation>();
-  }
-
-  async holdAfterRelease(id: string, now = Date.now()) {
-    await this.db.batch([
-      this.db
-        .prepare(
-          `INSERT INTO checkout_domain_holds(domain,reservation_id,observed_at)
-             SELECT domain,id,? FROM checkout_reservations WHERE id=? AND state='released'
-             ON CONFLICT(domain) DO NOTHING`,
-        )
-        .bind(now, id),
-      this.db
-        .prepare(
-          `UPDATE checkout_reservations SET state='canceling'
-             WHERE state IN ('creating','open') AND domain IN (
-               SELECT old.domain FROM checkout_reservations old
-               JOIN checkout_domain_holds h ON h.domain=old.domain
-               WHERE old.id=? AND old.state='released'
-             )`,
-        )
-        .bind(id),
-    ]);
   }
 
   async requestCancellation(id: string) {
@@ -308,6 +291,29 @@ export class CheckoutReservations {
            AND changes()=1`,
         )
         .bind(type, reference, id, provider, eventId, record),
+      // Cancellation may have committed while another callback was reading
+      // the provider. Journal the contradiction and hold the domain together.
+      this.db
+        .prepare(
+          `INSERT INTO checkout_domain_holds(domain,reservation_id,observed_at)
+           SELECT r.domain,r.id,?1 FROM checkout_reservations r
+           JOIN checkout_observations o ON o.reservation_id=r.id
+           WHERE r.id=?2 AND r.state='released' AND o.provider=?3 AND o.event_id=?4
+             AND o.observation=?5 AND (
+               (?6='payment' AND r.payment_reference IS NOT ?7) OR
+               (?6='transfer' AND r.transfer_reference IS NOT ?7)
+             )
+           ON CONFLICT(domain) DO NOTHING`,
+        )
+        .bind(now, id, provider, eventId, record, type, reference),
+      this.db
+        .prepare(
+          `UPDATE checkout_reservations SET state='canceling'
+           WHERE state IN ('creating','open') AND domain IN (
+             SELECT domain FROM checkout_domain_holds WHERE reservation_id=?
+           )`,
+        )
+        .bind(id),
     ]);
     if (!dedupe.results.length) {
       const old = await this.db
@@ -321,6 +327,15 @@ export class CheckoutReservations {
           'The observation conflicts with the reserved provider session.',
         );
     }
-    return this.get(id);
+    const current = await this.get(id);
+    if (
+      current?.state === 'released' &&
+      ((type === 'payment' && current.payment_reference !== reference) ||
+        (type === 'transfer' && current.transfer_reference !== reference))
+    )
+      throw new CheckoutConflict(
+        'Provider reports activity after final release.',
+      );
+    return current;
   }
 }

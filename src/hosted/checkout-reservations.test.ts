@@ -31,6 +31,8 @@ beforeAll(async () => {
   for (const name of [
     '0001_control',
     '0003_lifecycle',
+    '0007_sales_hostnames',
+    '0008_sales_domain_controls',
     '0022_public_domain_directory',
     '0028_checkout_reservations',
   ])
@@ -48,7 +50,7 @@ beforeEach(async () => {
   listing = crypto.randomUUID();
   revision = crypto.randomUUID();
   await db.exec(
-    'DELETE FROM checkout_domain_holds; DELETE FROM checkout_observations; DELETE FROM checkout_reservations; DELETE FROM public_domain_routes; DELETE FROM users; DELETE FROM workspaces;',
+    'DELETE FROM sales_domain_controls; DELETE FROM checkout_domain_holds; DELETE FROM checkout_observations; DELETE FROM checkout_reservations; DELETE FROM public_domain_routes; DELETE FROM users; DELETE FROM workspaces;',
   );
   await db.batch([
     db
@@ -381,6 +383,54 @@ it('blocks a new handoff when a provider contradicts a previous final release', 
     ...observation('cancel-final'),
     session: 'replacement-session',
   });
+  await expect(store.reserve(approve(), currentTime)).rejects.toThrow(
+    CheckoutConflict,
+  );
+});
+
+it('holds the domain when an already attached callback observes payment after release', async () => {
+  const row = await open();
+  await store.requestCancellation(row.id);
+  const attached = await store.attachSession(
+    row.id,
+    provider,
+    'fixture-session',
+  );
+  expect(attached.state).toBe('canceling');
+
+  await store.observe(row.id, observation('cancel-final'));
+  const payment = observation('payment');
+  await expect(store.observe(row.id, payment)).rejects.toThrow(
+    'Provider reports activity after final release',
+  );
+  expect(
+    await db
+      .prepare(
+        'SELECT reservation_id FROM checkout_observations WHERE event_id=?',
+      )
+      .bind(payment.eventId)
+      .first(),
+  ).toEqual({ reservation_id: row.id });
+  await expect(store.reserve(approve(), currentTime)).rejects.toThrow(
+    CheckoutConflict,
+  );
+});
+
+it('blocks new approvals and existing handoffs after control loss', async () => {
+  const row = await open();
+  await db
+    .prepare(
+      `INSERT INTO sales_domain_controls(workspace_id,listing_id,domain,epoch,revision,proof,status,updated_at)
+    VALUES(?,?,?,1,?,'fixture','lost',?)`,
+    )
+    .bind(workspace, listing, domain, revision, currentTime)
+    .run();
+
+  expect(
+    await store.handoff(row.id, 'fixture-session', currentTime),
+  ).toBeNull();
+  await store.requestCancellation(row.id);
+  await store.observe(row.id, observation('cancel-final'));
   await expect(store.reserve(approve(), currentTime)).rejects.toThrow(
     CheckoutConflict,
   );

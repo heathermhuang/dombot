@@ -150,23 +150,6 @@ export class CheckoutCoordinator {
       throw new CheckoutConflict(
         'Provider state differs from the approved case.',
       );
-    if (reservation.state === 'released') {
-      // A provider claiming a new payment or transfer after final release is a
-      // contract violation. Do not apply those facts to a newer reservation.
-      for (const event of remote.observations)
-        if (
-          (event.type === 'payment' &&
-            event.reference !== reservation.payment_reference) ||
-          (event.type === 'transfer' &&
-            event.reference !== reservation.transfer_reference)
-        ) {
-          await this.reservations.holdAfterRelease(reservation.id);
-          throw new CheckoutConflict(
-            'Provider reports activity after final release.',
-          );
-        }
-      return reservation;
-    }
     let current = await this.reservations.attachSession(
       reservation.id,
       this.provider.id,
