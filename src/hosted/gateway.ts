@@ -2267,7 +2267,7 @@ app.all('/w/:workspace/*', async (c) => {
     c.req.method === 'POST' &&
     ((response.ok &&
       (salesPublicPath(path, c.req.method) ||
-        /^\/sales\/inbox\/[^/]+\/messages$/.test(path))) ||
+        /^\/sales\/inbox\/[^/]+\/(?:messages|fresh-link)$/.test(path))) ||
       (response.status === 303 && salesPublicPath(path, c.req.method)))
   ) {
     // Scheduled recovery owns reliability; this only shortens time to first attempt.

@@ -292,16 +292,22 @@ it('qualifies submit, captured confirmation mail, conversation/reply, replay, ra
   ).toBeGreaterThan(0);
 }, 15000);
 
-it('accepts one private unlisted-domain case in the designated queue and preserves the verified conversation', async () => {
+async function qualifyUnlisted(environment) {
   configureStore(new MemoryDocStore());
   await hydrateStores();
   const workspace = crypto.randomUUID(),
     reviewer = crypto.randomUUID();
   const other = crypto.randomUUID();
   const key = 'synthetic-unlisted-gateway'.repeat(3);
-  const origin = 'https://domains-intake-qa-abcdef01.fixture.workers.dev';
+  const production = environment === 'production origin';
+  const origin = production
+    ? 'https://domains.domains'
+    : 'https://domains-intake-qa-abcdef01.fixture.workers.dev';
+  const reviewerBinding = production
+    ? 'OFF_MARKET_PRODUCTION_REVIEWER'
+    : 'OFF_MARKET_STAGING_REVIEWER';
   const buyer = 'unlisted-buyer@fixture.invalid';
-  const owner = 'unlisted-reviewer@fixture.invalid';
+  const owner = `unlisted-reviewer-${reviewer}@fixture.invalid`;
   const tenantEnv = {
     DB: unlisted,
     DOMBOT_SECRET: btoa('u'.repeat(32)),
@@ -328,8 +334,8 @@ it('accepts one private unlisted-domain case in the designated queue and preserv
     CONTROL_DB: control,
     AUTH_PEPPER: 'synthetic-intake-pepper'.repeat(3),
     CANONICAL_ORIGIN: origin,
-    OFF_MARKET_STAGING_REVIEWER: reviewer,
-    OFF_MARKET_STAGING_BUYER_EMAIL: buyer,
+    [reviewerBinding]: reviewer,
+    OFF_MARKET_STAGING_BUYER_EMAIL: production ? undefined : buyer,
     PUBLIC_REGISTRATION_ENABLED: 'false',
     WORKSPACES: JSON.stringify([
       {
@@ -339,7 +345,10 @@ it('accepts one private unlisted-domain case in the designated queue and preserv
       },
       { id: other, label: 'Other test account', binding: 'WORKSPACE_1' },
     ]),
-    GATEWAY_KEYS: JSON.stringify({ [workspace]: key, [other]: key + '-other' }),
+    GATEWAY_KEYS: JSON.stringify({
+      [workspace]: key,
+      [other]: key + '-other',
+    }),
     WORKSPACE_0: { fetch: (r) => app.fetch(r, tenantEnv) },
     WORKSPACE_1: {
       fetch: (r) =>
@@ -414,13 +423,8 @@ it('accepts one private unlisted-domain case in the designated queue and preserv
   const requestPath = '/request-domain';
   try {
     expect(
-      (
-        await send(
-          requestPath,
-          {},
-          { ...env, OFF_MARKET_STAGING_REVIEWER: undefined },
-        )
-      ).status,
+      (await send(requestPath, {}, { ...env, [reviewerBinding]: undefined }))
+        .status,
     ).toBe(404);
     const form = await get(requestPath);
     expect(form.status).toBe(200);
@@ -428,10 +432,43 @@ it('accepts one private unlisted-domain case in the designated queue and preserv
     expect(
       (await post(requestPath, input, 'https://other.example')).status,
     ).toBe(403);
-    expect(
-      (await post(requestPath, { ...input, email: 'outside@fixture.invalid' }))
-        .status,
-    ).toBe(404);
+    if (production) {
+      expect(
+        (
+          await send(
+            requestPath,
+            {},
+            {
+              ...env,
+              OFF_MARKET_PRODUCTION_REVIEWER: undefined,
+              OFF_MARKET_STAGING_REVIEWER: reviewer,
+              OFF_MARKET_STAGING_BUYER_EMAIL: buyer,
+            },
+          )
+        ).status,
+      ).toBe(404);
+      expect(
+        (
+          await send(
+            requestPath,
+            {},
+            {
+              ...env,
+              OFF_MARKET_PRODUCTION_REVIEWER: other,
+            },
+          )
+        ).status,
+      ).toBe(404);
+    } else {
+      expect(
+        (
+          await post(requestPath, {
+            ...input,
+            email: 'outside@fixture.invalid',
+          })
+        ).status,
+      ).toBe(404);
+    }
     expect((await get('/w/' + other + requestPath)).status).toBe(404);
     const receipt = await post(requestPath);
     expect(receipt.status).toBe(202);
@@ -553,4 +590,10 @@ it('accepts one private unlisted-domain case in the designated queue and preserv
     ).toBe(0);
     vi.unstubAllGlobals();
   }
-}, 20000);
+}
+
+it.each(['isolated staging', 'production origin'])(
+  'accepts one private unlisted-domain case in the %s queue and preserves the verified conversation',
+  qualifyUnlisted,
+  20000,
+);

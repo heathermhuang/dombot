@@ -6,7 +6,18 @@ import { workspaceFor, workspaceKey, workspaceService } from './workspaces';
 
 export async function offMarketIntake(request: Request, env: HostedEnv) {
   const incoming = new URL(request.url);
-  const reviewer = z.uuid().safeParse(env.OFF_MARKET_STAGING_REVIEWER);
+  const production = incoming.origin === 'https://domains.domains';
+  const isolated =
+    /^https:\/\/domains-[a-z0-9-]+-qa-[a-f0-9]{8}\.[a-z0-9-]+\.workers\.dev$/.test(
+      incoming.origin,
+    ) && env.PUBLIC_REGISTRATION_ENABLED === 'false';
+  const reviewer = z
+    .uuid()
+    .safeParse(
+      production
+        ? env.OFF_MARKET_PRODUCTION_REVIEWER
+        : env.OFF_MARKET_STAGING_REVIEWER,
+    );
   const buyer = z.email().safeParse(env.OFF_MARKET_STAGING_BUYER_EMAIL);
   const closed = () =>
     new Response('Page not found', {
@@ -15,12 +26,8 @@ export async function offMarketIntake(request: Request, env: HostedEnv) {
     });
   if (
     !reviewer.success ||
-    !buyer.success ||
     incoming.origin !== env.CANONICAL_ORIGIN ||
-    !/^https:\/\/domains-[a-z0-9-]+-qa-[a-f0-9]{8}\.[a-z0-9-]+\.workers\.dev$/.test(
-      incoming.origin,
-    ) ||
-    env.PUBLIC_REGISTRATION_ENABLED !== 'false' ||
+    (!production && (!isolated || !buyer.success)) ||
     !salesMailReady(env)
   )
     return closed();
@@ -29,7 +36,7 @@ export async function offMarketIntake(request: Request, env: HostedEnv) {
     request.headers.get('Origin') !== incoming.origin
   )
     return new Response('Bad origin', { status: 403 });
-  if (request.method === 'POST') {
+  if (!production && request.method === 'POST' && buyer.success) {
     const clone = request.clone();
     const email = await (
       request.headers.get('Content-Type')?.includes('application/json')
