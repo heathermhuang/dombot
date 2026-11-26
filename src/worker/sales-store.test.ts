@@ -723,6 +723,180 @@ describe('durable inquiry and outbox', () => {
       (await inbox.lease()).filter((v) => v.kind === 'seller-alert'),
     ).toHaveLength(1);
   });
+  it('opens a single recoverable buyer thread after concurrent confirmations', async () => {
+    const p = await live();
+    const value = { ...input(), observedRevision: p.revision };
+    const receipt = await inbox.intake(value, p);
+    expect(await inbox.intake(value, p)).toEqual(receipt);
+    const [mail] = await inbox.lease();
+    const raw = mail.mail.url.split('/').at(-1)!;
+    const app = createPublicSalesRoutes();
+    const origin = 'https://host.example';
+    const env = {
+      DB: db,
+      DOMBOT_SECRET: btoa(String.fromCharCode(...root)),
+      DOMBOT_SALES_ORIGIN: origin,
+    } as Env;
+    const submit = () =>
+      app.request(
+        origin + '/i/' + raw + '/confirm',
+        {
+          method: 'POST',
+          headers: { Origin: origin },
+        },
+        env,
+      );
+    const confirmation = await app.request(
+      origin + '/i/' + raw,
+      undefined,
+      env,
+    );
+    expect(confirmation.headers.get('Referrer-Policy')).toBe('same-origin');
+    expect((await inbox.lead(receipt.id)).verification).toBe('pending');
+
+    const [first, raced] = await Promise.all([submit(), submit()]);
+    expect(first.status).toBe(303);
+    expect(raced.status).toBe(303);
+    const location = first.headers.get('Location')!;
+    expect(location).toMatch(/^\/t\/[A-Za-z0-9_-]{43}$/);
+    expect(raced.headers.get('Location')).toBe(location);
+    expect((await submit()).headers.get('Location')).toBe(location);
+    expect(
+      (
+        await db
+          .prepare(
+            "SELECT count(*) AS n FROM sales_tokens WHERE lead_id=? AND purpose='thread'",
+          )
+          .bind(receipt.id)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(1);
+    expect(
+      (await inbox.lease()).filter((m) => m.kind === 'seller-alert'),
+    ).toHaveLength(1);
+
+    const open = () => app.request(origin + location, undefined, env);
+    const initial = await open();
+    expect(initial.status).toBe(200);
+    expect(initial.headers.get('Cache-Control')).toBe('no-store');
+    expect(await initial.text()).toContain('Awaiting seller review');
+    const send = async (direction: 'private-note' | 'reply', body: string) =>
+      inbox.message(receipt.id, {
+        direction,
+        body,
+        revision: (await inbox.lead(receipt.id)).revision,
+        idempotencyKey: crypto.randomUUID(),
+      });
+    await send('private-note', 'PRIVATE_ONLY_SENTINEL');
+    expect(await (await open()).text()).toContain('Awaiting seller review');
+    await send('reply', 'A reply to the verified buyer.');
+    await store.unpublish(p.id, (await store.get(p.id)).revision);
+
+    const reopened = await open();
+    expect(reopened.status).toBe(200);
+    const html = await reopened.text();
+    expect(html).toContain('Seller replied');
+    expect(html).toContain('A reply to the verified buyer.');
+    expect(html).not.toMatch(
+      /PRIVATE_ONLY_SENTINEL|buyer@example.com|SECRET_FLOOR/,
+    );
+    expect(await readPublicSale(db, p.domain)).toBeNull();
+
+    const thread = location.split('/').at(-1)!;
+    const foreign = await live('different.example');
+    const key = 'test-edge-secret-for-confirmation'.repeat(3);
+    const workspace = crypto.randomUUID();
+    const host = 'different.example';
+    const crossListing = new Request(`https://${host}${location}`);
+    await db
+      .prepare(
+        'INSERT INTO sales_host_bindings(hostname,listing_id,epoch,enabled) VALUES(?,?,1,1)',
+      )
+      .bind(host, foreign.id)
+      .run();
+    const proof = (audience: string, listing: string | null) =>
+      signGatewayRequest(key, audience, null, crossListing, {
+        purpose: 'sales-public',
+        host,
+        listing,
+        epoch: 1,
+      });
+    const gatewayEnv = {
+      ...env,
+      DOMBOT_AUTH: 'gateway',
+      DOMBOT_SALES_EDGE_SECRET: key,
+      DOMBOT_WORKSPACE_ID: workspace,
+    } as Env;
+    crossListing.headers.set(
+      'x-dombot-gateway-proof',
+      await proof(workspace, foreign.id),
+    );
+    expect(
+      (await app.request(crossListing, undefined, gatewayEnv)).status,
+    ).toBe(404);
+    crossListing.headers.set(
+      'x-dombot-gateway-proof',
+      await proof(crypto.randomUUID(), null),
+    );
+    expect(
+      (await app.request(crossListing, undefined, gatewayEnv)).status,
+    ).toBe(404);
+    await db
+      .prepare('UPDATE sales_tokens SET expires_at=0 WHERE token_hash=?')
+      .bind(await tokenHash(thread))
+      .run();
+    expect((await open()).status).toBe(403);
+    expect((await submit()).headers.has('Location')).toBe(false);
+    expect(await inbox.token(thread, 'thread', true)).toMatchObject({
+      expires_at: 0,
+    });
+  });
+
+  it('keeps legacy links compatible and prevents a confirmation retry from reissuing a revoked grant', async () => {
+    const p = await live();
+    const first = await inbox.intake(
+      { ...input(), observedRevision: p.revision },
+      p,
+    );
+    const [mail] = await inbox.lease();
+    const raw = mail.mail.url.split('/').at(-1)!;
+    const confirmed = (await inbox.confirm(raw))!;
+    await inbox.freshLink(first.id);
+    expect(await inbox.token(confirmed, 'thread')).toBeNull();
+    expect(await inbox.confirm(raw)).toBeNull();
+    expect(
+      (await inbox.token(confirmed, 'thread', true))?.revoked_at,
+    ).toBeTruthy();
+
+    const second = await inbox.intake(
+      { ...input(), observedRevision: p.revision },
+      p,
+    );
+    const oldVerify = (await inbox.lease()).find(
+      (m) => m.kind === 'verification',
+    )!;
+    const legacy = oldVerify.mail.url.split('/').at(-1)!;
+    await db.batch([
+      db
+        .prepare("UPDATE sales_leads SET verification='verified' WHERE id=?")
+        .bind(second.id),
+      db
+        .prepare(
+          'UPDATE sales_tokens SET consumed_at=?,grant_id=? WHERE token_hash=?',
+        )
+        .bind(Date.now(), crypto.randomUUID(), await tokenHash(legacy)),
+    ]);
+    expect(await inbox.confirm(legacy)).toBeNull();
+    await inbox.freshLink(second.id);
+    const link = (await inbox.lease()).find((m) => m.kind === 'buyer-reply')!;
+    expect(
+      await inbox.token(link.mail.url.split('/').at(-1)!, 'thread'),
+    ).toMatchObject({
+      lead_id: second.id,
+      verification: 'verified',
+    });
+  });
+
   it('two drainers cannot share a lease, expired sends become unknown, stale ACK fails', async () => {
     const p = await live();
     await inbox.intake({ ...input(), observedRevision: p.revision }, p);

@@ -59,6 +59,7 @@ const mailSchema = z
 export type SalesMail = z.infer<typeof mailSchema>;
 export const tokenHash = async (s: string) => toBase64Url(await sha256(s));
 const token = () => toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+const confirmationThreadGrant = 'confirmation-thread';
 type LeadRow = {
   id: string;
   listing_id: string;
@@ -166,13 +167,14 @@ export class SalesInquiryStore {
     purpose: 'verify' | 'thread',
     lead: string,
     days: number,
+    grantId: string | null = null,
   ): Promise<D1PreparedStatement> {
     return tokenHash(raw).then((hash) =>
       this.db
         .prepare(
-          'INSERT INTO sales_tokens(token_hash,purpose,lead_id,expires_at) VALUES(?,?,?,?)',
+          'INSERT INTO sales_tokens(token_hash,purpose,lead_id,expires_at,grant_id) VALUES(?,?,?,?,?)',
         )
-        .bind(hash, purpose, lead, Date.now() + days * 86400_000),
+        .bind(hash, purpose, lead, Date.now() + days * 86400_000, grantId),
     );
   }
   async intake(
@@ -313,51 +315,59 @@ export class SalesInquiryStore {
         status: string;
       }>();
   }
-  async confirm(raw: string): Promise<void> {
-    const grant = await this.token(raw, 'verify');
-    if (!grant || grant.status === 'spam')
-      throw new SalesError(
+  async confirm(raw: string): Promise<string | null> {
+    const expired = () =>
+      new SalesError(
         'LINK_EXPIRED',
         'This confirmation link expired or was revoked.',
         403,
       );
-    if (grant.consumed_at) {
-      const lead = await this.lead(grant.lead_id);
-      await recordJourney(
-        this.db,
-        lead.listing_id,
-        'inquiry-verified',
-        grant.lead_id,
-      );
-      return;
-    }
-    const marker = crypto.randomUUID(),
-      now = Date.now();
-    try {
-      await this.sales.atomic([
-        ...this.sales.guard(
-          "EXISTS(SELECT 1 FROM sales_tokens WHERE token_hash=? AND purpose='verify' AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at>?)",
-          [await tokenHash(raw), now],
-        ),
-        this.db
-          .prepare(
-            'UPDATE sales_tokens SET consumed_at=?,grant_id=? WHERE token_hash=?',
-          )
-          .bind(now, marker, await tokenHash(raw)),
-        this.db
-          .prepare(
-            "UPDATE sales_leads SET verification='verified',revision=?,updated_at=? WHERE id=?",
-          )
-          .bind(crypto.randomUUID(), now, grant.lead_id),
-        await this.outbox(grant.lead_id, grant.lead_id, 'seller-alert', {
-          recipient: null,
-          subject: 'A domain inquiry is confirmed',
-          url: `${this.publicBase}/#/sales/inbox/${grant.lead_id}`,
-          reference: grant.lead_id,
-        }),
-      ]);
-    } catch (e) {
-      if (!(await this.token(raw, 'verify'))?.consumed_at) throw e;
+    const grant = await this.token(raw, 'verify');
+    if (!grant || grant.status === 'spam') throw expired();
+
+    // Derive the same scoped capability on retry without storing a plaintext token.
+    const thread = await this.sales.hash(
+      'confirmed-thread',
+      `${grant.lead_id}:${raw}`,
+    );
+    if (!grant.consumed_at) {
+      const now = Date.now();
+      const hash = await tokenHash(raw);
+      try {
+        await this.sales.atomic([
+          ...this.sales.guard(
+            "EXISTS(SELECT 1 FROM sales_tokens t JOIN sales_leads l ON l.id=t.lead_id WHERE t.token_hash=? AND t.purpose='verify' AND t.consumed_at IS NULL AND t.revoked_at IS NULL AND t.expires_at>CAST((julianday('now')-2440587.5)*86400000 AS INTEGER) AND l.verification='pending' AND l.status!='spam')",
+            [hash],
+          ),
+          this.db
+            .prepare(
+              'UPDATE sales_tokens SET consumed_at=?,grant_id=? WHERE token_hash=?',
+            )
+            .bind(now, crypto.randomUUID(), hash),
+          this.db
+            .prepare(
+              "UPDATE sales_leads SET verification='verified',revision=?,updated_at=? WHERE id=?",
+            )
+            .bind(crypto.randomUUID(), now, grant.lead_id),
+          await this.tokenWrite(
+            thread,
+            'thread',
+            grant.lead_id,
+            7,
+            confirmationThreadGrant,
+          ),
+          await this.outbox(grant.lead_id, grant.lead_id, 'seller-alert', {
+            recipient: null,
+            subject: 'A domain inquiry is confirmed',
+            url: `${this.publicBase}/#/sales/inbox/${grant.lead_id}`,
+            reference: grant.lead_id,
+          }),
+        ]);
+      } catch (problem) {
+        const current = await this.token(raw, 'verify');
+        if (!current || current.status === 'spam') throw expired();
+        if (!current.consumed_at) throw problem;
+      }
     }
     const lead = await this.lead(grant.lead_id);
     await recordJourney(
@@ -366,6 +376,12 @@ export class SalesInquiryStore {
       'inquiry-verified',
       grant.lead_id,
     );
+    const active = await this.token(thread, 'thread');
+    return active?.lead_id === lead.id &&
+      active.verification === 'verified' &&
+      active.status !== 'spam'
+      ? thread
+      : null;
   }
   async lead(id: string) {
     const row = await this.db
@@ -458,7 +474,7 @@ export class SalesInquiryStore {
     }
     const rows = await this.db
       .prepare(
-        `SELECT id,direction,created_at,sealed,sequence FROM sales_messages WHERE lead_id=? AND (?=0 OR sequence<?) ${buyer ? "AND direction!='private-note'" : ''} ORDER BY sequence DESC LIMIT 101`,
+        `SELECT id,direction,created_at,sealed,sequence FROM sales_messages WHERE lead_id=? AND (?=0 OR sequence<?) ${buyer ? "AND direction IN ('reply','buyer')" : ''} ORDER BY sequence DESC LIMIT 101`,
       )
       .bind(id, before, before)
       .all<{
@@ -501,7 +517,25 @@ export class SalesInquiryStore {
               .replaceAll('/', '_')
           : null,
     };
-    if (buyer) return common;
+    if (buyer) {
+      const reply = await this.db
+        .prepare(
+          "SELECT 1 FROM sales_messages WHERE lead_id=? AND direction='reply' LIMIT 1",
+        )
+        .bind(id)
+        .first();
+      return {
+        ...common,
+        original: {
+          message: l.payload.message,
+          offer: l.payload.offer,
+          snapshot: { domain: l.payload.snapshot.domain },
+        },
+        buyerStatus: reply
+          ? ('seller-replied' as const)
+          : ('awaiting-seller-review' as const),
+      };
+    }
     const deliveries = await this.db
       .prepare(
         'SELECT id,message_id,kind,state,attempts,updated_at FROM sales_outbox WHERE lead_id=? ORDER BY updated_at DESC LIMIT 100',
@@ -643,9 +677,9 @@ export class SalesInquiryStore {
       statements.push(
         this.db
           .prepare(
-            "UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose='thread' AND revoked_at IS NULL",
+            "UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose='thread' AND revoked_at IS NULL AND grant_id IS NOT ?",
           )
-          .bind(now, id),
+          .bind(now, id, confirmationThreadGrant),
         await this.tokenWrite(raw, 'thread', id, 7),
         await this.outbox(
           message,

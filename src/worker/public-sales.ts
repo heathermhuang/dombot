@@ -403,7 +403,7 @@ export function createPublicSalesRoutes() {
       : c.html(
           salesPage(
             'Check your email',
-            `<section class="flow"><span class="eyebrow">Inquiry saved</span><h1>Check your inbox.</h1><div class="panel"><p>We saved your inquiry about <strong>${e(s.domain)}</strong>.</p><p>${c.env.SALES_MAIL_ENABLED === 'true' ? `A confirmation email is on its way to <strong>${e(input.email)}</strong>.` : 'Email delivery is temporarily unavailable. Your inquiry is saved and waiting for delivery.'}</p><ol><li>Open the email from domains.domains.</li><li>Choose <strong>Confirm email address</strong>.</li><li>Continue the conversation by email.</li></ol><p class="note">Can’t see it? Check Spam or All Mail. Delivery can take a few minutes.</p></div><p class="receipt">Inquiry reference: ${e(receipt!.id)}</p></section>`,
+            `<section class="flow"><span class="eyebrow">Inquiry saved</span><h1>Check your inbox.</h1><div class="panel"><p>We saved your inquiry about <strong>${e(s.domain)}</strong>.</p><p>${c.env.SALES_MAIL_ENABLED === 'true' ? `A confirmation email is on its way to <strong>${e(input.email)}</strong>.` : 'Email delivery is temporarily unavailable. Your inquiry is saved and waiting for delivery.'}</p><ol><li>Open the email from domains.domains.</li><li>Choose <strong>Confirm email address</strong>.</li><li>Open your private conversation.</li></ol><p class="note">Can’t see it? Check Spam or All Mail. Delivery can take a few minutes.</p></div><p class="receipt">Inquiry reference: ${e(receipt!.id)}</p></section>`,
           ),
           202,
         );
@@ -417,12 +417,19 @@ export function createPublicSalesRoutes() {
         grant
           ? `<section class="flow"><span class="eyebrow">Email confirmation</span><h1>Ready to start the conversation?</h1><div class="panel"><p>Confirm your email so we can reply to your inquiry. This does not accept an offer or commit you to a purchase.</p><form method="post" action="${e(base(c))}/i/${e(c.req.param('token'))}/confirm"><button>Confirm email address</button></form></div></section>`
           : '<section class="flow"><h1>This link expired or was revoked.</h1><p>It can no longer confirm an inquiry. If you still want to get in touch, return to the public domain page you visited and send a new inquiry.</p><p><a class="cta" href="https://domains.domains/">Go to domains.domains</a></p><p class="note">Need help? <a href="mailto:domains@domains.domains">Contact support</a>. Do not forward private conversation links.</p></section>',
+        false,
       ),
       grant ? 200 : 403,
     );
   });
   app.post('/i/:token/confirm', async (c) => {
-    await (await inbox(c.env)).confirm(c.req.param('token'));
+    const db = await inbox(c.env);
+    const thread = await db.confirm(c.req.param('token'));
+    if (thread) {
+      // Managed sale hosts can detach while the conversation stays accessible.
+      const location = c.get('customSalesHost') ? db.publicBase : base(c);
+      return c.redirect(`${location}/t/${thread}`, 303);
+    }
     return c.html(
       salesPage(
         'Inquiry confirmed',
@@ -450,7 +457,7 @@ export function createPublicSalesRoutes() {
     return c.html(
       salesPage(
         'Your inquiry',
-        `<section class="conversation"><span class="eyebrow">Your conversation</span><h1>${e(thread.original.snapshot.domain)}</h1><p class="note">Forwarding this link shares this conversation until it expires or is revoked.</p><p class="message">${e(thread.original.message)}</p>${thread.messages.map((m) => `<article class="message"><div class="message-meta"><strong>${m.direction === 'reply' ? 'Reply' : 'You'}</strong> · <time datetime="${e(new Date(m.createdAt).toISOString())}">${e(new Date(m.createdAt).toUTCString())}</time></div><p>${e(m.body)}</p></article>`).join('')}${thread.cursor ? `<a href="?cursor=${e(thread.cursor)}">More messages</a>` : ''}<form method="post" action="${e(base(c))}/t/${e(raw)}/messages"><input type="hidden" name="idempotencyKey" value="${crypto.randomUUID()}"><label for="body">Your reply</label><textarea id="body" name="body" maxlength="4000" required></textarea><button>Send message</button></form></section>`,
+        `<section class="conversation"><span class="eyebrow">Your conversation</span><h1>${e(thread.original.snapshot.domain)}</h1><div class="panel">${thread.original.offer ? `<p>Your offer · <strong>${e(salePriceLabel(thread.original.offer))}</strong></p>` : ''}<p role="status"><strong>${'buyerStatus' in thread && thread.buyerStatus === 'seller-replied' ? 'Seller replied' : 'Awaiting seller review'}</strong></p><p class="note">Your email is confirmed. Keep this link private to reopen the conversation.</p></div>${thread.original.message ? `<p class="message">${e(thread.original.message)}</p>` : ''}${thread.messages.map((m) => `<article class="message"><div class="message-meta"><strong>${m.direction === 'reply' ? 'Reply' : 'You'}</strong> · <time datetime="${e(new Date(m.createdAt).toISOString())}">${e(new Date(m.createdAt).toUTCString())}</time></div><p>${e(m.body)}</p></article>`).join('')}${thread.cursor ? `<a href="?cursor=${e(thread.cursor)}">More messages</a>` : ''}<form method="post" action="${e(base(c))}/t/${e(raw)}/messages"><input type="hidden" name="idempotencyKey" value="${crypto.randomUUID()}"><label for="body">Your reply</label><textarea id="body" name="body" maxlength="4000" required></textarea><button>Send message</button></form></section>`,
       ),
     );
   });

@@ -1,3 +1,8 @@
+import { tokenHash } from './crypto';
+import { agentListingSchema } from './agent-openapi';
+import { refreshAgentCatalog } from './agent-catalog';
+import { agentOwnerPage } from './agent-views';
+import type { SaleDraft } from '../shared/hosted-sales';
 import {
   backfillDomainRoutes,
   PublicDomainDirectory,
@@ -21,13 +26,15 @@ import {
   PROOF_HEADER,
   signGatewayRequest,
 } from '../shared/gateway-proof';
-import { SalesStore } from '../worker/sales-store';
+import { SalesStore, readPublicSale } from '../worker/sales-store';
+import { SalesInquiryStore } from '../worker/sales-inquiry-store';
 import { emptySale } from '../shared/hosted-sales';
 import { sealPlatformKey } from './platform-keys';
 
 const ids = [
   '11111111-1111-4111-8111-111111111111',
   '22222222-2222-4222-8222-222222222222',
+  '33333333-3333-4333-8333-333333333333',
 ];
 const keys = ids.map((id) => `synthetic-public-domain-key-${id}`);
 const origin = 'https://localhost';
@@ -37,6 +44,7 @@ let dbs: D1Database[];
 let env: HostedEnv;
 const calls = vi.fn();
 let broken = -1;
+let syntheticIntake: ((request: Request) => Promise<Response>) | null = null;
 const observation = () => ({
   available: true,
   reason: null,
@@ -44,12 +52,20 @@ const observation = () => ({
   ownershipFingerprint: 'synthetic-control',
   controlExpiresAt: Date.now() + 86400000,
 });
-async function publish(index = 0, domain = 'working.io') {
+async function publish(
+  index = 0,
+  domain = 'working.io',
+  values: Partial<SaleDraft> = {},
+) {
   const store = await SalesStore.from({
     DB: dbs[index],
     DOMBOT_SECRET: btoa('x'.repeat(32)),
   });
-  const draft = { ...emptySale(domain, 'synthetic'), priceSource: null };
+  const draft = {
+    ...emptySale(domain, 'synthetic'),
+    priceSource: null,
+    ...values,
+  };
   const revision = await store.save(draft, null);
   const review = await store.prepare([{ id: draft.id, revision }], observation);
   try {
@@ -121,7 +137,14 @@ beforeAll(async () => {
             SALES_INQUIRIES_ENABLED: 'true',
             SALES_PRIVACY_REVIEWED: 'true',
             SALES_TURNSTILE_SITEKEY: 'synthetic-site-key',
-            // Public reads must work without a root secret or any registrar credentials.
+            ...(i === 2
+              ? {
+                  SALES_TURNSTILE_SECRET: 'synthetic-never-send',
+                  SALES_MAIL_ENABLED: 'true',
+                }
+              : {}),
+            // The first tenant exercises public reads without a root secret.
+            ...(i === 0 ? {} : { DOMBOT_SECRET: btoa('x'.repeat(32)) }),
           },
         })),
       ],
@@ -185,13 +208,14 @@ beforeAll(async () => {
             expect(proof?.owner).toBeNull();
             expect(req.headers.get('cookie')).toBeNull();
             expect(req.headers.get('authorization')).toBeNull();
-            if (
-              new URL(req.url).pathname.startsWith(
-                '/platform-internal/public-domain',
-              )
-            )
+            if (new URL(req.url).pathname.startsWith('/platform-internal/'))
               expect(proof?.sales).toBeUndefined();
             else expect(proof?.sales?.purpose).toBe('sales-public');
+            if (
+              syntheticIntake &&
+              new URL(req.url).pathname === '/d/working.io/inquiries'
+            )
+              return syntheticIntake(req);
             return service.fetch(req);
           },
         },
@@ -201,13 +225,15 @@ beforeAll(async () => {
 }, 30000);
 afterAll(async () => mf?.dispose());
 beforeEach(async () => {
+  delete env.AGENT_CATALOG_ENABLED;
+  syntheticIntake = null;
   delete env.PUBLIC_DOMAIN_DIRECTORY_READY;
   broken = -1;
   delete env.PLATFORM_ENABLED;
   delete env.DISPATCHER;
   calls.mockClear();
   await control.exec(
-    'DELETE FROM public_domain_route_transfers; DELETE FROM public_domain_route_conflicts; DELETE FROM public_domain_route_backfill; DELETE FROM public_domain_routes; DELETE FROM sales_domain_controls; DELETE FROM closure_requests; DELETE FROM users; DELETE FROM platform_workspaces; DELETE FROM rate_limits; DELETE FROM workspaces;',
+    'DELETE FROM agent_catalog_events; DELETE FROM agent_catalog_search; DELETE FROM agent_catalog_index; DELETE FROM public_domain_route_transfers; DELETE FROM public_domain_route_conflicts; DELETE FROM public_domain_route_backfill; DELETE FROM public_domain_routes; DELETE FROM sales_domain_controls; DELETE FROM closure_requests; DELETE FROM users; DELETE FROM platform_workspaces; DELETE FROM rate_limits; DELETE FROM workspaces;',
   );
   for (const id of ids)
     await control
@@ -216,7 +242,7 @@ beforeEach(async () => {
       .run();
   for (const db of dbs)
     await db.exec(
-      'DELETE FROM sales_reviews; DELETE FROM published_sales; DELETE FROM sale_drafts;',
+      'DELETE FROM sales_reviews; DELETE FROM sales_leads; DELETE FROM published_sales; DELETE FROM sale_drafts;',
     );
 });
 
@@ -653,5 +679,428 @@ it('signs original public inquiry context and strips forged internal headers bef
     userAgent: 'Original browser',
     country: 'SG',
     city: 'Singapore',
+  });
+});
+
+describe('public agent catalog', () => {
+  const listingPath = '/api/agent/listings/working.io';
+  const fetchGateway = (path: string, init?: RequestInit) =>
+    gateway.fetch(new Request(origin + path, init), env);
+  const override = { amount: '1200.99', currency: 'USD' };
+  const offerDraft: Partial<SaleDraft> = {
+    mode: 'offer',
+    description: 'Card payments software for merchants.',
+    categories: ['payments'],
+    priceSource: {
+      kind: 'override',
+      price: override,
+      reason: 'Approved public price',
+    },
+  };
+
+  it('provides no-auth setup instructions and a read-only JSON catalog contract', async () => {
+    expect((await fetchGateway('/connect-agent')).status).toBe(404);
+    expect((await fetchGateway('/api/agent/openapi.json')).status).toBe(404);
+    env.AGENT_CATALOG_ENABLED = 'true';
+    await publish(2, 'working.io', offerDraft);
+
+    const page = await fetchGateway('/connect-agent');
+    expect(page.status).toBe(200);
+    expect(page.headers.get('Content-Security-Policy')).toContain(
+      "script-src 'self'",
+    );
+    const html = await page.text();
+    expect(html).toContain(origin + '/mcp/catalog');
+    expect(html).toContain('No authentication');
+    expect(html).toContain('No sign in to Domains.Domains is required');
+    expect(html).toContain('codex mcp add domains-domains-catalog --url');
+    expect(html).toContain('claude mcp add --transport http');
+    expect(html).toContain('gemini mcp add --transport http');
+    const install = html.match(/href="(cursor:[^"]+)"/)![1];
+    const cursor = new URL(install.replaceAll('&amp;', '&'));
+    expect(JSON.parse(atob(cursor.searchParams.get('config')!))).toEqual({
+      url: origin + '/mcp/catalog',
+    });
+
+    const spec = await fetchGateway('/api/agent/openapi.json');
+    expect(spec.status).toBe(200);
+    expect(await spec.json()).toMatchObject({
+      openapi: '3.1.0',
+      security: [],
+      servers: [{ url: origin }],
+      paths: {
+        '/api/agent/listings': { get: { operationId: 'domain_search' } },
+        '/api/agent/listings/{domain}': {
+          get: { operationId: 'domain_price' },
+        },
+      },
+      components: { schemas: { Listing: { type: 'object' } } },
+    });
+    const live = await (await fetchGateway(listingPath)).json();
+    expect(agentListingSchema.parse(live)).toEqual(live);
+    expect(await (await fetchGateway('/')).text()).toContain('/connect-agent');
+  });
+
+  it('indexes published terms, searches by concept and exact price, and excludes withdrawn and private names', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    const listingId = await publish(2, 'working.io', offerDraft);
+    const privateStore = await SalesStore.from({
+      DB: dbs[1],
+      DOMBOT_SECRET: btoa('x'.repeat(32)),
+    });
+    await privateStore.save(
+      emptySale('private.example.com', 'Private portfolio'),
+      null,
+    );
+    await refreshAgentCatalog(env);
+
+    const response = await fetchGateway(
+      '/api/agent/listings?q=fintech&currency=USD&minPrice=1200.99&maxPrice=1200.99',
+      {
+        headers: {
+          'User-Agent': 'SyntheticAgent/1.0',
+          Cookie: 'secret=owner',
+          Authorization: 'Bearer secret',
+        },
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      listings: [
+        {
+          domain: 'working.io',
+          forSale: true,
+          askingPrice: override,
+          terms: 'make-offer',
+          offerCurrency: 'USD',
+          route: {
+            type: 'offer',
+            humanApprovalRequired: true,
+            buyerVerificationRequired: true,
+          },
+        },
+      ],
+      nextCursor: null,
+      partial: false,
+    });
+    expect(
+      (await fetchGateway('/api/agent/listings/private.example.com')).status,
+    ).toBe(404);
+    expect(
+      (await fetchGateway('/api/agent/listings?minPrice=100')).status,
+    ).toBe(400);
+    const activity = await agentOwnerPage(env, ids[2], '', '');
+    expect(activity).toContain('API · SyntheticAgent');
+    expect(activity).toContain('fintech');
+    expect(await agentOwnerPage(env, ids[1], '', '')).not.toContain('fintech');
+    expect((await fetchGateway('/account/agent-listings')).status).toBe(303);
+
+    await dbs[2]
+      .prepare('DELETE FROM published_sales WHERE id=?')
+      .bind(listingId)
+      .run();
+    expect((await fetchGateway(listingPath)).status).toBe(404);
+    expect((await fetchGateway('/working.io/llms.txt')).status).toBe(404);
+    expect(
+      await (await fetchGateway('/api/agent/listings?q=fintech')).json(),
+    ).toMatchObject({ listings: [] });
+  });
+
+  it('withholds aged terms and serves the draft discovery URL for the eligible name', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    const listing = await publish(2, 'working.io', offerDraft);
+    const price = await fetchGateway(listingPath);
+    const approved = await price.json();
+    expect(approved.askingPrice).toEqual(override);
+    expect(approved.lastVerified).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const file = await fetchGateway('/working.io/llms.txt');
+    expect(file.status).toBe(200);
+    expect(await file.text()).toContain(`${origin}${listingPath}`);
+
+    await dbs[2]
+      .prepare(
+        "UPDATE published_sales SET payload=json_set(payload,'$.publishedAt',?) WHERE id=?",
+      )
+      .bind(Date.now() - 31 * 86400_000, listing)
+      .run();
+    expect(await (await fetchGateway(listingPath)).json()).toMatchObject({
+      askingPrice: null,
+      priceStatus: 'needs-reconfirmation',
+    });
+    expect(
+      await (await fetchGateway('/api/agent/listings?currency=USD')).json(),
+    ).toMatchObject({ listings: [] });
+  });
+
+  it('exposes a real read-only stateless MCP server and denies direct private reader calls', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    await publish(2, 'working.io', offerDraft);
+    const send = (method: string, params: object) =>
+      fetchGateway('/mcp/catalog', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      });
+    const initialized = await send('initialize', {
+      protocolVersion: '2025-11-25',
+      clientInfo: { name: 'synthetic', version: '1' },
+      capabilities: {},
+    });
+    expect(initialized.status).toBe(200);
+    expect(await initialized.json()).toMatchObject({
+      result: { serverInfo: { name: 'domains-domains-public-catalog' } },
+    });
+    const tools = await send('tools/list', {});
+    expect(await tools.json()).toMatchObject({
+      result: { tools: [{ name: 'domain_search' }, { name: 'domain_price' }] },
+    });
+    const result = await send('tools/call', {
+      name: 'domain_price',
+      arguments: { domain: 'working.io' },
+    });
+    const payload = await result.json();
+    expect(JSON.parse(payload.result.content[0].text)).toMatchObject({
+      askingPrice: override,
+    });
+
+    const tenant = await mf.getWorker('tenant2');
+    expect(
+      (
+        await tenant.fetch(
+          origin + '/platform-internal/agent-listing?domain=working.io',
+        )
+      ).status,
+    ).toBe(403);
+    delete env.AGENT_CATALOG_ENABLED;
+    expect((await send('tools/list', {})).status).toBe(404);
+  });
+
+  it('keeps the verified buyer thread through the packaged tenant after withdrawal', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    const listing = await publish(2, 'working.io', offerDraft);
+    await refreshAgentCatalog(env);
+    const publicTerms = await (await fetchGateway(listingPath)).json();
+    const snapshot = (await readPublicSale(dbs[2], 'working.io'))!;
+    expect(publicTerms.revision).toBe(snapshot.revision);
+    const seller = await SalesStore.from({
+      DB: dbs[2],
+      DOMBOT_SECRET: btoa('x'.repeat(32)),
+    });
+    const inbox = new SalesInquiryStore(seller, origin + '/w/' + ids[2]);
+    const offer = {
+      observedRevision: snapshot.revision,
+      idempotencyKey: crypto.randomUUID(),
+      name: 'Synthetic buyer',
+      email: 'buyer@example.com',
+      message: 'Offer for the catalog fixture.',
+      offer: { amount: '950', currency: 'USD' },
+      website: '',
+      turnstileToken: 'fixture',
+    };
+    const receipt = await inbox.intake(offer, snapshot);
+    expect(await inbox.intake(offer, snapshot)).toEqual(receipt);
+    const [mail] = await inbox.lease();
+    const verification = new URL(mail.mail.url);
+    const confirmed = await fetchGateway(verification.pathname + '/confirm', {
+      method: 'POST',
+      headers: { Origin: origin },
+    });
+    expect(confirmed.status).toBe(303);
+    const threadPath = confirmed.headers.get('Location')!;
+    expect(threadPath).toMatch(new RegExp('^/w/' + ids[2] + '/t/'));
+    expect(await (await fetchGateway(threadPath)).text()).toContain(
+      'Awaiting seller review',
+    );
+    expect(
+      (await fetchGateway(threadPath.replace(ids[2], ids[1]))).status,
+    ).toBe(403);
+
+    await inbox.message(receipt.id, {
+      direction: 'reply',
+      revision: (await inbox.lead(receipt.id)).revision,
+      body: 'Thanks. Could you share your timeline?',
+      idempotencyKey: crypto.randomUUID(),
+    });
+    await seller.unpublish(listing, (await seller.get(listing)).revision);
+    expect((await fetchGateway(listingPath)).status).toBe(404);
+    const search = await (
+      await fetchGateway('/api/agent/listings?q=payments')
+    ).json();
+    expect(search.listings).toEqual([]);
+    const thread = await fetchGateway(threadPath);
+    expect(thread.status).toBe(200);
+    const html = await thread.text();
+    expect(html).toContain('Seller replied');
+    expect(html).toContain('Thanks. Could you share your timeline?');
+  });
+
+  it('serves updated prices after explicit review and uses an opaque filter-bound cursor', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    const id = await publish(2, 'working.io', offerDraft);
+    await publish(2, 'sorted-first.example.com', offerDraft);
+    const first = await (
+      await fetchGateway('/api/agent/listings?limit=1')
+    ).json();
+    expect(
+      first.listings.map((item: { domain: string }) => item.domain),
+    ).toEqual(['sorted-first.example.com']);
+    expect(first.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(first.nextCursor).not.toContain('sorted-first.example.com');
+    expect(
+      (
+        await fetchGateway(
+          '/api/agent/listings?limit=1&q=unrelated&cursor=' + first.nextCursor,
+        )
+      ).status,
+    ).toBe(400);
+    const second = await (
+      await fetchGateway(
+        '/api/agent/listings?limit=1&cursor=' + first.nextCursor,
+      )
+    ).json();
+    expect(
+      second.listings.map((item: { domain: string }) => item.domain),
+    ).toEqual(['working.io']);
+
+    const store = await SalesStore.from({
+      DB: dbs[2],
+      DOMBOT_SECRET: btoa('x'.repeat(32)),
+    });
+    const saved = await store.get(id);
+    const askingPrice = { amount: '1600.55', currency: 'USD' };
+    const revision = await store.save(
+      {
+        ...saved.draft,
+        priceSource: {
+          kind: 'override',
+          price: askingPrice,
+          reason: 'Updated asking price',
+        },
+      },
+      saved.revision,
+    );
+    expect(await (await fetchGateway(listingPath)).json()).toMatchObject({
+      askingPrice: override,
+    });
+    const review = await store.prepare([{ id, revision }], observation);
+    await new PublicDomainDirectory(control).reserve(ids[2], {
+      domain: 'working.io',
+      listing: id,
+      revision: review.items[0].after.revision,
+    });
+    expect((await fetchGateway(listingPath)).status).toBe(404);
+    await store.publish(review.id, observation);
+    expect(await (await fetchGateway(listingPath)).json()).toMatchObject({
+      askingPrice,
+    });
+  });
+
+  it('requires the current reviewed revision and forwards structured offers through existing Sales intake', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    const listingId = await publish(2, 'working.io', offerDraft);
+    const { revision } = await (await fetchGateway(listingPath)).json();
+    const id = crypto.randomUUID();
+    const data = {
+      intent: 'offer',
+      observedRevision: revision,
+      idempotencyKey: crypto.randomUUID(),
+      name: 'Fixture buyer',
+      email: 'buyer@example.com',
+      turnstileToken: 'fixture-token',
+      offer: override,
+    };
+    const post = (body: object, caller = origin) =>
+      fetchGateway(listingPath + '/inquiries', {
+        method: 'POST',
+        headers: {
+          Origin: caller,
+          'Content-Type': 'application/json',
+          'cf-connecting-ip': '203.0.113.1',
+        },
+        body: JSON.stringify(body),
+      });
+    const dispatch = vi.fn(async (request: Request) => {
+      const input = await request.json();
+      expect(input).toMatchObject({
+        offer: override,
+        turnstileToken: 'fixture-token',
+        observedRevision: revision,
+      });
+      return Response.json(
+        { id, status: 'verification-pending' },
+        { status: 202 },
+      );
+    });
+    syntheticIntake = dispatch;
+    expect((await post(data, 'https://other.example.com')).status).toBe(403);
+    expect(
+      (await post({ ...data, observedRevision: crypto.randomUUID() })).status,
+    ).toBe(409);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect((await post(data)).status).toBe(202);
+    expect((await post(data)).status).toBe(202);
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    const counted = await control
+      .prepare(
+        "SELECT count(*) AS hits FROM agent_catalog_events WHERE event='offer' AND receipt=?",
+      )
+      .bind(id)
+      .first<{ hits: number }>();
+    expect(counted?.hits).toBe(1);
+    await dbs[2]
+      .prepare(
+        `
+      INSERT INTO sales_leads(id,listing_id,request_hash,payload_hash,email_hash,revision,verification,created_at,updated_at,sealed)
+      VALUES(?,?,'request','payload','email',?,'verified',0,0,'fixture')
+    `,
+      )
+      .bind(id, listingId, revision)
+      .run();
+    const evidence = crypto.randomUUID();
+    await dbs[2].batch([
+      dbs[2]
+        .prepare(
+          "INSERT INTO sales_events(id,listing_id,lead_id,kind,created_at,sealed) VALUES(?,?,?,'outcome',?,'fixture')",
+        )
+        .bind(evidence, listingId, id, Date.now()),
+      dbs[2]
+        .prepare(
+          "INSERT INTO sales_journey_receipts(event,receipt) VALUES('sale-evidence-linked',?)",
+        )
+        .bind(evidence),
+    ]);
+
+    const user = crypto.randomUUID();
+    const token = 'a'.repeat(64);
+    await control.batch([
+      control
+        .prepare(
+          "INSERT INTO users(id,email,workspace_id,password_hash,created_at) VALUES(?,?,?,'fixture',?)",
+        )
+        .bind(user, 'owner@example.com', ids[2], Date.now()),
+      control
+        .prepare(
+          'INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',
+        )
+        .bind(await tokenHash(token), user, Date.now() + 3600_000),
+    ]);
+    const ownerPage = () =>
+      fetchGateway('/account/agent-listings', {
+        headers: { Cookie: '__Host-dd_session=' + token },
+      });
+    const dashboard = await ownerPage();
+    expect(dashboard.status).toBe(200);
+    expect(await dashboard.text()).toContain('1 email-verified offers');
+    await dbs[2]
+      .prepare("UPDATE sale_drafts SET availability='sold' WHERE id=?")
+      .bind(listingId)
+      .run();
+    expect((await fetchGateway(listingPath)).status).toBe(404);
+    expect(await (await ownerPage()).text()).toContain(
+      '<strong>1</strong><span>Linked sale evidence</span>',
+    );
   });
 });

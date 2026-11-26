@@ -1,4 +1,5 @@
 interface HostedEnv {
+  AGENT_CATALOG_ENABLED?: string;
   PARKIO_LOGIN?: DurableObjectNamespace;
   PARKIO_LOGIN_SECRET?: string;
   PARKIO_CONNECTOR_ENABLED?: string;
@@ -85,6 +86,7 @@ interface HostedEnv {
   EMAIL?: SendEmail;
   EMAIL_FROM?: string;
   EMAIL_DELIVERY_VERIFIED?: string;
+  AUTH_EMAIL_STAGING_ORIGIN?: string;
   AUTH_EMAIL_DAILY_LIMIT?: string;
   AUTH_EMAIL_MONTHLY_LIMIT?: string;
   AUTH_EMAIL_IP_LIMIT?: string;
