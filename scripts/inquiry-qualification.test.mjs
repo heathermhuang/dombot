@@ -335,6 +335,7 @@ async function qualifyUnlisted(environment) {
     AUTH_PEPPER: 'synthetic-intake-pepper'.repeat(3),
     CANONICAL_ORIGIN: origin,
     [reviewerBinding]: reviewer,
+    PUBLIC_SITE_ADDRESSES_ENABLED: production ? 'true' : 'false',
     OFF_MARKET_STAGING_BUYER_EMAIL: production ? undefined : buyer,
     PUBLIC_REGISTRATION_ENABLED: 'false',
     WORKSPACES: JSON.stringify([
