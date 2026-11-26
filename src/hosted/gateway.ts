@@ -234,6 +234,20 @@ app.use(
     onError: (c) => c.json({ error: 'Request too large' }, 413),
   }),
 );
+const referralPostPath = /^\/[^/]+\/inquiries$/;
+const referralBodyLimit = bodyLimit({
+  maxSize: 16_384,
+  onError: (c) => c.text('Message is too large.', 413),
+});
+app.use('*', async (c, next) => {
+  if (
+    c.req.method === 'POST' &&
+    referralPostPath.test(c.req.path) &&
+    c.req.query('referral')
+  )
+    return referralBodyLimit(c, next);
+  await next();
+});
 app.use('*', async (c, next) => {
   const directoryPath = c.req.path.match(
     /^\/internal\/public-directory\/([a-f0-9-]{36})$/,
@@ -260,7 +274,7 @@ app.use('*', async (c, next) => {
     referralDomain.success &&
     (((request.method === 'GET' || request.method === 'HEAD') &&
       /^\/[^/]+$/.test(url.pathname)) ||
-      (request.method === 'POST' && /^\/[^/]+\/inquiries$/.test(url.pathname)));
+      (request.method === 'POST' && referralPostPath.test(url.pathname)));
   const referral = referralRoute
     ? await verifyReferral(c.env, referralTicket!, referralDomain.data)
     : null;

@@ -873,6 +873,15 @@ describe('public agent catalog', () => {
         }),
       });
     expect((await post(ticket, crypto.randomUUID())).status).toBe(409);
+    const oversized = await fetchGateway(
+      '/working.io/inquiries?referral=' + ticket,
+      {
+        method: 'POST',
+        headers: { Origin: origin },
+        body: new URLSearchParams({ message: 'a'.repeat(16_384) }),
+      },
+    );
+    expect(oversized.status).toBe(413);
     expect((await post(ticket)).status).toBe(202);
     expect((await post(ticket)).status).toBe(202);
     expect(keys).toHaveLength(2);
