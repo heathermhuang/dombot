@@ -1,3 +1,10 @@
+import {
+  bindReferralOffer,
+  pruneReferralActivity,
+  recordReferral,
+  saveReferralConsent,
+  verifyReferral,
+} from './agent-referrals';
 import { agentConnectPath } from './agent-connect';
 import {
   agentCatalogEnabled,
@@ -227,6 +234,20 @@ app.use(
     onError: (c) => c.json({ error: 'Request too large' }, 413),
   }),
 );
+const referralPostPath = /^\/[^/]+\/inquiries$/;
+const referralBodyLimit = bodyLimit({
+  maxSize: 16_384,
+  onError: (c) => c.text('Message is too large.', 413),
+});
+app.use('*', async (c, next) => {
+  if (
+    c.req.method === 'POST' &&
+    referralPostPath.test(c.req.path) &&
+    c.req.query('referral')
+  )
+    return referralBodyLimit(c, next);
+  await next();
+});
 app.use('*', async (c, next) => {
   const directoryPath = c.req.path.match(
     /^\/internal\/public-directory\/([a-f0-9-]{36})$/,
@@ -242,10 +263,34 @@ app.use('*', async (c, next) => {
   if (publicSiteResponse) return publicSiteResponse;
   const redirect = canonicalRedirect(c.req.raw, c.env.CANONICAL_ORIGIN);
   if (redirect) return redirect;
-  const request = c.req.raw;
+  let request = c.req.raw;
   const url = new URL(request.url);
   const agentEnabled = agentCatalogEnabled(c.env);
-  const handoff = agentEnabled && url.searchParams.get('from') === 'agent';
+  const referralTicket = url.searchParams.get('referral');
+  const referralDomain =
+    referralTicket && saleDomainSchema.safeParse(url.pathname.split('/')[1]);
+  const referralRoute =
+    referralDomain &&
+    referralDomain.success &&
+    (((request.method === 'GET' || request.method === 'HEAD') &&
+      /^\/[^/]+$/.test(url.pathname)) ||
+      (request.method === 'POST' && referralPostPath.test(url.pathname)));
+  const referral = referralRoute
+    ? await verifyReferral(c.env, referralTicket!, referralDomain.data)
+    : null;
+  if (referralRoute && !referral)
+    return c.text('This referral is no longer available.', 404, {
+      'Cache-Control': 'no-store',
+    });
+  if (referral && request.method === 'POST') {
+    if (request.headers.get('Origin') !== url.origin)
+      return c.text('Bad origin', 403);
+    const bound = await bindReferralOffer(request, referral.grant);
+    if (!bound) return c.text('Review the referred offer before sending.', 409);
+    request = bound;
+  }
+  const handoff =
+    !referral && agentEnabled && url.searchParams.get('from') === 'agent';
   const offerRequest =
     handoff &&
     request.method === 'POST' &&
@@ -270,6 +315,8 @@ app.use('*', async (c, next) => {
     void offerRequest.body?.cancel().catch(() => {});
   }
   if (domainResponse) {
+    if (referral && request.method === 'POST' && domainResponse.status === 202)
+      await recordReferral(c.env, referral, domainResponse.clone());
     if (!domainResponse.headers.get('Content-Type')?.startsWith('text/html'))
       return domainResponse;
     const listing = new Response(domainResponse.body, domainResponse);
@@ -287,7 +334,15 @@ app.use('*', async (c, next) => {
         const live = await readAgentListing(c.env, domain.data).catch(
           () => null,
         );
-        if (live) return addAgentMetadata(listing, live, handoff);
+        if (live)
+          return addAgentMetadata(
+            listing,
+            live,
+            handoff,
+            referral
+              ? { ticket: referralTicket!, partnerName: referral.partnerName }
+              : undefined,
+          );
       }
     }
     return listing;
@@ -1379,6 +1434,34 @@ app.get('/account/agent-listings', async (c) => {
     ),
   );
 });
+app.post(
+  '/account/agent-listings/referrals',
+  bodyLimit({ maxSize: 4096 }),
+  async (c) => {
+    if (!sameOrigin(c.req.raw)) return c.text('Bad origin', 403);
+    const user = await account(c.env).session(readSession(c.req.raw));
+    if (!user)
+      return c.redirect('/login?next=%2Faccount%2Fagent-listings', 303);
+    const input = z
+      .object({
+        domain: saleDomainSchema,
+        listing: z.uuid(),
+        revision: z.uuid(),
+        enabled: z
+          .enum(['true', 'false'])
+          .transform((value) => value === 'true'),
+      })
+      .safeParse(await c.req.parseBody());
+    if (!input.success)
+      return c.text(
+        'Review the current listing before changing referrals.',
+        400,
+      );
+    if (!(await saveReferralConsent(c.env, user.workspace_id, input.data)))
+      return c.text('The current listing could not be shared.', 409);
+    return c.redirect('/account/agent-listings', 303);
+  },
+);
 app.post('/account/sessions/logout', async (c) => {
   if (!sameOrigin(c.req.raw)) return c.json({ error: 'Bad origin' }, 403);
   const accounts = account(c.env);
@@ -2281,7 +2364,7 @@ export default {
         'DELETE FROM password_resets WHERE expires_at<?1',
       ).bind(Date.now()),
     ]);
-    await pruneAgentEvents(env);
+    await Promise.all([pruneAgentEvents(env), pruneReferralActivity(env)]);
     if (env.NOTIFICATION_POLICY_ENABLED === 'true')
       await env.CONTROL_DB.batch([
         env.CONTROL_DB.prepare(

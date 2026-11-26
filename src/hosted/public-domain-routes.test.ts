@@ -1,4 +1,5 @@
 import { tokenHash } from './crypto';
+import { ownerReferralActivity, saveReferralConsent } from './agent-referrals';
 import { agentListingSchema } from './agent-openapi';
 import { refreshAgentCatalog } from './agent-catalog';
 import { agentOwnerPage } from './agent-views';
@@ -38,6 +39,12 @@ const ids = [
 ];
 const keys = ids.map((id) => `synthetic-public-domain-key-${id}`);
 const origin = 'https://localhost';
+const partnerFixture = {
+  AGENT_REFERRAL_PARTNER_ID: 'test-partner',
+  AGENT_REFERRAL_PARTNER_NAME: 'Synthetic partner',
+  AGENT_REFERRAL_PARTNER_TOKEN: 'fixture-bearer-credential'.repeat(2),
+  AGENT_REFERRAL_SIGNING_KEY: 'fixture-independent-signing-key'.repeat(2),
+};
 let mf: Miniflare;
 let control: D1Database;
 let dbs: D1Database[];
@@ -105,6 +112,17 @@ beforeAll(async () => {
       logLevel: 'silent',
     })
   ).outputFiles[0].text;
+  const referralGateway = (
+    await build({
+      entryPoints: ['src/hosted/gateway.ts'],
+      bundle: true,
+      write: false,
+      platform: 'node',
+      format: 'esm',
+      external: ['cloudflare:*'],
+      logLevel: 'silent',
+    })
+  ).outputFiles[0].text;
   mf = new Miniflare(
     convertV4MiniflareOptions({
       cf: false,
@@ -114,6 +132,29 @@ beforeAll(async () => {
           modules: true,
           script: 'export default {fetch(){return new Response("ok")}}',
           d1Databases: { CONTROL_DB: 'control' },
+        },
+        {
+          name: 'referral-browser-gateway',
+          modules: true,
+          script: referralGateway,
+          compatibilityDate: '2026-10-08',
+          compatibilityFlags: ['nodejs_compat'],
+          d1Databases: { CONTROL_DB: 'control' },
+          serviceBindings: { WORKSPACE_2: 'tenant2' },
+          bindings: {
+            ...partnerFixture,
+            AGENT_CATALOG_ENABLED: 'true',
+            CANONICAL_ORIGIN: origin,
+            AUTH_PEPPER: 'synthetic-pepper'.repeat(4),
+            WORKSPACES: JSON.stringify([
+              {
+                id: ids[2],
+                binding: 'WORKSPACE_2',
+                label: 'Synthetic account',
+              },
+            ]),
+            GATEWAY_KEYS: JSON.stringify({ [ids[2]]: keys[2] }),
+          },
         },
         ...ids.map((id, i) => ({
           name: `tenant${i}`,
@@ -226,6 +267,10 @@ beforeAll(async () => {
 afterAll(async () => mf?.dispose());
 beforeEach(async () => {
   delete env.AGENT_CATALOG_ENABLED;
+  delete env.AGENT_REFERRAL_PARTNER_ID;
+  delete env.AGENT_REFERRAL_PARTNER_NAME;
+  delete env.AGENT_REFERRAL_PARTNER_TOKEN;
+  delete env.AGENT_REFERRAL_SIGNING_KEY;
   syntheticIntake = null;
   delete env.PUBLIC_DOMAIN_DIRECTORY_READY;
   broken = -1;
@@ -233,7 +278,7 @@ beforeEach(async () => {
   delete env.DISPATCHER;
   calls.mockClear();
   await control.exec(
-    'DELETE FROM agent_catalog_events; DELETE FROM agent_catalog_search; DELETE FROM agent_catalog_index; DELETE FROM public_domain_route_transfers; DELETE FROM public_domain_route_conflicts; DELETE FROM public_domain_route_backfill; DELETE FROM public_domain_routes; DELETE FROM sales_domain_controls; DELETE FROM closure_requests; DELETE FROM users; DELETE FROM platform_workspaces; DELETE FROM rate_limits; DELETE FROM workspaces;',
+    'DELETE FROM agent_referral_receipts; DELETE FROM agent_referral_optins; DELETE FROM agent_catalog_events; DELETE FROM agent_catalog_search; DELETE FROM agent_catalog_index; DELETE FROM public_domain_route_transfers; DELETE FROM public_domain_route_conflicts; DELETE FROM public_domain_route_backfill; DELETE FROM public_domain_routes; DELETE FROM sales_domain_controls; DELETE FROM closure_requests; DELETE FROM users; DELETE FROM platform_workspaces; DELETE FROM rate_limits; DELETE FROM workspaces;',
   );
   for (const id of ids)
     await control
@@ -759,6 +804,112 @@ describe('public agent catalog', () => {
     const live = await (await fetchGateway(listingPath)).json();
     expect(agentListingSchema.parse(live)).toEqual(live);
     expect(await (await fetchGateway('/')).text()).toContain('/connect-agent');
+  });
+
+  it('shares only explicitly opted-in current terms and attributes the browser offer to the Sales receipt', async () => {
+    env.AGENT_CATALOG_ENABLED = 'true';
+    expect((await fetchGateway('/api/agent/referrals')).status).toBe(404);
+    Object.assign(env, partnerFixture);
+    const owner = ids[2];
+    const listing = await publish(2, 'working.io', offerDraft);
+    const { revision } = await (await fetchGateway(listingPath)).json();
+    const entry = { domain: 'working.io', listing, revision, enabled: true };
+    const feed = (
+      authorization = 'Bearer ' + env.AGENT_REFERRAL_PARTNER_TOKEN,
+    ) =>
+      fetchGateway('/api/agent/referrals', {
+        headers: { Authorization: authorization },
+      });
+    expect((await feed('Bearer incorrect')).status).toBe(401);
+    expect((await (await feed()).json()).listings).toEqual([]);
+    expect(await saveReferralConsent(env, ids[1], entry)).toBe(false);
+    expect(await saveReferralConsent(env, owner, entry)).toBe(true);
+
+    const page = await (await feed()).json();
+    expect(page.listings).toHaveLength(1);
+    expect(page.listings[0]).toMatchObject({
+      domain: 'working.io',
+      askingPrice: override,
+    });
+    const handoff = new URL(page.listings[0].offerUrl);
+    const ticket = handoff.searchParams.get('referral')!;
+    expect(ticket).toBeTruthy();
+    expect((await fetchGateway('/working.io?referral=forged')).status).toBe(
+      404,
+    );
+    const browserGateway = await mf.getWorker('referral-browser-gateway');
+    const hostedForm = await browserGateway.fetch(handoff.href);
+    expect(hostedForm.status).toBe(200);
+    const markedUp = await hostedForm.text();
+    expect(markedUp).toContain('/working.io/inquiries?referral=');
+    expect(markedUp).toContain(
+      'This offer will be marked as a referral from Synthetic partner.',
+    );
+
+    const receipt = crypto.randomUUID();
+    const directKey = crypto.randomUUID();
+    const keys: string[] = [];
+    syntheticIntake = async (req) => {
+      const form = await req.formData();
+      keys.push(String(form.get('idempotencyKey')));
+      return new Response(
+        '<p class="receipt">Inquiry reference: ' + receipt + '</p>',
+        {
+          status: 202,
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    };
+    const post = (referral: string, observedRevision = revision) =>
+      fetchGateway('/working.io/inquiries?referral=' + referral, {
+        method: 'POST',
+        headers: { Origin: origin },
+        body: new URLSearchParams({
+          intent: 'offer',
+          amount: '900',
+          currency: 'USD',
+          idempotencyKey: directKey,
+          observedRevision,
+        }),
+      });
+    expect((await post(ticket, crypto.randomUUID())).status).toBe(409);
+    const oversized = await fetchGateway(
+      '/working.io/inquiries?referral=' + ticket,
+      {
+        method: 'POST',
+        headers: { Origin: origin },
+        body: new URLSearchParams({ message: 'a'.repeat(16_384) }),
+      },
+    );
+    expect(oversized.status).toBe(413);
+    expect((await post(ticket)).status).toBe(202);
+    expect((await post(ticket)).status).toBe(202);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[0]).not.toBe(directKey);
+    expect((await ownerReferralActivity(env, owner))?.recent).toEqual([
+      {
+        domain: 'working.io',
+        receipt,
+        partner_name: 'Synthetic partner',
+      },
+    ]);
+    expect((await ownerReferralActivity(env, ids[1]))?.recent).toEqual([]);
+
+    expect(
+      await saveReferralConsent(env, owner, { ...entry, enabled: false }),
+    ).toBe(true);
+    expect((await post(ticket)).status).toBe(404);
+    expect((await (await feed()).json()).listings).toEqual([]);
+    expect(await saveReferralConsent(env, owner, entry)).toBe(true);
+    expect((await post(ticket)).status).toBe(404);
+
+    await dbs[2]
+      .prepare('DELETE FROM published_sales WHERE id=?')
+      .bind(listing)
+      .run();
+    expect((await (await feed()).json()).listings).toEqual([]);
+    expect((await ownerReferralActivity(env, owner))?.recent).toHaveLength(1);
   });
 
   it('indexes published terms, searches by concept and exact price, and excludes withdrawn and private names', async () => {
