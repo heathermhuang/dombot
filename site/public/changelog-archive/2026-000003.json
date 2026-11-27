@@ -66,6 +66,22 @@
       ]
     },
     {
+      "id": "auto-saas-pr-265",
+      "date": "2026-11-27",
+      "layer": "saas",
+      "title": "Check a current registrar renewal quote from a Domains estimate",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #265 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #265",
+          "url": "https://github.com/heathermhuang/dombot/pull/265"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-3db62841d8d9166bdc8e7204771991583a42b0ce-59",
       "date": "2026-11-26",
       "layer": "saas",
