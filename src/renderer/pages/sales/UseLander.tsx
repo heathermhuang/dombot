@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import './sales.css';
 import {
   salesRequest,
@@ -23,28 +25,30 @@ import {
   landerHostStatus,
 } from '../../lib/lander-presentation';
 
+type RecentLanderJob = {
+  id: string;
+  state: string;
+  total: number;
+  updated_at?: number;
+  domain?: string | null;
+};
+
 export default function UseLander({
   selection,
   matching,
+  showHistory = false,
   onChange,
 }: {
   selection: LanderSelection | null;
   matching?: LanderSelection;
+  showHistory?: boolean;
   onChange?: () => void;
 }) {
   const [job, setJob] = useState<LanderJobView | null>(null),
     [open, setOpen] = useState(false),
-    [recent, setRecent] = useState<
-      {
-        id: string;
-        state: string;
-        total: number;
-        updated_at?: number;
-        domain?: string | null;
-      }[]
-    >([]),
+    [recent, setRecent] = useState<RecentLanderJob[]>([]),
     [cursor, setCursor] = useState(-1),
-    [resumeError, setResumeError] = useState(''),
+    [resumeFailed, setResumeFailed] = useState(false),
     [now, setNow] = useState(() => Date.now());
   const action = useSalesAction();
   const identityLink = useRef<HTMLAnchorElement>(null);
@@ -78,20 +82,30 @@ export default function UseLander({
   useEffect(() => {
     if (open && jobId) reviewHeading.current?.focus();
   }, [open, jobId]);
-  const accept = useCallback((value: LanderJobView) => {
-    setJob(value);
-    setResumeError('');
-    setRecent((rows) =>
-      rows.some((r) => r.id === value.id)
-        ? rows.map((r) =>
-            r.id === value.id ? { ...r, state: value.state } : r,
-          )
-        : [
-            { id: value.id, state: value.state, total: value.total },
-            ...rows,
-          ].slice(0, 20),
-    );
-  }, []);
+  const accept = useCallback(
+    (value: LanderJobView) => {
+      setJob(value);
+      setResumeFailed(false);
+      if (showHistory)
+        setRecent((rows) =>
+          rows.some((r) => r.id === value.id)
+            ? rows.map((r) =>
+                r.id === value.id ? { ...r, state: value.state } : r,
+              )
+            : [
+                {
+                  id: value.id,
+                  state: value.state,
+                  total: value.total,
+                  domain: value.items.find((item) => item.ordinal === 0)
+                    ?.domain,
+                },
+                ...rows,
+              ].slice(0, 20),
+        );
+    },
+    [showHistory],
+  );
   const read = async (id: string, after = -1) => {
     const epoch = ++viewEpoch.current;
     let v: LanderJobView;
@@ -130,13 +144,9 @@ export default function UseLander({
         accept(value);
         setCursor(saved.cursor);
         setOpen(true);
-        setResumeError('');
       })
       .catch(() => {
-        if (!stopped && epoch === viewEpoch.current)
-          setResumeError(
-            'Your saved connection could not be reopened. Use recent connections to try again.',
-          );
+        if (!stopped && epoch === viewEpoch.current) setResumeFailed(true);
       });
     return () => {
       stopped = true;
@@ -172,15 +182,16 @@ export default function UseLander({
         if (!stopped) setEnabled(v.enabled);
       })
       .catch(() => {});
-    void salesRequest<{ items: typeof recent }>('/lander/jobs')
-      .then((v) => {
-        if (!stopped) setRecent(v.items);
-      })
-      .catch(() => {});
+    if (showHistory)
+      void salesRequest<{ items: RecentLanderJob[] }>('/lander/jobs')
+        .then((v) => {
+          if (!stopped) setRecent(v.items);
+        })
+        .catch(() => {});
     return () => {
       stopped = true;
     };
-  }, []);
+  }, [showHistory]);
   useEffect(() => {
     if (
       !jobId ||
@@ -267,8 +278,62 @@ export default function UseLander({
     !!job &&
     ['finished', 'cancelled'].includes(job.state) &&
     job.counts.some((c) => ['held', 'conflict'].includes(c.state));
-  if (!enabled && !recent.length && !open && !action.error && !resumeError)
+  const pendingReview = enabled && !job ? pending : null;
+  if (
+    !(enabled && (selection || matching)) &&
+    !pendingReview &&
+    !recent.length &&
+    !open &&
+    !action.error &&
+    !resumeFailed
+  )
     return null;
+
+  // History arrives newest first. Only exact single-domain jobs are known to
+  // cover the same selection; a batch summary names just its first domain.
+  const groupedHistory = new Map<string, RecentLanderJob[]>();
+  for (const attempt of recent) {
+    const key =
+      attempt.total === 1 && attempt.domain
+        ? `domain:${attempt.domain}`
+        : `job:${attempt.id}`;
+    const group = groupedHistory.get(key);
+    if (group) group.push(attempt);
+    else groupedHistory.set(key, [attempt]);
+  }
+  const historyButton = (attempt: RecentLanderJob) => (
+    <button
+      type="button"
+      disabled={action.busy}
+      onClick={() =>
+        void action.run(async () => {
+          if (await read(attempt.id)) setOpen(true);
+        })
+      }
+    >
+      <span>
+        {attempt.domain
+          ? `${attempt.domain}${attempt.total > 1 ? ` +${attempt.total - 1}` : ''}`
+          : domainCount(attempt.total)}{' '}
+        ·{' '}
+        {landerJobLabel({
+          state: attempt.state,
+          total: attempt.total,
+          counts: job?.id === attempt.id ? job.counts : [],
+        })}
+      </span>
+      {typeof attempt.updated_at === 'number' && attempt.updated_at > 0 && (
+        <time dateTime={new Date(attempt.updated_at).toISOString()}>
+          {new Date(attempt.updated_at).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </time>
+      )}
+    </button>
+  );
   return (
     <div className="sales sales-lander-action">
       {enabled && selection && (
@@ -285,56 +350,57 @@ export default function UseLander({
           Use our lander for all matching
         </button>
       )}
-      {enabled && pending && !job && (
+      {pendingReview && (
         <button
           disabled={action.busy}
-          onClick={() => prepare(pending.selection)}
+          onClick={() => prepare(pendingReview.selection)}
         >
           Continue lander review
         </button>
       )}
-      {!!recent.length && (
-        <details>
-          <summary>Recent lander connections</summary>
+      {!!groupedHistory.size && (
+        <details className="sales-lander-history-disclosure">
+          <summary>
+            <ChevronRight aria-hidden="true" size={16} />
+            Recent lander connections
+          </summary>
           <ul className="sales-lander-history">
-            {recent.map((j) => (
-              <li key={j.id}>
-                <button
-                  disabled={action.busy}
-                  onClick={() =>
-                    void action.run(async () => {
-                      if (await read(j.id)) setOpen(true);
-                    })
-                  }
-                >
-                  <span>
-                    {j.domain
-                      ? `${j.domain}${j.total > 1 ? ` +${j.total - 1}` : ''}`
-                      : domainCount(j.total)}{' '}
-                    ·{' '}
-                    {landerJobLabel({
-                      state: j.state,
-                      total: j.total,
-                      counts: job?.id === j.id ? job.counts : [],
-                    })}
-                  </span>
-                  {typeof j.updated_at === 'number' && j.updated_at > 0 && (
-                    <time dateTime={new Date(j.updated_at).toISOString()}>
-                      {new Date(j.updated_at).toLocaleString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </time>
-                  )}
-                </button>
+            {[...groupedHistory].map(([key, [latest, ...earlier]]) => (
+              <li key={key}>
+                {historyButton(latest)}
+                {!!earlier.length && (
+                  <details className="sales-lander-history-disclosure sales-lander-earlier-attempts">
+                    <summary>
+                      <ChevronRight aria-hidden="true" size={16} />
+                      {earlier.length === 1
+                        ? '1 earlier attempt'
+                        : `${earlier.length} earlier attempts`}
+                      <span className="sr-only"> for {latest.domain}</span>
+                    </summary>
+                    <ul className="sales-lander-history">
+                      {earlier.map((attempt) => (
+                        <li key={attempt.id}>{historyButton(attempt)}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </li>
             ))}
           </ul>
         </details>
       )}
-      {resumeError && <p role="alert">{resumeError}</p>}
+      {resumeFailed && (
+        <p role="alert">
+          Your saved connection could not be reopened.{' '}
+          {showHistory ? (
+            'Use recent connections to try again.'
+          ) : (
+            <Link className="link" to="/public-listings">
+              Find it in Sales pages
+            </Link>
+          )}
+        </p>
+      )}
       {action.error && !action.reauth && <p role="alert">{action.error}</p>}
       {action.reauth && (
         <div className="sales-lander-auth" role="alert">

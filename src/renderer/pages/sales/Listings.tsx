@@ -356,6 +356,7 @@ export default function Listings() {
         </div>
       )}
       <UseLander
+        showHistory
         selection={
           picked.length
             ? { kind: 'listings', ids: picked.map((i) => i.draft.id) }

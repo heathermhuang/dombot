@@ -62,23 +62,81 @@ const browser = await chromium.launchPersistentContext(profile, {
 let job = null,
   approved = 0,
   selection = null,
+  historyFixture = false,
   reauthOnce = true,
   rejectedRequestId = null;
 const results = [];
+const domain = domains[0];
+const missingAttempt = crypto.randomUUID();
+const historyJobs = [
+  { domain, total: 1, state: 'finished' },
+  { domain, total: 2, state: 'finished' },
+  { domain, total: 1, state: 'finished' },
+  { domain, total: 1, state: 'cancelled' },
+  { domain, total: 2, state: 'cancelled' },
+  { domain: domains[1], total: 1, state: 'finished' },
+].map((attempt, index) => ({
+  ...attempt,
+  id: crypto.randomUUID(),
+  updated_at: Date.UTC(2026, 10, 15, 14 - index),
+}));
+let openedAttempt;
+let historyListReads = 0;
 try {
   await browser.route('**/*', async (route) => {
     const request = route.request(),
       url = new URL(request.url());
     if (url.origin !== origin) return route.abort();
+    if (url.pathname.endsWith('/publishing/presence')) {
+      const [name] = JSON.parse(url.searchParams.get('names'));
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              domain: name,
+              sales: {
+                state: 'known',
+                value: {
+                  id: name === domain ? historyJobs[0].id : null,
+                  publishedRevision: name === domain ? historyJobs[0].id : null,
+                  actionable: name === domain,
+                  pendingChanges: false,
+                  suppression: null,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
     if (!url.pathname.includes('/sales/lander/')) return route.continue();
     const suffix = url.pathname.split('/sales/lander/')[1];
     let value;
     if (suffix === 'config') value = { enabled: true, provider: 'cloudflare' };
-    else if (suffix === 'jobs' && request.method() === 'GET')
+    else if (suffix === 'jobs' && request.method() === 'GET') {
+      if (historyFixture) historyListReads++;
       value = {
-        items: job ? [{ id: job.id, state: job.state, total: job.total }] : [],
+        items: historyFixture
+          ? historyJobs
+          : job
+            ? [{ id: job.id, state: job.state, total: job.total }]
+            : [],
       };
-    else if (suffix === 'jobs') {
+    } else if (historyFixture) {
+      assert.equal(request.method(), 'GET', 'History opens a read-only view.');
+      const id = suffix.split('/')[1];
+      if (id === missingAttempt)
+        return route.fulfill({ status: 404, json: { error: 'Unknown job' } });
+      const attempt = historyJobs.find((item) => item.id === id);
+      assert(attempt);
+      openedAttempt = id;
+      value = {
+        ...attempt,
+        counts: [{ state: 'cancelled', count: 1 }],
+        items: [{ ordinal: 0, domain, state: 'cancelled', reason: null }],
+        cursor: null,
+      };
+    } else if (suffix === 'jobs') {
       const input = request.postDataJSON();
       if (reauthOnce) {
         reauthOnce = false;
@@ -163,7 +221,7 @@ try {
     });
   });
   let page = await browser.newPage();
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(60_000);
   await page.goto(origin + '/__qualification/session');
   await page
     .getByRole('searchbox', { name: /Search/ })
@@ -171,6 +229,57 @@ try {
     .fill('lander-fixture-');
   await page.waitForFunction(
     () => document.querySelectorAll('tbody [role="checkbox"]').length === 50,
+  );
+  const column = page.getByRole('columnheader', { name: /public page/i });
+  const menu = page.getByRole('button', {
+    name: `Public page actions for ${domain}`,
+    exact: true,
+  });
+  await menu.waitFor();
+  assert(
+    (await column.boundingBox()).width <= 140,
+    'The Public Page column must stay close to its content width.',
+  );
+  const published = menu.locator('..').getByText('Published', { exact: true });
+  const [statusBox, menuBox] = await Promise.all([
+    published.boundingBox(),
+    menu.boundingBox(),
+  ]);
+  assert(
+    statusBox.y < menuBox.y + menuBox.height &&
+      menuBox.y < statusBox.y + statusBox.height,
+    'The status and action stay on the same line.',
+  );
+  const prepare = page.getByRole('button', {
+    name: `Prepare public page for ${domains[1]}`,
+    exact: true,
+  });
+  assert(await prepare.isEnabled(), 'A private page can still be prepared.');
+  await menu.focus();
+  await page.keyboard.press('Enter');
+  assert.match(
+    await page
+      .getByRole('menuitem', { name: 'Edit', exact: true })
+      .getAttribute('href'),
+    new RegExp(`/sales/listings/${historyJobs[0].id}$`),
+  );
+  assert.match(
+    await page
+      .getByRole('menuitem', { name: 'Preview', exact: true })
+      .getAttribute('href'),
+    new RegExp(`/sales/listings/${historyJobs[0].id}/preview$`),
+  );
+  assert(
+    await page.getByRole('menuitem', { name: 'Copy page link' }).isVisible(),
+  );
+  await page.keyboard.press('Escape');
+  await page.getByRole('menu').waitFor({ state: 'detached' });
+  await page.screenshot({
+    path: path.join(out, 'inventory-desktop.png'),
+    animations: 'disabled',
+  });
+  results.push(
+    'compact Public Page column with keyboard-accessible page actions',
   );
   // Wait for the existing 200ms search debounce before selecting its scope.
   await page.waitForTimeout(350);
@@ -247,6 +356,12 @@ try {
   results.push(
     '60 selected across pages; exact neutral review; one keyboard confirmation',
   );
+  await page.reload();
+  await page
+    .getByRole('heading', { name: 'Connecting', exact: true })
+    .waitFor();
+  assert.equal(approved, 1, 'Reloading inventory does not repeat approval.');
+  results.push('an in-progress connection reopens on inventory reload');
   await page.close();
   page = await browser.newPage();
   await page.goto(`${origin}/w/${status.workspace}/#/public-listings`);
@@ -281,6 +396,98 @@ try {
   assert.equal(overflow, false, 'Mobile content must fit the viewport.');
   await page.screenshot({ path: path.join(out, 'mobile.png'), fullPage: true });
   results.push('mobile all-matching review without horizontal overflow');
+  await page.close();
+
+  historyFixture = true;
+  page = await browser.newPage();
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto(`${origin}/w/${status.workspace}/#/`);
+  const history = page.getByText('Recent lander connections', { exact: true });
+  await page.getByRole('button', { name: 'Table view', exact: true }).waitFor();
+  assert.equal(await history.count(), 0, 'History is absent from inventory.');
+  await page
+    .getByRole('button', { name: 'Page and domain details', exact: true })
+    .first()
+    .click();
+  const mobileMenu = page.getByRole('button', {
+    name: `Public page actions for ${domain}`,
+    exact: true,
+  });
+  await mobileMenu.waitFor();
+  const mobileMenuBox = await mobileMenu.boundingBox();
+  assert(mobileMenuBox.width >= 44 && mobileMenuBox.height >= 44);
+  await mobileMenu.click();
+  assert(
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).isVisible(),
+  );
+  await page.keyboard.press('Escape');
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    ),
+    false,
+    'Public Page actions fit inside the phone viewport.',
+  );
+  results.push('mobile Public Page actions have a full-size target');
+  await page.goto(
+    `${origin}/w/${status.workspace}/#/?landerConnection=${missingAttempt}`,
+  );
+  // Reload the route to exercise reopening a saved address from a new document.
+  await page.reload();
+  const recovery = page.getByRole('link', {
+    name: 'Find it in Sales pages',
+    exact: true,
+  });
+  await recovery.waitFor();
+  assert.equal(historyListReads, 0, 'Inventory never polls for history.');
+  await recovery.click();
+  await page
+    .getByRole('heading', { name: 'Sales pages', exact: true })
+    .waitFor();
+  await history.waitFor();
+  assert(historyListReads > 0, 'Sales pages loads the connection history.');
+  const summaryBox = await history.boundingBox();
+  assert(summaryBox.height >= 44, 'History has a full-size touch target.');
+  const latest = page.getByRole('button', {
+    name: `${domain} · Finished`,
+    exact: false,
+  });
+  assert.equal(await latest.count(), 0, 'History starts collapsed.');
+  await history.click();
+  assert.equal(
+    await latest.count(),
+    1,
+    'Show the latest single-domain attempt.',
+  );
+  assert.equal(
+    await latest.locator('time').getAttribute('datetime'),
+    new Date(historyJobs[0].updated_at).toISOString(),
+  );
+  assert.equal(
+    await page
+      .getByRole('button', { name: `${domain} +1`, exact: false })
+      .count(),
+    2,
+    'Keep separate batches that name the same first domain.',
+  );
+  const earlier = page.getByText('2 earlier attempts', { exact: false });
+  await earlier.click();
+  assert.equal(await latest.count(), 2);
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    ),
+    false,
+    'Expanded history fits the phone viewport.',
+  );
+  await page
+    .getByRole('button', { name: `${domain} · Stopped`, exact: false })
+    .click();
+  await page.getByRole('heading', { name: 'Stopped', exact: true }).waitFor();
+  assert.equal(openedAttempt, historyJobs[3].id);
+  results.push(
+    'mobile inventory has no history and failed resume links to grouped receipts on Sales pages',
+  );
   await fs.writeFile(
     path.join(out, 'receipt.json'),
     JSON.stringify(
