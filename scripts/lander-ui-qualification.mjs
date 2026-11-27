@@ -262,6 +262,75 @@ try {
     .first()
     .fill('lander-fixture-');
   results.push('inventory default order and saved keyboard rearrangement');
+  await page
+    .getByRole('button', {
+      name: `Public page actions for ${domain}`,
+      exact: true,
+    })
+    .waitFor();
+  const beforeHeader = page.getByRole('columnheader', { name: /registrar/i });
+  const movedHeader = page.getByRole('columnheader', { name: /created/i });
+  const createdBeforeRegistrar = () => {
+    const labels = [...document.querySelectorAll('thead th')].map((th) =>
+      th.textContent.trim().toLowerCase(),
+    );
+    return labels.indexOf('created') === labels.indexOf('registrar') - 1;
+  };
+  await beforeHeader.scrollIntoViewIfNeeded();
+  await movedHeader.scrollIntoViewIfNeeded();
+  const sourceHeader = movedHeader.getByRole('button', {
+    name: /Sort Created/i,
+  });
+  const [sourceRect, targetRect] = await Promise.all([
+    sourceHeader.boundingBox(),
+    beforeHeader.boundingBox(),
+  ]);
+  assert(sourceRect && targetRect);
+  await page.mouse.move(
+    sourceRect.x + sourceRect.width / 2,
+    sourceRect.y + sourceRect.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetRect.x + targetRect.width / 4,
+    targetRect.y + targetRect.height / 2,
+    { steps: 10 },
+  );
+  const settledTarget = await beforeHeader.boundingBox();
+  assert(settledTarget);
+  await page.mouse.move(
+    settledTarget.x + settledTarget.width / 4,
+    settledTarget.y + settledTarget.height / 2,
+  );
+  await page.mouse.up();
+  await page.waitForFunction(createdBeforeRegistrar, null, { timeout: 5000 });
+  assert.equal(
+    await movedHeader.getAttribute('aria-sort'),
+    null,
+    'Dragging must not change sorting.',
+  );
+
+  await page.reload();
+  await movedHeader.waitFor();
+  await page.waitForFunction(createdBeforeRegistrar, null, { timeout: 5000 });
+  await sourceHeader.click();
+  assert.equal(
+    await movedHeader.getAttribute('aria-sort'),
+    'ascending',
+    'Clicking the moved header still sorts.',
+  );
+  await page.getByRole('button', { name: 'Columns', exact: true }).click();
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await inventoryColumns(), columns);
+  await page
+    .getByRole('button', { name: 'Sort Domain ascending', exact: true })
+    .click();
+  await page
+    .getByRole('searchbox', { name: /Search/ })
+    .first()
+    .fill('lander-fixture-');
+  results.push('direct inventory drag saves the order and keeps click-to-sort');
   const menu = page.getByRole('button', {
     name: `Public page actions for ${domain}`,
     exact: true,
@@ -436,6 +505,53 @@ try {
   const history = page.getByText('Recent lander connections', { exact: true });
   await page.getByRole('button', { name: 'Table view', exact: true }).waitFor();
   assert.equal(await history.count(), 0, 'History is absent from inventory.');
+  await page.getByRole('button', { name: 'Table view', exact: true }).click();
+  await page
+    .getByRole('button', {
+      name: `Public page actions for ${domain}`,
+      exact: true,
+    })
+    .waitFor();
+  const touchSource = page.getByRole('columnheader', { name: /expiration/i });
+  const touchTarget = page.getByRole('columnheader', { name: /registrar/i });
+  await touchTarget.scrollIntoViewIfNeeded();
+  await touchSource.scrollIntoViewIfNeeded();
+  const [touchFrom, touchTo] = await Promise.all([
+    touchSource.boundingBox(),
+    touchTarget.boundingBox(),
+  ]);
+  assert(touchFrom && touchTo);
+  const fromX = touchFrom.x + touchFrom.width / 2;
+  const toX = touchTo.x + touchTo.width / 4;
+  const y = touchFrom.y + touchFrom.height / 2;
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: fromX, y }],
+  });
+  for (let step = 1; step <= 8; step++) {
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: fromX + ((toX - fromX) * step) / 8, y }],
+    });
+  }
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await touch.detach();
+  await page.waitForFunction(
+    () => {
+      const labels = [...document.querySelectorAll('thead th')].map((th) =>
+        th.textContent.trim().toLowerCase(),
+      );
+      return labels.indexOf('expiration') === labels.indexOf('registrar') - 1;
+    },
+    null,
+    { timeout: 5000 },
+  );
+  await page.getByRole('button', { name: 'Summary view', exact: true }).click();
+  results.push('direct column dragging works with touch in the phone table');
   await page
     .getByRole('button', { name: 'Page and domain details', exact: true })
     .first()
