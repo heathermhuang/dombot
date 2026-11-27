@@ -2980,6 +2980,7 @@ export default function Domains() {
         columns={dataColumns}
         layout={columnLayout}
         onLayoutChange={setColumnLayout}
+        reorderHeaders
         forceVisible={filteredDateColumns}
         rowKey={domainKey}
         sort={{ key: sortKey, dir: sortDir }}
