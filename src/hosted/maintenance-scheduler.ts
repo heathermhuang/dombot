@@ -174,6 +174,7 @@ const reads = new Set<keyof DombotApi>([
   'ping',
   'getRegistrarCatalog',
   'getPortfolioPricing',
+  'getRegistrarRenewalQuote',
   'getManualPrices',
   'getPurchases',
   'previewDomainImport',

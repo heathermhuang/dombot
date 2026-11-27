@@ -359,6 +359,7 @@ export function createHttpApi(): DombotApi {
     exportData: m('exportData'),
     importData: m('importData'),
     getPortfolioPricing: m('getPortfolioPricing'),
+    getRegistrarRenewalQuote: m('getRegistrarRenewalQuote'),
     stepRenewalPricing: m('stepRenewalPricing'),
     getManualPrices: m('getManualPrices'),
     setManualPrice: m('setManualPrice'),

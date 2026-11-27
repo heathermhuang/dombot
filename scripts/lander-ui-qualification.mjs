@@ -66,6 +66,56 @@ let job = null,
   reauthOnce = true,
   rejectedRequestId = null;
 const results = [];
+let quoteFixture = true;
+let quoteReads = 0;
+const quoteDomain = 'quote-fixture.io';
+const unquotedDomain = 'quote-unavailable.io';
+const quoteAccount = 'quote-fixture-account';
+const fixtureDomain = (name, registrar, accountId) => ({
+  domainName: name,
+  registrar,
+  accountId,
+  accountLabel: 'Quote fixture',
+  source: 'registrar',
+  status: 'active',
+  createdDate: null,
+  expirationDate: null,
+  renewalDate: null,
+  autoRenew: false,
+  locked: true,
+  privacy: true,
+  nameservers: [],
+  deleted: false,
+});
+const quotePortfolio = {
+  domains: [
+    fixtureDomain(quoteDomain, 'gandi', quoteAccount),
+    fixtureDomain(unquotedDomain, 'cloudflare', 'unquoted-fixture-account'),
+  ],
+  fetchedAt: Date.now(),
+  registrars: ['gandi', 'cloudflare'],
+  registrarLabels: { gandi: 'Gandi', cloudflare: 'Cloudflare' },
+  errors: [],
+};
+const quotePricing = {
+  [quoteAccount + ':' + quoteDomain]: {
+    accountId: quoteAccount,
+    domain: quoteDomain,
+    registrar: 'gandi',
+    renewal: 30,
+    currency: 'USD',
+    source: 'base',
+    canCheckQuote: true,
+  },
+  ['unquoted-fixture-account:' + unquotedDomain]: {
+    accountId: 'unquoted-fixture-account',
+    domain: unquotedDomain,
+    registrar: 'cloudflare',
+    renewal: 20,
+    currency: 'USD',
+    source: 'base',
+  },
+};
 const domain = domains[0];
 const missingAttempt = crypto.randomUUID();
 const historyJobs = [
@@ -87,6 +137,51 @@ try {
     const request = route.request(),
       url = new URL(request.url());
     if (url.origin !== origin) return route.abort();
+    if (quoteFixture && url.pathname.includes('/api/')) {
+      const method = url.pathname.split('/').at(-1);
+      if (method === 'hydrateFromCache')
+        return route.fulfill({
+          json: {
+            result: {
+              portfolio: quotePortfolio,
+              detail: {},
+              pricing: quotePricing,
+            },
+          },
+        });
+      if (method === 'listPortfolio')
+        return route.fulfill({ json: { result: quotePortfolio } });
+      if (method === 'getPortfolioPricing')
+        return route.fulfill({ json: { result: quotePricing } });
+      if (method === 'getRegistrarRenewalQuote') {
+        assert.deepEqual(request.postDataJSON(), {
+          args: [
+            {
+              accountId: quoteAccount,
+              registrar: 'gandi',
+              domainName: quoteDomain,
+            },
+          ],
+        });
+        quoteReads++;
+        return route.fulfill({
+          json: {
+            result:
+              quoteReads === 1
+                ? {
+                    domain: quoteDomain,
+                    registrar: 'gandi',
+                    accountId: quoteAccount,
+                    renewal: 47.25,
+                    currency: 'USD',
+                    source: 'api',
+                    observedAt: Date.now(),
+                  }
+                : null,
+          },
+        });
+      }
+    }
     if (url.pathname.endsWith('/publishing/presence')) {
       const [name] = JSON.parse(url.searchParams.get('names'));
       return route.fulfill({
@@ -222,6 +317,37 @@ try {
   });
   let page = await browser.newPage();
   page.setDefaultTimeout(60_000);
+  await page.goto(origin + '/__qualification/session');
+  await page
+    .getByRole('searchbox', { name: /Search/ })
+    .first()
+    .fill('quote-');
+  const quoteButton = page.getByRole('button', {
+    name: new RegExp('Check current renewal quote for ' + quoteDomain),
+  });
+  const unavailableQuote = page.getByRole('button', {
+    name: new RegExp('Check current renewal quote for ' + unquotedDomain),
+  });
+  await quoteButton.waitFor();
+  assert.equal(quoteReads, 0);
+  assert.equal(await unavailableQuote.count(), 0);
+  await quoteButton.click();
+  await page.getByText(/47\.25.*per year/).waitFor();
+  assert.equal(quoteReads, 1);
+  await page.keyboard.press('Escape');
+  await quoteButton.click();
+  await page
+    .getByText('No current quote available for this domain.', { exact: true })
+    .waitFor();
+  assert.equal(quoteReads, 2);
+  assert.match(await quoteButton.getAttribute('aria-label'), /Estimate .*30/);
+  await page.close();
+  quoteFixture = false;
+  page = await browser.newPage();
+  page.setDefaultTimeout(60_000);
+  results.push(
+    'supported estimates request a domain quote only on click and keep the saved estimate on an empty response',
+  );
   await page.goto(origin + '/__qualification/session');
   await page
     .getByRole('searchbox', { name: /Search/ })
