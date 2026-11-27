@@ -231,6 +231,37 @@ try {
     () => document.querySelectorAll('tbody [role="checkbox"]').length === 50,
   );
   const column = page.getByRole('columnheader', { name: /public page/i });
+  const inventoryColumns = () =>
+    page
+      .locator('thead th')
+      .evaluateAll((headers) =>
+        headers.map((header) => header.textContent.trim().toLowerCase()),
+      );
+  const columns = await inventoryColumns();
+  const nameservers = columns.indexOf('nameservers');
+  assert(nameservers > 0);
+  assert.deepEqual(columns.slice(nameservers, nameservers + 5), [
+    'nameservers',
+    'public page',
+    'folder',
+    'bin price',
+    'min offer',
+  ]);
+  await page.getByRole('button', { name: 'Columns', exact: true }).click();
+  await page.locator('[data-column-key="publicPage"]').press('Alt+ArrowUp');
+  assert.equal((await inventoryColumns()).indexOf('public page'), nameservers);
+  await page.reload();
+  await column.waitFor();
+  assert.equal((await inventoryColumns()).indexOf('public page'), nameservers);
+  await page.getByRole('button', { name: 'Columns', exact: true }).click();
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await inventoryColumns(), columns);
+  await page
+    .getByRole('searchbox', { name: /Search/ })
+    .first()
+    .fill('lander-fixture-');
+  results.push('inventory default order and saved keyboard rearrangement');
   const menu = page.getByRole('button', {
     name: `Public page actions for ${domain}`,
     exact: true,
