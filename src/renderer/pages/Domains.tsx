@@ -2572,6 +2572,7 @@ export default function Domains() {
         ),
       };
     const col = columnByKey.get(key)!;
+    const publicPage = key === 'publicPage';
     return {
       label: col.tooltip ? (
         <span title={col.tooltip}>{col.label}</span>
@@ -2582,7 +2583,11 @@ export default function Domains() {
       align: col.align,
       compact: col.compact,
       hideOnMobile: col.hideOnMobile,
-      headClassName: key === 'autoRenew' ? 'pl-[8px]' : undefined,
+      headClassName: publicPage
+        ? 'w-px'
+        : key === 'autoRenew'
+          ? 'pl-[8px]'
+          : undefined,
       cellClassName: key === 'autoRenew' ? 'pl-[6px]' : undefined,
       cell: (d) => renderCell(col, d),
     };

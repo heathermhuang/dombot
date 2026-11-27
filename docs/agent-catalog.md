@@ -1,0 +1,41 @@
+# Domains.Domains agent listings
+
+The portfolio scanner is configured for `scan.domains.domains`. Paste up to five domain names to see a portfolio score and evidence for each check. Clients can also send `POST /api/scan` with `{"domains":["…"]}`. The scanner reads public HTTPS and DNS. Unreachable checks are reported as unverified. It identifies advertised purchase or inquiry routes without submitting requests to them.
+
+In Sales, review and publish the name and its terms. The existing publication action makes eligible terms available to agents. Update an asking price in Sales and publish the reviewed revision to replace the price. The catalog reports the owner’s publication timestamp and withholds an asking price after 30 days or at the earlier source expiry.
+
+- `/connect-agent` gives buyer setup instructions for Claude, ChatGPT, Cursor, Codex, Claude Code and Gemini CLI. Agents can also follow the public catalog and listing links directly.
+- `GET /api/agent` documents the public API and submission schema. `GET /api/agent/openapi.json` describes the anonymous search and price operations.
+- `GET /api/agent/listings` searches seller-approved names by keyword, business concept, currency and price range. Follow `nextCursor` with the same filters. Search terms use full-text matching and a business vocabulary. A bounded scheduled job indexes public terms. Exact-name lookups and the prices in search results read the current eligible publication.
+- `GET /api/agent/listings/{domain}` returns the current terms and buyer handoff. The public lander advertises this JSON and its discovery file. The file is available at `/{domain}/llms.txt` on Domains.Domains and at `/llms.txt` on an active managed sale hostname.
+- `/mcp/catalog` supports stateless Streamable HTTP with the `domain_search` and `domain_price` tools. The owner’s separate authenticated MCP service retains its own access controls.
+- `Account → Agent listings` shows readiness, recent catalog activity and transaction stages for that owner. Client names are self-reported. Linked sale evidence in the activity summary matches exact offer or brief receipts. Per-listing totals include all channels. Activity is retained for 30 days.
+
+An optional TXT record at `_mcp.<domain>` advertises the public MCP catalog. The seller dashboard supplies the record value and checks public DNS. The owner adds the record at their authoritative DNS provider. See [IETF discovery draft revision 10](https://datatracker.ietf.org/doc/draft-morrison-mcp-dns-discovery/10/).
+
+The offer and broker-brief routes use the existing buyer challenge, email confirmation and Sales Inbox. On confirmation, the buyer opens the same private conversation the seller sees in the Sales Inbox. The link lasts seven days, survives listing withdrawal and seller replies, and can be revoked or renewed through the existing recovery flow. Retrying the confirmation returns the same active link. Older consumed confirmation emails retain their prior behavior. A broker brief includes the buyer’s budget and goes to the seller for review. A buy-now provider handoff opens the reviewed listing so a human can continue to the selected provider. Domains.Domains does not create a checkout session or collect payment through the catalog.
+
+## Qualification and rollout
+
+1. Apply control migration `0027_agent_catalog.sql` using the normal hosted migration process. Deploy the compatible hosted tenant wrapper to managed tenants and the future template. Use the Summit engine pin, which adds the new confirmation grant and can read existing tokens. The change uses the existing tenant schema and backup shape. Previous readers can open the issued thread grant while it is active. They resume their original reply-link rotation if rolled back.
+2. Deploy the scanner from `hosted/wrangler.agent-readiness.jsonc`. Confirm the custom hostname, a submitted portfolio scan and the fix CTA. The scanner Worker only receives the rate-limit binding. Keep outbound fetch on the public Internet path.
+3. In staging, turn on `AGENT_CATALOG_ENABLED` for the gateway. Turn it on for the managed lander edge where custom sale hostnames are supported, with its existing gateway service binding. Allow the bounded scheduled index to cover the intended published portfolio.
+4. With a reviewed fixture, exercise anonymous search, price and MCP reads, discovery through the public and managed lander, re-published price, withdrawal, expired terms, buyer verification, and seller dashboard readback. Use an owner-authorized domain for a live DNS check. Capture the original deployment versions and live bindings before staging changes. Qualify real verification delivery to a controlled buyer inbox and exact-once seller notification. Capture the fresh Claude and ChatGPT tool transcripts with the buyer links redacted. Verify tenant and capability configuration before production activation. If rollout must be stopped, disable the catalog gate first and restore the previous Worker versions with their captured bindings. Leave the additive control migration in place and retain the Summit tenant engine where preservation of the initial link across replies is required.
+
+For the Domain Summit Asia demo, connect an MCP client to `/mcp/catalog`, call `domain_search` using a business type represented in the approved demo portfolio, then call `domain_price` with a returned domain. The agent can show the current price, seller terms, confirmation date and human handoff without initiating a transaction.
+
+For a real-mail staging rehearsal, set `AUTH_EMAIL_STAGING_ORIGIN` to the exact isolated `domains-*-qa-<8 hex>.<account>.workers.dev` origin. Keep public registration explicitly disabled and bind both mail senders to the approved recipient only. Sign in with the controlled seller mailbox to prove recipient ownership before enabling inquiry intake. Leave this staging-only option unset on production.
+
+## Referral pilot
+
+The optional pilot uses one verified partner. Apply control migration `0029_agent_referrals.sql` before setting `AGENT_REFERRAL_PARTNER_ID` and `AGENT_REFERRAL_PARTNER_NAME`. Set a dedicated bearer credential in `AGENT_REFERRAL_PARTNER_TOKEN` and a separate signing key in `AGENT_REFERRAL_SIGNING_KEY`. The feed is `GET /api/agent/referrals` and accepts the partner’s bearer credential. The feed supplies live prices and expiring buyer links for seller-approved offer listings. The partner receives no buyer data.
+
+Owners choose **Share this revision** in **Account → Agent listings**. Opt-out revokes existing links. A price change requires the seller to opt in the newly published revision. Buyers submit and verify each offer through Sales. **Referred offers** links owners to the original Inbox case. An accepted referral is recorded before the buyer receives a successful response. Identical retries use the same Sales request key and attribution.
+
+The pilot can run independently of checkout. Before enabling a real partner, test the partner credential, live price, revision change, withdrawal, opt-out, browser offer and matching verified Sales case in staging.
+
+### Referral browser qualification
+
+Install `playwright-core` in a temporary tool directory and set `DOMBOT_UI_QA_TOOLS` to its absolute path. Use `DOMBOT_UI_QA_CHROME` if Chrome is installed outside the default macOS path. Run `npx vitest run src/hosted/public-domain-routes.test.ts` for Chrome desktop and mobile against disposable Miniflare data and captured verification mail.
+
+To run against isolated Summit staging, invoke `node scripts/referral-browser-qualification.mjs PRIVATE_FIXTURE_DRIVER EVIDENCE_JSON`. The private driver allocates one `referral-qa-<8 hex>.example` fixture, signs in the controlled seller, finds the verification email in the controlled buyer inbox, and checks the listing-wide case and referral counts. It must republish the planned price, withdraw through the scoped fixture, and independently confirm cleanup in `finally`, including if preparation fails. Set `DOMBOT_UI_QA_HEADFUL=1` to open the staging security check in a visible Chrome window. The driver and output stay private. Browser, feed, consent, replay and conversation checks are shared with the local run.

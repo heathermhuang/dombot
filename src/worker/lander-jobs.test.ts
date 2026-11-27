@@ -513,7 +513,7 @@ describe('durable exact lander manifests and recovery', () => {
     await tick();
     expect(writes).toBe(1);
     const backup = await exportSales(store);
-    expect(backup.version).toBe(6);
+    expect(backup.version).toBe(7);
     expect(backup.dnsRecovery).toHaveLength(1);
     expect(JSON.stringify(backup)).not.toContain('fixture-secret');
     await restoreSales(store, { ...backup, version: 4, dnsRecovery: [] });
@@ -531,7 +531,7 @@ describe('durable exact lander manifests and recovery', () => {
   it('round-trips Dynadot recovery without importing executable authority', async () => {
     await prepared();
     const backup = await exportSales(store);
-    expect(backup.version).toBe(6);
+    expect(backup.version).toBe(7);
     const snapshot = backup.dnsRecovery[0].payload.plan!.snapshot;
     snapshot.provider = 'dynadot';
     snapshot.nameservers = ['ns1.dynadot.com', 'ns2.dynadot.com'];

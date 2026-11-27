@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  publishedSaleSchema,
+  salesCaseSnapshotSchema,
   saleMoneySchema,
   salePriceLabel,
 } from './hosted-sales';
@@ -13,7 +13,7 @@ export const salesEmailContextSchema = z
     email: z.string().email().max(254),
     message: z.string().max(4000),
     offer: saleMoneySchema.nullable(),
-    snapshot: publishedSaleSchema,
+    snapshot: salesCaseSnapshotSchema,
     receivedAt: z.number().int().nonnegative(),
     latest: z
       .object({
@@ -38,13 +38,16 @@ export function renderSalesEmail(
   options: { replyByEmail?: boolean } = {},
 ) {
   const c = mail.context;
+  const listing = c && 'id' in c.snapshot ? c.snapshot : null;
   const verifying = kind === 'verification';
   const event = verifying
     ? 'Confirm your inquiry'
     : kind === 'buyer-reply'
       ? 'New reply'
       : c?.latest
-        ? 'New message about your domain'
+        ? listing
+          ? 'New message about your domain'
+          : 'New message in a domain inquiry'
         : 'New domain inquiry';
   const subject = c
     ? `${verifying ? 'Confirm your inquiry' : kind === 'buyer-reply' ? 'Reply' : c.latest ? 'New message' : 'New inquiry'} · ${c.snapshot.domain}`
@@ -53,8 +56,8 @@ export function renderSalesEmail(
   if (c) {
     details.push(['Name', c.name], ['Email', c.email]);
     if (c.offer) details.push(['Offer', salePriceLabel(c.offer)]);
-    if (c.snapshot.publicPrice)
-      details.push(['Published price', salePriceLabel(c.snapshot.publicPrice)]);
+    if (listing?.publicPrice)
+      details.push(['Published price', salePriceLabel(listing?.publicPrice)]);
     details.push([
       'Received',
       new Date(c.receivedAt).toLocaleString('en-GB', {
@@ -66,10 +69,10 @@ export function renderSalesEmail(
         timeZone: 'UTC',
       }) + ' UTC',
     ]);
-    if (c.snapshot.destination)
+    if (listing?.destination)
       details.push(
-        ['Provider', c.snapshot.destination.provider],
-        ['Provider link', c.snapshot.destination.url],
+        ['Provider', listing?.destination.provider],
+        ['Provider link', listing?.destination.url],
       );
   }
   const inquiry = c && {

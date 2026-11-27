@@ -6,7 +6,17 @@ import { verifyGatewayRequest } from '../shared/gateway-proof';
 /** A narrow anonymous projection reader admitted only by the main gateway key. */
 export async function publicDomainEligibility(
   request: Request,
-  env: Pick<Env, 'DB' | 'DOMBOT_GATEWAY_SECRET' | 'DOMBOT_WORKSPACE_ID'>,
+  env: Pick<
+    Env,
+    | 'DB'
+    | 'DOMBOT_GATEWAY_SECRET'
+    | 'DOMBOT_WORKSPACE_ID'
+    | 'SALES_INQUIRIES_ENABLED'
+    | 'SALES_PRIVACY_REVIEWED'
+    | 'SALES_TURNSTILE_SECRET'
+    | 'SALES_TURNSTILE_SITEKEY'
+    | 'SALES_MAIL_ENABLED'
+  >,
 ) {
   const proof = await verifyGatewayRequest(
     env.DOMBOT_GATEWAY_SECRET ?? '',
@@ -57,10 +67,64 @@ export async function publicDomainEligibility(
       { headers },
     );
   }
-  const domain = canonicalDomain(
-    new URL(request.url).searchParams.get('domain') ?? '',
-  );
+  const url = new URL(request.url);
+  if (url.pathname === '/platform-internal/agent-activity') {
+    const ids = z
+      .array(z.string().uuid())
+      .max(100)
+      .parse(url.searchParams.getAll('receipt'));
+    if (!ids.length)
+      return Response.json({ verified: [], linked: [] }, { headers });
+    const rows = await env.DB.prepare(
+      `
+      SELECT l.id, EXISTS(
+        SELECT 1 FROM sales_events e JOIN sales_journey_receipts r ON r.receipt=e.id
+        WHERE e.lead_id=l.id AND e.listing_id=l.listing_id AND e.kind='outcome'
+        AND r.event='sale-evidence-linked'
+      ) AS linked
+      FROM sales_leads l
+      WHERE l.verification='verified' AND l.status!='spam'
+      AND l.id IN (SELECT value FROM json_each(?))
+    `,
+    )
+      .bind(JSON.stringify(ids))
+      .all<{ id: string; linked: number }>();
+    return Response.json(
+      {
+        verified: rows.results.map((row) => row.id),
+        linked: rows.results
+          .filter((row) => row.linked === 1)
+          .map((row) => row.id),
+      },
+      { headers },
+    );
+  }
+  const domain = canonicalDomain(url.searchParams.get('domain') ?? '');
   const sale = await readPublicSale(env.DB, domain);
+  if (url.pathname === '/platform-internal/agent-listing') {
+    const since = Date.now() - 30 * 86400_000;
+    const sales =
+      sale && url.searchParams.get('metrics') === '1'
+        ? await env.DB.prepare(
+            "SELECT coalesce(sum(count),0) AS total FROM sales_journey_daily WHERE listing_id=? AND day>=? AND event='sale-evidence-linked'",
+          )
+            .bind(sale.id, new Date(since).toISOString().slice(0, 10))
+            .first<{ total: number }>()
+        : null;
+    return Response.json(
+      {
+        sale,
+        intake:
+          env.SALES_INQUIRIES_ENABLED === 'true' &&
+          env.SALES_PRIVACY_REVIEWED === 'true' &&
+          env.SALES_MAIL_ENABLED === 'true' &&
+          !!env.SALES_TURNSTILE_SITEKEY &&
+          !!env.SALES_TURNSTILE_SECRET,
+        sales: sales?.total ?? 0,
+      },
+      { headers },
+    );
+  }
   return Response.json(
     { revision: sale?.revision ?? null, listing: sale?.id ?? null },
     { headers },

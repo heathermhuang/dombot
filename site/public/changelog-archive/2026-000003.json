@@ -2,6 +2,198 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-gateway-3db62841d8d9166bdc8e7204771991583a42b0ce-59",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Hosted service update observed: Reserve the public off-market intake route",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/3db62841d8d9166bdc8e7204771991583a42b0ce"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-79abda4d0fbbcef250c4598a0b831d39b13607c8-57",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Hosted service update observed: Pilot seller-controlled referrals through the existing Sales Inbox",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/79abda4d0fbbcef250c4598a0b831d39b13607c8"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-a8b5e38deca0ee08d826c268493f3c7dfc561a2a-55",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Hosted service update observed: Add the public agent catalog and verified buyer conversations",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/a8b5e38deca0ee08d826c268493f3c7dfc561a2a"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-d89b4e0e4805936da7948ae21a8bc06c35592be9-58",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Hosted service update observed: Receive unlisted-domain inquiries in the Sales Inbox",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/d89b4e0e4805936da7948ae21a8bc06c35592be9"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-gateway-de031da5177d60585773308c36b1a4d1db6c80c8-56",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Hosted service update observed: Reserve the Summit agent setup route",
+      "status": "Gateway deployment observed · Tenant engine rollouts are separate",
+      "changes": [
+        "The public service reports this source revision. This date records the observation, not an inferred deployment time or a fleet-wide tenant rollout."
+      ],
+      "links": [
+        {
+          "label": "Observed service source",
+          "url": "https://github.com/heathermhuang/dombot/commit/de031da5177d60585773308c36b1a4d1db6c80c8"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-255",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Add the public agent catalog and verified buyer conversations",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #255 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #255",
+          "url": "https://github.com/heathermhuang/dombot/pull/255"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-257",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Pilot seller-controlled referrals through the existing Sales Inbox",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #257 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #257",
+          "url": "https://github.com/heathermhuang/dombot/pull/257"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-258",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Reserve the Summit agent setup route",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #258 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #258",
+          "url": "https://github.com/heathermhuang/dombot/pull/258"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-259",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Qualify the referral buyer and seller flows in Chrome",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #259 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #259",
+          "url": "https://github.com/heathermhuang/dombot/pull/259"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-260",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Receive unlisted-domain inquiries in the Sales Inbox",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #260 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #260",
+          "url": "https://github.com/heathermhuang/dombot/pull/260"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-261",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Keep referral fixture cleanup active when Chrome times out",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #261 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #261",
+          "url": "https://github.com/heathermhuang/dombot/pull/261"
+        }
+      ]
+    },
+    {
+      "id": "auto-saas-pr-262",
+      "date": "2026-11-26",
+      "layer": "saas",
+      "title": "Reserve the public off-market intake route",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #262 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #262",
+          "url": "https://github.com/heathermhuang/dombot/pull/262"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-3f2c304e1a0e794c25c33348bbea1a802c575d38-53",
       "date": "2026-11-25",
       "layer": "saas",

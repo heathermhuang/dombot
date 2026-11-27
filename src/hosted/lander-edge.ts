@@ -1,3 +1,4 @@
+import { agentUrls } from './agent-projection';
 import {
   previousSalesFormScript,
   previousSalesFormScriptPath,
@@ -146,6 +147,19 @@ export default {
       )
         return missing();
     }
+    const agentDiscovery =
+      env.AGENT_CATALOG_ENABLED === 'true' && row.status === 'active';
+    const agent = agentUrls('https://domains.domains', row.domain);
+    if (
+      agentDiscovery &&
+      url.pathname === '/llms.txt' &&
+      ['GET', 'HEAD'].includes(incoming.method)
+    ) {
+      if (!env.PORTFOLIO_GATEWAY) return missing();
+      return env.PORTFOLIO_GATEWAY.fetch(
+        new Request(agent.discovery, { method: incoming.method }),
+      );
+    }
     // The listing may be an apex with an explicitly configured www alias.
     const path =
       url.pathname === '/'
@@ -210,7 +224,22 @@ export default {
     const out = new Headers(response.headers);
     out.delete('set-cookie');
     out.set('Cache-Control', 'no-store');
-    out.set('Referrer-Policy', 'no-referrer');
+    out.set('Referrer-Policy', 'same-origin');
+    if (
+      agentDiscovery &&
+      url.pathname === '/d/' + row.domain &&
+      response.ok &&
+      out.has('X-Domains-Sales-Revision')
+    ) {
+      out.append(
+        'Link',
+        '<' + agent.detail + '>; rel="alternate"; type="application/json"',
+      );
+      out.append(
+        'Link',
+        '<https://' + host + '/llms.txt>; rel="llms-txt"; type="text/plain"',
+      );
+    }
     return new Response(response.body, {
       status: response.status,
       headers: out,

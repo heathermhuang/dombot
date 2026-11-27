@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { sqlStatements } from './prepare-on-demand.mjs';
+import { bootstrapStatements, sqlStatements } from './prepare-on-demand.mjs';
 const root = process.cwd(),
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dombot-import-flow-'));
 const salesEnabled = process.argv.includes('--sales');
@@ -50,14 +50,18 @@ const module = (
     external: ['cloudflare:*', 'node:*'],
   })
 ).outputFiles[0].text;
-const statements = [];
-for (const name of (await fs.readdir('migrations'))
-  .filter((x) => x.endsWith('.sql'))
-  .sort())
-  statements.push(
-    ...sqlStatements(await fs.readFile('migrations/' + name, 'utf8')),
-  );
-const schema = JSON.stringify({ statements }),
+const migrationFiles = (await fs.readdir('migrations'))
+    .filter((name) => name.endsWith('.sql'))
+    .sort(),
+  statements = bootstrapStatements(
+    await Promise.all(
+      migrationFiles.map(async (name) => [
+        name,
+        await fs.readFile(path.join('migrations', name), 'utf8'),
+      ]),
+    ),
+  ),
+  schema = JSON.stringify({ statements }),
   engine = JSON.parse(
     await fs.readFile(
       'node_modules/@domains-domains/dombot-engine/engine-manifest.json',

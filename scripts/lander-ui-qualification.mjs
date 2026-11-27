@@ -87,6 +87,28 @@ try {
     const request = route.request(),
       url = new URL(request.url());
     if (url.origin !== origin) return route.abort();
+    if (url.pathname.endsWith('/publishing/presence')) {
+      const [name] = JSON.parse(url.searchParams.get('names'));
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              domain: name,
+              sales: {
+                state: 'known',
+                value: {
+                  id: name === domain ? historyJobs[0].id : null,
+                  publishedRevision: name === domain ? historyJobs[0].id : null,
+                  actionable: name === domain,
+                  pendingChanges: false,
+                  suppression: null,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
     if (!url.pathname.includes('/sales/lander/')) return route.continue();
     const suffix = url.pathname.split('/sales/lander/')[1];
     let value;
@@ -207,6 +229,57 @@ try {
     .fill('lander-fixture-');
   await page.waitForFunction(
     () => document.querySelectorAll('tbody [role="checkbox"]').length === 50,
+  );
+  const column = page.getByRole('columnheader', { name: /public page/i });
+  const menu = page.getByRole('button', {
+    name: `Public page actions for ${domain}`,
+    exact: true,
+  });
+  await menu.waitFor();
+  assert(
+    (await column.boundingBox()).width <= 140,
+    'The Public Page column must stay close to its content width.',
+  );
+  const published = menu.locator('..').getByText('Published', { exact: true });
+  const [statusBox, menuBox] = await Promise.all([
+    published.boundingBox(),
+    menu.boundingBox(),
+  ]);
+  assert(
+    statusBox.y < menuBox.y + menuBox.height &&
+      menuBox.y < statusBox.y + statusBox.height,
+    'The status and action stay on the same line.',
+  );
+  const prepare = page.getByRole('button', {
+    name: `Prepare public page for ${domains[1]}`,
+    exact: true,
+  });
+  assert(await prepare.isEnabled(), 'A private page can still be prepared.');
+  await menu.focus();
+  await page.keyboard.press('Enter');
+  assert.match(
+    await page
+      .getByRole('menuitem', { name: 'Edit', exact: true })
+      .getAttribute('href'),
+    new RegExp(`/sales/listings/${historyJobs[0].id}$`),
+  );
+  assert.match(
+    await page
+      .getByRole('menuitem', { name: 'Preview', exact: true })
+      .getAttribute('href'),
+    new RegExp(`/sales/listings/${historyJobs[0].id}/preview$`),
+  );
+  assert(
+    await page.getByRole('menuitem', { name: 'Copy page link' }).isVisible(),
+  );
+  await page.keyboard.press('Escape');
+  await page.getByRole('menu').waitFor({ state: 'detached' });
+  await page.screenshot({
+    path: path.join(out, 'inventory-desktop.png'),
+    animations: 'disabled',
+  });
+  results.push(
+    'compact Public Page column with keyboard-accessible page actions',
   );
   // Wait for the existing 200ms search debounce before selecting its scope.
   await page.waitForTimeout(350);
@@ -332,6 +405,30 @@ try {
   const history = page.getByText('Recent lander connections', { exact: true });
   await page.getByRole('button', { name: 'Table view', exact: true }).waitFor();
   assert.equal(await history.count(), 0, 'History is absent from inventory.');
+  await page
+    .getByRole('button', { name: 'Page and domain details', exact: true })
+    .first()
+    .click();
+  const mobileMenu = page.getByRole('button', {
+    name: `Public page actions for ${domain}`,
+    exact: true,
+  });
+  await mobileMenu.waitFor();
+  const mobileMenuBox = await mobileMenu.boundingBox();
+  assert(mobileMenuBox.width >= 44 && mobileMenuBox.height >= 44);
+  await mobileMenu.click();
+  assert(
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).isVisible(),
+  );
+  await page.keyboard.press('Escape');
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    ),
+    false,
+    'Public Page actions fit inside the phone viewport.',
+  );
+  results.push('mobile Public Page actions have a full-size target');
   await page.goto(
     `${origin}/w/${status.workspace}/#/?landerConnection=${missingAttempt}`,
   );

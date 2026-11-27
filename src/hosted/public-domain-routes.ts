@@ -30,6 +30,7 @@ const eligibility = z
 export async function publicDomainRequest(
   request: Request,
   env: HostedEnv,
+  inquiryMetadata?: ReturnType<typeof captureInquiryRequest>,
 ): Promise<Response | null> {
   if (!env.CANONICAL_ORIGIN) return null;
   const incoming = new URL(request.url);
@@ -162,7 +163,10 @@ export async function publicDomainRequest(
           purpose: 'sales-public',
           ...(request.method === 'POST' &&
           /\/inquiries$/.test(new URL(request.url).pathname)
-            ? { inquiryRequest: captureInquiryRequest(request) }
+            ? {
+                inquiryRequest:
+                  inquiryMetadata ?? captureInquiryRequest(request),
+              }
             : {}),
           host: incoming.hostname,
           listing: null,

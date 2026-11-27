@@ -81,6 +81,8 @@ jobs:
         run: npm run engine:verify
       - name: Bundle hosted gateway
         run: npx wrangler deploy --config hosted/wrangler.gateway.jsonc --dry-run --outdir dist/gateway
+      - name: Bundle the public agent-readiness scanner
+        run: npx wrangler deploy --config hosted/wrangler.agent-readiness.jsonc --dry-run --outdir dist/agent-readiness
       - name: Bundle public lander edge
         run: npx wrangler deploy --config hosted/wrangler.lander.jsonc --dry-run --outdir dist/lander
       - name: Bundle hosted tenant

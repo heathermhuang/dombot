@@ -79,6 +79,23 @@ export function sqlStatements(sql) {
   return statements;
 }
 
+// Fresh databases start with the final Sales schema and have no rows to copy.
+export function bootstrapStatements(migrations) {
+  const hasUnlisted = migrations.some(
+    ([file]) => file === '0013_unlisted_domain_inquiries.sql',
+  );
+  return migrations.flatMap(([file, sql]) => {
+    if (file === '0013_unlisted_domain_inquiries.sql') return [];
+    if (hasUnlisted && file === '0005_sales_inquiries.sql') {
+      const before = 'listing_id TEXT NOT NULL REFERENCES sale_drafts(id)';
+      if (sql.split(before).length !== 2)
+        throw Error('Review the initial Sales schema for unlisted inquiries');
+      sql = sql.replace(before, 'listing_id TEXT REFERENCES sale_drafts(id)');
+    }
+    return sqlStatements(sql);
+  });
+}
+
 async function prepare() {
   const target = path.join(root, 'dist/provisioning');
   await fs.mkdir(target, { recursive: true });
@@ -89,16 +106,17 @@ async function prepare() {
   );
   const privateDir = path.join(target, '_provision');
   await fs.mkdir(privateDir, { recursive: true });
-  const statements = [];
   const migrationFiles = (await fs.readdir(path.join(root, 'migrations')))
     .filter((f) => f.endsWith('.sql'))
     .sort();
-  for (const file of migrationFiles)
-    statements.push(
-      ...sqlStatements(
+  const statements = bootstrapStatements(
+    await Promise.all(
+      migrationFiles.map(async (file) => [
+        file,
         await fs.readFile(path.join(root, 'migrations', file), 'utf8'),
-      ),
-    );
+      ]),
+    ),
+  );
   if (statements.length > 100)
     throw Error('Bootstrap batch exceeds reviewed statement limit');
   const schema = JSON.stringify({ statements });

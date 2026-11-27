@@ -11,13 +11,16 @@ import {
 import { z } from 'zod';
 import {
   inquirySchema,
-  publishedSaleSchema,
+  salesCaseSnapshotSchema,
+  unlistedInquirySchema,
   conversationStatusSchema,
   saleMoneySchema,
   saleMinorUnits,
   messageSchema,
   type SaleInquiry,
   type PublishedSale,
+  type UnlistedInquiry,
+  type SalesCaseSnapshot,
   type DeliveryState,
 } from '../shared/hosted-sales';
 import { conflict, SalesError } from '../shared/sales-review';
@@ -37,7 +40,7 @@ export const leadPayloadSchema = z
     email: z.string().email().max(254),
     message: z.string().max(4000),
     offer: saleMoneySchema.nullable(),
-    snapshot: publishedSaleSchema,
+    snapshot: salesCaseSnapshotSchema,
     buyerDetails: buyerDetailsSchema.optional(),
     requestMetadata: inquiryRequestSchema.optional(),
   })
@@ -59,9 +62,10 @@ const mailSchema = z
 export type SalesMail = z.infer<typeof mailSchema>;
 export const tokenHash = async (s: string) => toBase64Url(await sha256(s));
 const token = () => toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+const confirmationThreadGrant = 'confirmation-thread';
 type LeadRow = {
   id: string;
-  listing_id: string;
+  listing_id: string | null;
   revision: string;
   verification: string;
   status: string;
@@ -70,6 +74,9 @@ type LeadRow = {
   follow_up_at: number | null;
   sealed: string;
 };
+type InquiryInput = SaleInquiry | UnlistedInquiry;
+const inquiryScope = (input: InquiryInput, listing: string | null) =>
+  listing ?? ('domain' in input ? 'unlisted-domain' : '');
 export class SalesInquiryStore {
   constructor(
     readonly sales: SalesStore,
@@ -108,12 +115,12 @@ export class SalesInquiryStore {
       );
   }
   async receipt(
-    input: SaleInquiry,
-    listing: string,
+    input: InquiryInput,
+    listing: string | null,
   ): Promise<{ id: string; status: 'verification-pending' } | null> {
     const request = await this.sales.hash(
       'request',
-      `${listing}:${input.idempotencyKey}`,
+      `${inquiryScope(input, listing)}:${input.idempotencyKey}`,
     );
     const r = await this.db
       .prepare('SELECT id,payload_hash FROM sales_leads WHERE request_hash=?')
@@ -126,14 +133,14 @@ export class SalesInquiryStore {
       );
     return { id: r.id, status: 'verification-pending' };
   }
-  payloadHash(v: SaleInquiry) {
+  payloadHash(v: InquiryInput) {
     return this.sales.hash(
       'payload',
       JSON.stringify([
-        v.observedRevision,
+        'domain' in v ? v.domain : v.observedRevision,
         v.name,
         v.email,
-        v.offer,
+        'offer' in v ? v.offer : null,
         v.message,
         ...(v.buyerDetails ? [v.buyerDetails] : []),
       ]),
@@ -166,13 +173,14 @@ export class SalesInquiryStore {
     purpose: 'verify' | 'thread',
     lead: string,
     days: number,
+    grantId: string | null = null,
   ): Promise<D1PreparedStatement> {
     return tokenHash(raw).then((hash) =>
       this.db
         .prepare(
-          'INSERT INTO sales_tokens(token_hash,purpose,lead_id,expires_at) VALUES(?,?,?,?)',
+          'INSERT INTO sales_tokens(token_hash,purpose,lead_id,expires_at,grant_id) VALUES(?,?,?,?,?)',
         )
-        .bind(hash, purpose, lead, Date.now() + days * 86400_000),
+        .bind(hash, purpose, lead, Date.now() + days * 86400_000, grantId),
     );
   }
   async intake(
@@ -216,6 +224,28 @@ export class SalesInquiryStore {
         'QUESTIONS_DISABLED',
         'Questions are currently unavailable for this listing.',
       );
+    return this.saveInquiry(input, snapshot, requestMetadata);
+  }
+  async intakeUnlisted(
+    value: UnlistedInquiry,
+    requestMetadata?: InquiryRequest,
+  ) {
+    const input = unlistedInquirySchema.parse(value);
+    return this.saveInquiry(
+      input,
+      { kind: 'unlisted-domain', domain: input.domain },
+      requestMetadata,
+    );
+  }
+  private async saveInquiry(
+    input: InquiryInput,
+    snapshot: SalesCaseSnapshot,
+    requestMetadata?: InquiryRequest,
+  ): Promise<{ id: string; status: 'verification-pending' }> {
+    const listing = 'id' in snapshot ? snapshot.id : null;
+    const previous = await this.receipt(input, listing);
+    if (previous) return previous;
+    const offer = 'offer' in input ? input.offer : null;
     await this.reserve(`recipient:${input.email}`, 10, 86400_000);
     await this.reserve('workspace-intake', 100, 86400_000);
     const emailHash = await this.sales.hash('email', input.email);
@@ -246,20 +276,22 @@ export class SalesInquiryStore {
     });
     try {
       await this.sales.atomic([
-        ...this.sales.guard(
-          "EXISTS(SELECT 1 FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id=? AND p.revision=? AND d.availability IN ('available','source-stale') AND d.control_expires_at>? AND (?=0 OR (d.availability='available' AND COALESCE(json_extract(p.payload,'$.sourceValidUntil'),9223372036854775807)>?)))",
-          [snapshot.id, input.observedRevision, now, input.offer ? 1 : 0, now],
-        ),
+        ...('observedRevision' in input
+          ? this.sales.guard(
+              "EXISTS(SELECT 1 FROM published_sales p JOIN sale_drafts d ON d.id=p.id WHERE p.id=? AND p.revision=? AND d.availability IN ('available','source-stale') AND d.control_expires_at>? AND (?=0 OR (d.availability='available' AND COALESCE(json_extract(p.payload,'$.sourceValidUntil'),9223372036854775807)>?)))",
+              [listing, input.observedRevision, now, offer ? 1 : 0, now],
+            )
+          : []),
         this.db
           .prepare(
             "INSERT INTO sales_leads(id,listing_id,request_hash,payload_hash,email_hash,revision,verification,created_at,updated_at,sealed) VALUES(?,?,?,?,?,?,'pending',?,?,?)",
           )
           .bind(
             id,
-            snapshot.id,
+            listing,
             await this.sales.hash(
               'request',
-              `${snapshot.id}:${input.idempotencyKey}`,
+              `${inquiryScope(input, listing)}:${input.idempotencyKey}`,
             ),
             await this.payloadHash(input),
             emailHash,
@@ -270,7 +302,7 @@ export class SalesInquiryStore {
               name: input.name,
               email: input.email,
               message: input.message,
-              offer: input.offer,
+              offer,
               snapshot,
               ...(input.buyerDetails
                 ? { buyerDetails: input.buyerDetails }
@@ -287,7 +319,7 @@ export class SalesInquiryStore {
         mail,
       ]);
     } catch (e) {
-      const raced = await this.receipt(input, snapshot.id);
+      const raced = await this.receipt(input, listing);
       if (raced) return raced;
       throw e;
     }
@@ -313,59 +345,74 @@ export class SalesInquiryStore {
         status: string;
       }>();
   }
-  async confirm(raw: string): Promise<void> {
-    const grant = await this.token(raw, 'verify');
-    if (!grant || grant.status === 'spam')
-      throw new SalesError(
+  async confirm(raw: string): Promise<string | null> {
+    const expired = () =>
+      new SalesError(
         'LINK_EXPIRED',
         'This confirmation link expired or was revoked.',
         403,
       );
-    if (grant.consumed_at) {
-      const lead = await this.lead(grant.lead_id);
+    const grant = await this.token(raw, 'verify');
+    if (!grant || grant.status === 'spam') throw expired();
+
+    // Derive the same scoped capability on retry without storing a plaintext token.
+    const thread = await this.sales.hash(
+      'confirmed-thread',
+      `${grant.lead_id}:${raw}`,
+    );
+    if (!grant.consumed_at) {
+      const now = Date.now();
+      const hash = await tokenHash(raw);
+      try {
+        await this.sales.atomic([
+          ...this.sales.guard(
+            "EXISTS(SELECT 1 FROM sales_tokens t JOIN sales_leads l ON l.id=t.lead_id WHERE t.token_hash=? AND t.purpose='verify' AND t.consumed_at IS NULL AND t.revoked_at IS NULL AND t.expires_at>CAST((julianday('now')-2440587.5)*86400000 AS INTEGER) AND l.verification='pending' AND l.status!='spam')",
+            [hash],
+          ),
+          this.db
+            .prepare(
+              'UPDATE sales_tokens SET consumed_at=?,grant_id=? WHERE token_hash=?',
+            )
+            .bind(now, crypto.randomUUID(), hash),
+          this.db
+            .prepare(
+              "UPDATE sales_leads SET verification='verified',revision=?,updated_at=? WHERE id=?",
+            )
+            .bind(crypto.randomUUID(), now, grant.lead_id),
+          await this.tokenWrite(
+            thread,
+            'thread',
+            grant.lead_id,
+            7,
+            confirmationThreadGrant,
+          ),
+          await this.outbox(grant.lead_id, grant.lead_id, 'seller-alert', {
+            recipient: null,
+            subject: 'A domain inquiry is confirmed',
+            url: `${this.publicBase}/#/sales/inbox/${grant.lead_id}`,
+            reference: grant.lead_id,
+          }),
+        ]);
+      } catch (problem) {
+        const current = await this.token(raw, 'verify');
+        if (!current || current.status === 'spam') throw expired();
+        if (!current.consumed_at) throw problem;
+      }
+    }
+    const lead = await this.lead(grant.lead_id);
+    if (lead.listing_id)
       await recordJourney(
         this.db,
         lead.listing_id,
         'inquiry-verified',
         grant.lead_id,
       );
-      return;
-    }
-    const marker = crypto.randomUUID(),
-      now = Date.now();
-    try {
-      await this.sales.atomic([
-        ...this.sales.guard(
-          "EXISTS(SELECT 1 FROM sales_tokens WHERE token_hash=? AND purpose='verify' AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at>?)",
-          [await tokenHash(raw), now],
-        ),
-        this.db
-          .prepare(
-            'UPDATE sales_tokens SET consumed_at=?,grant_id=? WHERE token_hash=?',
-          )
-          .bind(now, marker, await tokenHash(raw)),
-        this.db
-          .prepare(
-            "UPDATE sales_leads SET verification='verified',revision=?,updated_at=? WHERE id=?",
-          )
-          .bind(crypto.randomUUID(), now, grant.lead_id),
-        await this.outbox(grant.lead_id, grant.lead_id, 'seller-alert', {
-          recipient: null,
-          subject: 'A domain inquiry is confirmed',
-          url: `${this.publicBase}/#/sales/inbox/${grant.lead_id}`,
-          reference: grant.lead_id,
-        }),
-      ]);
-    } catch (e) {
-      if (!(await this.token(raw, 'verify'))?.consumed_at) throw e;
-    }
-    const lead = await this.lead(grant.lead_id);
-    await recordJourney(
-      this.db,
-      lead.listing_id,
-      'inquiry-verified',
-      grant.lead_id,
-    );
+    const active = await this.token(thread, 'thread');
+    return active?.lead_id === lead.id &&
+      active.verification === 'verified' &&
+      active.status !== 'spam'
+      ? thread
+      : null;
   }
   async lead(id: string) {
     const row = await this.db
@@ -409,6 +456,7 @@ export class SalesInquiryStore {
         return {
           id: l.id,
           domain: l.payload.snapshot.domain,
+          ...(!l.listing_id ? { kind: 'unlisted-domain' as const } : {}),
           name: l.payload.name,
           offer: l.payload.offer,
           revision: l.revision,
@@ -458,7 +506,7 @@ export class SalesInquiryStore {
     }
     const rows = await this.db
       .prepare(
-        `SELECT id,direction,created_at,sealed,sequence FROM sales_messages WHERE lead_id=? AND (?=0 OR sequence<?) ${buyer ? "AND direction!='private-note'" : ''} ORDER BY sequence DESC LIMIT 101`,
+        `SELECT id,direction,created_at,sealed,sequence FROM sales_messages WHERE lead_id=? AND (?=0 OR sequence<?) ${buyer ? "AND direction IN ('reply','buyer')" : ''} ORDER BY sequence DESC LIMIT 101`,
       )
       .bind(id, before, before)
       .all<{
@@ -501,7 +549,25 @@ export class SalesInquiryStore {
               .replaceAll('/', '_')
           : null,
     };
-    if (buyer) return common;
+    if (buyer) {
+      const reply = await this.db
+        .prepare(
+          "SELECT 1 FROM sales_messages WHERE lead_id=? AND direction='reply' LIMIT 1",
+        )
+        .bind(id)
+        .first();
+      return {
+        ...common,
+        original: {
+          message: l.payload.message,
+          offer: l.payload.offer,
+          snapshot: { domain: l.payload.snapshot.domain },
+        },
+        buyerStatus: reply
+          ? ('seller-replied' as const)
+          : ('awaiting-seller-review' as const),
+      };
+    }
     const deliveries = await this.db
       .prepare(
         'SELECT id,message_id,kind,state,attempts,updated_at FROM sales_outbox WHERE lead_id=? ORDER BY updated_at DESC LIMIT 100',
@@ -551,7 +617,9 @@ export class SalesInquiryStore {
       followUpAt: l.follow_up_at,
       deliveries: deliveries.results,
       outcomes,
-      saleEvidence: saleEvidenceChoices(l.payload.snapshot.domain),
+      saleEvidence: l.listing_id
+        ? saleEvidenceChoices(l.payload.snapshot.domain)
+        : [],
     };
   }
   async message(
@@ -643,9 +711,9 @@ export class SalesInquiryStore {
       statements.push(
         this.db
           .prepare(
-            "UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose='thread' AND revoked_at IS NULL",
+            "UPDATE sales_tokens SET revoked_at=? WHERE lead_id=? AND purpose='thread' AND revoked_at IS NULL AND grant_id IS NOT ?",
           )
-          .bind(now, id),
+          .bind(now, id, confirmationThreadGrant),
         await this.tokenWrite(raw, 'thread', id, 7),
         await this.outbox(
           message,
@@ -725,6 +793,11 @@ export class SalesInquiryStore {
         this.db
           .prepare('DELETE FROM sales_suppression WHERE email_hash=?')
           .bind(await this.sales.hash('suppression-email', l.payload.email)),
+      );
+    if (!l.listing_id && (outcome || status === 'agreed'))
+      throw new SalesError(
+        'UNLISTED_INQUIRY',
+        'This inquiry has no sale listing.',
       );
     if (outcome) {
       outcome = saleOutcomeSchema.parse(outcome);
