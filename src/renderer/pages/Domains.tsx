@@ -656,10 +656,6 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
   owned: {
     order: [
       'domainName',
-      'publicPage',
-      FOLDER,
-      'binPrice',
-      'minOffer',
       'listed',
       'registrar',
       'createdDate',
@@ -671,22 +667,26 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
       'privacy',
       'locked',
       'nameservers',
+      'publicPage',
+      FOLDER,
+      'binPrice',
+      'minOffer',
     ],
     hidden: ['purchaseDate', 'purchaseAmount'],
   },
   listings: {
     order: [
       'domainName',
-      'publicPage',
-      FOLDER,
-      'binPrice',
-      'minOffer',
       'fastTransfer',
       'listing',
       'views',
       'leads',
       'searches',
       'nameservers',
+      'publicPage',
+      FOLDER,
+      'binPrice',
+      'minOffer',
       'registrar',
       'expirationDate',
       'purchaseDate',
@@ -703,7 +703,6 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
   archive: {
     order: [
       'domainName',
-      'publicPage',
       FOLDER,
       'registrar',
       'purchaseDate',
@@ -712,14 +711,15 @@ const VIEW_COLUMNS: Record<DomainsView, ColumnLayout> = {
       'saleAmount',
       'createdDate',
       'expirationDate',
-      'binPrice',
-      'minOffer',
       'listing',
       RENEWAL,
       'autoRenew',
       'privacy',
       'locked',
       'nameservers',
+      'publicPage',
+      'binPrice',
+      'minOffer',
     ],
     hidden: [
       'createdDate',
@@ -2572,6 +2572,7 @@ export default function Domains() {
         ),
       };
     const col = columnByKey.get(key)!;
+    const publicPage = key === 'publicPage';
     return {
       label: col.tooltip ? (
         <span title={col.tooltip}>{col.label}</span>
@@ -2582,7 +2583,11 @@ export default function Domains() {
       align: col.align,
       compact: col.compact,
       hideOnMobile: col.hideOnMobile,
-      headClassName: key === 'autoRenew' ? 'pl-[8px]' : undefined,
+      headClassName: publicPage
+        ? 'w-px'
+        : key === 'autoRenew'
+          ? 'pl-[8px]'
+          : undefined,
       cellClassName: key === 'autoRenew' ? 'pl-[6px]' : undefined,
       cell: (d) => renderCell(col, d),
     };

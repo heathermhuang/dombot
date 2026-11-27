@@ -267,11 +267,6 @@
 .hosted-app .sales-lander-action {
   flex-shrink: 0;
 }
-.hosted-app .sales-lander-history {
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 4px;
-}
 @media (max-width: 639px) {
   .app-statusbar {
     min-height: 44px;
