@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-saas-pr-254",
+      "date": "2026-11-27",
+      "layer": "saas",
+      "title": "Move lander history to Sales and compact the Public Page column",
+      "status": "Merged SaaS source · Deployment tracked separately",
+      "changes": [
+        "Source change #254 was merged. The linked review records its details, validation and rollout scope."
+      ],
+      "links": [
+        {
+          "label": "Change #254",
+          "url": "https://github.com/heathermhuang/dombot/pull/254"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-gateway-3db62841d8d9166bdc8e7204771991583a42b0ce-59",
       "date": "2026-11-26",
       "layer": "saas",
