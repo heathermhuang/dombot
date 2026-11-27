@@ -2,6 +2,22 @@
   "version": 1,
   "entries": [
     {
+      "id": "auto-core-source-1fce1ca8c1784905854ea3ceda9a81cf970b5016",
+      "date": "2026-11-27",
+      "layer": "core",
+      "title": "Claude review: pass the subscription token to the shared review (#295)",
+      "status": "Published source change · Release availability tracked separately",
+      "changes": [
+        "This primary-branch source change is recorded in the linked commit. A source merge does not infer a hosted rollout."
+      ],
+      "links": [
+        {
+          "label": "Source change 1fce1ca8c178",
+          "url": "https://github.com/aoxborrow/dombot/commit/1fce1ca8c1784905854ea3ceda9a81cf970b5016"
+        }
+      ]
+    },
+    {
       "id": "auto-saas-pr-254",
       "date": "2026-11-27",
       "layer": "saas",
