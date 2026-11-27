@@ -19,6 +19,7 @@ import {
 import { paginate, rangeKeys, type SortDir } from './table-state';
 import { applyColumnLayout, type ColumnLayout } from './column-layout';
 import { ColumnPicker } from './ColumnPicker';
+import { useColumnHeaderDrag } from './use-column-header-drag';
 import { cn } from '@/lib/utils';
 import {
   SegmentedControl,
@@ -102,6 +103,7 @@ export function DataTable<T>({
   density: fixedDensity,
   layout,
   onLayoutChange,
+  reorderHeaders = false,
   forceVisible,
   floatingBar,
   mobileRow,
@@ -129,6 +131,8 @@ export function DataTable<T>({
   layout?: ColumnLayout;
   /** With a `layout`: the Columns button goes in the footer, first. */
   onLayoutChange?: (next: ColumnLayout) => void;
+  /** Allow dragging table headers when the page saves column layouts. */
+  reorderHeaders?: boolean;
   /** Columns shown even while the layout hides them, e.g. one being filtered. */
   forceVisible?: readonly string[];
   /**
@@ -143,6 +147,11 @@ export function DataTable<T>({
   const columns = layout
     ? applyColumnLayout(allColumns, layout, forceVisible)
     : allColumns;
+  const headerDrag = useColumnHeaderDrag(
+    reorderHeaders ? layout : undefined,
+    allColumns,
+    onLayoutChange,
+  );
   const preferred = usePreferences((s) => s.density);
   const density = fixedDensity ?? preferred;
   const setPreferences = usePreferences((s) => s.setPreferences);
@@ -307,7 +316,10 @@ export function DataTable<T>({
             {/* Slightly smaller body text when compact (headers keep their own
             sizes); cells with an explicit size opt down separately. */}
             <Table scrollable={false} className="compact:text-xs">
-              <TableHeader className="sticky top-0 z-10 bg-muted [&_th]:bg-muted">
+              <TableHeader
+                className="sticky top-0 z-10 bg-muted [&_th]:bg-muted"
+                onClickCapture={headerDrag.preventDragClick}
+              >
                 <TableRow className="[&_th]:h-8 [&_th]:font-medium [&_th]:tracking-wider [&_th]:text-muted-foreground [&_button]:text-[10px] [&_button]:uppercase">
                   {selection && (
                     <TableHead className="w-0 border-r-0! pl-3">
@@ -331,6 +343,13 @@ export function DataTable<T>({
                   )}
                   {columns.map((col, i) => {
                     const active = col.key === sort.key;
+                    const movable =
+                      reorderHeaders &&
+                      !!layout &&
+                      !!onLayoutChange &&
+                      !col.locked;
+                    const drop =
+                      headerDrag.drop?.key === col.key ? headerDrag.drop : null;
                     const Icon = !active
                       ? ChevronsUpDown
                       : sort.dir === 'asc'
@@ -339,6 +358,12 @@ export function DataTable<T>({
                     return (
                       <TableHead
                         key={col.key}
+                        data-reorder-column={movable ? col.key : undefined}
+                        onPointerDown={
+                          movable
+                            ? (event) => headerDrag.start(event, col.key)
+                            : undefined
+                        }
                         aria-sort={
                           active && col.sortable !== false
                             ? sort.dir === 'asc'
@@ -353,6 +378,12 @@ export function DataTable<T>({
                           firstCell(i),
                           col.hideOnMobile && 'hidden sm:table-cell',
                           col.headClassName,
+                          movable &&
+                            'cursor-grab touch-pan-y select-none active:cursor-grabbing',
+                          drop &&
+                            (drop.after
+                              ? 'shadow-[inset_-2px_0_var(--primary)]'
+                              : 'shadow-[inset_2px_0_var(--primary)]'),
                         )}
                       >
                         {col.sortable === false ? (
@@ -370,6 +401,7 @@ export function DataTable<T>({
                               // right so the label sits visually over the icons.
                               col.compact && 'gap-0.5 translate-x-0.5',
                               active && 'text-foreground',
+                              movable && 'cursor-grab active:cursor-grabbing',
                             )}
                           >
                             {col.label}
