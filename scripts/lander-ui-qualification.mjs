@@ -322,15 +322,20 @@ try {
     .getByRole('searchbox', { name: /Search/ })
     .first()
     .fill('quote-');
-  const quoteButton = page.getByRole('button', {
-    name: new RegExp('Check current renewal quote for ' + quoteDomain),
-  });
-  const unavailableQuote = page.getByRole('button', {
-    name: new RegExp('Check current renewal quote for ' + unquotedDomain),
-  });
+  const domainRow = (name) =>
+    page.getByRole('row').filter({
+      has: page.getByRole('link', { name, exact: true }),
+    });
+  const quoteControl = { name: /^Check current renewal quote/ };
+  const quoteButton = domainRow(quoteDomain).getByRole('button', quoteControl);
+  const unavailableRow = domainRow(unquotedDomain);
   await quoteButton.waitFor();
+  await unavailableRow.waitFor();
   assert.equal(quoteReads, 0);
-  assert.equal(await unavailableQuote.count(), 0);
+  assert.equal(
+    await unavailableRow.getByRole('button', quoteControl).count(),
+    0,
+  );
   await quoteButton.click();
   await page.getByText(/47\.25.*per year/).waitFor();
   assert.equal(quoteReads, 1);
