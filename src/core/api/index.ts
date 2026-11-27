@@ -69,6 +69,7 @@ import {
   getDomainDetail,
   getPortfolio,
   getPortfolioPricing,
+  getRegistrarRenewalQuote,
   getRegistrationQuote,
   getRegistrarClient,
   getRegistrarCredentialValues,
@@ -315,6 +316,10 @@ export const coreMethods: { [K in CoreMethodName]: ApiMethod<K> } = {
 
   // ── Pricing ───────────────────────────────────────────────────────────────
   getPortfolioPricing: method(none, async () => getPortfolioPricing()),
+  getRegistrarRenewalQuote: method(
+    z.tuple([s.domainTarget]),
+    getRegistrarRenewalQuote,
+  ),
   getExchangeRates: method(none, async () => getExchangeRateRows()),
   getManualPrices: method(none, async () => getManualPrices()),
   setManualPrice: method(

@@ -11,6 +11,7 @@ import {
 } from '../../shared/parkio-status';
 import { marketObservationRows } from '../../shared/market-observation-rows';
 import { PublicPageActions } from '../components/domains/PublicPageActions';
+import { RenewalQuoteTrigger } from '../components/domains/RenewalQuoteTrigger';
 import { supportsSales } from '../lib/platform';
 import { useTableSelection } from '../lib/table-selection';
 import { salesRequest } from '../lib/sales-client';
@@ -52,6 +53,7 @@ import {
 import type {
   Domain,
   DomainOp,
+  DomainTarget,
   Folder,
   RegistrarName,
   RegistrationLookup,
@@ -340,27 +342,49 @@ function RenewalCell({
   loading,
   preferred,
   numberFormat,
+  quoteTarget,
 }: {
   info: RenewalPricing | undefined;
   loading: boolean;
   preferred: string;
   numberFormat: NumberFormatId;
+  quoteTarget?: DomainTarget;
 }) {
   if (info === undefined && loading) return <CellSkeleton align="right" />;
   if (!info || info.renewal == null) {
     return <span className="text-muted-foreground/50">—</span>;
   }
-  return (
-    <span
-      className="font-medium tabular-nums"
-      title={`Renewal source: ${SOURCE_LABEL[info.source]}. ${RENEWAL_AGE_LABEL[renewalPriceAge(info)]}. Quote observed: ${observationLabel(info.observedAt)}. Inventory observed: ${observationLabel(info.inventoryAt)}.`}
-    >
-      {formatMoneyNumber(info.renewal, info.currency, preferred, numberFormat)}
-      {renewalPriceAge(info) !== 'current' && (
+  const age = renewalPriceAge(info);
+  const amount = formatMoneyNumber(
+    info.renewal,
+    info.currency,
+    preferred,
+    numberFormat,
+  );
+  const title = `Renewal source: ${SOURCE_LABEL[info.source]}. ${RENEWAL_AGE_LABEL[age]}. Quote observed: ${observationLabel(info.observedAt)}. Inventory observed: ${observationLabel(info.inventoryAt)}.`;
+  const content = (
+    <>
+      {amount}
+      {age !== 'current' && (
         <span className="block text-[11px] font-normal text-muted-foreground">
-          {RENEWAL_AGE_LABEL[renewalPriceAge(info)]}
+          {RENEWAL_AGE_LABEL[age]}
         </span>
       )}
+    </>
+  );
+  return info.canCheckQuote && age === 'estimate' && quoteTarget ? (
+    <RenewalQuoteTrigger
+      key={domainKey(quoteTarget)}
+      target={quoteTarget}
+      estimate={amount}
+      title={title}
+      numberFormat={numberFormat}
+    >
+      {content}
+    </RenewalQuoteTrigger>
+  ) : (
+    <span className="font-medium tabular-nums" title={title}>
+      {content}
     </span>
   );
 }
@@ -2564,6 +2588,15 @@ export default function Domains() {
         cellClassName: 'w-0 pr-3',
         cell: (d) => (
           <RenewalCell
+            quoteTarget={
+              !archiveView && d.accountId
+                ? {
+                    accountId: d.accountId,
+                    registrar: d.registrar as RegistrarName,
+                    domainName: d.domainName,
+                  }
+                : undefined
+            }
             info={pricing[domainKey(d)]}
             loading={pricingLoading}
             preferred={currency}

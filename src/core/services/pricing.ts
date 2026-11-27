@@ -77,6 +77,21 @@ export function usesPerNameQuote(
   );
 }
 
+/** Explicit quote checks can use safe per-name endpoints that are too limited
+ * for bulk sync. Namecheap exposes a per-name renewal only for premium names. */
+export function supportsOwnedRenewalQuote(
+  registrar: RegistrarName,
+  tld: string,
+): boolean {
+  return (
+    ALWAYS_QUOTE.has(registrar) ||
+    SPECIFIC_CAPABLE.has(registrar) ||
+    registrar === 'porkbun' ||
+    registrar === 'godaddy' ||
+    (registrar === 'namecheap' && !isUniformTld(tld))
+  );
+}
+
 /** A per-name renewal quote fetched during Sync and stored with the detail. */
 export interface RenewalQuote {
   renewal: number | null;
